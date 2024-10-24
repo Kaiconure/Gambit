@@ -1,7 +1,7 @@
 __version = '0.91.2'
 __name = 'Gambit'
 __shortName = 'gbt'
-__author = '@FandomMenance'
+__author = '@Kaiconure'
 __commands = { 'gbt', 'gambit' }
 
 _addon.version = __version
