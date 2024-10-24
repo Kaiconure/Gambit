@@ -1,0 +1,128 @@
+SPAWN_TYPE_PLAYER   = 13
+SPAWN_TYPE_TRUST    = 14
+SPAWN_TYPE_MOB      = 16
+
+ITEM_SLOTS_EARRING  = 6144
+ITEM_SLOTS_RING     = 24576
+
+ITEM_TYPE_FOOD      = 7
+
+BUFF_SLEEP1         = 2
+BUFF_SLEEP2         = 19
+BUFF_FOOD           = 251
+
+
+STATUS_IDLE           = 0
+STATUS_ENGAGED        = 1
+STATUS_DEAD           = 2
+
+PACKET_TARGET_LOCK    = 0x058
+
+--------------------------------------------------------------------------------------
+-- Write out a named value
+function makeDisplayValue(name, value, ignoreTables, prefix)
+    prefix = prefix or '  '
+
+    if value == nil then
+        return string.format('%s%s: %s', prefix, colorize(Colors.gray, name), colorize(Colors.gray, 'nil'))
+    elseif type(value) == 'number' then
+        return string.format('%s%s: %s', prefix, colorize(Colors.gray, name), colorize(Colors.blue, tostring(value)))
+    elseif type(value) == 'string' then
+        return string.format('%s%s: "%s"', prefix, colorize(Colors.gray, name), colorize(Colors.coral, tostring(value)))
+    elseif type(value) == 'boolean' then
+        return string.format('%s%s: %s', prefix, colorize(Colors.gray, name), colorize(Colors.blue, tostring(value and 'true' or 'false')))
+    elseif type(value) == 'table' and not ignoreTables then
+        local result = string.format('%s%s: {\n', prefix, colorize(Colors.gray, name))
+
+        local indentPrefix = '  ' .. prefix
+        local first = true
+        for i, v in pairs(value) do
+            result = result .. (first and '' or '\n') .. makeDisplayValue(i, v, ignoreTables, prefix .. ' ')
+            first = false
+        end
+
+        result = result .. '\n' .. prefix .. '}'
+
+        return result
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Write an object to a file as JSON
+function writeJsonToFile(fileName, obj)
+    local file = files.new(fileName)
+    file:write(json.stringify(obj))
+end
+
+--------------------------------------------------------------------------------------
+-- Write an object to a file as JSON
+function writeStringToFile(fileName, str)
+    local file = files.new(fileName)
+    file:write(str)
+end
+
+--------------------------------------------------------------------------------------
+-- Check if an object is an array
+function isArray(value)
+    return value ~= nil and type(value) == 'table' and #value > 0
+end
+
+--------------------------------------------------------------------------------------
+-- Find the index of the specified array key, or nil
+function arrayIndexOf(array, search)
+    if array ~= nil then
+        for index, value in ipairs(array) do
+            if value == search then
+                return index
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Find the first in an array that matches one of the specified search parameters
+function arrayIndexOfAny(array, ...)
+    local searches = {...}
+    if array ~= nil then
+        for index, value in ipairs(array) do
+            if arrayIndexOf(searches, value) then
+                return index
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Find the index of the specified array key, or nil
+function arrayIndexOfStrI(array, search)
+    if isArray(array) and search ~= nil then
+        search = string.lower(search)
+        for index, value in ipairs(array) do
+            if value ~= nil and string.lower(tostring(value)) == search then
+                return index
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Find the first element of an array
+function arrayFirst(array, fn)
+    if array == nil or #array == 0 then return end
+
+    for index, val in ipairs(array) do
+        if fn == nil or fn(val, index) then return val end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Find the first element of a table
+function tableFirst(table, fn)
+    if type(table) ~= 'table' then return table end
+
+    for key, val in pairs(table) do
+        if fn == nil or fn(val, key) then return val end
+    end
+end
+
+

@@ -1,0 +1,165 @@
+{
+  "about": {
+    "author": "@FandomMenace"
+  },
+  "actions": [
+    {
+      "when": "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp and canUseSpell(withMaxTier(vars.black_magic_burst.max_tier, vars.black_magic_burst[skillchain.name]))",
+      "commands": [
+        "log('Magic bursting', skillchain.name, 'with', spell.name)",
+        "useSpell()"
+      ],
+      "comment": "Burst with single-target black magic spells. Customize by defining variables: max_tier, min_mpp"
+    }
+  ],
+  "vars": {
+    "black_magic_burst": {
+      "max_tier": "III",
+      "min_mpp": 25,
+      "Darkness": [
+        "Blizzard VI",
+        "Water VI",
+        "Stone VI",
+
+        "Blizzard V",
+        "Water V",
+        "Stone V",
+
+        "Blizzard IV",
+        "Water IV",
+        "Stone IV",
+
+        "Blizzard III",
+        "Water III",
+        "Stone III",
+
+        "Blizzard II",
+        "Water II",
+        "Stone II",
+
+        "Blizzard",
+        "Water",
+        "Stone"
+      ],
+      "Detonation": [
+        "Aero VI",
+        "Aero V",
+        "Aero IV",
+        "Aero III",
+        "Aero II",
+        "Aero"
+      ],
+      "Distortion": [
+        "Blizzard VI",
+        "Water VI",
+
+        "Blizzard V",
+        "Water V",
+
+        "Blizzard IV",
+        "Water IV",
+
+        "Blizzard III",
+        "Water III",
+
+        "Blizzard II",
+        "Water II",
+
+        "Blizzard",
+        "Water"
+      ],
+      "Fragmentation": [
+        "Thunder VI",
+        "Aero VI",
+
+        "Thunder V",
+        "Aero V",
+
+        "Thunder IV",
+        "Aero IV",
+
+        "Thunder III",
+        "Aero III",
+
+        "Thunder II",
+        "Aero II",
+
+        "Thunder",
+        "Aero"
+      ],
+      "Fusion": [
+        "Fire VI",
+        "Fire V",
+        "Fire IV",
+        "Fire III",
+        "Fire II",
+        "Fire"
+      ],
+      "Gravitation": [
+        "Stone VI",
+        "Stone V",
+        "Stone IV",
+        "Stone III",
+        "Stone II",
+        "Stone"
+      ],
+      "Impaction": [
+        "Thunder VI",
+        "Thunder V",
+        "Thunder IV",
+        "Thunder III",
+        "Thunder II",
+        "Thunder"
+      ],
+      "Light": [
+        "Thunder VI",
+        "Fire VI",
+        "Aero VI",
+
+        "Thunder V",
+        "Fire V",
+        "Aero V",
+
+        "Thunder IV",
+        "Fire IV",
+        "Aero IV",
+
+        "Thunder III",
+        "Fire III",
+        "Aero III",
+
+        "Thunder II",
+        "Fire II",
+        "Aero II",
+
+        "Thunder",
+        "Fire",
+        "Aero"
+      ],
+      "Liquefaction": [
+        "Fire VI",
+        "Fire V",
+        "Fire IV",
+        "Fire III",
+        "Fire II",
+        "Fire"
+      ],
+      "Reverberation": [
+        "Water VI",
+        "Water V",
+        "Water IV",
+        "Water III",
+        "Water II",
+        "Water"
+      ],
+      "Scission": [
+        "Stone VI",
+        "Stone V",
+        "Stone IV",
+        "Stone III",
+        "Stone II",
+        "Stone"
+      ]
+    }
+  }
+}

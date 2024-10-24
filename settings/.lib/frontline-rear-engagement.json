@@ -1,0 +1,19 @@
+{
+  "about": {
+    "author": "@FandomMenace"
+  },
+  "actions": [
+    {
+      "when": "bt and bt.distance < 5 and not alignedRear()",
+      "commands": ["alignRear()", "cancelFollow()"],
+      "frequency": 3,
+      "comment": "Once we get close, be sure we position ourselves behind the enemy."
+    },
+    {
+      "when": "bt and bt.distance >= 5",
+      "commands": ["follow(bt)"],
+      "frequency": 5,
+      "comment": "This gets us in the enemy's vicinity."
+    }
+  ]
+}

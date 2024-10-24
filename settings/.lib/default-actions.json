@@ -1,0 +1,17 @@
+{
+  "pull": [
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "idle": [
+    {
+      "import": "use-xp-cp-rings"
+    }
+  ]
+}

@@ -1,0 +1,253 @@
+__version = '0.91.2'
+__name = 'Gambit'
+__shortName = 'gbt'
+__author = '@FandomMenance'
+__commands = { 'gbt', 'gambit' }
+
+_addon.version = __version
+_addon.name = __name
+_addon.shortName = __shortName
+_addon.author = __author
+_addon.commands = __commands
+
+require('sets')
+require('vectors')
+
+extdata = require('extdata')
+resources = require('resources')
+packets = require('packets')
+config = require('config')
+files = require('files')
+
+require('actions')
+
+json = require('./lib/jsonlua')
+directionality = require('./lib/directionality')
+require('./lib/logging')
+require('./lib/helpers')
+require('./lib/settings')
+require('./lib/resx')
+require('./lib/skillchains')
+require('./lib/commands')
+require('./lib/target-processing')
+require('./lib/action-processing')
+
+ActionContext = require('./lib/action-context')
+
+globals = {
+    enabled         = false,
+    isSpellCasting  = false,
+    target          = {
+        mob = nil,
+        cycles = 0,
+        seconds = 0
+    },
+    currentZone = nil,
+    selfName = __name,
+    selfShortName = __shortName,
+    selfCommand = __commands[1],
+    language = 'en',
+    actionsEnabled = true,
+    autoFollowIndex = nil
+}
+
+--------------------------------------------------------------------------------------
+-- Make a command that can be run against this addon with an optional wait afterward
+function makeSelfCommand(command, wait)
+    local command = string.format('%s %s;',
+        globals.selfCommand,
+        command)
+    
+    if type(wait) == 'number' and wait > 0 then
+        command = command .. string.format('wait %d;', wait)
+    end
+
+    return command
+end
+
+--------------------------------------------------------------------------------------
+-- Run a command against this addon
+function sendSelfCommand(command, wait)
+    windower.send_command(makeSelfCommand(command, wait))
+end
+
+function reloadSettings(actionsName, bypassActions)
+    bypassActions = bypassActions and settings.actions ~= nil
+
+    settings = loadSettings(actionsName, bypassActions)
+    logging_settings.verbosity = settings.verbosity
+
+    -- We will not recompile actions or reset the current mob if this is a settings-only reload
+    if not bypassActions then
+        recompileActions()
+        resetCurrentMob(nil, true)
+    end
+
+    writeMessage(text_green('Settings have been reloaded!', Colors.default))
+end
+
+-- Player status change
+windower.register_event('status change', function(new_id, previous_id)
+    
+    --if previous_id == STATUS_ENGAGED and new_id == STATUS_IDLE then
+    if new_id == STATUS_IDLE then
+        -- We'll unfollow once battle has ended to avoid running off into space if autofollow was enabled
+        resetCurrentMob(nil, true)
+        windower.ffxi.follow(-1)
+
+    elseif new_id == STATUS_DEAD then
+        -- Stop on death
+        sendSelfCommand('disable -quiet')
+        resetCurrentMob(nil, true)
+    end
+end)
+
+---------------------------------------------------------------------
+-- Zoned
+windower.register_event('zone change', function(zone_id)
+    -- Store the new zone
+    globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil
+
+    -- Disable all the things
+    sendSelfCommand('disable -quiet')
+    resetCurrentMob(nil, true)
+end)
+
+---------------------------------------------------------------------
+-- Addon loaded
+windower.register_event('load', function()
+
+    writeMessage('')
+    writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
+    writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
+    writeMessage('')
+
+    sendSelfCommand('disable')
+
+    windower.send_command('unbind !~G; bind !~G ' .. makeSelfCommand('toggle')) -- Use Shift+Alt+G to toggle automation
+
+    windower.send_command('unbind @R; bind @R ' .. makeSelfCommand('run -start'))
+    windower.send_command('unbind @~R; bind @~R ' .. makeSelfCommand('run -stop'))
+
+
+
+    -- Store the current zone
+    local info = windower.ffxi.get_info()
+    globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
+    globals.language = info.language
+    
+    -- Reload all settings
+    reloadSettings()
+    
+    -- Kick off the background threads
+    coroutine.schedule(cr_actionProcessor, 0)
+    --coroutine.schedule(cr_targetDetector, 0)
+end)
+
+---------------------------------------------------------------------
+-- Addon unloaded
+windower.register_event('unload', function()
+    windower.send_command('unbind !~G;')    -- Unbind the automation toggle key
+end)
+
+
+local CATEGORY_SPELL_START          = 8     -- action.category=8, action.param = 24931
+local CATEGORY_SPELL_INTERRUPT      = 8     -- action.category=8, action.param = 28787
+local CATEGORY_SPELL_END            = 4
+
+local PARAM_STARTED                 = 24931 -- Normal start
+local PARAM_INTERRUPTED             = 28787 -- Interrupted before completion
+
+---------------------------------------------------------------------
+-- Handle actions
+windower.register_event('action', function(action)
+    if action == nil or
+        action.actor_id == nil or
+        action.param == nil
+    then
+        return
+    end
+
+    local player    = windower.ffxi.get_player()
+    local playerId  = player.id
+    local actorId   = action.actor_id
+    local isSelf    = actorId == playerId
+
+    if isSelf then
+        local isSpellStart              = action.category == CATEGORY_SPELL_START and action.param == PARAM_STARTED
+        local isSpellInterrupted        = action.category == CATEGORY_SPELL_START and action.param == PARAM_INTERRUPTED
+        local isSpellSuccessful         = action.category == CATEGORY_SPELL_END
+        local isSpellCastingComplete    = isSpellInterrupted or isSpellSuccessful
+
+        if isSpellStart then            
+            
+            globals.isSpellCasting = true
+            globals.currentSpell = nil
+            globals.spellTarget = nil
+
+            local actionTarget = action.targets and action.targets[1]
+
+            if actionTarget then
+                local targetId = actionTarget.id
+                if targetId then
+                    globals.spellTarget = windower.ffxi.get_mob_by_id(targetId)
+                end
+
+                local spellId = actionTarget.actions and actionTarget.actions[1] and actionTarget.actions[1].param
+                local spell = spellId and resources.spells[spellId]
+
+                globals.currentSpell = spell
+            end
+
+            if globals.currentSpell then
+                _actionProcessorState:setSpellStart(globals.currentSpell)
+
+                local message = 'Casting %s':format(text_spell(globals.currentSpell.name, Colors.verbose))
+                if globals.spellTarget then
+                    message = '%s %s %s':format(message, CHAR_RIGHT_ARROW, text_target(globals.spellTarget.name, Colors.verbose))
+                end
+                writeVerbose(message)
+            else
+                writeVerbose('Casting has started')
+            end
+
+        elseif globals.isSpellCasting and isSpellCastingComplete then
+            _actionProcessorState:setSpellCompleted(isSpellInterrupted)
+
+            writeVerbose('  %s has %s!':format(
+                globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
+                isSpellSuccessful and text_green('completed successfully') or text_red('been interrupted')
+            ))
+            
+            globals.isSpellCasting = false
+            globals.currentSpell = nil
+            globals.spellTarget = nil
+        end
+    end
+end)
+
+---------------------------------------------------------------------
+-- Job change
+windower.register_event('job change', function()
+    reloadSettings()
+end)
+
+---------------------------------------------------------------------
+-- Addon command
+windower.register_event('addon command', function (command, ...)
+    local args = {...}
+    
+    for i, arg in ipairs(args) do
+        if type(arg) == 'table' then
+            local message = string.format(
+                'Command [%s] called with argument %d as a table value. Value=%s',
+                command,
+                i,
+                json.stringify(arg))
+            writeMessage(message)
+            print(message)
+        end
+    end
+
+    commands.process(command, args)
+end)

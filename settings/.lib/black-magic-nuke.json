@@ -1,0 +1,67 @@
+{
+  "about": {
+    "author": "@FandomMenace"
+  },
+  "actions": [
+    {
+      "when": "me.mpp >= vars.black_magic_nuke.min_mpp and canUseSpell(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, randomize(vars.black_magic_nuke.spells)))",
+      "commands": [
+        "log('Nuking with', spell.name)",
+        "useSpell()",
+        "delay(vars.black_magic_nuke.frequency)"
+      ],
+      "comment": "Nukes with normal, single-target black magic. Customize by defining variables: max_tier, frequency, min_mpp"
+    }
+  ],
+  "vars": {
+    "black_magic_nuke": {
+      "max_tier": "VI",
+      "min_tier": "I",
+      "frequency": 20,
+      "min_mpp": 30,
+      "spells": [
+        "Thunder VI",
+        "Blizzard VI",
+        "Fire VI",
+        "Aero VI",
+        "Water VI",
+        "Stone VI",
+
+        "Thunder V",
+        "Blizzard V",
+        "Fire V",
+        "Aero V",
+        "Water V",
+        "Stone V",
+
+        "Thunder IV",
+        "Blizzard IV",
+        "Fire IV",
+        "Aero IV",
+        "Water IV",
+        "Stone IV",
+
+        "Thunder III",
+        "Blizzard III",
+        "Fire III",
+        "Aero III",
+        "Water III",
+        "Stone III",
+
+        "Thunder II",
+        "Blizzard II",
+        "Fire II",
+        "Aero II",
+        "Water II",
+        "Stone II",
+
+        "Thunder",
+        "Blizzard",
+        "Fire",
+        "Aero",
+        "Water",
+        "Stone"
+      ]
+    }
+  }
+}

@@ -1,0 +1,571 @@
+<html>
+  <head>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+      crossorigin="anonymous"
+    ></script>
+
+    <style>
+      .codeblock {
+        display: block;
+        padding: 13px;
+        background: rgba(0, 0, 0, 0.05);
+        font-family: monospace;
+        font-size: 0.875em;
+        color: #d63384;
+        word-wrap: break-word;
+      }
+
+      .section-actiontypes,
+      .section-actiondefinition,
+      .section-actionapi,
+      .section-functions {
+        margin-top: 18px;
+      }
+
+      .doc-item,
+      .action-property {
+        box-shadow: #aaa 5px 5px 10px;
+        padding: 8px;
+      }
+
+      .item-name {
+        display: block;
+        font-size: 16pt;
+      }
+
+      .bare-list {
+        margin-left: 0px;
+        padding-inline-start: 0px;
+      }
+      .bare-list > li {
+        list-style-type: none;
+        padding: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      class="container m-4"
+      style="max-width: 980px"
+    >
+      <div class="row"><p class="display-4">Gambit Actions</p></div>
+
+      <div class="row">
+        <p class="display-5">Introduction</p>
+
+        <p>
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+          Cras in dui sagittis, vulputate eros sed, tempus turpis.
+          Mauris aliquam in magna eu accumsan. Aliquam sodales ex nec
+          aliquam suscipit. Curabitur fermentum nec dolor vitae
+          sagittis.
+        </p>
+      </div>
+
+      <div class="row section-actiontypes">
+        <p class="display-5">Action Types</p>
+
+        <p>There are three types of actions supported by Gambit:</p>
+        <div>
+          <ol>
+            <li>
+              <span><code>idle</code></span> &mdash; These are actions
+              performed between battles, while there is no aggro.
+            </li>
+            <li>
+              <span><code>pull</code></span> &mdash; These are actions
+              just before battle starts, once a target has been
+              selected and there are no idle actions ready to execute.
+            </li>
+            <li>
+              <span><code>battle</code></span>
+              &mdash; These actions are performed in the heat of
+              battle.
+            </li>
+          </ol>
+        </div>
+        <p>
+          Each of these has an array of corresponding
+          <em>actions</em> that can be defined in the configuration
+          JSON:
+        </p>
+
+        <pre class="codeblock">
+{
+  "idle": [],
+  "pull": [],
+  "battle": []
+}
+</pre
+        >
+
+        <p>
+          Gambit executes on a 2 Hz cycle (twice a second), and will
+          run through the list of actions, in order, for the current
+          state. The first action whose condition is met will be
+          executed before moving on to the next cycle. Similarly, if
+          no conditions are met then Gambit will try again on the next
+          cycle.
+        </p>
+      </div>
+
+      <div class="row section-actiondefinition">
+        <p class="display-5">Action Definition</p>
+
+        <p>Actions are defined using the following properties:</p>
+
+        <div class="section-actionproperties">
+          <!-- BEGIN REQUIRED ACTION PROPERTIES -->
+          <div class="lead mb-3">
+            <strong>Required Properties</strong>
+          </div>
+          <ul class="bare-list">
+            <li class="mb-3 action-property">
+              <span class="item-name"
+                ><code>commands: string | string[]</code></span
+              >
+              An array of commands to execute when the action is
+              triggered.
+            </li>
+
+            <li class="mb-3 action-property">
+              <span class="item-name"><code>when: string</code></span>
+              An expression representing the condition that is used to
+              determine if the action should be executed.
+            </li>
+          </ul>
+
+          <!-- BEGIN OPTIONAL ACTION PROPERTIES -->
+          <div class="lead mt-4 mb-3">
+            <strong>Optional Properties</strong>
+          </div>
+          <ul class="bare-list">
+            <li class="mb-3 action-property">
+              <span class="item-name"
+                ><code>comment: string</code></span
+              >
+              An optional, human-readable description you can set to
+              help you remember what you thought you were doing.
+              &lt;grin&gt;
+            </li>
+
+            <li class="mb-3 action-property">
+              <span class="item-name"
+                ><code>delay: number</code></span
+              >
+              The time to wait after entering the current state, in
+              seconds, before this action can be executed.
+              <p class="mt-2">
+                When the action state changes (that is, when it moves
+                between <code>idle</code> / <code>pull</code> /
+                <code>battle</code>), the set of actions that are
+                evaluated will change as well. The
+                <code>delay</code> value an optional buffer you can
+                place between the time the current state was entered
+                and when this action will start to be evaluated.
+              </p>
+              <p class="mt-2">
+                Let's say you want to wait 5 seconds after entering
+                battle before beginning your ranged attack sequence?
+                Set your relevant <code>battle</code> action with a
+                <code>delay</code> of 5 and that will happen
+                automatically.
+              </p>
+            </li>
+
+            <li class="mb-3 action-property">
+              <span class="item-name"
+                ><code>disabled: boolean</code></span
+              >
+              Set to <code>true</code> to disable the action; omit or
+              set to <code>false</code> to enable it (default).
+            </li>
+
+            <li class="mb-3 action-property">
+              <span class="item-name"
+                ><code>frequency: number</code></span
+              >
+              The maximum frequency at which this action can be run,
+              in seconds.
+              <p class="mt-2">
+                If the action is executed, it will not be run again
+                until this duration has elapsed. This is
+                <code>0</code> by default, which allows it to be run
+                as often as its <code>when</code> clause allows.
+              </p>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="row section-actionapi">
+        <!-- API -->
+        <p class="display-5">Action API</p>
+
+        <!-- VARIABLES -->
+        <div class="section-variables">
+          <p class="display-6">Variables</p>
+
+          <!-- BEGIN -->
+          <a id="var-target"></a>
+          <a id="var-battle_target"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name"
+                  ><code>bt</code> / <code>t</code></span
+                >
+                The two are interchangable, and represent your current
+                battle target. Note that this is
+                <strong>not</strong> necessarily your current target
+                in-game, but the mob you are currently engaged (or
+                about to be engaged) with. The following properties
+                are supported:
+
+                <div class="mt-2 mb-2">
+                  <ul>
+                    <li>
+                      <code>distance</code> - The distance between the
+                      player and this target. For those familiar with
+                      addon development, this is the
+                      <em>actual</em> distance rather than the
+                      distance squared.
+                    </li>
+                    <li>
+                      <code>hpp</code> - The HP percent, from 0-100.
+                    </li>
+                    <li><code>name</code> - The display name.</li>
+                    <li>
+                      <code>x</code> / <code>y</code> /
+                      <code>z</code> - The map location of the target.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <a id="var-party_alliance"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name">
+                  <code>p0 - p5</code> / <code>a10 - a15</code> /
+                  <code>a20 - a25</code>
+                </span>
+                The list of members currently in your party or
+                alliance. Any unoccupied slot will evaluate to nil.
+                All of the properties mentioned for
+                <a href="#var-battle_target">bt</a> and
+                <a href="#var-target">t</a>
+                above are supported, with the addition of:
+
+                <div class="mt-2 mb-2">
+                  <ul>
+                    <li>
+                      <code>hp</code> - The current actual HP of this
+                      member.
+                    </li>
+                    <li>
+                      <code>mp</code> - The current actual MP of this
+                      member.
+                    </li>
+                    <li>
+                      <code>tp</code> The current TP of this member.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name"
+                  ><code>self</code> / <code>me</code></span
+                >
+                These two are interchangeable, and represent yourself
+                as the player. All of the properties mentioned for
+                <a href="#var-party_alliance">party/alliance</a>
+                members above are supported, with the addition of:
+
+                <div class="mt-2 mb-2">
+                  <ul>
+                    <li>
+                      <code>max_hp</code> - Your actual maximum HP
+                      value.
+                    </li>
+                    <li>
+                      <code>max_mp</code> - Your actual maximum MP
+                      value.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+        </div>
+
+        <!-- FUNCTIONS -->
+        <div class="section-functions">
+          <p class="display-6">Functions</p>
+
+          <p>
+            The following functions are available for use by actions.
+            I know this is Lua, but I've opted to use a
+            TypeScript-like syntax to make the function usage more
+            clear.
+          </p>
+
+          <!-- BEGIN -->
+          <a id="canuseability"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name"
+                  ><code
+                    >canUseAbility(name1: string, name2: string, ...,
+                    nameN: string): number</code
+                  ></span
+                >
+                Determine if any of the specified abilities can be
+                used, based on job/sub job level and the relevant
+                ability timers. The first usable ability found will be
+                saved for easier use later in this action cycle.
+
+                <div class="mt-3 mb-4">
+                  See also:
+                  <a href="#useability">useAbility</a>
+                </div>
+
+                <div class="mt-2">
+                  <strong>Parameters</strong>
+                  <ul>
+                    <li>
+                      <code>names</code> - The names of the abilities
+                      to check, such as <code>"Haste Samba"</code>.
+                    </li>
+                  </ul>
+                </div>
+                <div class="mt-2">
+                  <strong>Return value</strong>
+                  <ul>
+                    <li>
+                      Returns the index (starting from 1) of the first
+                      ability that can be used, or
+                      <code>nil</code> if none are usable.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <a id="canuseitem"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name">
+                  <code
+                    >canUseItem(name1: string, name2: string, ...,
+                    nameN: string): number</code
+                  >
+                </span>
+                Determine if any of the specified item can be used,
+                based on job level, remaining charges, and reuse
+                timers where applicable. The first usable item found
+                will be saved for easier use later in this action
+                cycle.
+
+                <div class="mt-3 mb-4">
+                  See also:
+                  <a href="#useitem">useItem</a>
+                </div>
+
+                <div class="mt-2">
+                  <strong>Parameters</strong>
+                  <ul>
+                    <li>
+                      <code>names</code> - The names of the items or
+                      enchanted equipment to check, such as
+                      <code>"Capacity Ring"</code> or
+                      <code>"Silt Pouch"</code>.
+                    </li>
+                  </ul>
+                </div>
+                <div class="mt-2">
+                  <strong>Return value</strong>
+                  <ul>
+                    <li>
+                      Returns the index (starting from 1) of the first
+                      item that can be used, or
+                      <code>nil</code> if none are usable.
+
+                      <p class="mt-3">
+                        Note that this does <strong>not</strong> take
+                        into account activation timers (as in, the 5
+                        second countdown on equipping a Capacity Ring)
+                        so you can use this to determine if said items
+                        are ready to be equipped and used.
+                      </p>
+
+                      <p class="mt-3">
+                        Items not in your inventory will
+                        <strong>not</strong> be considered usable.
+                      </p>
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <a id="canusespell"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name"
+                  ><code
+                    >canUseSpell(name1: string, name2: string, ...,
+                    nameN: string): number</code
+                  ></span
+                >
+
+                Determine if any of the specified spells can be used,
+                based on job/sub job level, whether the spell as been
+                learned, whether the spell is assigned (BLU), and the
+                relevant recast timer. The first usable spell found
+                will be saved for easier use later in this action
+                cycle.
+
+                <div class="mt-3 mb-4">
+                  See also:
+                  <a href="#usespell">useSpell</a>
+                </div>
+
+                <div class="mt-2">
+                  <strong>Parameters</strong>
+                  <ul>
+                    <li>
+                      <code>names</code> - The names of the spells to
+                      check, such as <code>"Battery Charge"</code>.
+                    </li>
+                  </ul>
+                </div>
+                <div class="mt-2">
+                  <strong>Return value</strong>
+                  <ul>
+                    <li>
+                      Returns the index (starting from 1) of the first
+                      item that can be used, or
+                      <code>nil</code> if none are usable.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <a id="idle"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name">
+                  <code
+                    >idle(seconds: number, message: string):
+                    void</code
+                  >
+                </span>
+                Remain in idle for the specified number of seconds.
+                The <a href="#wake">wake</a> function can be used to
+                force an early wakeup.
+
+                <div class="mt-3 mb-4">
+                  <strong>Note</strong>: If enabled and active, Gambit
+                  will <em>always</em> exit from idle if you get
+                  aggro. You will be woken up, and the relevant
+                  pull/battle actions will commence.
+                </div>
+
+                <div class="mt-2">
+                  <strong>Parameters</strong>
+                  <ul>
+                    <li>
+                      <code>seconds</code> - The duration of the
+                      forced idle, in seconds.
+                    </li>
+                    <li>
+                      <code>message</code> - (Optional) If specified,
+                      a message that will be written to chat (via
+                      <a href="#log">log</a>) when idling starts.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <a id="log"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name"
+                  ><code>log(message: string): void</code></span
+                >
+                Write a message to the chat. The message is visible
+                only to you.
+
+                <div class="mt-2">
+                  <strong>Parameters</strong>
+                  <ul>
+                    <li>
+                      <code>message</code> - The message to write.
+                    </li>
+                  </ul>
+                </div>
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+
+          <!-- BEGIN -->
+          <a id="wake"></a>
+          <div class="mb-4 doc-item">
+            <ul class="bare-list">
+              <li>
+                <span class="item-name"
+                  ><code>wake(): void</code></span
+                >
+                Wake from an extended idle state that was previously
+                set via the <a href="#idle">idle</a> function.
+              </li>
+            </ul>
+          </div>
+          <!-- END -->
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

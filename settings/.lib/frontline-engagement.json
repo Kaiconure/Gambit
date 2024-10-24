@@ -1,0 +1,25 @@
+{
+  "about": {
+    "author": "@FandomMenace"
+  },
+  "actions": [
+    {
+      "when": "bt and bt.distance <= 2 and not facingEnemy()",
+      "commands": ["faceEnemy()"],
+      "frequency": 1,
+      "comment": "Keep facing the enemy as we fight."
+    },
+    {
+      "when": "bt and bt.distance <= 2 and following()",
+      "commands": ["cancelFollow()", "faceEnemy()"],
+      "frequency": 1,
+      "comment": "Stop following and face the enemy if we're close to the mob."
+    },
+    {
+      "when": "bt and bt.distance > 2",
+      "commands": ["follow(bt)"],
+      "frequency": 5,
+      "comment": "Maintain a minimum distance from the enemy."
+    }
+  ]
+}
