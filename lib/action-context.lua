@@ -57,7 +57,26 @@ function context_randomize(...)
     if count == 0 then return nil end
     if count == 1 then return args[1] end
 
-    return args[math.random(1, count)]
+    -- -- We need a deep copy of the args
+    -- args = json.parse(json.stringify(args))
+
+    local MAX_PASSES = 1
+
+    -- This is a very basic shuffle. Iterate through the array a given number of times and
+    -- swap the current element with a random one at some other location in the array. 
+    for pass = 1, MAX_PASSES do 
+        for i, val in ipairs(args) do
+            local dest = math.random(1, count)
+            if dest ~= i then
+                args[i] = args[dest]
+                args[dest] = val
+            end
+        end
+    end
+
+    return args
+
+    --return args[math.random(1, count)]
 end
 
 -----------------------------------------------------------------------------------------
@@ -544,19 +563,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                                 -- once we know the item can be used once equipped.
                                 local canUse = secondsUntilReuse <= 0 and chargesRemaining > 0
 
-                                -- Save the item to the context
-                                context.item = {
-                                    name = item.name,
-                                    item = item,
-                                    type = ext and ext.type,
-                                    bagItem = bagItem,
-                                    secondsUntilReuse = secondsUntilReuse,
-                                    secondsUntilActivation = secondsUntilActivation,
-                                    chargesRemaining = chargesRemaining,
-                                    usable = (ext and ext.usable) or canUse
-                                }
-
                                 if canUse then
+                                    -- Save the item to the context
+                                    context.item = {
+                                        name = item.name,
+                                        item = item,
+                                        type = ext and ext.type,
+                                        bagItem = bagItem,
+                                        secondsUntilReuse = secondsUntilReuse,
+                                        secondsUntilActivation = secondsUntilActivation,
+                                        chargesRemaining = chargesRemaining,
+                                        usable = (ext and ext.usable) or canUse
+                                    }
+
                                     return key
                                 end
                             end
@@ -647,11 +666,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         if type(spells) == 'table' then
             for key, _spell in ipairs(spells) do
                 local spell = _spell
-                if type(spell) == 'string' then
+                if type(spell) ~= 'nil' then
                     spell = findSpell(spell)
                     if spell then
-                        context.spell = spell
                         if canUseSpell(context.player, spell) then
+                            context.spell = spell
                             return key
                         end
                     end
@@ -720,7 +739,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     -- Remove all items that aren't within the specified min and max tier range
     context.withTierRange = function(min, max, ...)
         return context.withMinTier(min, 
-            context.withMaxTier(max, {...})
+            context.withMaxTier(max, varargs({...}))
         )
     end
 
@@ -736,8 +755,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                     ability = findJobAbility(ability)
 
                     if ability then
-                        context.ability = ability
                         if canUseAbility(context.player, ability) then
+                            context.ability = ability
                             return key
                         end
                     end
@@ -895,16 +914,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
 
         if context.item then
             return context.useItem(target)
-        end
-    end
-
-    --------------------------------------------------------------------------------------
-    -- Determine if you have the effect triggerd by the specified spell or ability
-    context.hasEffectOf = function(name)
-        local res = findSpell(name) or findJobAbility(name)
-        local buffId = res and res.status
-        if buffId then
-            return hasBuff(context.player, buffId)
         end
     end
 
@@ -1067,12 +1076,34 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     -- Returns true if the specified buff is active
     context.hasBuff = function (...)
-        local buffs = varargs({...})
+        local names = varargs({...})
         
         local player = windower.ffxi.get_player()
-        for key, buff in pairs(buffs) do
-            if hasBuff(player, buff) then
-                return key
+        for i, name in ipairs(names) do
+            local buff = hasBuff(player, name)
+            if buff then
+                context.effect = buff
+                return i
+            end
+        end
+    end
+    context.hasEffect = context.hasBuff
+
+    --------------------------------------------------------------------------------------
+    -- Determine if you have the effect triggerd by the specified spell or ability
+    context.hasEffectOf = function(...)
+        local names = varargs({...})
+        local player = windower.ffxi.get_player()
+
+        for i, name in ipairs(names) do
+            local res = findSpell(name) or findJobAbility(name)
+            local buffId = res and res.status
+            if buffId then
+                local buff = hasBuff(player, buffId)
+                if buff then
+                    context.effect = buff
+                    return i
+                end
             end
         end
     end

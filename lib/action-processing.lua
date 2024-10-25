@@ -449,6 +449,7 @@ local function getNextBattleAction(context)
                 context.spell       = nil   -- Current spell
                 context.ability     = nil   -- Current ability
                 context.item        = nil   -- Current item info [Item resource is at context.item.item]
+                context.effect      = nil   -- Current buff/effect
                 context.result      = nil   -- The result of a targeting enumerator
 
                 -- Store the current action to the context

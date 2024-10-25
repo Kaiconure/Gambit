@@ -232,7 +232,9 @@ function hasBuff(player, buff, skiprecursion)
         return false
     end
 
-    return arrayIndexOf(player.buffs, buff.id) ~= nil
+    if arrayIndexOf(player.buffs, buff.id) ~= nil then
+        return buff
+    end
 end
 
 --------------------------------------------------------------------------------------
