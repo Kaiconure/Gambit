@@ -12,7 +12,10 @@ local ALL_MEMBER_FIELD_NAMES = {
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
 local function varargs(args)
-    if args and type(args[1]) == 'table' then
+    -- We allow a single array to be passed rather than a list of arguments, in which case
+    -- we will simply return the first array we've received. We could consider appending
+    -- multiple arrays together at some point if we'd like.
+    if type(args) == 'table' and type(args[1]) == 'table' then
         return args[1]
     end
 
@@ -375,6 +378,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         time = time,
         mobTime = mobEngagedTime or 0,
         skillchain = _actionProcessorState:getSkillchain(),
+        party_weapon_skill = _actionProcessorState:getPartyWeaponSkillInfo(),
         vars = _actionProcessorState.vars,
     }
 
@@ -436,33 +440,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --
     context.canUseWeaponSkill = function (...)
         local weaponSkills = varargs({...})
-        
-        if type(weaponSkills) == 'table' then
-            for key, _weaponSkill in ipairs(weaponSkills) do
-                local weaponSkill = _weaponSkill
-                if type(weaponSkill) == 'string' then
-                    weaponSkill = findWeaponSkill(weaponSkill)
-                    if weaponSkill then
-                        local target = weaponSkill.targets.Self and context.me or context.bt
-                        local targetOutOfRange = target and
-                            target.distance and
-                            target.distance > weaponSkill.range
+        for key, _weaponSkill in ipairs(weaponSkills) do
+            weaponSkill = findWeaponSkill(_weaponSkill)
+            if weaponSkill then
+                local target = weaponSkill.targets.Self and context.me or context.bt
+                local targetOutOfRange = target and
+                    target.distance and
+                    target.distance > weaponSkill.range
 
-                        if not targetOutOfRange then
-                            if canUseWeaponSkill(
-                                context.player,
-                                weaponSkill) 
-                            then
-                                context.weaponSkill = weaponSkill
-                                return key
-                            end
-                        else
-                            writeDebug('Target %s is not in range of weapon skill %s':format(
-                                text_mob(target.name),
-                                text_weapon_skill(weaponSkill.name)
-                            ))
-                        end
+                if not targetOutOfRange then
+                    if canUseWeaponSkill(
+                        context.player,
+                        weaponSkill) 
+                    then
+                        context.weapon_skill = weaponSkill
+                        return key
                     end
+                else
+                    writeDebug('Target %s is not in range of weapon skill %s':format(
+                        text_mob(target.name),
+                        text_weapon_skill(weaponSkill.name)
+                    ))
                 end
             end
         end
@@ -471,7 +469,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     --
     context.useWeaponSkill = function (weaponSkill)
-        if weaponSkill == nil then weaponSkill = context.weaponSkill end
+        if weaponSkill == nil then weaponSkill = context.weapon_skill end
         if type(weaponSkill) == 'string' then weaponSkill = findWeaponSkill(weaponSkill) end
 
         if type(weaponSkill) == 'table' then
@@ -1117,11 +1115,129 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         if sc.name ~= nil and 
             (names[1] == nil or arrayIndexOfStrI(names, sc.name))
         then
+            context.skillchain_trigger_time = sc.time
+
+            -- Don't let this action trigger again for the same skillchain
             local age = context.time - sc.time
             context.delay(MAX_SKILLCHAIN_TIME - age)
+
             return true
         end
     end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy is using a TP move
+    context.enemyAbility = function (...)
+        if context.bt then
+            local skills = varargs({...})
+            local info = _actionProcessorState:getMobAbilityInfo(context.bt)
+            if info then
+                -- We'll match if either no filters were provided, or if the current  ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- We'll only allow one trigger per single mob ability. TODO: Maybe change this in the future?
+                    _actionProcessorState:clearMobAbility(context.bt)
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Need better understanding. Triggers when a skillchain opening with any of 
+    -- the specified skillchain attributes (e.g. what's in the WS description)
+    context.____partyOpeningSkillchain = function (...)
+        -- if context.bt then
+        --     local skillchains = varargs({...})
+        --     local info = _actionProcessorState:getPartyWeaponSkillInfo()
+            
+        --     if 
+        --         info and
+        --         info.mob and
+        --         info.mob.id == context.bt.id
+        --     then
+        --         -- We'll match if either no filters were provided, or if the requested skillchain
+        --         -- attributes are matched by the triggering weapon skill
+        --         if 
+        --             skillchains[1] == nil or
+        --             arraysIntersectStrI(skillchains, info.skillchains)
+        --         then
+        --             context.party_weapon_skill = info.skill
+        --             context.party_weapon_skill_time = _actionProcessorState.time
+
+        --             return context.party_weapon_skill
+        --         end
+        --     end
+        -- end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if a party member is using a tp move
+    context.partyUsingWeaponSkill = function (...)
+        if context.bt then
+            local skills = varargs({...})
+            local party_weapon_skill = context.party_weapon_skill
+            
+            if 
+                party_weapon_skill and
+                party_weapon_skill.mob and
+                party_weapon_skill.mob.id == context.bt.id
+            then
+                -- We'll match if either no filters were provided, or if the requested skillchain
+                -- attributes are matched by the triggering weapon skill
+                if 
+                    skills[1] == nil or
+                    arrayIndexOfStrI(skills, party_weapon_skill.name)
+                then
+                    context.skillchain_trigger_time = party_weapon_skill.time
+
+                    -- Don't let this action trigger again for the same weapon skill
+                    local age = context.time - party_weapon_skill.time
+                    context.delay(MAX_WEAPON_SKILL_TIME - age)
+
+                    return party_weapon_skill
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Close a skill chain with the specified weapon skill
+    context.closeSkillchain = function (...)
+        local weaponSkill = varargs({...})
+        if #weaponSkill == 0 then weaponSkill = context.weapon_skill and context.weapon_skill.name end
+
+        if context.canUseWeaponSkill(weaponSkill) then
+
+            writeVerbose('Attempting to close skillchain with: %s':format(
+                text_weapon_skill(context.weapon_skill.name, Colors.verbose)
+            ))
+
+            -- The skillchain_trigger_time value is by a triggered 'skillchaining' or 'partyUsingWeaponSkill' check.
+            -- In either case, we have the possibility of closing a skillchain by following up with a weapon skill.
+            if 
+                context.skillchain_trigger_time > 0
+            then
+                -- Calculate the age of our weapon skill, and the corresponding sleep time needed
+                -- to ensure we have a chance at creating a skillchain effect
+                local age = context.time - context.skillchain_trigger_time
+                local sleepTime = math.max(WEAPON_SKILL_DELAY - age, WEAPON_SKILL_DELAY)
+
+                -- If we need to delay for our skillchain, do that now
+                if sleepTime > 0 then
+                    coroutine.sleep(sleepTime)
+                end
+            end
+
+            context.useWeaponSkill()
+
+            return true
+        end
+    end
+
 
     --------------------------------------------------------------------------------------
     --

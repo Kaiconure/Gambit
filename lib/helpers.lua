@@ -68,6 +68,37 @@ function isArray(value)
 end
 
 --------------------------------------------------------------------------------------
+-- Determine if the two arrays have a non-empty intersect set
+function arraysIntersect(a1, a2)
+    if 
+        a1 ~= nil and #a1 > 0 and
+        a2 ~= nil and #a2 > 0
+    then
+        for i, val in ipairs(a1) do
+            if arrayIndexOf(a2, val) then
+                return true
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if the two string arrays have a non-empty intersect set, with
+-- a case-insensitive comparison operation
+function arraysIntersectStrI(a1, a2)
+    if 
+        a1 ~= nil and #a1 > 0 and
+        a2 ~= nil and #a2 > 0
+    then
+        for i, val in ipairs(a1) do
+            if arrayIndexOfStrI(a2, val) then
+                return true
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
 -- Find the index of the specified array key, or nil
 function arrayIndexOf(array, search)
     if array ~= nil then

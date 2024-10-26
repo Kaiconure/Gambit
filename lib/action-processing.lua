@@ -1,4 +1,7 @@
-MAX_SKILLCHAIN_TIME = 5
+MAX_SKILLCHAIN_TIME     = 4     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+
+WEAPON_SKILL_DELAY      = 2     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
@@ -82,6 +85,10 @@ _actionProcessorState = {
 
                 self.actionTypeStartTime = os.clock()
                 self.cycles = 0
+                
+                -- Reset some mob state tracking on state change
+                self.skillchain = { time = 0 }
+                self.mobAbilities = { }
             end
 
             self.actionType = newType
@@ -111,11 +118,66 @@ _actionProcessorState = {
     end,
 
     getSkillchain = function(self)
-        if (self.currentTime - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
+        if self.skillchain.time > 0 and (self.currentTime - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
             self:setSkillchain(nil)
         end
 
         return self.skillchain
+    end,
+
+    setPartyWeaponSkill = function(self, actor, skill, mob)
+        if actor and skill and mob then
+            local skillchains = {}
+
+            if skill.skillchain_a and skill.skillchain_a ~= '' then skillchains[#skillchains + 1] = skill.skillchain_a end
+            if skill.skillchain_b and skill.skillchain_b ~= '' then skillchains[#skillchains + 1] = skill.skillchain_b end
+            if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
+
+            self.weaponSkill = {
+                time = self.currentTime,
+                skill = skill,
+                name = skill.name,
+                actor = actor,
+                mob = mob,
+                skillchains = skillchains
+            }
+        else
+            self.weaponSkill = { time = 0 }
+        end
+    end,
+
+    getPartyWeaponSkillInfo = function(self)
+        -- Keep alive for at most 6 seconds
+        if self.weaponSkill.time > 0 and (self.currentTime - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
+            self:setPartyWeaponSkill()
+        end
+
+        return self.weaponSkill
+    end,
+
+    setMobAbility = function(self, mob, ability)
+        self.mobAbilities[mob.id] = {
+            time = self.currentTime,
+            mob = mob,
+            ability = ability
+        }
+    end,
+
+    clearMobAbility = function(self, mob)
+        self.mobAbilities[mob.id] = nil
+    end,
+
+    getMobAbilityInfo = function(self, mob)
+        local info = self.mobAbilities[mob.id]
+        if info then
+            -- We'll set a maximum time that we'll allow a mob ability to remaing active
+            if self.currentTime - info.time > 10 then
+                self.mobAbilities[mob.id] = nil
+                info = nil
+            end            
+        end
+
+        return info
     end,
 
     currentSpell = {
@@ -148,6 +210,8 @@ _actionProcessorState = {
         self.actionWakeTime = 0
         self.actionType = nil
         self.skillchain = { time = 0 }
+        self.mobAbilities = {}
+        self.weaponSkill = { time = 0 }
         self.currentSpell = { time = 0 }
         self.actionTypeStartTime = os.clock()
         self.actions = { }
@@ -170,6 +234,18 @@ end
 
 function setSkillchain(name)
     _actionProcessorState:setSkillchain(name)
+end
+
+function markMobAbilityStart(mob, ability)
+    _actionProcessorState:setMobAbility(mob, ability)
+end
+
+function markMobAbilityEnd(mob)
+    _actionProcessorState:clearMobAbility(mob)
+end
+
+function setPartyWeaponSkill(actor, skill, mob)
+    _actionProcessorState:setPartyWeaponSkill(actor, skill, mob)
 end
 
 --------------------------------------------------------------------------------------
@@ -446,11 +522,14 @@ local function getNextBattleAction(context)
                 delayReference >= action.delay
             then 
                 -- When we evaluate a new action, we need to clear the state left behind by any previous actions
-                context.spell       = nil   -- Current spell
-                context.ability     = nil   -- Current ability
-                context.item        = nil   -- Current item info [Item resource is at context.item.item]
-                context.effect      = nil   -- Current buff/effect
-                context.result      = nil   -- The result of a targeting enumerator
+                context.spell                   = nil   -- Current spell
+                context.ability                 = nil   -- Current ability
+                context.item                    = nil   -- Current item info [Item resource is at context.item.item]
+                context.effect                  = nil   -- Current buff/effect
+                context.result                  = nil   -- The result of a targeting enumerator
+                context.enemy_ability           = nil   -- The current mob ability
+                context.weapon_skill            = nil   -- The weapon skill you're trying to use
+                context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
 
                 -- Store the current action to the context
                 context.action = action

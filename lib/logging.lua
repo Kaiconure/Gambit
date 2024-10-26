@@ -240,7 +240,7 @@ end
 
 --------------------------------------------------------------------------------------
 -- Semantic formatting references
-text_player               = text_white
+text_player               = text_yellow
 text_mount                = text_green
 text_trust                = text_magenta
 text_inactive             = text_gray
