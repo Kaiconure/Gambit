@@ -11,12 +11,26 @@ local ALL_MEMBER_FIELD_NAMES = {
 -----------------------------------------------------------------------------------------
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
-local function varargs(args)
+local function varargs(args, default)
     -- We allow a single array to be passed rather than a list of arguments, in which case
     -- we will simply return the first array we've received. We could consider appending
     -- multiple arrays together at some point if we'd like.
     if type(args) == 'table' and type(args[1]) == 'table' then
-        return args[1]
+        args = args[1]
+    end
+
+    -- If args is not a table, we'll promote it as appropriate
+    if type(args) ~= 'table' then
+        if args then
+            args = {args}
+        else
+            args = {}
+        end
+    end
+
+    -- We know that args is a table. If it's empty and we have a valid default, use that as a fallback
+    if #args == 0 and default then
+        args = { default }
     end
 
     return args
@@ -457,10 +471,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                         return key
                     end
                 else
-                    writeDebug('Target %s is not in range of weapon skill %s':format(
-                        text_mob(target.name),
-                        text_weapon_skill(weaponSkill.name)
-                    ))
+                    -- writeDebug('Target %s is not in range of weapon skill %s':format(
+                    --     text_mob(target.name),
+                    --     text_weapon_skill(weaponSkill.name)
+                    -- ))
                 end
             end
         end
@@ -495,7 +509,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     --
     context.canUseItem = function(...)
-        local items = varargs({...})
+        local items = varargs({...}, context.item and context.item.name)
         if type(items) == 'table' then
             for key, _item in ipairs(items) do
                 local item = _item
@@ -561,19 +575,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                                 -- once we know the item can be used once equipped.
                                 local canUse = secondsUntilReuse <= 0 and chargesRemaining > 0
 
-                                if canUse then
-                                    -- Save the item to the context
-                                    context.item = {
-                                        name = item.name,
-                                        item = item,
-                                        type = ext and ext.type,
-                                        bagItem = bagItem,
-                                        secondsUntilReuse = secondsUntilReuse,
-                                        secondsUntilActivation = secondsUntilActivation,
-                                        chargesRemaining = chargesRemaining,
-                                        usable = (ext and ext.usable) or canUse
-                                    }
+                                -- Save the item to the context
+                                context.item = {
+                                    name = item.name,
+                                    item = item,
+                                    type = ext and ext.type,
+                                    bagItem = bagItem,
+                                    secondsUntilReuse = secondsUntilReuse,
+                                    secondsUntilActivation = secondsUntilActivation,
+                                    chargesRemaining = chargesRemaining,
+                                    usable = (ext and ext.usable) or canUse
+                                }
 
+                                -- Return if we can use it
+                                if canUse then
                                     return key
                                 end
                             end
@@ -659,7 +674,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     --
     context.canUseSpell = function (...)
-        local spells = varargs({...})
+        local spells = varargs({...}, context.spell and context.spell.name)
         
         if type(spells) == 'table' then
             for key, _spell in ipairs(spells) do
@@ -667,8 +682,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                 if type(spell) ~= 'nil' then
                     spell = findSpell(spell)
                     if spell then
+                        context.spell = spell
+                        
                         if canUseSpell(context.player, spell) then
-                            context.spell = spell
                             return key
                         end
                     end
@@ -744,7 +760,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     --
     context.canUseAbility = function (...)
-        local abilities = varargs({...})
+        local abilities = varargs({...}, context.ability and context.ability.name)
 
         if type(abilities) == 'table' then
             for key, _ability in ipairs(abilities) do
@@ -753,8 +769,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                     ability = findJobAbility(ability)
 
                     if ability then
+                        context.ability = ability
+
                         if canUseAbility(context.player, ability) then
-                            context.ability = ability
                             return key
                         end
                     end
@@ -871,7 +888,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     -- from the above checks, stores that result to the context and returns true. Returns
     -- false and clears the context if no positive checks are found.
     context.canUse = function(...)
-        local names = varargs({...})
+        local names = varargs({...}, 
+            (context.spell and context.spell.name) or
+            (context.ability and context.ability.name) or
+            (context.item and context.item.name)
+        )
+
 
         -- We need to clear out all spells/abilities/items from the context here
         context.spell = nil
@@ -879,7 +901,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         context.item = nil
 
         -- Now, we get to find the first hit in the set (if any) and return based on that
-        if names and #names > 1 then
+        if names and #names > 0 then
             for i, name in ipairs(names) do
                 if context.canUseSpell(name) or context.canUseAbility(name) or context.canUseItem(name) then
                     return true
@@ -1094,12 +1116,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         local player = windower.ffxi.get_player()
 
         for i, name in ipairs(names) do
-            local res = findSpell(name) or findJobAbility(name)
+            local spell = findSpell(name)
+            local ability = findJobAbility(name)
+            local res = spell or ability
             local buffId = res and res.status
             if buffId then
+                -- Set the effect, as well as the spell or ability that causes it, to the context.
+                -- We do it outside the check to ensure that the latest hit is saved to the context
+                -- for use in "not hasEffectOf" scenarios.
+                context.effect = buff
+                context.spell = spell
+                context.ability = ability
+
                 local buff = hasBuff(player, buffId)
-                if buff then
-                    context.effect = buff
+                if buff then                    
                     return i
                 end
             end
@@ -1127,7 +1157,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
 
     --------------------------------------------------------------------------------------
     -- Trigger if our enemy is using a TP move
-    context.enemyAbility = function (...)
+    context.enemyUsingAbility = function (...)
         if context.bt then
             local skills = varargs({...})
             local info = _actionProcessorState:getMobAbilityInfo(context.bt)
@@ -1265,6 +1295,28 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     end
 
     --------------------------------------------------------------------------------------
+    -- Determine if you have a ranged weapon and ammo equipped
+    context.canShoot = function()
+        if context.t then
+            local items     = windower.ffxi.get_items()
+            local ammo      = tonumber(items.equipment.ammo or 0)
+            local ranged    = tonumber(items.equipment.range or 0)
+
+            return ammo > 0 and ranged > 0
+        end
+
+        return false
+    end
+
+    --------------------------------------------------------------------------------------
+    -- 
+    context.shoot = function (duration)
+        if context.t then
+            sendRangedAttackCommand(context.t, context)
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     --
     context.hasTarget = function ()
         return (context.t and context.t.mob) ~= nil
@@ -1328,6 +1380,65 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     -- Check if idle
     context.isIdling = function ()
         return _actionProcessorState:isIdleSnoozing()
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Check if resting
+    context.isResting = function ()
+        return context.player.status == STATUS_RESTING
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Take a knee if not already doing so
+    context.rest = function ()
+        if not context.isResting() then
+            sendActionCommand('input /heal', context, 1)
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Rise from rest if not already doing so
+    context.cancelRest = function ()
+        if context.isResting() then
+            sendActionCommand('input /heal', context, 1)
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- If dead, return to your homepoint
+    context.deathWarp = function ()
+        if context.player.vitals.hpp > 0 then
+            return
+        end
+
+        writeMessage(text_red('Alert: Initiating the sequence to send you back to your homepoint on death.'))
+
+        -- Give us a bit of time here
+        coroutine.sleep(5)
+
+        -- TODO: See if this reraise handling actually works
+        local reraise = hasBuff(context.player, 'Reraise')
+        if reraise then
+            windower.ffxi.cancel_buff(reraise.id)
+            coroutine.sleep(1)
+        end
+
+        local commands = {
+            'setkey enter down',    
+            'wait 0.1',
+            'setkey enter up',
+            'wait 2',               -- At this point: We've clicked the "Go back to Home Point" button with the countdown
+            'setkey left down',
+            'wait 0.1',
+            'setkey left up',
+            'wait 2',               -- At this point, we've selected [Yes] from the [Yes] [No] "Return to home point?" confirmation prompt.
+            'setkey enter down',
+            'wait 0.1',
+            'setkey enter up'       -- At this pint, we've clicked the [Yes] button from the above confirmation prompt. We should be returning to point point.
+        }
+
+        local command = table.concat(commands, ';')
+        sendActionCommand(command, context, 10)
     end
 
     --------------------------------------------------------------------------------------

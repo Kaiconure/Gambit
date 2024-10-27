@@ -139,7 +139,7 @@ local function shouldAquireNewTarget(player)
                 -- If we are engaged and have no valid t or bt, then we're ready to start looking for our
                 -- next target. This could be mob status latency, or an actual in-game auto-target that we
                 -- aren't properly facing.
-                if timeWithTarget >= math.max(settings.retargetDelay, 1) then
+                if timeWithTarget >= settings.retargetDelay then
                     writeDebug('Engaged without a valid target, forcing new target search.')
                     return true
                 end

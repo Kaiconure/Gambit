@@ -4,7 +4,7 @@
   },
   "actions": [
     {
-      "when": "bt and not facingEnemy()",
+      "when": "not facingEnemy()",
       "commands": ["faceEnemy()"],
       "frequency": 1,
       "comment": "Melee: Ensures that we are always facing the mob when engaged. We will not move from our camp spot."

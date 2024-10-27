@@ -40,11 +40,11 @@ handlers['disable'] = function (args)
         -- Clear the mob after we disable
         resetCurrentMob(nil)
 
-        writeMessage('  Status: Automation has been disabled.')
+        writeMessage('  Status: Automation has been %s.':format(text_red('disabled')))
     else
         -- Quiet mode means we won't message when there's no actual status change
         if not quiet then
-            writeMessage('  Status: Automation is disabled.')
+            writeMessage('  Status: Automation is %s.':format(text_red('disabled')))
         end
     end
 end
@@ -61,11 +61,17 @@ handlers['enable'] = function (args)
 
         globals.enabled = true
         changed = true
-        writeMessage(string.format('  Status: Automation has been enabled with [%s] strategy!', settings.strategy))
+        writeMessage('  Status: Automation has been %s with the %s strategy!':format(
+            text_green('enabled'),
+            text_action(settings.strategy)
+        ))
     else
         -- Quiet mode means we won't message when there's no actual status change
         if not quiet then
-            writeMessage(string.format('  Status: Automation is enabled with [%s] strategy.', settings.strategy))
+            writeMessage('  Status: Automation is %s with the [%s] strategy.':format(
+                text_green('enabled'),
+                text_action(settings.strategy)
+            ))
         end
     end
 
@@ -303,8 +309,10 @@ handlers['r'] = handlers['reload']
 -------------------------------------------------------------------------------
 -- verbosity
 handlers['verbosity'] = function (args)
-    local verbosity = (args[1] or ''):lower()
+    local level = arrayIndexOfStrI('-level')
+    local verbosity = type(level) == 'number' and (args[level + 1] or ''):lower()
     local verbositySet = false
+
     if verbosity == 'normal' or verbosity == '0' then
         settings.verbosity = VERBOSITY_NORMAL
         verbositySet = true
@@ -314,9 +322,14 @@ handlers['verbosity'] = function (args)
     elseif verbosity == 'debug' or verbosity == '2' then
         settings.verbosity = VERBOSITY_DEBUG
         verbositySet = true
+    elseif verbosity == 'trace' or verbosity == '3' then
+        settings.verbosity = VERBOSITY_TRACE
+        verbositySet = true
     end
 
     if verbositySet then
+        logging_settings.verbosity = settings.verbosity
+
         writeMessage(string.format('Verbosity set to: %s', verbosity))
         saveSettings()
     else

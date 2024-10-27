@@ -94,11 +94,6 @@ windower.register_event('status change', function(new_id, previous_id)
         -- We'll unfollow once battle has ended to avoid running off into space if autofollow was enabled
         resetCurrentMob(nil, true)
         windower.ffxi.follow(-1)
-
-    elseif new_id == STATUS_DEAD then
-        -- Stop on death
-        sendSelfCommand('disable -quiet')
-        resetCurrentMob(nil, true)
     end
 end)
 
@@ -155,6 +150,10 @@ local CATEGORY_SPELL_START          = 8     -- action.category=8, action.param =
 local CATEGORY_SPELL_INTERRUPT      = 8     -- action.category=8, action.param = 28787
 local CATEGORY_SPELL_END            = 4
 
+local CATEGORY_RANGED_START         = 12
+local CATEGORY_RANGED_INTERRUPT     = 12
+local CATEGORY_RANGED_END           = 2
+
 local PARAM_STARTED                 = 24931 -- Normal start
 local PARAM_INTERRUPTED             = 28787 -- Interrupted before completion
 
@@ -175,12 +174,16 @@ windower.register_event('action', function(action)
 
     if isSelf then
         local isSpellStart              = action.category == CATEGORY_SPELL_START and action.param == PARAM_STARTED
-        local isSpellInterrupted        = action.category == CATEGORY_SPELL_START and action.param == PARAM_INTERRUPTED
+        local isSpellInterrupted        = action.category == CATEGORY_SPELL_INTERRUPT and action.param == PARAM_INTERRUPTED
         local isSpellSuccessful         = action.category == CATEGORY_SPELL_END
         local isSpellCastingComplete    = isSpellInterrupted or isSpellSuccessful
 
+        local isRangedStart         = action.category == CATEGORY_RANGED_START and action.param == PARAM_STARTED
+        local isRangedInterrupted   = action.category == CATEGORY_RANGED_INTERRUPT and action.param == PARAM_INTERRUPTED
+        local isRangedSuccessful    = action.category == CATEGORY_RANGED_END
+        local isRangedComplete      = isRangedInterrupted or isRangedSuccessful
+
         if isSpellStart then            
-            
             globals.isSpellCasting = true
             globals.currentSpell = nil
             globals.spellTarget = nil
@@ -222,6 +225,14 @@ windower.register_event('action', function(action)
             globals.isSpellCasting = false
             globals.currentSpell = nil
             globals.spellTarget = nil
+        end
+
+        if isRangedStart then
+            --writeVerbose('Ranged attack starting...')
+            _actionProcessorState:markRangedAttackStart()
+        elseif isRangedComplete then
+            --writeVerbose('   ...ranged attack ending!')
+            _actionProcessorState:markRangedAttackCompleted(isRangedSuccessful)
         end
     end
 end)

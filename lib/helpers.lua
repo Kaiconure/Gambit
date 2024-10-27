@@ -15,6 +15,7 @@ BUFF_FOOD           = 251
 STATUS_IDLE           = 0
 STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
+STATUS_RESTING        = 33
 
 PACKET_TARGET_LOCK    = 0x058
 

@@ -101,28 +101,20 @@ ActionPacket.open_listener(function (act)
                 local ability = action and action.param and resources.monster_abilities[action.param]
 
                 if ability then
-                    local message = '%s: Beginning %s %s %s':format(
-                        text_mob(actor.name, Colors.trace),
-                        text_weapon_skill(ability.name, Colors.trace),
+                    writeVerbose('%s: Preparing %s %s %s':format(
+                        text_mob(actor.name, Colors.verbose),
+                        text_weapon_skill(ability.name, Colors.verbose),
                         CHAR_RIGHT_ARROW,
-                        text_player(target.name, Colors.trace)
-                    )
-                    writeTrace(message)
+                        target.spawn_type == SPAWN_TYPE_MOB and text_mob(target.name) or text_player(target.name)
+                    ))
 
-                    markMobAbilityStart(actor, ability)
+                    -- Need to load all the targets rather than just the first
+                    markMobAbilityStart(actor, ability, {target})
                 end
             elseif category == 'mob_tp_finish' then
                 local ability = actionPacket.raw.param and resources.monster_abilities[actionPacket.raw.param]
 
                 if ability then
-                    local message = '  %s: Finishing %s %s %s':format(
-                        text_mob(actor.name, Colors.trace),
-                        text_weapon_skill(ability and ability.name or 'n/a', Colors.trace),
-                        CHAR_RIGHT_ARROW,
-                        text_player(target.name, Colors.trace)
-                    )
-                    writeTrace(message)
-
                     markMobAbilityEnd(actor)
                 end
             end
@@ -156,12 +148,6 @@ ActionPacket.open_listener(function (act)
                 ))
 
                 setPartyWeaponSkill(actor, ability, target)
-            else
-                -- writeVerbose('[%s] %s used unknown ability %s':format(
-                --     category,
-                --     text_player(actor.name, Colors.verbose),
-                --     text_number(id, Colors.verbose)
-                -- ))
             end
         end
     end

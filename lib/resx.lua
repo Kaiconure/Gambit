@@ -229,7 +229,7 @@ function hasBuff(player, buff, skiprecursion)
     if type(buff) == 'string' then buff = findBuff(buff) end
 
     if type(buff) ~= 'table' or type(buff.id) ~= 'number' or not resources.buffs[buff.id] then
-        return false
+        return nil
     end
 
     if arrayIndexOf(player.buffs, buff.id) ~= nil then
@@ -443,4 +443,26 @@ function canUseWeaponSkill(player, weaponSkill)
     end
 
     return false
+end
+
+local FINISHING_MOVES_COUNT = 
+{
+    381,    -- 1 finishing move
+    382,    -- 2 finishing moves
+    383,    -- 3 finishing moves
+    384,    -- 4 finishing moves
+    385,    -- 5 finishing moves
+    588     -- 6 or more finishing moves
+}
+
+function getFinishingMoves(player)
+    player = player or windower.ffxi.get_player()
+
+    for i = #FINISHING_MOVES_COUNT, 1, -1 do
+        if arrayIndexOf(player.buffs, FINISHING_MOVES_COUNT[i]) then
+            return i
+        end
+    end
+
+    return 0
 end

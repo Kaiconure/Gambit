@@ -29,16 +29,12 @@ local DefaultIgnoreList = {
 }
 
 local defaultSettings = {
-    maxDistance = 15,
+    maxDistance = 50,
     maxDistanceZ = 5,
-    attackDelay = 1.5,
-    retargetDelay = 0.5,
+    retargetDelay = 0.0,
     strategy = TargetStrategy.default,
-    autoFollow = 0,
     verbosity = VERBOSITY_VERBOSE,
     schemaVersion = 2,
-    onEngage = '',
-    weaponSkill = '',
     ignoreList = DefaultIgnoreList,
     maxChaseTime = nil
 }
@@ -106,13 +102,13 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
 
             -- Import any items that have an import reference and which aren't marked as disabled
             if type(action.import) == 'string' and not action.disabled then
-                -- First, try the user's own settings folder
-                local fileName = '.\\settings\\%s\\.lib\\%s.json':format(playerName, action.import)
+                -- First, try the user's actions/.libs folder
+                local fileName = './settings/%s/actions/.lib/%s.json':format(playerName, action.import)
                 local file = files.new(fileName)
 
-                -- If the import doesn't exist there, use the standard libs folder
+                -- If the import doesn't exist there, use the standard settings .lib folder
                 if not file:exists() then
-                    fileName = '.\\settings\\.lib\\%s.json':format(action.import)
+                    fileName = './settings/.lib/%s.json':format(action.import)
                     file = files.new(fileName)
                 end
 
@@ -171,7 +167,7 @@ local function loadActionImports(playerName, actions)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'pull', 'idle'}
+        local types = {'battle', 'pull', 'idle', 'resting', 'dead'}
 
         for i = 1, #types do
             local actionType = types[i]
@@ -248,7 +244,7 @@ end
 ----------------------------------------------------------------------------------------
 --
 local function loadDefaultActions(player, save)
-    local fileName = '.\\settings\\.lib\\default-actions.json'
+    local fileName = '.\\settings\\.defaults\\default-actions.json'
     local defaults = loadActionsFromFile(player.name, fileName)
 
     if defaults and save then
