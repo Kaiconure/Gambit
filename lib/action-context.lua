@@ -391,9 +391,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         actionType = actionType,
         time = time,
         mobTime = mobEngagedTime or 0,
-        skillchain = _actionProcessorState:getSkillchain(),
-        party_weapon_skill = _actionProcessorState:getPartyWeaponSkillInfo(),
-        vars = _actionProcessorState.vars,
+        skillchain = actionStateManager:getSkillchain(),
+        party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(),
+        vars = actionStateManager.vars,
     }
 
     context.target = target
@@ -1160,7 +1160,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     context.enemyUsingAbility = function (...)
         if context.bt then
             local skills = varargs({...})
-            local info = _actionProcessorState:getMobAbilityInfo(context.bt)
+            local info = actionStateManager:getMobAbilityInfo(context.bt)
             if info then
                 -- We'll match if either no filters were provided, or if the current  ability is in the filter list
                 if 
@@ -1168,7 +1168,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                     arrayIndexOfStrI(skills, info.ability.name) 
                 then
                     -- We'll only allow one trigger per single mob ability. TODO: Maybe change this in the future?
-                    _actionProcessorState:clearMobAbility(context.bt)
+                    actionStateManager:clearMobAbility(context.bt)
                     context.enemy_ability = info.ability
                     return info.ability
                 end
@@ -1182,7 +1182,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     context.____partyOpeningSkillchain = function (...)
         -- if context.bt then
         --     local skillchains = varargs({...})
-        --     local info = _actionProcessorState:getPartyWeaponSkillInfo()
+        --     local info = actionStateManager:getPartyWeaponSkillInfo()
             
         --     if 
         --         info and
@@ -1196,7 +1196,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         --             arraysIntersectStrI(skillchains, info.skillchains)
         --         then
         --             context.party_weapon_skill = info.skill
-        --             context.party_weapon_skill_time = _actionProcessorState.time
+        --             context.party_weapon_skill_time = actionStateManager.time
 
         --             return context.party_weapon_skill
         --         end
@@ -1337,25 +1337,25 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         local s = math.max(tonumber(s) or 0, 2)
         
         -- Set the wake time to the new time, or the current wake time -- whichever is later
-        _actionProcessorState.idleWakeTime = math.max(context.time + s, _actionProcessorState.idleWakeTime)
+        actionStateManager.idleWakeTime = math.max(context.time + s, actionStateManager.idleWakeTime)
 
         -- Don't let this action trigger again until we either wake up, or the time where
         -- the action was going to trigger anway -- whichever is later.
         if context.action then
             -- context.action.availableAt = math.max(
-            --     _actionProcessorState.idleWakeTime,
+            --     actionStateManager.idleWakeTime,
             --     context.action.availableAt or 0
             -- ) - 1
 
             if context.actionType ~= 'idle' then
                 -- Technically, being called from a non-idle state is kind of a no-op. But...
                 context.action.availableAt = math.max(
-                    _actionProcessorState.idleWakeTime,
+                    actionStateManager.idleWakeTime,
                     context.action.availableAt or 0
                 ) - 1
             else            
                 -- Wake up 1 second before the idle wake time so we can re-evaluate
-                context.action.availableAt = _actionProcessorState.idleWakeTime - 1
+                context.action.availableAt = actionStateManager.idleWakeTime - 1
             end
         end
 
@@ -1370,8 +1370,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     -- Wake from idle
     context.wake = function ()
-        if _actionProcessorState:isIdleSnoozing() then
-            _actionProcessorState.idleWakeTime = 0
+        if actionStateManager:isIdleSnoozing() then
+            actionStateManager.idleWakeTime = 0
             writeTrace('Waking from idle!')
         end
     end
@@ -1379,7 +1379,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     -- Check if idle
     context.isIdling = function ()
-        return _actionProcessorState:isIdleSnoozing()
+        return actionStateManager:isIdleSnoozing()
     end
 
     --------------------------------------------------------------------------------------

@@ -30,6 +30,8 @@ require('./lib/resx')
 require('./lib/eventing')
 require('./lib/commands')
 require('./lib/target-processing')
+
+actionStateManager = require('./lib/action-state-manager')
 require('./lib/action-processing')
 
 ActionContext = require('./lib/action-context')
@@ -203,7 +205,7 @@ windower.register_event('action', function(action)
             end
 
             if globals.currentSpell then
-                _actionProcessorState:setSpellStart(globals.currentSpell)
+                actionStateManager:setSpellStart(globals.currentSpell)
 
                 local message = 'Casting %s':format(text_spell(globals.currentSpell.name, Colors.verbose))
                 if globals.spellTarget then
@@ -215,7 +217,7 @@ windower.register_event('action', function(action)
             end
 
         elseif globals.isSpellCasting and isSpellCastingComplete then
-            _actionProcessorState:setSpellCompleted(isSpellInterrupted)
+            actionStateManager:setSpellCompleted(isSpellInterrupted)
 
             writeVerbose('  %s has %s!':format(
                 globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
@@ -229,10 +231,10 @@ windower.register_event('action', function(action)
 
         if isRangedStart then
             --writeVerbose('Ranged attack starting...')
-            _actionProcessorState:markRangedAttackStart()
+            actionStateManager:markRangedAttackStart()
         elseif isRangedComplete then
             --writeVerbose('   ...ranged attack ending!')
-            _actionProcessorState:markRangedAttackCompleted(isRangedSuccessful)
+            actionStateManager:markRangedAttackCompleted(isRangedSuccessful)
         end
     end
 end)

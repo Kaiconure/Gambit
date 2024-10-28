@@ -1,8 +1,3 @@
-MAX_SKILLCHAIN_TIME     = 5     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
-MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
-
-WEAPON_SKILL_DELAY      = 2     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
-
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
 --
@@ -22,282 +17,24 @@ WEAPON_SKILL_DELAY      = 2     -- The minimum amount of time to wait after one 
 --
 -------------------------------------------------------------------------------
 
-_actionProcessorState = {
-    needsRecompile = true,
-
-    currentTime = 0,
-    cycles = 0,
-
-    skillchain = {
-        time = 0
-    },
-    
-    idleWakeTime = 0,
-    isIdleSnoozing = function (self)
-        return self.currentTime < self.idleWakeTime
-    end,
-
-    actionWakeTime = 0,
-    extendActionWakeTime = function(self, duration)
-        duration = math.max(duration or 0, 0)
-        if self.actionWakeTime < self.currentTime then
-            -- If we're not already snoozing, the wake time is now + duration
-            self.actionWakeTime = self.currentTime + duration
-        else
-            -- If we are already snoozing, the wake time is the current wake time + duration
-            self.actionWakeTime = self.actionWakeTime + duration
-        end
-        
-        -- NOTE: This sleep is how we've prevented commands from stepping on each other. It's been wrapped
-        -- in this "extend" method so we have the option to change how this works later.
-        coroutine.sleep(duration)
-    end,
-    isActionSnoozing = function(self)
-        return self.currentTime < self.actionWakeTime
-    end,
-    
-    actionType = nil,
-    actionTypeStartTime = os.clock(),
-
-    -- Sets the action type being executed, used to track how long we're in a type
-    setActionType = function (self, newType)
-        
-        -- If we're running actions, it's time to wake up from action snooze
-        self.actionWakeTime = 0
-
-        -- If we're running non-idle actions,it's time to wake up from idling
-        if newType ~= 'idle' then
-            self.idleWakeTime = 0
-        end
-        
-        if self.actionType ~= newType and newType ~= nil then
-            local isInit = self.actionType == nil
-            local isResting = self.actionType == 'resting'
-            local isDead = self.actionType == 'dead'
-            local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull')
-            local isBattle = (self.actionType == 'battle')
-
-            --local isIdlePullTarget = (newType == 'idle' or newType == 'pull' or self.actionType == 'resting')
-            local isNewTypeResting = newType == 'resting'
-            local isNewTypeDead = newType == 'dead'
-            local isNewTypeIdlePull = newType == 'idle' or newType == 'pull'
-            local isNewTypeBattle = newType == 'battle'
-
-            local mode = (isInit and 'init')
-                or (isResting and 'resting')
-                or (isDead and 'dead')
-                or (isIdlePull and 'idle/pull')
-                or (isBattle and 'battle')
-
-            local newMode = (isNewTypeResting and 'resting')
-                or (isNewTypeDead and 'dead')
-                or (isNewTypeIdlePull and 'idle/pull')
-                or (isNewTypeBattle and 'battle')
-
-            -- Only reset time if we're transitioning between idle/pull and battle
-            if mode ~= newMode then
-                writeDebug(string.format(
-                    'Transitioning from %s to %s after %s',
-                    text_red(mode, Colors.debug),
-                    text_red(newMode, Colors.debug),
-                    pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.debug)
-                ))
-
-                self.actionTypeStartTime = os.clock()
-                self.cycles = 0
-                
-                -- Reset some mob state tracking on state change
-                self.skillchain = { time = 0 }
-                self.mobAbilities = { }
-            end
-
-            self.actionType = newType
-        end
-    end,
-    -- Return how long we've been in the current action type
-    elapsedTimeInType = function (self)
-        return os.clock() - (self.actionTypeStartTime or 0)
-    end,
-
-    -- How many cycles have been processed in the current action type
-    cyclesInType = function(self)
-        return self.cycles
-    end,
-
-    -- Marks the start of a new cycle
-    tick = function(self, currentTime)
-        self.currentTime = currentTime
-        self.cycles = self.cycles + 1
-    end,
-
-    setSkillchain = function(self, name)
-        self.skillchain = {
-            name = name,
-            time = self.currentTime
-        }
-    end,
-
-    getSkillchain = function(self)
-        if self.skillchain.time > 0 and (self.currentTime - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
-            self:setSkillchain(nil)
-        end
-
-        return self.skillchain
-    end,
-
-    setPartyWeaponSkill = function(self, actor, skill, mob)
-        if actor and skill and mob then
-            local skillchains = {}
-
-            if skill.skillchain_a and skill.skillchain_a ~= '' then skillchains[#skillchains + 1] = skill.skillchain_a end
-            if skill.skillchain_b and skill.skillchain_b ~= '' then skillchains[#skillchains + 1] = skill.skillchain_b end
-            if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
-
-            self.weaponSkill = {
-                time = self.currentTime,
-                skill = skill,
-                name = skill.name,
-                actor = actor,
-                mob = mob,
-                skillchains = skillchains
-            }
-        else
-            self.weaponSkill = { time = 0 }
-        end
-    end,
-
-    getPartyWeaponSkillInfo = function(self)
-        -- Keep alive for at most 6 seconds
-        if self.weaponSkill.time > 0 and (self.currentTime - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
-            self:setPartyWeaponSkill()
-        end
-
-        return self.weaponSkill
-    end,
-
-    setMobAbility = function(self, mob, ability, targets)
-        self.mobAbilities[mob.id] = {
-            time = self.currentTime,
-            mob = mob,
-            ability = ability,
-            target = targets and targets[1],
-            targets = targets
-        }
-    end,
-
-    clearMobAbility = function(self, mob)
-        self.mobAbilities[mob.id] = nil
-    end,
-
-    getMobAbilityInfo = function(self, mob)
-        local info = self.mobAbilities[mob.id]
-        if info then
-            -- We'll set a maximum time that we'll allow a mob ability to remaing active
-            if self.currentTime - info.time > 10 then
-                self.mobAbilities[mob.id] = nil
-                info = nil
-            end            
-        end
-
-        return info
-    end,
-
-    markRangedAttackStart = function(self)
-        self.rangedAttack = {
-            time = self.currentTime
-        }
-
-        return self.rangedAttack
-    end,
-
-    markRangedAttackCompleted = function(self, success)
-        self.rangedAttack = {
-            time = 0,
-            success = success
-        }
-    end,
-
-    getRangedAttack = function(self) 
-        ra = self.rangedAttack
-        if ra then
-            if ra.time == 0 then
-                ra = nil
-            elseif self.currentTime - ra.time > 10 then
-                self:markRangedAttackCompleted()
-                ra = nil
-            end
-        end
-
-        return ra
-    end,
-
-    currentSpell = {
-        time = 0,
-        castTime = 0,
-        spell = nil
-    },
-
-    setSpellStart = function(self, spell)
-        self.currentSpell = {
-            time = self.currentTime,
-            spell = spell,
-            interrupted = false
-        }
-        return self.currentTime
-    end,
-
-    setSpellCompleted = function(self, interrupted)
-        self.currentSpell = {
-            time = self.currentTime,
-            spell = nil,
-            interrupted = interrupted
-        }
-    end,
-
-    reset = function (self)
-        self.currentTime = 0
-        self.cycles = 0
-        self.idleWakeTime = 0
-        self.actionWakeTime = 0
-        self.actionType = nil
-        self.skillchain = { time = 0 }
-        self.mobAbilities = {}
-        self.weaponSkill = { time = 0 }
-        self.currentSpell = { time = 0 }
-        self.rangedAttack = { time = 0}
-        self.actionTypeStartTime = os.clock()
-        self.actions = { }
-        self.vars = { }
-    end,
-
-    actions = { }
-}
-
-CommandDurationTypes = 
-{
-    Sleep = 0,
-    Immediate = 1,
-    Scheduled = 2
-}
-
 function recompileActions()
-    _actionProcessorState.needsRecompile = true
+    actionStateManager.needsRecompile = true
 end
 
 function setSkillchain(name)
-    _actionProcessorState:setSkillchain(name)
+    actionStateManager:setSkillchain(name)
 end
 
 function markMobAbilityStart(mob, ability, targets)
-    _actionProcessorState:setMobAbility(mob, ability, targets)
+    actionStateManager:setMobAbility(mob, ability, targets)
 end
 
 function markMobAbilityEnd(mob)
-    _actionProcessorState:clearMobAbility(mob)
+    actionStateManager:clearMobAbility(mob)
 end
 
 function setPartyWeaponSkill(actor, skill, mob)
-    _actionProcessorState:setPartyWeaponSkill(actor, skill, mob)
+    actionStateManager:setPartyWeaponSkill(actor, skill, mob)
 end
 
 --------------------------------------------------------------------------------------
@@ -342,14 +79,7 @@ function sendActionCommand(
     end
 
     if commandDuration > 0 then
-        if durationType == CommandDurationTypes.Immediate then
-            -- Nothing to do, execute and immediately return
-        elseif durationType == CommandDurationTypes.Scheduled then
-            --_actionProcessorState:extendActionWakeTime(commandDuration)
-            coroutine.sleep(commandDuration)
-        else
-            coroutine.sleep(commandDuration)
-        end
+        coroutine.sleep(commandDuration)
     end
 end
 
@@ -380,7 +110,7 @@ function sendRangedAttackCommand(target, context)
     -- Wait until the RA is done or it expires
     local continue = true
     while continue do 
-        local ra = _actionProcessorState:getRangedAttack()
+        local ra = actionStateManager:getRangedAttack()
         if ra == nil or ra.time == 0 then
             continue = false
         else
@@ -445,7 +175,7 @@ function sendSpellCastingCommand(spell, target, context)
     -- Note that if the spell has not begun casting after the 1 second delay used above, exit early.
     local continue = true
     while continue do
-        local currentSpell = _actionProcessorState.currentSpell
+        local currentSpell = actionStateManager.currentSpell
 
         if
             os.clock() >= endTime or
@@ -564,12 +294,12 @@ local function compileActions(actionType, rawActions)
             end
         end
 
-        _actionProcessorState.actions[actionType] = _temp
+        actionStateManager.actions[actionType] = _temp
     else
-        _actionProcessorState.actions[actionType] = {}
+        actionStateManager.actions[actionType] = {}
     end
 
-    local actionCount = #_actionProcessorState.actions[actionType]
+    local actionCount = #actionStateManager.actions[actionType]
     if actionCount > 0 then
         writeMessage('Compilation of %s has completed.':format(
             pluralize(actionCount,
@@ -588,7 +318,7 @@ end
 local function compileAllActions()
     local settingsCopy = json.parse(json.stringify(settings))
 
-    _actionProcessorState:reset()
+    actionStateManager:reset()
 
     local actions = settingsCopy.actions
 
@@ -598,35 +328,35 @@ local function compileAllActions()
     compileActions('resting',   actions and actions.resting or {})
     compileActions('dead',      actions and actions.dead or {})
 
-    _actionProcessorState.vars = actions and actions.vars or {}
+    actionStateManager.vars = actions and actions.vars or {}
 
-    _actionProcessorState.needsRecompile = false
+    actionStateManager.needsRecompile = false
 end
 
 --------------------------------------------------------------------------------------
 -- Determine which action should be performed next
 local function getNextBattleAction(context)
     -- We will never execute actions while snoozing
-    if _actionProcessorState:isActionSnoozing() then
+    if actionStateManager:isActionSnoozing() then
         --return nil
         -- TODO: Nothing for now, let's just log
-        writeTrace('WARNING: _actionProcessorState:isActionSnoozing() returned true (NO-OP for now)')
+        writeTrace('WARNING: actionStateManager:isActionSnoozing() returned true (NO-OP for now)')
     end
 
-    _actionProcessorState:setActionType(context.actionType)
+    actionStateManager:setActionType(context.actionType)
 
     -- Do not proceed further if actions are not enabled
     if not globals.actionsEnabled then
         return nil
     end
 
-    local actions = _actionProcessorState.actions[context.actionType]
-    local delayReference = _actionProcessorState:elapsedTimeInType()
+    local actions = actionStateManager.actions[context.actionType]
+    local delayReference = actionStateManager:elapsedTimeInType()
     -- local delayReference = context.mobTime
     -- if context.actionType == 'battle' then
     --     -- For battle actions, we'll trigger based on the delay since entering
     --     -- battle rather than from begining to target the mob.
-    --     delayReference = _actionProcessorState:elapsedTimeInType()
+    --     delayReference = actionStateManager:elapsedTimeInType()
     -- end
 
     if actions then
@@ -723,7 +453,7 @@ local function doNextActionCycle(time, player)
     
     -- Determine if we're in an idling state (forced idle until a given time unless aggro'd). See the above
     -- initialization of isIdle to see the situations that would force us out of idling.
-    local isTimedIdling = isIdle and _actionProcessorState:isIdleSnoozing()
+    local isTimedIdling = isIdle and actionStateManager:isIdleSnoozing()
 
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
@@ -863,7 +593,7 @@ function cr_actionProcessor()
     while true do
         local sleepTimeSeconds = 0.5
 
-        if _actionProcessorState.needsRecompile then
+        if actionStateManager.needsRecompile then
             compileAllActions()
         end
 
@@ -879,7 +609,7 @@ function cr_actionProcessor()
             if
                 not isMounted
             then
-                _actionProcessorState:tick(time)
+                actionStateManager:tick(time)
 
                 -- As long as we're not dead or resting, we can process targeting info
                 if 
