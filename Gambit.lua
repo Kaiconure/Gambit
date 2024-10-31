@@ -39,11 +39,7 @@ ActionContext = require('./lib/action-context')
 globals = {
     enabled         = false,
     isSpellCasting  = false,
-    target          = {
-        mob = nil,
-        cycles = 0,
-        seconds = 0
-    },
+    target          = nil,
     currentZone = nil,
     selfName = __name,
     selfShortName = __shortName,
@@ -126,14 +122,13 @@ windower.register_event('load', function()
     windower.send_command('unbind @R; bind @R ' .. makeSelfCommand('run -start'))
     windower.send_command('unbind @~R; bind @~R ' .. makeSelfCommand('run -stop'))
 
-
-
     -- Store the current zone
     local info = windower.ffxi.get_info()
     globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
     globals.language = info.language
     
     -- Reload all settings
+    resetCurrentMob(nil)
     reloadSettings()
     
     -- Kick off the background threads

@@ -539,23 +539,6 @@ local function doNextActionCycle(time, player)
                     commandDelay = commandDelay + 0.5
                 end
 
-                -- Follow if necessary
-                if player.follow_index == nil or player.follow_index ~= mob.index then
-                    -- if mobDistance < 2 then
-                    --     -- Cancel follow for a bit if we're very close. Follow has been known to cause an inability to engage.
-                    --     -- The faceEnemy call further below will ensure we're pointed in the right direction.
-                    --     command = command .. 
-                    --         makeSelfCommand('follow; wait 0.5') ..
-                    --         makeSelfCommand('face -index %d; wait 0.5':format(mob.index))
-                    --     commandDelay = commandDelay + 1
-
-                    --     writeDebug('Temporarily removing follow for alignment on pull.')
-                    -- end
-
-                    -- command = command .. makeSelfCommand(string.format('follow -index %d; wait 0.5', mob.index))
-                    -- commandDelay = commandDelay + 0.5
-                end
-
                 -- Engage if necessary
                 if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
                     command = command .. string.format('input /attack <t>; ')

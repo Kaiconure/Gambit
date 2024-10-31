@@ -2,21 +2,26 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "vars": {
+    "frontline_engagement": {
+      "target_distance": 2
+    }
+  },
   "actions": [
     {
-      "when": "bt and bt.distance <= 2 and not facingEnemy()",
+      "when": "bt and bt.distance <= vars.frontline_engagement.target_distance and not facingEnemy()",
       "commands": ["faceEnemy()"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
-      "when": "bt and bt.distance <= 2 and following()",
+      "when": "bt and bt.distance <= vars.frontline_engagement.target_distance and following()",
       "commands": ["cancelFollow()", "faceEnemy()"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
-      "when": "bt and bt.distance > 2",
+      "when": "bt and bt.distance > vars.frontline_engagement.target_distance",
       "commands": ["follow(bt)"],
       "frequency": 5,
       "comment": "Maintain a minimum distance from the enemy."

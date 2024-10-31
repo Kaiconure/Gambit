@@ -19,6 +19,22 @@ STATUS_RESTING        = 33
 
 PACKET_TARGET_LOCK    = 0x058
 
+-- Math helper to get the sign indicator of a given number. Returns -1 if negative, 0 if 0, and +1 if positive
+math.sign = math.sign or 
+    function (num) 
+        return (num < 0 and -1) or (num > 0 and 1) or (0) 
+    end
+
+-- Math helper to clamp a number to a given range. Return value is in the range [min, max].
+math.clamp = math.clamp or 
+    function(num, min, max)
+        local _min = math.min(min, end)
+        local _max = math.max(max, end)
+
+        return math.min(_max, math.max(_min, num))
+    end
+
+
 --------------------------------------------------------------------------------------
 -- Write out a named value
 function makeDisplayValue(name, value, ignoreTables, prefix)

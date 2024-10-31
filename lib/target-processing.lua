@@ -178,20 +178,25 @@ function lockTarget(player, mob)
 end
 
 
+local targetKey = 0
 --------------------------------------------------------------------------------------
 --
 function resetCurrentMob(mob, force)
     -- We're setting the same mob if both old and new are nil, or both old and new share the same mob id
-    local isSameMob = 
+    local isSameMob = globals.target and (
         (mob == nil and globals.target._mob == nil) or
         (mob ~= nil and globals.target._mob ~= nil and mob.id == globals.target._mob.id)
+    )
     local allowReset = force or not isSameMob
 
     -- Only do an update if the new mob is different from the old, or if we're doing a forced update
     if allowReset then
+        targetKey = targetKey + 1
+
         local _temp = {
+            _key = targetKey,
             _mob = mob,
-            _start = os.clock(),
+            _start = os.clock(),            
 
             --------------------------------------------------------------------------------------
             -- Gets the mob, as it was originally set when found
