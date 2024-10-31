@@ -28,8 +28,8 @@ math.sign = math.sign or
 -- Math helper to clamp a number to a given range. Return value is in the range [min, max].
 math.clamp = math.clamp or 
     function(num, min, max)
-        local _min = math.min(min, end)
-        local _max = math.max(max, end)
+        local _min = math.min(min, max)
+        local _max = math.max(min, max)
 
         return math.min(_max, math.max(_min, num))
     end
