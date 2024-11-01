@@ -366,6 +366,14 @@ local function loadContextTargetSymbols(context, target)
             local mob = context.party[p].mob
             context[p] = { symbol = p, mob = mob, member = context.party[p], targets = {}, isParty = true, isAlly = true }
             initContextTargetSymbol(context, context[p])
+
+            -- Store party leader info as well
+            if context.party.party1_leader == mob.id then
+                context[p].leader = true
+                context.party_leader = context[p]
+            else
+                context[p].leader = false
+            end
         end
 
         context[a1] = nil
@@ -986,54 +994,93 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     --------------------------------------------------------------------------------------
     -- Returns true if we're behind the mob and facing it
     context.alignedRear = function ()
-        if context.bt and context.bt.mob then
-            return directionality.isAtMobRear(context.bt.mob, 1.5) and context.facingEnemy()
+        if context.bt then
+            if smartMove:atMobRear(context.bt.index) then
+                return true
+            end
         end
+
         return false
     end
 
     --------------------------------------------------------------------------------------
     -- Set up behind the mob and then face it
     context.alignRear = function ()
-        if context.bt and context.bt.mob then
-            local index = context.bt.index
-            local distance = context.bt.distance
-            if distance > 50 then
-                return false
+        if context.bt then
+            if context.alignedRear() then
+                return true
             end
 
-            writeVerbose('Setting up to the rear of %s...':format(text_mob(context.bt.name)))
-
-            -- Set up behind
-            local completed = context.alignedRear() or directionality.walkToMobRear(context.bt.mob, 3, 5,
-                function (time, distance)
-                    -- This will cause us to stop tracking immediately if the target mob is killed
-                    local mob = windower.ffxi.get_mob_by_index(index)
-                    return mob and mob.valid_target
+            if context.bt.distance < 5 then
+                local jobId = smartMove:moveBehindMob(context.bt.mob, 3)
+                if jobId then
+                    while true do
+                        coroutine.sleep(0.5)
+                        local job = smartMove:getJobInfo()
+                        if job == nil or job.jobId ~= jobId then
+                            return context.alignedRear()
+                        end
+                    end
                 end
-            )
-
-            --context.follow(context.bt)
-
-            -- Face the target
-            --context.faceEnemy()
-            context.follow()
-            coroutine.sleep(1)
-
-            return completed
+            end
         end
     end
 
+    -------------------------------------------------------------------------------------
+    -- Check if the specified target is being followed
+    context.following = function(target)
+        target = target or context.result or context.bt
+        
+        if type(target) == 'string' then
+            target = windower.ffxi.get_mob_by_target(target) 
+        elseif type(target) == 'table' and target.mob then
+            target = target.mob
+        end
+
+        if
+            target == nil
+            or type(target.index) ~= 'number' or
+            not target.valid_target 
+        then
+            return
+        end
+
+        local jobInfo = smartMove:getJobInfo()
+        if jobInfo and jobInfo.follow_index == target.index then
+            return true
+        end
+    end
+
+    -- context.follow = function (distance)
+    --     local party = windower.ffxi.get_party()
+    --     local leaderId = tonumber(party.party1_leader) or 0
+
+    --     if 
+    --         leaderId <= 0 or
+    --         leaderId == context.me.id
+    --     then
+    --         return false
+    --     end
+
+    --     local mob = windower.ffxi.get_mob_by_id(leaderId)
+    --     if mob == nil then
+    --         return false
+    --     end
+
+    --     distance = math.clamp(tonumber(distance) or 5, 0, 20)
+    --     return context.follow(mob, distance)
+    -- end
+
     --------------------------------------------------------------------------------------
     -- 
-    context.follow = function (target)
+    context.follow = function (target, distance)
         target = target or context.result or context.bt
 
         -- Allow string targets
         if type(target) == 'string' then
             target = windower.ffxi.get_mob_by_target(target) 
         elseif type(target) == 'table' and target.mob then
-            target = target.mob 
+            target = target.mob
         end
 
         -- Bail if we don't have a target, or if the target doesn't have a numeric id
@@ -1049,7 +1096,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         -- follow is already for the current target
         local jobInfo = smartMove:getJobInfo()
         if jobInfo == nil or jobInfo.follow_index ~= target.index then
-            smartMove:followIndex(target.index)
+            return smartMove:followIndex(target.index, distance or 1.0)
         end
     end
 
@@ -1150,6 +1197,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                 if buff then                    
                     return i
                 end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Cancels a cancellable beneficial buff
+    context.cancelBuff = function(...)
+        local names = varargs({...})
+        for i, name in ipairs(names) do
+            local buff = hasBuff(name)
+            if buff then
+                windower.ffxi.cancel_buff(buff.id)
             end
         end
     end
@@ -1285,7 +1344,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
             return true
         end
     end
-
 
     --------------------------------------------------------------------------------------
     --

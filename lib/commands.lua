@@ -90,100 +90,11 @@ end
 -------------------------------------------------------------------------------
 -- follow
 handlers['follow'] = function (args)
-    local id = arrayIndexOfStrI(args, '-id')
-    local index = arrayIndexOfStrI(args, '-index')
-
-    id = id and tonumber(args[id + 1]) or 0
-    index = index and tonumber(args[index + 1]) or 0
-    
-    local hasFollow = id > 0 or index > 0
-    local noOverwrite = arrayIndexOfStrI(args, '-no-overwrite')
-
-    -- Figure out if we should skip this command; that is, if the -no-overwrite flag
-    -- was specified and the target has changed. This flag is used to resume follow
-    -- after a longer action, where the mob could have been killed the bt changed.
-    local skip = false
-    if noOverwrite then
-        local player = windower.ffxi.get_player()
-        local followIndex = player.follow_index
-
-        -- if followIndex and not globals.autoFollowIndex then
-        --     -- We have a follow index but no global follow index, we'll proceed as if we have nothing
-        --     followIndex = nil
-        -- elseif not followIndex and globals.autoFollowIndex then
-        --     -- We have no follow index but the global follow index is set; proceed as if we have nothing
-        --     -- and clear the global
-        --     globals.autoFollowIndex = nil
-        -- end
-
-        if followIndex then
-            writeDebug('Follow index: %d (%03X)':format(followIndex, followIndex))
-            writeJsonToFile('.\\data\\player.json', player)
-            -- Skip if we're following a valid target
-            local followed = windower.ffxi.get_mob_by_index(followIndex)
-            if followed and followed.valid_target then
-                skip = true
-            end
-        end
-
-        if not skip then
-            current = globals.target:mob()
-            
-            if hasFollow and not current then
-                -- Skip if we're being asked to follow but there's no current target
-                skip = true
-            elseif hasFollow and current then
-                -- Skip if our current id/index doesn't match the current target's id/index
-                skip = (id ~= 0 and current.id ~= id) or
-                    (index ~= 0 and current.index ~= index)
-            elseif not hasFollow and current then
-                -- Skip if this is a cancel and a target has been set
-                skip = true
-            end
-        end
-    end
-
-    local _mobToFollow = nil
-
-    if not skip then
-        if id > 0 then
-            local mob = windower.ffxi.get_mob_by_id(id)
-            if mob and mob.valid_target and mob.hpp > 0 then
-                _mobToFollow = mob
-            end
-        elseif index > 0 then
-            local mob = windower.ffxi.get_mob_by_index(index)
-            if mob and mob.valid_target and mob.hpp > 0 then
-                _mobToFollow = mob
-            end
-        end
-    end
-
-    if skip then
-        writeTrace('Follow skipped because another target was already set.')
-    elseif _mobToFollow then
-        globals.autoFollowIndex = _mobToFollow.index
-        windower.ffxi.follow(_mobToFollow.index)        
-        
-        writeTrace(string.format('Following %s at distance %.1f with index=%d (%03X)',
-            text_mob(_mobToFollow.name, Colors.trace),
-            math.sqrt(_mobToFollow.distance),
-            _mobToFollow.index,
-            _mobToFollow.index))
-    else
-        windower.ffxi.run(false)
-
-        -- SUPER SUPER important to use -1, rather than no param at all like the docs say. If you pass nothing,
-        -- the player object's follow index is not modified and it becomes incorrect.
-        --
-        -- UPDATE: There are still bugs, so we're going to have to use our own tracking. Hence, globals.autoFollowIndex :(
-        globals.autoFollowIndex = nil
-        windower.ffxi.follow(-1)
-        
-        writeTrace('Follow cancelled.')
-    end
+    writeMessage('Not implemented: follow')  
 end
 
+-------------------------------------------------------------------------------
+-- Start moving
 handlers['run'] = function(args)
     local start = arrayIndexOfStrI(args, '-start')
     local stop = arrayIndexOfStrI(args, '-stop')
@@ -196,99 +107,10 @@ handlers['run'] = function(args)
 end
 
 handlers['walk'] = function (args)
-
-    local stop = arrayIndexOfStrI(args, '-stop')
-    if stop then
-        windower.ffxi.run(false)
-        return
-    end
-
-    local direction = tonumber(arrayIndexOfStrI(args, '-direction'))
-    local time = tonumber(arrayIndexOfStrI(args, '-time'))
-
-    direction = direction and args[direction + 1]
-    time = time and tonumber(args[time + 1] or 0)
-
-    local radians = nil
-    local degrees = tonumber(direction)
-    if type(direction) == 'string' then
-        radians = directionality.directionToRadians(direction)
-    elseif type(degrees) == 'number' then
-        radians = directionality.degToRad(degrees)
-    end
-
-    -- If we have an angle, face toward it
-    windower.ffxi.follow(-1)
-    if radians ~= nil then
-        windower.ffxi.run(radians)
-    else
-        windower.ffxi.run()
-    end
-
-    local directionMessage = radians ~= nil and 
-        ' with heading %s degrees':format(text_number('%03d':format(directionality.radToDeg(radians)))) or ''
-
-    -- Set up the run end, if one was specified
-    if type(time) == 'number' and time > 0 then
-        
-        writeMessage('Initiating walk for %s%s.':
-            format(pluralize(time, 'second', 'seconds'),
-            directionMessage
-        ))
-
-        local stopCommand = string.format('wait %d; %s',
-            time,
-            makeSelfCommand('follow -no-overwrite')
-        )
-        windower.send_command(stopCommand)
-    else
-        writeMessage('Initiating walk%s.':format(directionMessage))
-    end
+    writeMessage('Not implemented: walk')
 end
-
 handlers['face'] = function(args)
-    local id = arrayIndexOfStrI(args, '-id')
-    local index = arrayIndexOfStrI(args, '-index')
-    local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
-    local direction = arrayIndexOfStrI(args, '-direction')
-    local skipFacing = false
-
-    id = id and tonumber(args[id + 1])
-    index = index and tonumber(args[index + 1])
-    target = target and 't'
-    direction = direction and tonumber(args[direction + 1])
-
-    local radians = nil
-
-    if direction ~= nil then
-        if type(direction) == 'number' then
-            -- The param was a numeric degree value
-            radians = directionality.degToRad(direction)
-        else
-            -- The param was a named directional value
-            radians = directionality.directionToRadians(direction)
-        end
-    else
-        local target = (id and windower.ffxi.get_mob_by_id(id)) or
-            (index and windower.ffxi.get_mob_by_index(index)) or
-            (target and windower.ffxi.get_mob_by_target(target))
-        radians = directionality.faceTarget(target, true)
-
-        local radians = directionality.faceTarget(target)
-        skipFacing = true
-    end
-
-    if type(radians) == 'number' then
-        writeMessage('Adjusting current heading to %s!':format(
-            text_number('%03d degrees':format(
-                directionality.radToDeg(radians)
-            ))
-        ))
-
-        if not skipFacing then
-            directionality.faceDirection(radians)
-        end
-    end    
+    writeMessage('Not implemented: face')  
 end
 
 -------------------------------------------------------------------------------
@@ -309,7 +131,7 @@ handlers['r'] = handlers['reload']
 -------------------------------------------------------------------------------
 -- verbosity
 handlers['verbosity'] = function (args)
-    local level = arrayIndexOfStrI('-level')
+    local level = arrayIndexOfStrI(args, '-level')
     local verbosity = type(level) == 'number' and (args[level + 1] or ''):lower()
     local verbositySet = false
 
@@ -330,10 +152,10 @@ handlers['verbosity'] = function (args)
     if verbositySet then
         logging_settings.verbosity = settings.verbosity
 
-        writeMessage(string.format('Verbosity set to: %s', verbosity))
+        writeMessage(string.format('Verbosity set to: %s', verbosity or ''))
         saveSettings()
     else
-        writeMessage(string.format('Invalid verbosity setting: %s', verbosity))
+        writeMessage(string.format('Invalid verbosity setting: %s', verbosity or ''))
     end
 end
 
@@ -370,10 +192,6 @@ handlers['targetinfo'] = function (args)
             if partyMember then
                 writeJsonToFile(string.format('.\\data\\%s-%d.party.json', partyMember.name, partyMember.mob.index), partyMember)
             end
-
-            -- local player = windower.ffxi.get_player()
-            -- player = windower.ffxi.get_mob_by_id(player.id)
-            -- writeJsonToFile(string.format('.\\data\\%s-%d.self.json', player.name, player.index), player)
         end
     end
 end
@@ -539,57 +357,11 @@ handlers['actions'] = function(args)
 end
 
 handlers['align'] = function(args)
-    local id = arrayIndexOfStrI(args, '-id')
-    local index = arrayIndexOfStrI(args, '-index')
-    local t = arrayIndexOfStrI(args, '-t')
-    local duration = arrayIndexOfStrI(args, '-duration')
-
-    id = id and tonumber(args[id + 1]) or 0
-    index = index and tonumber(args[index + 1]) or 0
-
-    duration = duration and args[duration + 1]
-    duration = duration and math.max(tonumber(duration), 0) or 10
-
-    local _mob = nil
-    if t then
-        _mob = windower.ffxi.get_mob_by_target('t')
-    elseif id > 0 then
-        _mob = windower.ffxi.get_mob_by_id(id)
-    elseif index > 0 then
-        _mob = windower.ffxi.get_mob_by_index(index)
-    end
-
-    if _mob then
-        result = directionality.walkToMobRear(_mob, 1.5, 5)
-
-        -- local aligned = directionality.isAtMobRear(mob, 2) and context.facingEnemy()
-        -- if aligned then
-        --     writeVerbose('Already aligned, exiting.')
-        --     return
-        -- end
-
-        -- writeVerbose('Walking to rear of %s...':format(text_mob(mob.name, Colors.verbose)))
-
-        -- local tries = 0
-        -- local result = false
-        -- while tries < 10 and not directionality.isAtMobRear(mob, 2) do
-        --     result = directionality.walkToMobRear(mob, 2, 1)
-        --     tries = tries + 1
-        -- end
-        -- writeVerbose('  ..walk completed (%s in %d tries)':format(result and 'success' or 'exited', tries))
-    end
+    writeMessage('Not implemented: align')
 end
 
 handlers['showfollow'] = function(args)
-    local player = windower.ffxi.get_player()
-    if player and player.follow_index then
-        local mob = windower.ffxi.get_mob_by_index(player.follow_index)
-        if mob and mob.valid_target then
-            writeMessage('Following %s (%s / %s)':format(text_mob(mob.name), text_number(mob.index), text_number('%03X':format(mob.index))))
-        end
-    end
-
-    writeMessage('No follow target was found.')
+    writeMessage('Not implemented: showfollow')
 end
 
 handlers['walkmode'] = function (args)
@@ -616,12 +388,6 @@ local BagsById =
     [14] = { field = "wardrobe6" },
     [15] = { field = "wardrobe7" },
     [16] = { field = "wardrobe8" },
-}
-
-local commitmentRings = {
-    "Endorsement Ring",
-    "Trizek Ring",
-    "Capacity Ring"
 }
 
 handlers['exp'] = function (args)

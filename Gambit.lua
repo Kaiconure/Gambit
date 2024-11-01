@@ -90,10 +90,19 @@ end
 windower.register_event('status change', function(new_id, previous_id)
     
     --if previous_id == STATUS_ENGAGED and new_id == STATUS_IDLE then
-    if new_id == STATUS_IDLE then
-        -- We'll unfollow once battle has ended to avoid running off into space if autofollow was enabled
+    if
+        new_id == STATUS_IDLE
+    then
         resetCurrentMob(nil, true)
+
+        -- We'll unfollow once battle has ended to avoid the possibility of running
+        -- off into space if autofollow was enabled
         windower.ffxi.follow(-1)
+    elseif 
+        new_id == 2 or  -- Dead
+        new_id == 3     -- Dead while engaged
+    then
+        resetCurrentMob(nil, true)
     end
 end)
 
@@ -132,12 +141,11 @@ windower.register_event('load', function()
     globals.language = info.language
     
     -- Reload all settings
-    resetCurrentMob(nil)
+    resetCurrentMob(nil, true)
     reloadSettings()
     
-    -- Kick off the background threads
+    -- Kick off background threads
     coroutine.schedule(cr_actionProcessor, 0)
-    --coroutine.schedule(cr_targetDetector, 0)
 end)
 
 ---------------------------------------------------------------------
@@ -151,8 +159,8 @@ local CATEGORY_SPELL_START          = 8     -- action.category=8, action.param =
 local CATEGORY_SPELL_INTERRUPT      = 8     -- action.category=8, action.param = 28787
 local CATEGORY_SPELL_END            = 4
 
-local CATEGORY_RANGED_START         = 12
-local CATEGORY_RANGED_INTERRUPT     = 12
+local CATEGORY_RANGED_START         = 12     -- action.category=12, action.param = 24931
+local CATEGORY_RANGED_INTERRUPT     = 12     -- action.category=12, action.param = 24931
 local CATEGORY_RANGED_END           = 2
 
 local PARAM_STARTED                 = 24931 -- Normal start
@@ -229,10 +237,8 @@ windower.register_event('action', function(action)
         end
 
         if isRangedStart then
-            --writeVerbose('Ranged attack starting...')
             actionStateManager:markRangedAttackStart()
         elseif isRangedComplete then
-            --writeVerbose('   ...ranged attack ending!')
             actionStateManager:markRangedAttackCompleted(isRangedSuccessful)
         end
     end

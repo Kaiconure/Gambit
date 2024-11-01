@@ -344,32 +344,3 @@ function processTargeting()
         setTargetMob(mobToTarget)
     end
 end
-
---------------------------------------------------------------------------------------
--- Handle auto-detection of aggroing mobs
--- NOTE: This was moved to be part of the action processing cycle
--- function cr_targetDetector()
---     local sleepTimeSeconds = 0.5
-
---     while true do
---         if globals.enabled then
-
---             local player = windower.ffxi.get_player()
---             local playerStatus = player.status
---             local isEngaged = player.status == STATUS_ENGAGED
---             local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
---             local isResting = (playerStatus == 33)                          -- 33 is taking a knee
---             local isDead = player.vitals.hp <= 0                            -- Dead
-
---             if
---                 not isMounted and
---                 not isResting and 
---                 not isDead 
---             then
---                 processTargeting()
---             end
---         end
-
---         coroutine.sleep(sleepTimeSeconds)
---     end
--- end

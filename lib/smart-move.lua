@@ -15,7 +15,8 @@ local smartMove = {
 
 local Modes = {
     position = 'position',
-    follow = 'follow'
+    follow = 'follow',
+    backstab = 'backstab'
 }
 
 local FORWARD           = V({1, 0})             -- The vector representing the point on the unit circle at 0 radians
@@ -23,7 +24,7 @@ local TWO_PI            = math.pi * 2           -- 2pi
 local PI_OVER_TWO       = math.pi * 0.5         -- pi / 2
 
 local JITTER_ANGLE      = PI_OVER_TWO * 1.50    -- The angle we'll try to escape obstacles with. This is equiavlent to 135 degrees.
-local MAX_JITTER        = 6                     -- The maximum duration we'll spend jittering around obstacles
+local MAX_JITTER        = 3                     -- The maximum duration we'll spend jittering around obstacles
 
 local HEADING_TOLERANCE = TWO_PI * 0.0125   -- 1.25% of a unit circle, or 4.5 degrees
 
@@ -93,6 +94,19 @@ local function coordVector(coord)
     return V({coord.x, coord.y})
 end
 
+-- Find the point at the given distance behind the specified mob
+local function findMobRear(mob, distance)
+    local player = windower.ffxi.get_mob_by_target('me')
+    local vPlayer = V({player.x, player.y})
+    
+    local rearDirection = mob.heading + math.pi
+
+    local vMob = V({mob.x, mob.y})
+    local vTarget = vMob:add(vector.from_radian(rearDirection):scale(distance))
+
+    return vTarget
+end
+
 -- ======================================================================================
 -- Private interface
 -- ======================================================================================
@@ -135,9 +149,15 @@ local function sm_movement(self, job)
     local pausing = false
     local zeroSpeedCycles = 0
 
+    local startTime = os.clock()
+    local endTime = (job.max_duration and (startTime + job.max_duration)) or nil
+
+    local previousPosition = vpos
+
     while 
         continue and
         job:cycle() and
+        (endTime == nil or os.clock() < endTime) and
         not self.cancel
     do
         local pos = job:pos()
@@ -174,16 +194,10 @@ local function sm_movement(self, job)
 
         -- Calculate our current and averaged velocity
         if sleepDuration > 0 then
-            -- Calculate the average velocity
-            local currentVelocity = (math.abs(distance - newDistance) / sleepDuration)
-            
-            -- -- If we have a velocity, use that; otherwise we will average our previous 
-            -- -- and new velocity and use that
-            -- if velocity > 0 then
-            --     velocity = velocity + currentVelocity / 2
-            -- else
-                velocity = currentVelocity
-            --end
+            local movement = vpos:subtract(previousPosition)
+            velocity = movement:length()
+
+            --velocity = currentVelocity
         end
 
         local t = os.clock()
@@ -192,7 +206,7 @@ local function sm_movement(self, job)
         isJittering = t < jitterStopTime
 
         if not isJittering then
-            jitterPause = math.max(jitterPause - 0.0125, 0)
+            jitterPause = math.max(jitterPause - 0.025, 0)
 
             -- We'll re-point at the target if:
             --      1. Our aim is off, or
@@ -204,19 +218,31 @@ local function sm_movement(self, job)
             then
                 jitterStopTime = 0
                 if not pausing then
-                    windower.ffxi.run(newHeading)
+                    if wasJittering then
+                        local adjustment = randomRange(-math.pi / 4, math.pi / 4)
+                        ---print('Adjusting heading by %.1f degrees':format(adjustment * 180 / math.pi))
+                        sleepDuration = 0.5
+                        windower.ffxi.run(newHeading + adjustment)
+                    else
+                        windower.ffxi.run(newHeading)
+                    end
                 end
             end
+        else
+            -- local adjustment = randomRange(-math.pi, math.pi)
+            -- print('Adjusting heading by %.1f degrees':format(adjustment * 180 / math.pi))
+            -- windower.ffxi.run(player_mob.heading + adjustment)
         end
 
         if 
             pausing
         then
-            -- Use a slightly longer sleep if we're paused
+            -- Use a slightly longer sleep if we're paused, and stop tracking zero speed
             sleepDuration = 0.5
+            zeroSpeedCycles = 0
         elseif 
-            ((not wasJittering and not sharesHalfspace(heading, newHeading)) and newDistance < 1.25) or
-            newDistance < 1.25 -- self.tolerance
+            --((not wasJittering and not sharesHalfspace(heading, newHeading))) or
+            newDistance < self.tolerance
         then
             -- We've reached our target distance, it's time to stop moving
             windower.ffxi.run(false)
@@ -242,13 +268,14 @@ local function sm_movement(self, job)
             if isZeroSpeed then
                 zeroSpeedCycles = zeroSpeedCycles + 1
             else
-                zeroSpeedCycles = 0
+                zeroSpeedCycles = math.max(0, zeroSpeedCycles - 0.125)
             end
 
 
             -- Initiate some obstacle avoidance jitter if we're not making any forward progress
             local canJitter = 
-                zeroSpeedCycles > 3 and
+                job.canJitter ~= false and
+                (isZeroSpeed and zeroSpeedCycles > 8) and
                 --((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
                 distance > 2 and
                 sleepDuration > 0
@@ -256,26 +283,31 @@ local function sm_movement(self, job)
             if canJitter then
                 jitterPause = math.min(jitterPause + 0.5, MAX_JITTER)
 
-                self.log('Initiating obstacle avoidance measures with jitterPause=%.2f':format(jitterPause))
+                self.log('Initiating obstacle avoidance measures with jitterPause=%.2f / zeroSpeed=%.2f':format(jitterPause, zeroSpeedCycles))
 
                 -- Apply a randomized escape angle based on our configured base value
                 local jitterAngle = JITTER_ANGLE * randomSign() * randomRange(0.95, 1.05)
 
                 -- Calculate our new heading, and start moving in that direction
-                --newHeading = player_mob.heading + jitterAngle     -- Base new heading on the heading of the player. Which is better?
-                newHeading = newHeading + jitterAngle               -- Base new heading on the trajectory to the mob. Which is better?
+                newHeading = player_mob.heading + jitterAngle     -- Base new heading on the heading of the player. Which is better?
+                --newHeading = newHeading + jitterAngle               -- Base new heading on the trajectory to the mob. Which is better?
                 windower.ffxi.run(newHeading)
 
                 -- Give ourselves a bit of time to continue moving along
                 jitterStopTime = t + jitterPause
             end
 
-            sleepDuration = 0.25
+            if newDistance < 3 then
+                sleepDuration = 0.125
+            else
+                sleepDuration = 0.25
+            end
         end
 
         -- Update our tracking info
         heading = newHeading
         distance = newDistance
+        previousPosition = vpos
 
         -- local player = windower.ffxi.get_player()
         -- if type(player.follow_index) == 'number' and player.follow_index > 0 then
@@ -289,7 +321,8 @@ local function sm_movement(self, job)
         end
     end
 
-    -- Stop moving and pause
+    -- Stop any follow more movement that may be active
+    windower.ffxi.follow(-1)
     windower.ffxi.run(false)
 
     if job:is_valid() then
@@ -298,6 +331,9 @@ local function sm_movement(self, job)
         toTarget = job:pos():subtract(vpos)
         windower.ffxi.turn(vectorAngle(toTarget))
     end
+
+    -- We need to space this out a little bit
+    coroutine.sleep(0.25)
 end
 
 function sm_coroutine(self)
@@ -314,14 +350,13 @@ function sm_coroutine(self)
         if job ~= nil and job:is_valid() then
             self.current = job
 
-            if job.mode == Modes.position or job.mode == Modes.follow then
+            --if job.mode == Modes.position or job.mode == Modes.follow then
+            if Modes[job.mode] then
                 self.previousJob = job
 
-                self.log('Picking up: %s':format(job.description))
-
+                self.log('Dequeued: %s':format(job.description))
                 sm_movement(self, job)
-
-                self.log('Job %d has completed!':format(job.jobId))
+                self.log('Completed: %s':format(job.description))
             end
         end
 
@@ -348,7 +383,7 @@ local function sm_createBaseJob(self, mode)
     local job = {
         jobId = jobId,
         time = os.clock(),
-        description = 'Job %d [%s]':format(jobId, mode),
+        description = 'Job #%d / %s':format(jobId, mode),
         mode = mode,
         zone = info.zone
     }
@@ -375,12 +410,13 @@ function smartMove:cancelJob(jobId, immediate)
     )
 
     if canCancel then
-        self.log('Cancelling job: %s':format(job.jobId))
-
+        self.verbose('Cancelling: %s':format(job.description))
         self.cancel = true
 
         if not immediate then
-            -- If we weren't asked for an immediate exit, we'll wait for the job to finish before returning.
+            -- If we weren't asked for an immediate exit, we'll wait for the job
+            -- to finish before returning. We'll give it a little bit of buffer time
+            -- afterward as well.
             while 
                 self.cancel or (jobId and self.current and self.current.jobId == jobId)
             do
@@ -388,14 +424,16 @@ function smartMove:cancelJob(jobId, immediate)
             end
         end
     else
-        --self.log('There is no matching job to cancel.')
+        -- If we were unable to cancel due to there being no job at all, we'll just
+        -- go ahead and stop movement and follow. This is already handled by the
+        -- job if one was running. And if a job other than the one we wanted to
+        -- cancel was running, then we don't want to upend it.
+        if not job then
+            windower.ffxi.follow(-1)
+            windower.ffxi.run(false)
+            coroutine.sleep(0.25)
+        end
     end
-
-    -- We'll always stop movement
-    windower.ffxi.follow(-1)
-    windower.ffxi.run(false)
-
-    coroutine.sleep(0.1)
 
     return job and job.JobId or nil
 end
@@ -430,10 +468,102 @@ function smartMove:moveTo(x, y)
     job.follow_distance = 0
 
     -- Update the job description
-    job.description = job.description .. ': (%.1f, %.1f)':format(x, y)
+    job.description = job.description .. ' (%.1f, %.1f)':format(x, y)
     
     -- Enqueue the new job. For now we only allow one item.
     self.queue = { job }
+
+    self.verbose('Requested: %s':format(job.description))
+
+    -- Add a bit of sleep time to give the job a chance to pick up
+    coroutine.sleep(0.25)
+
+    return job.jobId
+end
+
+-----------------------------------------------------------------------------------------
+-- Check if we're at the mob's rear
+function smartMove:atMobRear(index)
+    local mob = windower.ffxi.get_mob_by_index(index or 0)
+    if mob == nil or not mob.valid_target then
+        return false
+    end
+
+    local target = findMobRear(mob, 1.0)
+    local player = windower.ffxi.get_mob_by_target('me')
+
+    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
+end
+
+-----------------------------------------------------------------------------------------
+-- Move behind the mob, taking at most a given number of seconds. Use atMobRear to
+-- determine if the movement completed successfully.
+function smartMove:moveBehindMob(mob, maxDuration)
+    return self:moveBehindIndex(mob and mob.index or 0, maxDuration)
+end
+
+-----------------------------------------------------------------------------------------
+-- Move behind the mob with the given index, taking at most a given number of seconds.
+-- Use atMobRear to determine if the movement completed successfully.
+function smartMove:moveBehindIndex(follow_index, maxDuration)
+    -- Validate the target
+    local mob = windower.ffxi.get_mob_by_index(follow_index)
+    if mob == nil or not mob.valid_target then
+        return
+    end
+
+    -- Create and validate the basic job parameters
+    local job = sm_createBaseJob(self, Modes.backstab)
+    if not job then
+        return
+    end
+
+    job.follow_index = follow_index -- Store the follow index
+    job.mob = mob                   -- Store the target mob
+    job.autoComplete = true         -- We want this job to stop once we get into position
+    job.follow_distance = 1.2       -- How far behind the mob to get
+    job.max_duration = 
+        tonumber(maxDuration) or 5  -- The most time we'll spend waiting to get into position
+    job.canJitter = false           -- Don't allow jittering
+
+    -- Reschedule the job
+    job.reschedule = function (self)
+        return smartMove:moveBehindIndex(follow_index)
+    end
+
+    -- Determine if the job is still valid
+    job.is_valid = function(self)
+        local valid = self.mob and self.mob.valid_target
+        return valid
+    end
+
+    -- Cycling involves syncing up with the current state of our target mob
+    job.cycle = function(self)
+        self.mob = windower.ffxi.get_mob_by_index(self.follow_index)
+        return self:is_valid()
+    end
+
+    -- Positioning is based on the mob and any offsets
+    job.pos = function (self)
+        return findMobRear(self.mob, self.follow_distance)
+        -- -- If we're doing a follow distance, we'll need to run the position calculation
+        -- local player = windower.ffxi.get_mob_by_target('me')
+        -- local vPlayer = V({player.x, player.y})
+        
+        -- local rearDirection = self.mob.heading + math.pi
+
+        -- local vMob = V({self.mob.x, self.mob.y})
+        -- local vTarget = vMob:add(vector.from_radian(rearDirection):scale(job.follow_distance))
+
+        -- return vTarget
+    end
+
+    job.description = job.description .. ' %d (%03X)':format(follow_index, follow_index)
+    
+    -- Enqueue the new job. For now we only allow one item.
+    self.queue = { job }
+
+    self.verbose('Requested: %s':format(job.description))
 
     -- Add a bit of sleep time to give the job a chance to pick up
     coroutine.sleep(0.25)
@@ -520,10 +650,12 @@ function smartMove:followIndex(follow_index, distance)
         return V({self.mob.x, self.mob.y})
     end
 
-    job.description = job.description .. ': index=%d (%03X)':format(follow_index, follow_index)
+    job.description = job.description .. ' %d (%03X)':format(follow_index, follow_index)
     
     -- Enqueue the new job. For now we only allow one item.
     self.queue = { job }
+
+    self.verbose('Requested: %s':format(job.description))
 
     -- Add a bit of sleep time to give the job a chance to pick up
     coroutine.sleep(0.25)
@@ -551,12 +683,9 @@ function smartMove:reschedule(jobId)
     end
 end
 
-function smartMove:setLogger(fn)
-    if type(fn) == 'function' then
-        self.log = fn
-    else
-        self.log = null_log
-    end
+function smartMove:setLogger(log, verbose)
+    self.log        = (type(log) == 'function') and log or null_log
+    self.verbose    = (type(verbose) == 'function') and verbose or null_log
 end
 
 function smartMove:getJobInfo(jobId)

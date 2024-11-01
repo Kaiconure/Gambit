@@ -165,7 +165,7 @@ function sendSpellCastingCommand(spell, target, context)
             interrupted = currentSpell.interrupted
         else
             isFirstCycle = false
-            coroutine.sleep(0.5)
+            coroutine.sleep(0.25)
         end
     end
 
