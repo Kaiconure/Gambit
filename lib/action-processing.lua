@@ -58,21 +58,7 @@ function sendActionCommand(
     -- Overall sleep time
     commandDuration = math.max(tonumber(commandDuration) or 0, 0)
 
-    if pauseFollow then
-        local player = context and context.player or windower.ffxi.get_player() -- TODO: Maybe just load the live player here, instead of refreshing in the action executor proc?
-        local followIndex = tonumber(player.follow_index) or 0
-
-        local followCommand = makeSelfCommand('follow')
-
-        if followIndex > 0 then
-            followCommand = followCommand ..
-                string.format(' wait %.1f; ', commandDuration) ..
-                makeSelfCommand(string.format('follow -index %d -no-overwrite', followIndex))
-        end
-
-        sendActionCommand(followCommand, context, 0.5)
-    end
-
+    local movementJob = pauseFollow and smartMove:cancelJob()
     if command and command ~= '' then
         writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
         windower.send_command(command)
@@ -80,6 +66,11 @@ function sendActionCommand(
 
     if commandDuration > 0 then
         coroutine.sleep(commandDuration)
+
+        -- Kick the movement job back on, if any
+        if movementJob then
+            smartMove:reschedule(movementJob)
+        end
     end
 end
 
@@ -90,12 +81,7 @@ function sendRangedAttackCommand(target, context)
         return
     end
 
-    local player = windower.ffxi.get_player()
-    local followIndex = tonumber(player.follow_index) or 0
-
-    if followIndex then
-        sendActionCommand(makeSelfCommand('follow'), context, 0.5)
-    end
+    local followJob = smartMove:cancelJob()
 
     -- Construct the actual spell casting command
     local command = 'input /ra <%s>;':format(
@@ -118,13 +104,12 @@ function sendRangedAttackCommand(target, context)
         end
     end
 
-    -- Restore follow
-    if followIndex > 0 then
-        sendActionCommand(makeSelfCommand('follow -index %d -no-overwrite':format(followIndex)), context)
-    end
-
     -- Sleep a bit more to space things out
     coroutine.sleep(0.5)
+
+    if followJob then
+        smartMove:reschedule(followJob)
+    end
 
     local endTime = os.clock()
 
@@ -145,12 +130,7 @@ function sendSpellCastingCommand(spell, target, context)
         return
     end
 
-    local player = windower.ffxi.get_player()
-    local followIndex = tonumber(player.follow_index) or 0
-
-    if followIndex then
-        sendActionCommand(makeSelfCommand('follow'), context, 0.5)
-    end
+    local followJob = smartMove:cancelJob()
 
     -- Calculate the maximum amount of time we will wait for spell casting to complete. It's
     -- safer for this to err on the slightly longer side, as we will exit early as soon as we
@@ -191,10 +171,6 @@ function sendSpellCastingCommand(spell, target, context)
 
     local castingEndedAt = os.clock()
 
-    if followIndex > 0 then
-        sendActionCommand(makeSelfCommand('follow -index %d -no-overwrite':format(followIndex)), context)
-    end
-
     -- We need to pad the casting time a bit, because spell casting fires its completion event before
     -- it's actually fully done casting. We'll reduce the pading time if casting was interrupted, or
     -- if casting completed after the first cycle (first cycle completion means it either never went off,
@@ -204,6 +180,10 @@ function sendSpellCastingCommand(spell, target, context)
         paddingTime = 1.75
     end
     coroutine.sleep(paddingTime)
+
+    if followJob then
+        smartMove:reschedule(followJob)
+    end
 
     local wokeAt = os.clock()
 
@@ -389,8 +369,11 @@ local function getNextBattleAction(context)
 
                     writeDebug('Condition met %s %s':format(
                         text_action(context.actionType .. '.' .. i, Colors.debug),
-                        colorize(Colors.green, action.when, Colors.debug)
+                        --action.when
+                        text_green(action.when, Colors.debug)
                     ))
+
+                    --print(action.when)
 
                     return action
                 end

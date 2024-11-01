@@ -7,7 +7,9 @@ local smartMove = {
     previousJob = nil,
     current = nil,
     tolerance = 0.5,
-    log = null_log
+
+    log = null_log,
+    debug = null_log
 }
 
 
@@ -20,8 +22,8 @@ local FORWARD           = V({1, 0})             -- The vector representing the p
 local TWO_PI            = math.pi * 2           -- 2pi
 local PI_OVER_TWO       = math.pi * 0.5         -- pi / 2
 
-local JITTER_ANGLE      = PI_OVER_TWO * 1.25    -- The angle we'll try to escape obstacles with
-local MAX_JITTER        = 3                     -- The maximum duration we'll spend jittering around obstacles
+local JITTER_ANGLE      = PI_OVER_TWO * 1.50    -- The angle we'll try to escape obstacles with. This is equiavlent to 135 degrees.
+local MAX_JITTER        = 6                     -- The maximum duration we'll spend jittering around obstacles
 
 local HEADING_TOLERANCE = TWO_PI * 0.0125   -- 1.25% of a unit circle, or 4.5 degrees
 
@@ -131,6 +133,7 @@ local function sm_movement(self, job)
 
     local continue = true
     local pausing = false
+    local zeroSpeedCycles = 0
 
     while 
         continue and
@@ -138,6 +141,13 @@ local function sm_movement(self, job)
         not self.cancel
     do
         local pos = job:pos()
+
+        -- We can't freely move if we're target locked
+        local player = windower.ffxi.get_player()
+        if player.target_locked then
+            windower.send_command('input /lockon;')
+            coroutine.sleep(0.5)
+        end
 
         -- Refresh our vectors
         player_mob = windower.ffxi.get_mob_by_target('me')
@@ -164,7 +174,16 @@ local function sm_movement(self, job)
 
         -- Calculate our current and averaged velocity
         if sleepDuration > 0 then
-            velocity = math.abs(distance - newDistance) / sleepDuration
+            -- Calculate the average velocity
+            local currentVelocity = (math.abs(distance - newDistance) / sleepDuration)
+            
+            -- -- If we have a velocity, use that; otherwise we will average our previous 
+            -- -- and new velocity and use that
+            -- if velocity > 0 then
+            --     velocity = velocity + currentVelocity / 2
+            -- else
+                velocity = currentVelocity
+            --end
         end
 
         local t = os.clock()
@@ -173,7 +192,7 @@ local function sm_movement(self, job)
         isJittering = t < jitterStopTime
 
         if not isJittering then
-            jitterPause = math.max(jitterPause - 0.05, 0)
+            jitterPause = math.max(jitterPause - 0.0125, 0)
 
             -- We'll re-point at the target if:
             --      1. Our aim is off, or
@@ -196,8 +215,8 @@ local function sm_movement(self, job)
             -- Use a slightly longer sleep if we're paused
             sleepDuration = 0.5
         elseif 
-            ((not wasJittering and not sharesHalfspace(heading, newHeading)) and newDistance < 1.5) or
-            newDistance < self.tolerance
+            ((not wasJittering and not sharesHalfspace(heading, newHeading)) and newDistance < 1.25) or
+            newDistance < 1.25 -- self.tolerance
         then
             -- We've reached our target distance, it's time to stop moving
             windower.ffxi.run(false)
@@ -205,6 +224,7 @@ local function sm_movement(self, job)
             -- Reset other traversal states
             jitterStopTime = 0
             jitterPause = 0
+            zeroSpeedCycles = 0
 
             if job.autoComplete then
                 -- This job has been configured to auto-complete on reaching the target,
@@ -218,14 +238,23 @@ local function sm_movement(self, job)
                 windower.ffxi.turn(newHeading)
             end            
         else
+            local isZeroSpeed = ((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5))
+            if isZeroSpeed then
+                zeroSpeedCycles = zeroSpeedCycles + 1
+            else
+                zeroSpeedCycles = 0
+            end
+
+
             -- Initiate some obstacle avoidance jitter if we're not making any forward progress
             local canJitter = 
-                ((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
+                zeroSpeedCycles > 3 and
+                --((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
                 distance > 2 and
                 sleepDuration > 0
 
             if canJitter then
-                jitterPause = math.min(jitterPause + 1, MAX_JITTER)
+                jitterPause = math.min(jitterPause + 0.5, MAX_JITTER)
 
                 self.log('Initiating obstacle avoidance measures with jitterPause=%.2f':format(jitterPause))
 
@@ -233,7 +262,8 @@ local function sm_movement(self, job)
                 local jitterAngle = JITTER_ANGLE * randomSign() * randomRange(0.95, 1.05)
 
                 -- Calculate our new heading, and start moving in that direction
-                newHeading = player_mob.heading + jitterAngle
+                --newHeading = player_mob.heading + jitterAngle     -- Base new heading on the heading of the player. Which is better?
+                newHeading = newHeading + jitterAngle               -- Base new heading on the trajectory to the mob. Which is better?
                 windower.ffxi.run(newHeading)
 
                 -- Give ourselves a bit of time to continue moving along
@@ -287,21 +317,23 @@ function sm_coroutine(self)
             if job.mode == Modes.position or job.mode == Modes.follow then
                 self.previousJob = job
 
-                self.log('Job %d (%s) is starting!':format(job.jobId, job.mode))
+                self.log('Picking up: %s':format(job.description))
 
                 sm_movement(self, job)
 
-                self.log('Job %d has completed.':format(job.jobId))
+                self.log('Job %d has completed!':format(job.jobId))
             end
         end
 
         self.cancel = false
         self.current = nil
 
-        coroutine.sleep(0.5)
+        coroutine.sleep(0.25)
     end
 end
 
+-------------------------------------------------------------------------------
+-- Create the basic job entry
 local function sm_createBaseJob(self, mode)
     local info = windower.ffxi.get_info()
     if type(info.zone) ~= 'number' or info.zone < 1 or resources.zones[info.zone] == nil then
@@ -316,6 +348,7 @@ local function sm_createBaseJob(self, mode)
     local job = {
         jobId = jobId,
         time = os.clock(),
+        description = 'Job %d [%s]':format(jobId, mode),
         mode = mode,
         zone = info.zone
     }
@@ -334,26 +367,35 @@ end
 
 -------------------------------------------------------------------------------
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.
-function smartMove:cancelJob(jobId, wait)
+function smartMove:cancelJob(jobId, immediate)
     local job = self.current
-    local canCancel = 
+    local canCancel = job and (
         (jobId == nil) or
-        (job and job.jobId == jobId)
+        (job.jobId == jobId)
+    )
 
     if canCancel then
+        self.log('Cancelling job: %s':format(job.jobId))
+
         self.cancel = true
+
+        if not immediate then
+            -- If we weren't asked for an immediate exit, we'll wait for the job to finish before returning.
+            while 
+                self.cancel or (jobId and self.current and self.current.jobId == jobId)
+            do
+                coroutine.sleep(0.125)
+            end
+        end
+    else
+        --self.log('There is no matching job to cancel.')
     end
 
-    if canCancel and wait then
-        -- If waiting was configured, we'll wait until either the job schedule has completed the job
-        -- and flipped the flag -OR- our job isn't running anymore.
-        while 
-            self.cancel or
-            (self.current == nil or self.current.jobId ~= current.jobId) 
-        do
-            coroutine.sleep(0.25)
-        end
-    end
+    -- We'll always stop movement
+    windower.ffxi.follow(-1)
+    windower.ffxi.run(false)
+
+    coroutine.sleep(0.1)
 
     return job and job.JobId or nil
 end
@@ -386,9 +428,15 @@ function smartMove:moveTo(x, y)
 
     -- Follow exactly to the point
     job.follow_distance = 0
+
+    -- Update the job description
+    job.description = job.description .. ': (%.1f, %.1f)':format(x, y)
     
     -- Enqueue the new job. For now we only allow one item.
     self.queue = { job }
+
+    -- Add a bit of sleep time to give the job a chance to pick up
+    coroutine.sleep(0.25)
 
     return job.jobId
 end
@@ -414,6 +462,7 @@ function smartMove:followIndex(follow_index, distance)
     self:cancelJob()
 
     -- Fill in the new job details
+    
     job.follow_index = follow_index -- Store the follow index
     job.mob = mob                   -- Store the target mob
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
@@ -470,9 +519,14 @@ function smartMove:followIndex(follow_index, distance)
         -- Otherwise, just head straight to the mob
         return V({self.mob.x, self.mob.y})
     end
+
+    job.description = job.description .. ': index=%d (%03X)':format(follow_index, follow_index)
     
     -- Enqueue the new job. For now we only allow one item.
     self.queue = { job }
+
+    -- Add a bit of sleep time to give the job a chance to pick up
+    coroutine.sleep(0.25)
 
     return job.jobId
 end
@@ -505,6 +559,39 @@ function smartMove:setLogger(fn)
     end
 end
 
+function smartMove:getJobInfo(jobId)
+    local current = self.current
+    if current and (jobId == nil or jobId == current.jobId) then
+        if current:is_valid() then
+            return {
+                jobId = current.jobId,
+                mode = current.type,
+                follow_index = current.follow_index,
+                position = current:pos()
+            }
+        end
+    end
+end
+
+-- smartMove:onZoneChange = function ()
+--     -- Stop on zone change
+--     smartMove:cancelJob()
+-- end
+
+-- smartMove:onStatusChange = function (newStatus)
+--     -- Stop if we've changed to a status that doesn't make sense. We can't follow if dead, sitting, resting, etc
+--     if 
+--         newStatus ~= STATUS_IDLE and
+--         newStatus ~= STATUS_ENGAGED and 
+--         newStatus ~= 5 and  -- Riding a chocobo
+--         newStatus ~= 85     -- Riding a mount other than a chocobo
+--     then
+--         smartMove:cancelJob()
+--     end
+-- end
+
+
+
 -- -------------------------------------------------------------------------------
 -- Starts the pipeline processor
 
@@ -512,5 +599,22 @@ local cr = coroutine.schedule(function ()
     smartMove.started = true
     sm_coroutine(smartMove)
 end, 0)
+
+-- windower.register_event('zone change', function ()
+--     -- Stop on zone change
+--     smartMove:cancelJob()
+-- end)
+
+-- windower.register_event('status change', function (newStatus)
+--     -- Stop if we've changed to a status that doesn't make sense. We can't follow if dead, sitting, resting, etc
+--     if 
+--         newStatus ~= STATUS_IDLE and
+--         newStatus ~= STATUS_ENGAGED and 
+--         newStatus ~= 5 and  -- Riding a chocobo
+--         newStatus ~= 85     -- Riding a mount other than a chocobo
+--     then
+--         smartMove:cancelJob()
+--     end
+-- end)
 
 return smartMove

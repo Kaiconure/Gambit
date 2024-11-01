@@ -38,7 +38,7 @@ handlers['disable'] = function (args)
         globals.enabled = false
 
         -- Clear the mob after we disable
-        resetCurrentMob(nil)
+        resetCurrentMob(nil, true)
 
         writeMessage('  Status: Automation has been %s.':format(text_red('disabled')))
     else

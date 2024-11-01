@@ -1037,29 +1037,47 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
         end
 
         -- Bail if we don't have a target, or if the target doesn't have a numeric id
-        if target == nil or type(target.index) ~= 'number' then
+        if target == nil or type(target.index) ~= 'number' or not target.valid_target then
             return
         end
 
-        -- Issue the follow
-        local command = makeSelfCommand('follow -index %d':format(target.index))
-        sendActionCommand(command, context, 0.5)
+        -- -- Issue the follow
+        -- local command = makeSelfCommand('follow -index %d':format(target.index))
+        -- sendActionCommand(command, context, 0.5)
+
+        -- We can follow if there isn't already a follow in progress, or if the existing
+        -- follow is already for the current target
+        local jobInfo = smartMove:getJobInfo()
+        if jobInfo == nil or jobInfo.follow_index ~= target.index then
+            smartMove:followIndex(target.index)
+        end
     end
 
     --------------------------------------------------------------------------------------
     -- 
     context.cancelFollow = function ()
-        local command = makeSelfCommand('follow')
-        sendActionCommand(command, context, 0.5)
+        -- local command = makeSelfCommand('follow')
+        -- sendActionCommand(command, context, 0.5)
+        smartMove:cancelJob()
     end
 
     --------------------------------------------------------------------------------------
     -- Get the mob we're following, or nil if there is no follow
     context.following = function ()
-        if context.player and context.player.follow_index then
-            local mob = windower.ffxi.get_mob_by_index(context.player.follow_index)
-            if mob and mob.valid_target then
-                return mob
+        -- if context.player and context.player.follow_index then
+        --     local mob = windower.ffxi.get_mob_by_index(context.player.follow_index)
+        --     if mob and mob.valid_target then
+        --         return mob
+        --     end
+        -- end
+
+        local jobInfo = smartMove:getJobInfo()
+        if context.player and jobInfo then
+            if jobInfo.follow_index then
+                local mob = windower.ffxi.get_mob_by_index(jobInfo.follow_index)
+                if mob and mob.valid_target then
+                    return mob
+                end
             end
         end
     end

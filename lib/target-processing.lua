@@ -191,6 +191,9 @@ function resetCurrentMob(mob, force)
 
     -- Only do an update if the new mob is different from the old, or if we're doing a forced update
     if allowReset then
+        -- Cancel any pending follow jobs
+        smartMove:cancelJob()
+
         targetKey = targetKey + 1
 
         local _temp = {

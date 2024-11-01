@@ -1,4 +1,4 @@
-__version = '0.91.3'
+__version = '0.91.4'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -30,6 +30,8 @@ require('./lib/resx')
 require('./lib/eventing')
 require('./lib/commands')
 require('./lib/target-processing')
+
+smartMove = require('./lib/smart-move')
 
 actionStateManager = require('./lib/action-state-manager')
 require('./lib/action-processing')
@@ -116,6 +118,8 @@ windower.register_event('load', function()
     writeMessage('')
 
     sendSelfCommand('disable')
+
+    smartMove:setLogger(writeDebug)
 
     windower.send_command('unbind !~G; bind !~G ' .. makeSelfCommand('toggle')) -- Use Shift+Alt+G to toggle automation
 
