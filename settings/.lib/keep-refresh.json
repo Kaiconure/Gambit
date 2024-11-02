@@ -1,0 +1,18 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_refresh": {
+      "spells": ["Refresh III", "Refresh II", "Refresh"]
+    }
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Refresh') and canUse(vars.keep_refresh.spells)",
+      "commands": ["use(me)"],
+      "frequency": 10,
+      "comment": "Use the best refresh available on yourself."
+    }
+  ]
+}

@@ -362,7 +362,7 @@ local function loadContextTargetSymbols(context, target)
         local a2 = 'a2' .. i
 
         context[p] = nil
-        if context.party[p] then
+        if context.party[p] and context.party[p].mob then
             local mob = context.party[p].mob
             context[p] = { symbol = p, mob = mob, member = context.party[p], targets = {}, isParty = true, isAlly = true }
             initContextTargetSymbol(context, context[p])
@@ -1211,6 +1211,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
                 windower.ffxi.cancel_buff(buff.id)
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get the number of finishing moves
+    context.finishingMoves = function ()
+        return getFinishingMoves(context.player)
     end
 
     --------------------------------------------------------------------------------------

@@ -22,7 +22,9 @@
     },
     {
       "when": "bt and bt.distance > vars.frontline_engagement.target_distance",
-      "commands": ["follow(bt)"],
+      "commands": [
+        "follow(bt, vars.frontline_engagement.target_distance - 0.5)"
+      ],
       "frequency": 5,
       "comment": "Maintain a minimum distance from the enemy."
     }

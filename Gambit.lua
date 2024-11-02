@@ -100,7 +100,9 @@ windower.register_event('status change', function(new_id, previous_id)
         windower.ffxi.follow(-1)
     elseif 
         new_id == 2 or  -- Dead
-        new_id == 3     -- Dead while engaged
+        new_id == 3 or  -- Dead while engaged
+        new_id == 5 or  -- On a chocobo
+        new_id == 85    -- On a mount that is not a chocobo
     then
         resetCurrentMob(nil, true)
     end
@@ -268,4 +270,35 @@ windower.register_event('addon command', function (command, ...)
     end
 
     commands.process(command, args)
+end)
+
+-- Call from the incoming chunk event, with the data from event 0x076 (party buff update message)
+local function parse_party_buffs(data)
+    local members = {}
+
+    for  k = 0, 4 do
+        local memberId = data:unpack('I', k*48+5)
+        
+        if memberId ~= 0 then
+            members[memberId] =  { }
+            for i = 1, 32 do
+                local buffId = data:byte(k*48+5+16+i-1) + 256*( math.floor( data:byte(k*48+5+8+ math.floor((i-1)/4)) / 4^((i-1)%4) )%4) -- Credit: Byrth, GearSwap
+
+                if resources.buffs[buffId] and not members[memberId][buffId] then
+                    members[memberId][buffId] = true
+                end
+            end
+        end
+    end
+
+    return members
+end
+
+---------------------------------------------------------------------
+-- Incoming chunks (chunks are individual pieces of a packet)
+windower.register_event('incoming chunk', function (id, data)
+    
+    if id == 0x076 then     -- Party buffs update
+        local partyBuffs = parse_party_buffs(data)
+    end
 end)

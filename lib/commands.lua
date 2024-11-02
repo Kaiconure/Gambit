@@ -90,7 +90,35 @@ end
 -------------------------------------------------------------------------------
 -- follow
 handlers['follow'] = function (args)
-    writeMessage('Not implemented: follow')  
+    local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
+    local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
+    local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
+
+    distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
+
+    if cancel then
+        local jobInfo = smartMove:getJobInfo()
+        local jobId = smartMove:cancelJob()
+        if jobId then
+            writeMessage('Follow cancelled!')
+        else
+            writeMessage('There was no follow to cancel.')
+        end
+    elseif target then
+        local target = windower.ffxi.get_mob_by_target('t')
+        local job = smartMove:followIndex(target.index, distance)
+        if job then
+            writeMessage('Following %s with a distance of %.1f':format(
+                text_mob(target.name),
+                distance
+            ))
+        else
+            writeMessage('Unable to follow %s!':format(
+                text_mob(target.name)
+            ))
+        end
+    end
+    --writeMessage('Not implemented: follow')  
 end
 
 -------------------------------------------------------------------------------

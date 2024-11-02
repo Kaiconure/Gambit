@@ -23,6 +23,7 @@ local FORWARD           = V({1, 0})             -- The vector representing the p
 local TWO_PI            = math.pi * 2           -- 2pi
 local PI_OVER_TWO       = math.pi * 0.5         -- pi / 2
 
+local JITTER_ENABLED    = false                 -- Configure if jittering is allowed at all
 local JITTER_ANGLE      = PI_OVER_TWO * 1.50    -- The angle we'll try to escape obstacles with. This is equiavlent to 135 degrees.
 local MAX_JITTER        = 3                     -- The maximum duration we'll spend jittering around obstacles
 
@@ -274,6 +275,7 @@ local function sm_movement(self, job)
 
             -- Initiate some obstacle avoidance jitter if we're not making any forward progress
             local canJitter = 
+                JITTER_ENABLED and
                 job.canJitter ~= false and
                 (isZeroSpeed and zeroSpeedCycles > 8) and
                 --((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
@@ -435,7 +437,7 @@ function smartMove:cancelJob(jobId, immediate)
         end
     end
 
-    return job and job.JobId or nil
+    return job and job.jobId or nil
 end
 
 

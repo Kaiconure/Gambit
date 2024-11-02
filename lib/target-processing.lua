@@ -245,9 +245,46 @@ function processTargeting()
         return
     end
 
+    local strategy = settings.strategy
     local party = windower.ffxi.get_party()
     local mobs = windower.ffxi.get_mob_array()
     local meMob = windower.ffxi.get_mob_by_target('me')
+
+    -- If we're using the 'leader' strategy and we are the leader, then we'll fall back to the 
+    -- 'nearest' behavior. This ensures we don't sit around getting smacked while there's no
+    -- one else to start the battle for us.
+    if strategy == TargetStrategy.leader then
+        if 
+            party.party1_leader == meMob.id
+        then
+            strategy = TargetStrategy.nearest
+        end
+    end
+
+    -- We will bail early if we're using the leader strategy. Either we take the leader's battle target,
+    -- or the leader has no target and we remain idle.
+    if strategy == TargetStrategy.leader then
+        local leaderMob = windower.ffxi.get_mob_by_id(party.party1_leader)
+        if 
+            leaderMob and
+            type(leaderMob.target_index) == 'number' and
+            leaderMob.target_index > 0 and
+            leaderMob.status == STATUS_ENGAGED
+        then
+            local target = windower.ffxi.get_mob_by_index(leaderMob.target_index)
+            if 
+                target and
+                target.valid_target and
+                target.status == STATUS_ENGAGED
+            then
+                -- If the party leader is engaged with the target -AND- the target is engaged, then this is
+                -- the mob we're looking for. Move along, move along.
+                setTargetMob(target)
+            end
+        end
+
+        return
+    end
 
     local maxDistanceSquared = settings.maxDistance * settings.maxDistance
     local bestMatchingMob = nil
@@ -260,7 +297,7 @@ function processTargeting()
             and not candidateMob.charmed
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
-            and (candidateMob.status == 1 or settings.strategy == TargetStrategy.aggressor)
+            and (candidateMob.status == 1 or strategy == TargetStrategy.aggressor)
 
         local shouldIgnore = false
         if isValidCandidate then
@@ -270,8 +307,9 @@ function processTargeting()
                 shouldIgnore = true
 
                 if
-                    settings.strategy == TargetStrategy.nearest or
-                    settings.strategy == TargetStrategy.aggressor 
+                    -- strategy == TargetStrategy.nearest or
+                    -- strategy == TargetStrategy.aggressor 
+                    true
                 then
                     local downgrade = ignoreListItem.downgrade == true
 
@@ -314,11 +352,11 @@ function processTargeting()
                             bestMatchingMob = candidateMob
                         else
                             local isHpEqual = bestMatchingMob.hpp == candidateMob.hpp
-                            local isHpStrategy = settings.strategy == TargetStrategy.maxhp or
+                            local isHpStrategy = strategy == TargetStrategy.maxhp or
                                 settings.strategy == TargetStrategy.minhp
                             local isNearer = candidateMob.distance < bestMatchingMob.distance
 
-                            local assumeStrategy = settings.strategy
+                            local assumeStrategy = strategy
                             if assumeStrategy == TargetStrategy.aggressor then
                                 assumeStrategy = TargetStrategy.nearest
                             end
@@ -339,6 +377,7 @@ function processTargeting()
         end
     end
 
+    -- At this point, we'll take the nearest aggroing mob or the best match we found via strategy
     local mobToTarget = nearestAggroingMob or bestMatchingMob
     if mobToTarget ~= nil then
         setTargetMob(mobToTarget)

@@ -5,6 +5,7 @@ TargetStrategy = {
     maxhp           = 'maxhp',      -- Find the aggroing mob with the most HP
     minhp           = 'minhp',      -- Find aggroing mob with the least HP
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
+    leader          = 'leader',     -- The party leader target, or the nearest aggro if none
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
 
@@ -73,7 +74,13 @@ local function loadVars(original, incoming)
                 -- where the incoming data defines a table and the original already has a non-table
                 -- variable of the same name. This wouldn't be an expected situation.
                 if type(original[key]) == 'table' then
-                    loadVars(original[key], val)
+                    if #original[key] > 0 and original[key][1] ~= nil then
+                        -- For straight up arrays, we'll actually just take the new value
+                        original[key] = val
+                    else
+                        -- For non-array tables, we will merge the incoming values in
+                        loadVars(original[key], val)
+                    end
                 end
             else
                 -- For non-tables, copy the value in if it hasn't already been defined
