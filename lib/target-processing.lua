@@ -178,7 +178,7 @@ function lockTarget(player, mob)
 end
 
 
-local targetKey = 0
+local targetScope = 0
 --------------------------------------------------------------------------------------
 --
 function resetCurrentMob(mob, force)
@@ -194,10 +194,10 @@ function resetCurrentMob(mob, force)
         -- Cancel any pending follow jobs
         smartMove:cancelJob()
 
-        targetKey = targetKey + 1
+        targetScope = targetScope + 1
 
         local _temp = {
-            _key = targetKey,
+            _scopeId = targetScope,
             _mob = mob,
             _start = os.clock(),            
 
@@ -230,6 +230,10 @@ function resetCurrentMob(mob, force)
 
             runtime = function (self)
                 return os.clock() - self._start
+            end,
+
+            scopeId = function (self)
+                return self._scopeId
             end
         }
 

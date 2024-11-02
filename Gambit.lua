@@ -153,6 +153,7 @@ end)
 ---------------------------------------------------------------------
 -- Addon unloaded
 windower.register_event('unload', function()
+    resetCurrentMob(nil, true)
     windower.send_command('unbind !~G;')    -- Unbind the automation toggle key
 end)
 

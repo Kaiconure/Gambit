@@ -394,11 +394,12 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-local function makeActionContext(actionType, time, target, mobEngagedTime)
+local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope)
     local context = {
         actionType = actionType,
         time = time,
         mobTime = mobEngagedTime or 0,
+        battleScope = battleScope,
         skillchain = actionStateManager:getSkillchain(),
         party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(),
         vars = actionStateManager.vars,
@@ -1405,13 +1406,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     end
 
     --------------------------------------------------------------------------------------
-    -- Ensure that the current action does not execute again for at least the given number of seconds
+    -- Ensure that the current action does not execute again for at least
+    -- the given number of seconds
     context.delay = function(s)
         s = math.max(0, tonumber(s) or 0)
         if s > 0 then
             context.action.availableAt = math.max(context.action.availableAt, context.time + s)
         end
     end
+    context.postpone = context.delay
 
     --------------------------------------------------------------------------------------
     -- Stay in the idle state for the given number of seconds
@@ -1487,6 +1490,34 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
     end
 
     --------------------------------------------------------------------------------------
+    -- Count the number of arguments
+    context.count = function (...)
+        local args = varargs({...})
+        if args and args[1] then
+            return #args
+        end
+
+        return 0
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Splits an amount of times in seconds by the given number of segments. Essentially
+    -- returns (seconds / segments), or 0 if either argument is 0 or invalid. Think of
+    -- this as a safe, positive number division operation.
+    context.split_time = function (seconds, segments)
+        if 
+            type(seconds) == 'number' and
+            type(segments) == 'number' and
+            seconds > 0 and
+            segments > 0
+        then
+            return seconds / segments
+        end
+
+        return 0
+    end
+
+    --------------------------------------------------------------------------------------
     -- If dead, return to your homepoint
     context.deathWarp = function ()
         if context.player.vitals.hpp > 0 then
@@ -1538,7 +1569,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime)
 end
 
 return {
-    create = function(actionType, time, target, mobEngagedTime)
-        return makeActionContext(actionType, time, target, mobEngagedTime)
+    create = function(actionType, time, target, mobEngagedTime, battleScope)
+        return makeActionContext(actionType, time, target, mobEngagedTime, battleScope)
     end
 }

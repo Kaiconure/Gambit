@@ -341,10 +341,25 @@ local function getNextBattleAction(context)
 
     if actions then
         for i, action in ipairs(actions) do
+            local inScope = true
+
+            -- If the action scoped to the battle, then we'll mark it ouf of scope when all of the following met:
+            --  - The context has a battle scope
+            --  - The action has a prior scope attached
+            --  - The context's scope matches the action's prior scope
+            if 
+                action.scope == 'battle' and
+                context.battleScope ~= nil and
+                action.lastBattleScope ~= nil and
+                action.lastBattleScope == context.battleScope
+            then
+                inScope = false
+            end
 
             if 
                 context.time >= action.availableAt and
-                delayReference >= action.delay
+                delayReference >= action.delay and
+                inScope
             then 
                 -- When we evaluate a new action, we need to clear the state left behind by any previous actions
                 context.spell                   = nil   -- Current spell
@@ -366,6 +381,9 @@ local function getNextBattleAction(context)
                     -- If this action will get run, we'll need to schedule the next run time. We'll actually
                     -- update this later, after the actions are executed, based on the time they complete.
                     action.availableAt = math.max(context.time + action.frequency, action.availableAt)
+
+                    -- Save the scope that was present when this action was triggered.
+                    action.lastBattleScope = context.battleScope
 
                     writeDebug('Condition met %s %s':format(
                         text_action(context.actionType .. '.' .. i, Colors.debug),
@@ -421,6 +439,7 @@ local function doNextActionCycle(time, player)
     local mob = globals.target:mob()
     local mobTime = globals.target:runtime()
     local mobDistance = mob and math.sqrt(mob.distance) or 0
+    local battleScope = globals.target:scopeId()
     local actionsExecuted = false
     local restingActionsExecuted = false
     local idleActionsExecuted = false
@@ -441,7 +460,7 @@ local function doNextActionCycle(time, player)
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
-        local context = ActionContext.create('resting', time, nil, 0)
+        local context = ActionContext.create('resting', time, nil, mobTime)
         local action = processNextAction(context);
         return
     end
@@ -449,7 +468,7 @@ local function doNextActionCycle(time, player)
     -- Death: Execute any actions, and bail
     local isDead = player.vitals.hp <= 0
     if isDead then
-        local context = ActionContext.create('dead', time, nil, 0)
+        local context = ActionContext.create('dead', time, nil, mobTime)
         local action = processNextAction(context);
         return
     end
@@ -492,7 +511,7 @@ local function doNextActionCycle(time, player)
                 hasPullableMob = not isMobEngaged
 
                 if isMobEngaged then
-                    local context = ActionContext.create('battle', time, mob, mobTime)
+                    local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
 
                     -- if player.target_locked then
                     --     sendActionCommand('input /lockon', context, 1)
@@ -534,7 +553,7 @@ local function doNextActionCycle(time, player)
 
                 -- Give some time for us to establish and engage with a new target before jumping straight to the pull
                 if mobTime > 1 then
-                    local context = ActionContext.create('pull', time, mob, mobTime)
+                    local context = ActionContext.create('pull', time, mob, mobTime, battleScope)
 
                     -- We'll ensure that we're facing the target mob at this point
                     -- if not context.facingEnemy() then

@@ -8,7 +8,7 @@
       "commands": [
         "log('Nuking with', spell.name)",
         "useSpell()",
-        "delay(vars.black_magic_nuke.frequency)"
+        "postpone(vars.black_magic_nuke.frequency)"
       ],
       "delay": 6,
       "comment": "Nukes with normal, single-target black magic. Customize by defining variables: max_tier, frequency, min_mpp"
