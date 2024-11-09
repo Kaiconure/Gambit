@@ -426,6 +426,8 @@ function smartMove:cancelJob(jobId, immediate)
             do
                 coroutine.sleep(0.125)
             end
+
+            coroutine.sleep(0.25)
         end
     else
         -- If we were unable to cancel due to there being no job at all, we'll just

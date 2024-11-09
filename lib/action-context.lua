@@ -955,7 +955,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             (context.item and context.item.name)
         )
 
-
         -- We need to clear out all spells/abilities/items from the context here
         context.spell = nil
         context.ability = nil
