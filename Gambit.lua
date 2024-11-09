@@ -151,6 +151,19 @@ windower.register_event('load', function()
 end)
 
 ---------------------------------------------------------------------
+-- Login
+windower.register_event('login', function ()
+    -- Store the current zone
+    local info = windower.ffxi.get_info()
+    globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
+    globals.language = info.language
+    
+    -- Reload all settings
+    resetCurrentMob(nil, true)
+    reloadSettings()
+end)
+
+---------------------------------------------------------------------
 -- Addon unloaded
 windower.register_event('unload', function()
     resetCurrentMob(nil, true)
@@ -286,11 +299,18 @@ local function parse_party_buffs(data)
                 local buffId = data:byte(k*48+5+16+i-1) + 256*( math.floor( data:byte(k*48+5+8+ math.floor((i-1)/4)) / 4^((i-1)%4) )%4) -- Credit: Byrth, GearSwap
 
                 if resources.buffs[buffId] and not members[memberId][buffId] then
-                    members[memberId][buffId] = true
+                    local count = #members[memberId]
+                    members[memberId][count + 1] = buffId
                 end
             end
         end
     end
+
+    -- Sample response format:
+    -- {
+    --   "689675": [ 249, 255, 253, 40 ],
+    --   "688767": [ 255 ]
+    -- }
 
     return members
 end
@@ -298,8 +318,8 @@ end
 ---------------------------------------------------------------------
 -- Incoming chunks (chunks are individual pieces of a packet)
 windower.register_event('incoming chunk', function (id, data)
-    
     if id == 0x076 then     -- Party buffs update
         local partyBuffs = parse_party_buffs(data)
+        actionStateManager:setMemberBuffs(partyBuffs)
     end
 end)
