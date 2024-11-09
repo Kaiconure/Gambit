@@ -315,11 +315,111 @@ local function parse_party_buffs(data)
     return members
 end
 
+local _handle_partyBuffsChunk = function (id, data)
+    local partyBuffs = parse_party_buffs(data)
+    actionStateManager:setMemberBuffs(partyBuffs)
+end
+
+local _handle_actionChunk = function(id, data)
+    local packet = packets.parse('incoming', data)
+
+    local count = tonumber(packet['Target Count']) or 0
+    if count < 1 then return end
+
+    local actorId = tonumber(packet['Actor']) or 0
+    if actorId <= 0 then return end
+
+    local actionId = tonumber(packet['Param']) or 0
+    if actionId <= 0 then return end    
+
+    local category = tonumber(packet['Category']) or 0
+    
+    local action = nil
+    local actionStatus = nil
+    if
+        category == 4   -- Category 4 means this was a spell
+        
+    then
+        action = resources.spells[actionId]
+        actionBuffId = tonumber(action.status) or 0
+    end
+
+    if action then
+        for i = 1, count do
+            local targetId = tonumber(packet['Target %d ID':format(i)]) or 0
+            local target = windower.ffxi.get_mob_by_id(targetId)
+
+            -- We only track this event for trusts in our party. Actual player
+            -- buffs are tracked in a better way via event 0x076.
+            if
+                target and
+                target.valid_target and
+                (target.in_party or target.in_alliance) and
+                target.spawn_type == SPAWN_TYPE_TRUST
+            then
+                local message = tonumber(packet['Target %d Action 1 Message':format(i)]) or 0
+                local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
+                local buffId = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
+
+                local canTrack = buffId > 0 and actionBuffId > 0
+                if canTrack then
+                    -- Theoretically, these should always align...right?
+                    if buffId ~= actionBuffId then
+                        writeVerbose('Warning: Event buff = %d but action buff = %d':format(buffId, actionBuffId))
+                    end
+
+                    local buff = resources.buffs[actionBuffId]
+                    if buff then 
+                        writeMessage('Trust %s gained effect: %s':format(
+                            target.name,
+                            buff.name
+                        ))
+                    end
+                end
+            end
+        end
+    end
+end
+
+local _handle_actionMessageChunk = function(id, data)
+    local packet = packets.parse('incoming', data)
+
+    -- Expiring actions
+
+    local targetId = tonumber(packet['Target']) or 0
+    local target = windower.ffxi.get_mob_by_id(targetId)
+
+    if 
+        target and
+        target.valid_target and
+        (target.in_party or target.in_alliance) and
+        target.spawn_type == SPAWN_TYPE_TRUST
+    then
+        local buffId = tonumber(packet['Param 1'] or 0)
+        if buffId > 0 then
+            local buff = resources.buffs[buffId]
+
+            if buff then
+                writeMessage('Trust %s lost: %s (%d)':format(target.name, buff.name, buff.id))
+            end
+        end
+    end
+end
+
 ---------------------------------------------------------------------
 -- Incoming chunks (chunks are individual pieces of a packet)
 windower.register_event('incoming chunk', function (id, data)
-    if id == 0x076 then     -- Party buffs update
-        local partyBuffs = parse_party_buffs(data)
-        actionStateManager:setMemberBuffs(partyBuffs)
+    if
+        id == 0x076     -- Party buffs update
+    then
+        _handle_partyBuffsChunk(id, data)
+    elseif 
+        id == 0x028     -- Action (Tracks incoming spells, abilities, etc)
+    then
+        _handle_actionChunk(id, data)
+    elseif
+        id == 0x029     -- Action message (tracks expiring effects, etc)
+    then
+        _handle_actionMessageChunk(id, data)
     end
 end)
