@@ -26,6 +26,9 @@ local state_manager = {
         time = 0,
         castTime = 0,
         spell = nil
+    },
+
+    memberBuffs = {        
     }
 }
 
@@ -275,6 +278,34 @@ state_manager.setSpellCompleted = function(self, interrupted)
         spell = nil,
         interrupted = interrupted
     }
+end
+
+-----------------------------------------------------------------------------------------
+-- 
+state_manager.setMemberBuffs = function(self, buffs)
+    -- The following is a data sample. The key is the mob id of the member.
+    -- {
+    --   "689675": { "249": true, "255": true, "253": true, "40": true },
+    --   "688767": { "255": true }
+    -- }
+
+    self.memberBuffs = buffs or { }
+end
+
+-----------------------------------------------------------------------------------------
+-- 
+state_manager.getMemberBuffs = function(self)
+    return self.memberBuffs or { }
+end
+
+-----------------------------------------------------------------------------------------
+-- 
+
+state_manager.getMemberBuffsFor = function (self, member)
+    -- Use ourself if no mob is specified
+    if member == nil then member = windower.ffxi.get_mob_by_target('me') end
+
+    return self:getMemberBuffs()[member.id] or { }
 end
 
 -----------------------------------------------------------------------------------------

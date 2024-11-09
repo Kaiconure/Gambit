@@ -15,15 +15,18 @@ local function findIgnoreListMatch(mob)
         -- We can only match if this item applies to the current zone
         local isZoneApplicable = item.zone == nil or item.zone == zoneId
         
-        if not couldEngage and isZoneApplicable then
-            if 
-                item.index == mob.index and
-                item.zone == zoneId
+        if 
+            isZoneApplicable and
+            (item.downgrade or not couldEngage)
+        then
+            -- Check for an index match
+            if
+                item.index == mob.index
             then
                 return item
             end
 
-            -- Check for a name match, and a zone match if configured
+            -- Check for a name match
             if
                 string.lower(item.name or '') == string.lower(mob.name)
             then
@@ -59,10 +62,14 @@ local function setTargetMob(mob)
 end
 
 local function shouldAquireNewTarget(player)
+    local checkEngagement = true
+
     -- Make sure we don't fixate on a mob we can't actually engage
     local currentTarget = globals.target
     local currentMob = currentTarget:mob()
     if currentMob then
+        checkEngagement = false
+
         -- We start checking to see if we're properly engaged after a configurable amount of time 
         -- has elapsed. If not configured, a dynamic value based on mob distance is used.
         local properlyEngaged = currentTarget:runtime() < settings.maxChaseTime
@@ -121,7 +128,9 @@ local function shouldAquireNewTarget(player)
         windower.ffxi.follow(-1)
         windower.send_command('input /attack off')
         resetCurrentMob(nil)
-    else
+    end
+
+    if checkEngagement then
         -- If we don't have a target, we won't try to find a new one until the retarget delay has elapsed
         local timeWithTarget = currentTarget:runtime()
         
@@ -279,7 +288,8 @@ function processTargeting()
             if 
                 target and
                 target.valid_target and
-                target.status == STATUS_ENGAGED
+                target.status == STATUS_ENGAGED and
+                target.spawn_type == SPAWN_TYPE_MOB
             then
                 -- If the party leader is engaged with the target -AND- the target is engaged, then this is
                 -- the mob we're looking for. Move along, move along.
@@ -294,8 +304,18 @@ function processTargeting()
     local bestMatchingMob = nil
     local nearestAggroingMob = nil
 
+    -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
+    local party_by_id = { }
+    if party.p0 then party_by_id[party.p0.mob.id] = party.p0 end
+    if party.p1 then party_by_id[party.p1.mob.id] = party.p1 end
+    if party.p2 then party_by_id[party.p2.mob.id] = party.p2 end
+    if party.p3 then party_by_id[party.p3.mob.id] = party.p3 end
+    if party.p4 then party_by_id[party.p4.mob.id] = party.p4 end
+    if party.p5 then party_by_id[party.p5.mob.id] = party.p5 end
+    
     for id, candidateMob in pairs(mobs) do
-        local isValidCandidate = candidateMob.distance <= maxDistanceSquared
+        local isValidCandidate = 
+            candidateMob.distance <= maxDistanceSquared
             and candidateMob.valid_target 
             and candidateMob.spawn_type == 16
             and not candidateMob.charmed
@@ -334,50 +354,41 @@ function processTargeting()
             isValidCandidate and 
             not shouldIgnore 
         then
-            for i = 0, 5 do
-                local partyIndex = 'p' .. i
-                local member = party[partyIndex]
+            if (candidateMob.claim_id == 0 or party_by_id[candidateMob.claim_id]) then
 
-                if member ~= nil then
-                    -- Don't chase mobs that are claimed by someone else
-                    if (candidateMob.claim_id == 0 or candidateMob.claim_id == member.mob.id) then
-
-                        -- We'll store the nearest aggroing mob, and give it priority over others
-                        if candidateMob.status == STATUS_ENGAGED then
-                            if nearestAggroingMob == nil then
-                                nearestAggroingMob = candidateMob
-                            elseif candidateMob.distance < nearestAggroingMob.distance then
-                                nearestAggroingMob = candidateMob
-                            end
-                        end
-
-                        if bestMatchingMob == nil then
-                            -- If we don't have any point of reference yet, this is the one to start with
-                            bestMatchingMob = candidateMob
-                        else
-                            local isHpEqual = bestMatchingMob.hpp == candidateMob.hpp
-                            local isHpStrategy = strategy == TargetStrategy.maxhp or
-                                settings.strategy == TargetStrategy.minhp
-                            local isNearer = candidateMob.distance < bestMatchingMob.distance
-
-                            local assumeStrategy = strategy
-                            if assumeStrategy == TargetStrategy.aggressor then
-                                assumeStrategy = TargetStrategy.nearest
-                            end
-
-                            -- If we've already got a point of reference, compare that with the current 
-                            -- to see if it's better than what we've already looked at.
-                            if (assumeStrategy == TargetStrategy.nearest and isNearer) or
-                                (assumeStrategy == TargetStrategy.maxhp and candidateMob.hpp > bestMatchingMob.hpp) or
-                                (assumeStrategy == TargetStrategy.minhp and candidateMob.hpp < bestMatchingMob.hpp) or
-                                (isHpStrategy and isHpEqual and isNearer) -- Pick the nearest mob with the same HP if we're tracking HP
-                            then
-                                bestMatchingMob = candidateMob
-                            end
-                        end
+                -- We'll store the nearest aggroing mob, and give it priority over others
+                if candidateMob.status == STATUS_ENGAGED then
+                    if nearestAggroingMob == nil then
+                        nearestAggroingMob = candidateMob
+                    elseif candidateMob.distance < nearestAggroingMob.distance then
+                        nearestAggroingMob = candidateMob
                     end
-                end 
-            end 
+                end
+
+                if bestMatchingMob == nil then
+                    -- If we don't have any point of reference yet, this is the one to start with
+                    bestMatchingMob = candidateMob
+                else
+                    local isHpEqual = (bestMatchingMob.hpp == candidateMob.hpp)
+                    local isHpStrategy = (strategy == TargetStrategy.maxhp) or (settings.strategy == TargetStrategy.minhp)
+                    local isNearer = candidateMob.distance < bestMatchingMob.distance
+
+                    local assumeStrategy = strategy
+                    if assumeStrategy == TargetStrategy.aggressor then
+                        assumeStrategy = TargetStrategy.nearest
+                    end
+
+                    -- If we've already got a point of reference, compare that with the current 
+                    -- to see if it's better than what we've already looked at.
+                    if (assumeStrategy == TargetStrategy.nearest and isNearer) or
+                        (assumeStrategy == TargetStrategy.maxhp and candidateMob.hpp > bestMatchingMob.hpp) or
+                        (assumeStrategy == TargetStrategy.minhp and candidateMob.hpp < bestMatchingMob.hpp) or
+                        (isHpStrategy and isHpEqual and isNearer) -- Pick the nearest mob with the same HP if we're tracking HP
+                    then
+                        bestMatchingMob = candidateMob
+                    end
+                end
+            end
         end
     end
 

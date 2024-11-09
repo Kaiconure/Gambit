@@ -209,6 +209,7 @@ handlers['targetinfo'] = function (args)
             string.format('Status: %s\n', tostring(target.status)) ..
             string.format('Claim id: %s\n', tostring(target.claim_id or 0)) ..
             string.format('Pos: (%.2f, %.2f, %.2f)\n', target.x or -1337, target.y or -1337, target.z or -1337) ..
+            string.format('Hdg: %.2f degrees\n', target.heading and (target.heading * 180 / math.pi) or -1337) ..
             string.format('Speed: %.2f\n', target.movement_speed or -1337)
         )
 

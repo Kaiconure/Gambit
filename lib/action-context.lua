@@ -161,21 +161,21 @@ local function getNextMemberEnumerator(context)
             enumerator.at = enumerator.at + 1
             
             -- Validate the new result
-            local result = enumerator.data[enumerator.at]
-            if result then
-                local mob = windower.ffxi.get_mob_by_index(result.index)
+            local member = enumerator.data[enumerator.at]
+            if member then
+                local mob = windower.ffxi.get_mob_by_index(member.index)
                 if 
                     mob and
                     mob.valid_target
                 then
-                    context.result = result
-                    return context.result
+                    context.member = member
+                    return context.member
                 end
             end
         end
     end
 
-    context.result = nil
+    context.member = nil
     context.action.enumerators.member = nil
     return nil
 end
@@ -202,14 +202,57 @@ end
 local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
+    -- Count the number of party members matching the specified expression
+    context.partyCount = function(expression)
+        expression = expression or 'true'
+
+        local fn = loadstring('return %s':format(expression))
+        local count = 0
+
+        for i, name in ipairs(PARTY_MEMBER_FIELD_NAMES) do
+            local member = context[name]
+            if member then
+                setfenv(fn, member)
+                if fn() then
+                    count = count + 1
+                end
+            end
+        end
+
+        return count
+    end
+
+    ----------------------------------------------------------------------------------------
+    -- Count the number of party members and allies matching the specified expression
+    context.allyCount = function(expression)
+        expression = expression or 'true'
+
+        local fn = loadstring('return %s':format(expression))
+        local count = 0
+        
+        for i, name in ipairs(PARTY_MEMBER_FIELD_NAMES) do
+            local member = context[name]
+            if member then
+                setfenv(fn, member)
+                if fn() then
+                    count = count + 1
+                end
+            end
+        end
+
+        return count
+    end
+
+    -----------------------------------------------------------------------------------------
     -- Find a party member who matches the given expression
     context.partyAny = function(expression)
         local results = enumerateContextByExpression(context, PARTY_MEMBER_FIELD_NAMES, expression)
         
-        context.result = results[1]
-        context.action.enumerators.member = context.result and { data = results, at = 1}
+        context.member = results[1]
+        context.members = results
+        context.action.enumerators.member = context.member and { data = results, at = 1}
         
-        return context.result
+        return context.member
     end
 
     -----------------------------------------------------------------------------------------
@@ -233,10 +276,11 @@ local function setPartyEnumerators(context)
     context.allyAny = function(expression)
         local results = enumerateContextByExpression(context, ALL_MEMBER_FIELD_NAMES, expression)
 
-        context.result = results[1]
-        context.action.enumerators.member = context.result and { data = results, at = 1}
+        context.member = results[1]
+        context.members = results
+        context.action.enumerators.member = context.member and { data = results, at = 1}
 
-        return context.result
+        return context.member
     end
 
     -----------------------------------------------------------------------------------------
@@ -288,6 +332,7 @@ local function initContextTargetSymbol(context, symbol)
         local player = context.player
         local vitals = player.vitals
 
+        -- Vitals
         symbol.hp = vitals.hp
         symbol.hpp = vitals.hpp
         symbol.max_hp = vitals.max_hp
@@ -305,6 +350,9 @@ local function initContextTargetSymbol(context, symbol)
         symbol.sub_job = player.sub_job
         symbol.sub_job_level = player.sub_job_level
 
+        -- Active buffs. For the player, we'll use the live player object buffs.
+        symbol.buffs = player.buffs
+
         -- Flag to determine if you're at the master level
         symbol.is_mastered = (player.superior_level == 5)
     elseif symbol.member then
@@ -314,6 +362,9 @@ local function initContextTargetSymbol(context, symbol)
         symbol.mp = symbol.member.mp
         symbol.mpp = symbol.member.mpp
         symbol.tp = symbol.member.tp
+
+        -- Active buffs. For other party members and allies, we'll use the global state manager.
+        symbol.buffs = actionStateManager:getMemberBuffsFor(symbol.mob)
     else
         symbol.name = symbol.mob.name
         symbol.hpp = symbol.mob.hpp
@@ -324,8 +375,8 @@ local function initContextTargetSymbol(context, symbol)
     symbol.id = symbol.mob.id
     symbol.index = symbol.mob.index
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
-    symbol.isTrust = symbol.mob.spawn_type == SPAWN_TYPE_TRUST
-    symbol.isPlayer = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER
+    symbol.is_trust = symbol.mob.spawn_type == SPAWN_TYPE_TRUST
+    symbol.is_player = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
@@ -469,7 +520,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local target = weaponSkill.targets.Self and context.me or context.bt
                 local targetOutOfRange = target and
                     target.distance and
-                    target.distance > weaponSkill.range
+                    target.distance > math.max(weaponSkill.range, 5)
 
                 if not targetOutOfRange then
                     if canUseWeaponSkill(
@@ -492,7 +543,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.useWeaponSkill = function (weaponSkill)
-        if weaponSkill == nil then weaponSkill = context.weapon_skill end
+        --if weaponSkill == nil then weaponSkill = context.weapon_skill end
+        weaponSkill = weaponSkill or context.weapon_skill
         if type(weaponSkill) == 'string' then weaponSkill = findWeaponSkill(weaponSkill) end
 
         if type(weaponSkill) == 'table' then
@@ -638,7 +690,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if item == nil then return end
         end
 
-        target = target or context.result
+        target = target or context.member
         if type(target) == 'string' then 
             target = context[target] 
         end
@@ -678,28 +730,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             waitTime,
             true
         )        
-    end
-
-    --------------------------------------------------------------------------------------
-    --
-    context.canUseSpell = function (...)
-        local spells = varargs({...}, context.spell and context.spell.name)
-        
-        if type(spells) == 'table' then
-            for key, _spell in ipairs(spells) do
-                local spell = _spell
-                if type(spell) ~= 'nil' then
-                    spell = findSpell(spell)
-                    if spell then
-                        context.spell = spell
-                        
-                        if canUseSpell(context.player, spell) then
-                            return key
-                        end
-                    end
-                end
-            end
-        end
     end
 
     --------------------------------------------------------------------------------------
@@ -796,13 +826,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if type(ability) == 'string' then ability = findJobAbility(ability) end
         
         if ability ~= nil then
-            -- Bail if the ability cannot be used
+            -- Bail if the ability cannot be used. 
+            -- NOTE: This is the resx canUseAbility function, not the context one.
             if not canUseAbility(nil, ability) then
-                context.wait(1.0)
                 return
             end
 
-            target = target or context.result
+            target = target or context.member
             if type(target) == 'string' then 
                 target = context[target] 
             end
@@ -838,18 +868,40 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    --
+    context.canUseSpell = function (...)
+        local spells = varargs({...}, context.spell and context.spell.name)
+        if type(spells) == 'table' then
+            for key, _spell in ipairs(spells) do
+                local spell = _spell
+                if type(spell) ~= 'nil' then
+                    spell = findSpell(spell)
+                    if spell then
+                        context.spell = spell
+                        
+                        if canUseSpell(nil, spell) then
+                            return key
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Uses the specified spell on the specified target
     context.useSpell = function (target, spell)
         if spell == nil then spell = context.spell end
         if type(spell) == 'string' then spell = findSpell(spell) end
         
         if spell ~= nil then
+
             -- Bail if we cannot use the spell
             if not canUseSpell(nil, spell) then
                 return
             end
 
-            target = target or context.result
+            target = target or context.member
             if type(target) == 'string' then 
                 target = context[target] 
             end
@@ -1006,14 +1058,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Set up behind the mob and then face it
-    context.alignRear = function ()
+    context.alignRear = function (duration)
         if context.bt then
             if context.alignedRear() then
                 return true
             end
 
             if context.bt.distance < 5 then
-                local jobId = smartMove:moveBehindMob(context.bt.mob, 3)
+                duration = tonumber(duration) or 3
+                duration = math.clamp(duration, 1, 5)
+
+                local jobId = smartMove:moveBehindMob(context.bt.mob, duration)
                 if jobId then
                     while true do
                         coroutine.sleep(0.5)
@@ -1030,7 +1085,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -------------------------------------------------------------------------------------
     -- Check if the specified target is being followed
     context.following = function(target)
-        target = target or context.result or context.bt
+        target = target or context.member or context.bt
         
         if type(target) == 'string' then
             target = windower.ffxi.get_mob_by_target(target) 
@@ -1075,7 +1130,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- 
     context.follow = function (target, distance)
-        target = target or context.result or context.bt
+        target = target or context.member or context.bt
 
         -- Allow string targets
         if type(target) == 'string' then
@@ -1159,9 +1214,77 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return count
     end
 
+    -------------------------------------------------------------------------------------
+    -- Find the first party member with one of the specified buffs
+    context.partyHasBuff = function (...)
+        local names = varargs({...})
+        for i, p in ipairs(PARTY_MEMBER_FIELD_NAMES) do
+            local member = context[p]
+            if member and member.buffs then
+                if context.hasBuff(member, names) then
+                    return true
+                end
+            end
+        end
+    end
+    context.partyHasEffect = context.partyHasBuff
+
+    context.hasBuff = function(target, ...)
+        local names = varargs({...})
+
+        -- If the target is a string that exists in the context, we'll use that
+        if type(target) == 'string' and context[target] and context[target].buffs then
+            target = context[target]
+        end
+        
+        -- If the target is not a table at this point, then we'll use ourself
+        if type(target) ~= 'table' then
+
+            -- If the target is a string, it means no target was specified and the first param was 
+            -- a buff. Let's add it to the list of buff names we're searching through.
+            if type(target) == 'string' then
+                table.insert(names, 1, target)
+            end
+
+            -- Promote the target to ourself
+            target = context.me
+        end
+
+        for i, name in ipairs(names) do
+            local buff = findBuff(name)
+            if buff and arrayIndexOf(target.buffs, buff.id) then
+                context.effect = buff
+                if target.spawn_type ~= SPAWN_TYPE_MOB then
+                    context.member = target
+                end
+                return true
+            end
+        end
+    end
+
+    -- context.memberHasBuff = function(member, ...)
+    --     member = member or context.member
+    --     if type(member) == 'string' then 
+    --         member = context[member] 
+    --     end
+
+    --     if type(member) == 'table' and type(member.buffs) == 'table' then
+            
+    --         local names = varargs({...})
+    --         for i, name in ipairs(names) do
+    --             local buff = findBuff(name)
+    --             if buff and arrayIndexOf(member.buffs, buff.id) then
+    --                 context.effect = buff
+    --                 return true
+    --             end
+    --         end
+    --     end
+    -- end
+
     --------------------------------------------------------------------------------------
-    -- Returns true if the specified buff is active
-    context.hasBuff = function (...)
+    -- Returns true if the specified buff is active. If multiple buffs are specified,
+    -- the result will be true if -ANY- of them are active.
+    context.hasBuffOrig = function (...)
         local names = varargs({...})
         
         local player = windower.ffxi.get_player()
@@ -1231,9 +1354,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         then
             context.skillchain_trigger_time = sc.time
 
+            -- Commenting out the below. Why *not* let multple reactions occur to the same SC?
+
             -- Don't let this action trigger again for the same skillchain
-            local age = context.time - sc.time
-            context.delay(MAX_SKILLCHAIN_TIME - age)
+            -- local age = context.time - sc.time
+            -- context.delay(MAX_SKILLCHAIN_TIME - age)
 
             return true
         end

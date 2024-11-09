@@ -145,8 +145,9 @@ function sendSpellCastingCommand(spell, target, context)
     )
 
     local castingStartedAt = os.clock()
-    local interrupted = false
-    local isFirstCycle = true
+    local interrupted   = false     -- Set if the spell completes with interruption
+    local missed        = false     -- Set if the spell completed but missed (not yet implemented)
+    local isFirstCycle  = true
 
     -- Send the casting command. It will wait 1 second before returning (the third parameter)
     sendActionCommand(command, context, 1)
@@ -172,13 +173,9 @@ function sendSpellCastingCommand(spell, target, context)
     local castingEndedAt = os.clock()
 
     -- We need to pad the casting time a bit, because spell casting fires its completion event before
-    -- it's actually fully done casting. We'll reduce the pading time if casting was interrupted, or
-    -- if casting completed after the first cycle (first cycle completion means it either never went off,
-    -- or it was an extremely short casting time so it needs less padding).
+    -- it's actually fully done casting.
     local paddingTime = 1.75
-    if isFirstCycle or interrupted then
-        paddingTime = 1.75
-    end
+
     coroutine.sleep(paddingTime)
 
     if followJob then
@@ -189,6 +186,15 @@ function sendSpellCastingCommand(spell, target, context)
 
     local castingTime = castingEndedAt - castingStartedAt
     local totalTime = wokeAt - castingStartedAt
+
+    -- If the spell was interrupted, we'll adjust scheduling to allow it to be tried again
+    if
+        interrupted and
+        context and
+        context.action
+    then
+        context.action.incomplete = true
+    end
 
     -- In debug mode, let's log that we've finished our work here
     writeDebug('%s: Cast time %s / Observer time %s':format(
@@ -341,32 +347,25 @@ local function getNextBattleAction(context)
 
     if actions then
         for i, action in ipairs(actions) do
-            local inScope = true
-
-            -- If the action scoped to the battle, then we'll mark it ouf of scope when all of the following met:
-            --  - The context has a battle scope
-            --  - The action has a prior scope attached
-            --  - The context's scope matches the action's prior scope
+            -- If this action is scoped to a battle -AND- it either has no scope yet or its scope does not
+            -- match that of the current battle scope, then it is immediately reschedulable.
             if 
                 action.scope == 'battle' and
-                context.battleScope ~= nil and
-                action.lastBattleScope ~= nil and
-                action.lastBattleScope == context.battleScope
+                (action.lastBattleScope == nil or action.lastBattleScope ~= context.battleScope)
             then
-                inScope = false
+                action.availableAt = 0
             end
 
             if 
                 context.time >= action.availableAt and
-                delayReference >= action.delay and
-                inScope
+                delayReference >= action.delay
             then 
                 -- When we evaluate a new action, we need to clear the state left behind by any previous actions
                 context.spell                   = nil   -- Current spell
                 context.ability                 = nil   -- Current ability
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.effect                  = nil   -- Current buff/effect
-                context.result                  = nil   -- The result of a targeting enumerator
+                context.member                  = nil   -- The result of a targeting enumerator
                 context.enemy_ability           = nil   -- The current mob ability
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
@@ -417,9 +416,19 @@ local function executeBattleAction(context, action)
             command._commandFn()
         end
 
-        -- We'll actually bump the next schedulable time based on when this action ended,
-        -- rater than when it started...does this make sense?
+        -- At this point, we'll set the next schedule time based on the later of either its
+        -- configured frequency or its own current schedulable time.
         action.availableAt = math.max(context.time + action.frequency, action.availableAt)
+
+        -- If the action was flagged as incomplete, we'll allow it to be rescheduled again. In this
+        -- case, we'll clear the scope and set it to the earlier of its current schedulable time
+        -- or a small amount of time in the future. Don't forget to clear the incomplete flag!
+        if action.incomplete then
+            action.lastBattleScope = nil
+            action.availableAt = math.min(context.time + 1, action.availableAt)
+
+            action.incomplete = nil
+        end
     end
 
     return action

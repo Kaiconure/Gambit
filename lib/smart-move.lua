@@ -168,6 +168,8 @@ local function sm_movement(self, job)
         if player.target_locked then
             windower.send_command('input /lockon;')
             coroutine.sleep(0.5)
+        else
+            coroutine.sleep(0.25)
         end
 
         -- Refresh our vectors
@@ -242,7 +244,7 @@ local function sm_movement(self, job)
             sleepDuration = 0.5
             zeroSpeedCycles = 0
         elseif 
-            --((not wasJittering and not sharesHalfspace(heading, newHeading))) or
+            ((not wasJittering and not sharesHalfspace(heading, newHeading)) and newDistance < 1.25) or
             newDistance < self.tolerance
         then
             -- We've reached our target distance, it's time to stop moving
@@ -523,7 +525,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     job.follow_index = follow_index -- Store the follow index
     job.mob = mob                   -- Store the target mob
     job.autoComplete = true         -- We want this job to stop once we get into position
-    job.follow_distance = 1.2       -- How far behind the mob to get
+    job.follow_distance = 1.75      -- How far behind the mob to get
     job.max_duration = 
         tonumber(maxDuration) or 5  -- The most time we'll spend waiting to get into position
     job.canJitter = false           -- Don't allow jittering
