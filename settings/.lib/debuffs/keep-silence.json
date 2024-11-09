@@ -1,0 +1,18 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_silence": {
+      "with": ["Silence"]
+    }
+  },
+  "actions": [
+    {
+      "when": "canUse(vars.keep_silence.with)",
+      "commands": "use(bt)",
+      "frequency": 125,
+      "scope": "battle"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_haste": {
+      "with": ["Haste II", "Haste"]
+    }
+  },
+  "actions": [
+    {
+      "when": "partyCount('hpp < 60') > 2 and canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": "partyAny('hpp <= 40') and canUse('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')",
+      "commands": ["use()"],
+      "frequency": 1,
+      "disabled": false
+    },
+    {
+      "when": "partyCount('hpp < 75') > 2 and canUse('Curaga III', 'Curaga II', 'Curaga')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": "partyAny('hpp <= 60') and canUse('Cure IV', 'Cure III', 'Cure II', 'Cure')",
+      "commands": ["use()"],
+      "frequency": 1
+    },
+    {
+      "when": "partyAny('hpp <= 75') and canUse('Cure III', 'Cure II', 'Cure')",
+      "commands": ["use()"],
+      "frequency": 1
+    }
+  ]
+}

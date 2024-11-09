@@ -4,15 +4,14 @@
   },
   "vars": {
     "keep_haste": {
-      "spells": ["Haste II", "Haste"]
+      "with": ["Haste II", "Haste"]
     }
   },
   "actions": [
     {
-      "when": "not hasBuff('Haste') and canUse(vars.keep_haste.spells)",
+      "when": "not hasBuff('Haste') and canUse(vars.keep_haste.with)",
       "commands": ["use(me)"],
-      "frequency": 10,
-      "comment": "Use the best haste spell available on yourself."
+      "frequency": 10
     }
   ]
 }

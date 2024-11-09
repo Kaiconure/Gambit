@@ -1,0 +1,18 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_slow": {
+      "with": ["Slow II", "Slow"]
+    }
+  },
+  "actions": [
+    {
+      "when": "canUse(vars.keep_slow.with)",
+      "commands": "use(bt)",
+      "frequency": 185,
+      "scope": "battle"
+    }
+  ]
+}

@@ -4,15 +4,14 @@
   },
   "vars": {
     "keep_refresh": {
-      "spells": ["Refresh III", "Refresh II", "Refresh"]
+      "with": ["Refresh III", "Refresh II", "Refresh"]
     }
   },
   "actions": [
     {
-      "when": "not hasBuff('Refresh') and canUse(vars.keep_refresh.spells)",
+      "when": "not hasBuff('Refresh') and canUse(vars.keep_refresh.with)",
       "commands": ["use(me)"],
-      "frequency": 10,
-      "comment": "Use the best refresh available on yourself."
+      "frequency": 10
     }
   ]
 }
