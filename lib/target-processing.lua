@@ -276,7 +276,7 @@ function processTargeting()
 
     -- We will bail early if we're using the leader strategy. Either we take the leader's battle target,
     -- or the leader has no target and we remain idle.
-    if strategy == TargetStrategy.leader then
+    if strategy == TargetStrategy.leader and party.party1_leader then
         local leaderMob = windower.ffxi.get_mob_by_id(party.party1_leader)
         if 
             leaderMob and

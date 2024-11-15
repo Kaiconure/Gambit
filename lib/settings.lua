@@ -21,12 +21,46 @@ TargetStrategy.default = TargetStrategy.nearest
 --  - downgrade: Pushes the mob all the way to the bottom of the target list. It will only be engaged
 --      if it is aggroing, or if it is the only mob within range.
 local DefaultIgnoreList = {
+
+    -- Mobs that will never attack and are generally ignorable
     { name = 'Numbing Blossom', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Spinescent Protuberance', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Erupting Geyser', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Pungent Fungus', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Steam Spout', zone = nil, index = nil, ignoreAlways = true },
-    { name = 'Graupel Formation', zone = nil, index = nil, ignoreAlways = true }
+    { name = 'Graupel Formation', zone = nil, index = nil, ignoreAlways = true },
+
+    -- Mobs that guard colonization reives, which are just a waste of time to target
+    -- when we could be breaking down the obstacles to eliminate them.
+    { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Chilblain Snoll', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Indomitable Spurned', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Larkish Opo-opo', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Lavender Twitherym', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Lightfoot Lapinion', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Ruby Raptor', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Skittish Matamata', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Sloshmouth Snapweed', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Soiled Funguar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' }
+}
+
+--
+-- Mobs who we will always avoid trying to stand behind. These will typically be reive obstacles,
+-- where we have no reliable way of approaching from the rear.
+local DefaultNoRearList = {
+    'Amaranth Barrier',
+    'Bedrock Crag',
+    'Gnarled Rampart',
+    'Heliotrope Barrier',
+    'Icy Palisade',
+    'Knotted Root',
+    'Monolithic Boulder'
 }
 
 local defaultSettings = {
@@ -37,6 +71,7 @@ local defaultSettings = {
     verbosity = VERBOSITY_VERBOSE,
     schemaVersion = 2,
     ignoreList = DefaultIgnoreList,
+    noRearList = DefaultNoRearList,
     maxChaseTime = nil
 }
 
@@ -333,11 +368,14 @@ function loadSettings(actionsName, settingsOnly)
         actionsName = settings.actionInfo and settings.actionInfo.name
     end
 
+    local mainJob = player.main_job
+    local subJob = player.sub_job
+
     if actions == nil then
 
         actionsName = '%s%s':format(
-            player.main_job,
-            player.sub_job_level > 0 and '-%s':format(player.sub_job) or ''
+            mainJob,
+            subJob and '-%s':format(subJob) or ''
         ):lower()
 
         jobActionsName = actionsName

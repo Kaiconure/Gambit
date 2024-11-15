@@ -34,6 +34,8 @@ handlers['strat'] = handlers['strategy']
 handlers['disable'] = function (args)
     local quiet = arrayIndexOfStrI(args, '-quiet')
 
+    smartMove:cancelJob()
+
     if globals.enabled then
         globals.enabled = false
 
@@ -54,6 +56,8 @@ end
 handlers['enable'] = function (args)
     local quiet = arrayIndexOfStrI(args, '-quiet')
     local changed = false
+
+    smartMove:cancelJob()
 
     if not globals.enabled then
         -- Clear the mob before we enable
@@ -386,7 +390,34 @@ handlers['actions'] = function(args)
 end
 
 handlers['align'] = function(args)
-    writeMessage('Not implemented: align')
+    local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
+    local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
+    local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
+
+    distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
+
+    if cancel then
+        local jobInfo = smartMove:getJobInfo()
+        local jobId = smartMove:cancelJob()
+        if jobId then
+            writeMessage('Follow cancelled!')
+        else
+            writeMessage('There was no follow to cancel.')
+        end
+    elseif target then
+        local target = windower.ffxi.get_mob_by_target('t')
+        local job = smartMove:moveBehindIndex(target.index, 5)
+        if job then
+            writeMessage('Moving behind %s with a distance of %.1f':format(
+                text_mob(target.name),
+                distance
+            ))
+        else
+            writeMessage('Unable to move behind %s!':format(
+                text_mob(target.name)
+            ))
+        end
+    end
 end
 
 handlers['showfollow'] = function(args)
@@ -405,6 +436,42 @@ handlers['walkmode'] = function (args)
         windower.ffxi.toggle_walk()
     end
 end
+
+handlers['mobbuffs'] = function(args)
+    local count = 0
+    local message = text_cornsilk('\nTracked mob buffs:\n')
+
+    local buffs = actionStateManager:getBuffsForMobs()
+    for id, buffs in pairs(buffs) do        
+        local mob = windower.ffxi.get_mob_by_id(id)
+        if mob then
+            local timers = actionStateManager:getBuffTimersForMob(id)
+            count = count + 1
+            message = message .. text_cornsilk('  %s / %03X (%s)\n':format(
+                mob.name,
+                mob.index,
+                (mob.spawn_type == SPAWN_TYPE_TRUST and 'Trust' or 'Mob')
+            ))
+            for i, buffId in ipairs(buffs) do
+                local buff = resources.buffs[buffId]
+                if buff then
+                    message = message .. text_cornsilk('    %s expires in %s (applied by %s)\n':format(
+                        text_buff(buff.name, Colors.cornsilk),
+                        text_number(timers[buffId] and '%.1fs':format(timers[buffId]) or '--', Colors.cornsilk),
+                        text_target(actionStateManager.mobBuffs[id].byMe[buffId] and 'me' or 'other', Colors.cornsilk)
+                    ))
+                end
+            end
+        end
+    end
+
+    if count > 0 then
+        writeMessage(message)
+    else
+        writeMessage('No actively tracked mob buffs were found.')
+    end
+end
+handlers['mb'] = handlers['mobbuffs']
 
 local BagsById = 
 {

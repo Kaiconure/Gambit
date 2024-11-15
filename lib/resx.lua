@@ -320,7 +320,17 @@ function canUseSpell(player, spell)
     -- Bail if it's a blue magic spell and it is not assigned
     if spell.type == 'BlueMagic' and not hasBluSpellAssigned(player, spell) then
         return false
-    end    
+    end
+
+    -- Don't allow trusts in non-trust zones
+    if spell.type == 'Trust' then
+        if 
+            globals.currentZone ~= nil and
+            globals.currentZone.can_pet ~= true 
+        then
+            return false
+        end        
+    end
 
     --
     -- NOTE: At this point we know:
@@ -368,11 +378,13 @@ function canUseAbility(player, ability)
         return false
     end
 
-    -- Bail if we have a debuff that prevents use of job abilities.
+    -- Bail if we have a status effect that prevents use of job abilities.
     -- Note: This also affects pet commands
     if
         hasBuff(player, 'Sleep') or
-        hasBuff(player, 'Amnesia')
+        hasBuff(player, 'Amnesia') or
+        (ability.type == 'Waltz' and hasBuff(player, 'Saber Dance')) or
+        (ability.type == 'Samba' and hasBuff(player, 'Fan Dance'))
     then
         return false
     end

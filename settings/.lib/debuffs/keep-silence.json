@@ -9,9 +9,9 @@
   },
   "actions": [
     {
-      "when": "canUse(vars.keep_silence.with)",
+      "when": "bt and canUse(vars.keep_silence.with) and not hasBuff(bt, 'Silence')",
       "commands": "use(bt)",
-      "frequency": 125,
+      "frequency": 5,
       "scope": "battle"
     }
   ]

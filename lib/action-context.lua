@@ -12,10 +12,14 @@ local ALL_MEMBER_FIELD_NAMES = {
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
 local function varargs(args, default)
-    -- We allow a single array to be passed rather than a list of arguments, in which case
-    -- we will simply return the first array we've received. We could consider appending
-    -- multiple arrays together at some point if we'd like.
-    if type(args) == 'table' and type(args[1]) == 'table' then
+    -- We allow a single array to be passed in as a substitute for variable length argument lists. In this
+    -- case, we will simply use that array as the entire input.
+    if 
+        type(args) == 'table' and       -- We have an actual table
+        #args == 1 and                  -- The table only has one element
+        type(args[1]) == 'table' and    -- That one element is a table
+        args[1][1] ~= nil               -- That one element looks to be an array
+    then
         args = args[1]
     end
 
@@ -99,7 +103,9 @@ end
 -----------------------------------------------------------------------------------------
 --
 function context_wait(s)
-    coroutine.sleep(tonumber(s) or 1)
+    local s = math.max(tonumber(s) or 1, 0)
+    writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
+    coroutine.sleep(s)
 end
 
 -----------------------------------------------------------------------------------------
@@ -300,10 +306,73 @@ local function setPartyEnumerators(context)
     end
 end
 
+local function setArrayEnumerators(context)
+    context.iterate = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+        if enumerator then
+            -- Advance the enumerator
+            enumerator.at = enumerator.at + 1
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= #enumerator.data then
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+
+                return context.result
+            end
+        end
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            context.action.enumerators.array[name] = { data = results, at = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    -- Get the iterator for the collection with the given name
+    context.getIterator = function(name)
+        return context.result and context.result[name]
+    end
+end
+
 -----------------------------------------------------------------------------------------
 -- 
 local function setEnumerators(context)
     setPartyEnumerators(context)
+    setArrayEnumerators(context)
 end
 
 -----------------------------------------------------------------------------------------
@@ -363,11 +432,18 @@ local function initContextTargetSymbol(context, symbol)
         symbol.mpp = symbol.member.mpp
         symbol.tp = symbol.member.tp
 
-        -- Active buffs. For other party members and allies, we'll use the global state manager.
-        symbol.buffs = actionStateManager:getMemberBuffsFor(symbol.mob)
+        -- Active buffs
+        if symbol.mob.spawn_type == SPAWN_TYPE_PLAYER then
+            -- For player party members and allies, we'll use the global state manager driven by party buffs
+            symbol.buffs = actionStateManager:getMemberBuffsFor(symbol.mob)
+        elseif symbol.mob.spawn_type == SPAWN_TYPE_TRUST then
+            -- For trusts, we'll use the much more limited self-initiated trust buff data we're tracking
+            symbol.buffs = actionStateManager:getBuffsForMob(symbol.mob.id)
+        end
     else
         symbol.name = symbol.mob.name
         symbol.hpp = symbol.mob.hpp
+        symbol.buffs = actionStateManager:getBuffsForMob(symbol.mob.id)
     end
 
     -- Set the shared properties
@@ -420,10 +496,10 @@ local function loadContextTargetSymbols(context, target)
 
             -- Store party leader info as well
             if context.party.party1_leader == mob.id then
-                context[p].leader = true
+                context[p].is_party_leader = true
                 context.party_leader = context[p]
             else
-                context[p].leader = false
+                context[p].is_party_leader = false
             end
         end
 
@@ -441,6 +517,17 @@ local function loadContextTargetSymbols(context, target)
             initContextTargetSymbol(context, context[a2])
         end
     end
+
+    -- If we are the leader, or if we are the only one in the party, save that info
+    if 
+        context.party == nil or
+        context.party.party1_count == 1 or
+        context.party.party1_leader == context.me.id
+    then
+        context.party_leader = context.p0
+        context.p0.is_party_leader = true
+        context.me.is_party_leader = true
+    end
 end
 
 -----------------------------------------------------------------------------------------
@@ -449,6 +536,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local context = {
         actionType = actionType,
         time = time,
+        strategy = settings.strategy,
         mobTime = mobEngagedTime or 0,
         battleScope = battleScope,
         skillchain = actionStateManager:getSkillchain(),
@@ -547,7 +635,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         weaponSkill = weaponSkill or context.weapon_skill
         if type(weaponSkill) == 'string' then weaponSkill = findWeaponSkill(weaponSkill) end
 
-        if type(weaponSkill) == 'table' then
+        if 
+            type(weaponSkill) == 'table' and
+            type(weaponSkill.prefix) == 'string' and
+            type(weaponSkill.name) == 'string' and
+            type(weaponSkill.targets) ~= nil
+        then
             
             local waitTime = 3.0
             local command = string.format('input %s "%s" <%s>',
@@ -802,6 +895,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local abilities = varargs({...}, context.ability and context.ability.name)
 
         if type(abilities) == 'table' then
+            local player = windower.ffxi.get_player()
+
             for key, _ability in ipairs(abilities) do
                 local ability = _ability
                 if type(ability) == 'string' then
@@ -810,7 +905,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     if ability then
                         context.ability = ability
 
-                        if canUseAbility(context.player, ability) then
+                        if canUseAbility(player, ability) then
                             return key
                         end
                     end
@@ -850,6 +945,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             local waitTime = 1.5
+            local stopWalk = true
+            if 
+                ability.name == 'Sneak Attack' or
+                ability.name == 'Trick Attack'
+            then
+                -- Some abilities have very strict timing requirements
+                waitTime = 1.0
+                stopWalk = false
+            end
+
             local command = string.format('input %s "%s" <%s>',
                 ability.prefix, -- /jobability, /pet
                 ability.name,
@@ -862,7 +967,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 command,
                 context,
                 waitTime,
-                true -- We shouldn't need to stop walking to use job abilities...
+                stopWalk -- We generally shouldn't need to stop walking to use job abilities...
             )
         end
     end
@@ -1055,6 +1160,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return false
     end
 
+    context.canAlignRear = function ()
+        if not context.bt then
+            return false
+        end
+
+        if not settings.noRearList then
+            return false
+        end
+
+        return not arrayIndexOfStrI(settings.noRearList, context.bt.name)
+    end
+
     --------------------------------------------------------------------------------------
     -- Set up behind the mob and then face it
     context.alignRear = function (duration)
@@ -1063,16 +1180,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 return true
             end
 
+            -- If this mob is in the list of mobs we can't align behind, then just 
+            -- return false immediately. We'll also ensure this action doesn't get
+            -- scheduled again for a little bit in that case.
+            if not context.canAlignRear() then
+                context.postpone(5)
+                return false
+            end
+
             if context.bt.distance < 5 then
                 duration = tonumber(duration) or 3
-                duration = math.clamp(duration, 1, 5)
+                --duration = math.clamp(duration, 1, 5)
 
-                local jobId = smartMove:moveBehindMob(context.bt.mob, duration)
+                writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+
+                local jobId = smartMove:moveBehindIndex(context.bt.index, duration)
                 if jobId then
                     while true do
                         coroutine.sleep(0.5)
                         local job = smartMove:getJobInfo()
                         if job == nil or job.jobId ~= jobId then
+                            writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
                             return context.alignedRear()
                         end
                     end
@@ -1214,6 +1342,28 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     -------------------------------------------------------------------------------------
+    -- Try to release the specified trust
+    context.releaseTrust = function (name)
+        name = tostring(name)
+        if name then
+            name = name:lower()
+            for i = 1, 5 do
+                local member = context['p' .. i]
+                if member and member.is_trust then
+                    if tostring(member.name):lower() == name and member.distance <= 5 then
+                        sendActionCommand(
+                            'input /returnfaith "%s"':format(member.name),
+                            context,
+                            1)
+                        context.wait(6)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    -------------------------------------------------------------------------------------
     -- Find the first party member with one of the specified buffs
     context.partyHasBuff = function (...)
         local names = varargs({...})
@@ -1328,12 +1478,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Cancels a cancellable beneficial buff
     context.cancelBuff = function(...)
         local names = varargs({...})
+        local cancelled = false
         for i, name in ipairs(names) do
-            local buff = hasBuff(name)
+            local buff = hasBuff(nil, name)
             if buff then
                 windower.ffxi.cancel_buff(buff.id)
+                cancelled = true
             end
         end
+
+        return cancelled
     end
 
     --------------------------------------------------------------------------------------
@@ -1522,6 +1676,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             sendRangedAttackCommand(context.t, context)
         end
     end
+    context.throw = context.shoot
+    context.ra = context.shoot
 
     --------------------------------------------------------------------------------------
     --

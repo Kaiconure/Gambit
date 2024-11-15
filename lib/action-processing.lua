@@ -174,7 +174,7 @@ function sendSpellCastingCommand(spell, target, context)
 
     -- We need to pad the casting time a bit, because spell casting fires its completion event before
     -- it's actually fully done casting.
-    local paddingTime = 1.75
+    local paddingTime = 2.0
 
     coroutine.sleep(paddingTime)
 
@@ -366,6 +366,8 @@ local function getNextBattleAction(context)
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.effect                  = nil   -- Current buff/effect
                 context.member                  = nil   -- The result of a targeting enumerator
+                context.result                  = nil   -- The result of the latest iterator operation
+                context.results                 = { }   -- The results of all current iterator operations
                 context.enemy_ability           = nil   -- The current mob ability
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
@@ -440,6 +442,34 @@ function processNextAction(context)
     -- TODO: Anything to do here wrt logging, state management, etc?
     
     return executeBattleAction(context, action)
+end
+
+--
+-- Returns true if any member of the party is engaged
+local function isPartyEngaged()
+    local party = windower.ffxi.get_party()
+    if party then
+        return
+            (party.p1 and party.p1.mob.status == STATUS_ENGAGED) or
+            (party.p2 and party.p2.mob.status == STATUS_ENGAGED) or
+            (party.p3 and party.p3.mob.status == STATUS_ENGAGED) or
+            (party.p4 and party.p4.mob.status == STATUS_ENGAGED) or
+            (party.p5 and party.p5.mob.status == STATUS_ENGAGED)
+    end
+end
+
+--
+-- Returns true if any trusts in the party are engaged
+local function isPartyTrustEngaged()
+    local party = windower.ffxi.get_party()
+    if party then
+        return
+            (party.p1 and party.p1.mob.spawn_type == SPAWN_TYPE_TRUST and party.p1.mob.status == STATUS_ENGAGED) or
+            (party.p2 and party.p2.mob.spawn_type == SPAWN_TYPE_TRUST and party.p2.mob.status == STATUS_ENGAGED) or
+            (party.p3 and party.p3.mob.spawn_type == SPAWN_TYPE_TRUST and party.p3.mob.status == STATUS_ENGAGED) or
+            (party.p4 and party.p4.mob.spawn_type == SPAWN_TYPE_TRUST and party.p4.mob.status == STATUS_ENGAGED) or
+            (party.p5 and party.p5.mob.spawn_type == SPAWN_TYPE_TRUST and party.p5.mob.status == STATUS_ENGAGED)
+    end
 end
 
 local function doNextActionCycle(time, player)
@@ -521,12 +551,7 @@ local function doNextActionCycle(time, player)
 
                 if isMobEngaged then
                     local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
-
-                    -- if player.target_locked then
-                    --     sendActionCommand('input /lockon', context, 1)
-                    -- end
-
-                    local action = processNextAction(context);
+                    local action = processNextAction(context);                    
 
                     actionsExecuted = action ~= nil
                     battleActionsExecuted = actionsExecuted
@@ -582,7 +607,7 @@ end
 --------------------------------------------------------------------------------------
 -- Processes battle actions in the background
 function cr_actionProcessor()
-    local startTime = os.clock()
+    local startTime = 0 --os.clock()
 
     while true do
         local sleepTimeSeconds = 0.5
@@ -618,6 +643,8 @@ function cr_actionProcessor()
                 sleepTimeSeconds = 2
             end
         else
+            -- Wake from idle if we're disabled
+            actionStateManager.idleWakeTime = 0
             sleepTimeSeconds = 2
         end
         

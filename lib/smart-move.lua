@@ -92,7 +92,11 @@ end
 
 -- Gets a position vector from the specified coordinate (x,y)
 local function coordVector(coord)
-    return V({coord.x, coord.y})
+    if coord and type(coord.x) == 'number' and type(coord.y) == 'number' then
+        return V({coord.x, coord.y})
+    end
+
+    return nil
 end
 
 -- Find the point at the given distance behind the specified mob
@@ -112,7 +116,223 @@ end
 -- Private interface
 -- ======================================================================================
 
-local function sm_movement(self, job)
+local function sm_movement_exp(self, job)
+    
+    -- Unlock the target
+    local player = windower.ffxi.get_player()
+    if player.target_locked then
+        windower.send_command('input /lockon')
+        coroutine.sleep(0.25)
+    end
+
+    -- Stop any prior movement
+    windower.ffxi.follow(-1)
+    windower.ffxi.run(false)
+
+    local me = windower.ffxi.get_mob_by_target('me')
+    local vme = coordVector(me)
+    local vto = job:pos():subtract(vme) -- to = target - me
+    local d = vto:length()              -- d = |vdirection|
+    local hdg = vectorAngle(vto)        -- Heading to target
+
+    local now = os.clock()
+    local t0 = now
+    local runtime = 0
+    local iterationTime = 0
+
+    local paused = false
+    local continue = true
+
+    local MAX_SPEEDS        = 5     -- Max number of speeds to track
+    local MIN_AVERAGING     = 5     -- Minimum number of speeds for us to do the averaging check
+
+    local speeds = {}
+    local nextSpeed = 1
+
+    local jittering = false
+    local shouldJitter = false
+    local jitterUntil = 0
+    local jitterCounter = 0
+
+    local iteration = function ()
+        local sleepDuration = 0.25
+        local wasJittering = jittering
+
+        -- Update the 'me' mob
+        me = windower.ffxi.get_mob_by_target('me')
+        
+        -- Get the new vectors
+        local vme2 = coordVector(me)
+        local vto2 = job:pos():subtract(vme2)
+        local d2 = vto2:length()
+        local hdg2 = vectorAngle(vto2)
+
+        -- Calculate the distance traveled since the last iteration
+        local delta = vme2:subtract(vme):length()
+        local iterationSpeed = (iterationTime > 0 and (delta / iterationTime)) or nil
+
+        -- Cancel jittering if we've reached the limit time
+        if jittering and now >= jitterUntil then
+            jittering = false
+            jitterUntil = 0
+        end
+
+        -- Store the last MAX_SPEEDS speeds for averaging
+        if not paused then
+            if iterationSpeed ~= nil then
+                speeds[nextSpeed] = iterationSpeed
+                nextSpeed = nextSpeed + 1
+                if nextSpeed > MAX_SPEEDS then
+                    nextSpeed = 1
+                end
+            end
+
+            if 
+                JITTER_ENABLED and
+                job.canJitter and
+                #speeds >= MIN_AVERAGING
+            then
+                local avg = arrayAverage(speeds)
+                if avg < 1.5 then
+                    shouldJitter = true
+                end
+            end
+        end
+
+        -- Start jittering if necessary
+        if shouldJitter then
+            -- Reset speed averaging
+            speeds = {}
+            nextSpeed = 1
+
+            shouldJitter = false
+            jittering = true
+
+            --local jitterAngle = JITTER_ANGLE * randomSign() * randomRange(0.75, 1.2)
+            local jitterAngle = randomRange(90, 270) * math.pi / 180.0
+            windower.ffxi.run(hdg2 + jitterAngle)
+
+            jitterCounter = math.min(MAX_JITTER, jitterCounter + 0.75)
+            local jitterToAdd = jitterCounter
+            jitterUntil = now + jitterToAdd
+        end
+
+        if not jittering then
+            jitterCounter = math.max(0, jitterCounter * 0.95)
+        elseif not wasJittering then
+            jitterCounter = math.min(MAX_JITTER, jitterCounter * 1.5)
+        end
+
+        if paused then
+            -- Calculate the heading difference since the last iteration
+            local hdgDelta = math.abs(normalizeAngle(hdg) - normalizeAngle(hdg2))
+
+            if 
+                d2 > 1.0
+            then
+                -- Unpause if we're put some distance between us and the target
+                paused = false
+            elseif 
+                hdgDelta > HEADING_TOLERANCE
+            then
+                
+            end
+
+            -- Stay paused but turn to face the target if it's moved but is still in range
+            windower.ffxi.turn(hdg2)
+        end
+        
+        if not paused then
+            -- If we're within the desired distance, or if we passed right by the target but are still
+            -- reasonably close, then we'll call ourselves done.
+            if 
+                d2 < self.tolerance or
+                (d2 < 1.0 and not sharesHalfspace(hdg, hdg2))
+            then
+                paused = true
+
+                -- Reset the average speed tally
+                speeds = {}
+                nextSpeed = 1
+                iterationTime = nil
+                jittering = false
+                jitterUntil = 0
+
+                -- Stop moving and face the target
+                windower.ffxi.run(false)
+                windower.ffxi.turn(hdg2)
+
+                -- For jobs that allow auto-comletion, we will return now
+                if job.autoComplete then
+                    return
+                end
+            else
+                if not jittering then
+                    -- Use a shorter sleep as we get closer to the target
+                    sleepDuration = d2 < 5 and 0.15 or sleepDuration
+                    
+                    if wasJittering then
+                        -- Let's randomize the jitter recovery a little bit
+                        windower.ffxi.run(hdg2 + randomSign() * math.pi / 4)
+                        sleepDuration = sleepDuration * 3
+                    else
+                        -- Keep running toward the target
+                        windower.ffxi.turn(hdg2)
+                        windower.ffxi.run(hdg2)
+                    end
+                end
+            end
+        end
+
+        -- Save this iteration's data for use by the next iteration
+        vme = vme2
+        vto = vto2
+        d = d2
+        hdg = hdg2
+
+        return sleepDuration
+    end
+    
+    while
+        continue and            -- Updated each iteration indicating whether the job should self-terminate
+        not self.cancel and     -- Updated by the main class for external termination of the job
+        job:cycle()             -- Have the job update its state, returning true if it's still valid
+    do
+        local istart = os.clock()
+        local result = iteration()
+
+        -- The iteration returns the sleep time on success, or indicates completion on any other result
+        if type(result) == 'number' and result > 0 then
+
+            -- Sleep for the requested duration
+            coroutine.sleep(result)
+
+            -- Update clock-related things just before the next iteration begins
+            now = os.clock()
+            runtime = now - t0
+
+            -- Stop if a duration limit was set and exceeded
+            if job.max_duration and runtime >= job.max_duration then
+                continue = false
+            end
+        else
+            continue = false
+        end
+
+        -- Calculate the total iteration time
+        iterationTime = os.clock() - istart
+    end
+
+    -- If there's a completion function, call it
+    if type(job.oncomplete) == 'function' then
+        job:oncomplete()
+    else
+        -- If there's no completion handler, we'll just stop moving
+        windower.ffxi.run(false)
+    end
+end
+
+local function sm_movement_orig(self, job)
     local player_mob = windower.ffxi.get_mob_by_target('me')
     
     local vpos = coordVector(player_mob)
@@ -340,6 +560,8 @@ local function sm_movement(self, job)
     coroutine.sleep(0.25)
 end
 
+local sm_movement = sm_movement_exp
+
 function sm_coroutine(self)
     while true do
         self.cancel = false
@@ -396,6 +618,53 @@ local function sm_createBaseJob(self, mode)
     -- the specific job type implementations.
     job.is_valid = function (self) return true end
     job.cycle = function (self) return self.is_valid() end
+
+    job.oncomplete = function (self)
+        windower.ffxi.run(false)
+        coroutine.sleep(0.125)
+
+        if self:is_valid() then
+            local player = windower.ffxi.get_player()
+            local me = windower.ffxi.get_mob_by_target('me')
+            local mob = self.mob
+            local point = self:pos()
+
+            if mob and mob.valid_target then
+                if self.autolock then
+                    -- packets.inject(packets.new('incoming', 0x058, {
+                    --     ['Player'] = me.id,
+                    --     ['Target'] = mob.id,
+                    --     ['Player Index'] = me.index,
+                    -- }))
+                    if not player.target_locked then
+                        windower.send_command('input /lockon')
+                    end
+                    coroutine.sleep(0.125)
+                end
+
+                point = coordVector(mob)
+            end
+
+            if point then
+                local vme = coordVector(me)
+                local vto = point:subtract(vme)
+
+                if vto:length() > 0 then
+                    local heading = vectorAngle(vto)
+                    
+                    -- All of this is necessary because of some weirdness in the game actually honoring the
+                    -- heading change request. TODO: Investigate why.
+                    windower.ffxi.turn(heading)
+                    coroutine.sleep(0.125)
+
+                    -- windower.ffxi.turn(heading)
+                    -- coroutine.sleep(0.125)
+                    -- windower.ffxi.turn(heading)
+                    -- coroutine.sleep(0.125)                
+                end
+            end
+        end
+    end
 
     return job
 end
@@ -495,7 +764,7 @@ function smartMove:atMobRear(index)
         return false
     end
 
-    local target = findMobRear(mob, 1.0)
+    local target = findMobRear(mob, 2)
     local player = windower.ffxi.get_mob_by_target('me')
 
     return target:subtract(V({player.x, player.y})):length() <= self.tolerance
@@ -527,10 +796,11 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     job.follow_index = follow_index -- Store the follow index
     job.mob = mob                   -- Store the target mob
     job.autoComplete = true         -- We want this job to stop once we get into position
-    job.follow_distance = 1.75      -- How far behind the mob to get
+    job.follow_distance = 2         -- How far behind the mob to get
     job.max_duration = 
         tonumber(maxDuration) or 5  -- The most time we'll spend waiting to get into position
     job.canJitter = false           -- Don't allow jittering
+    job.autolock = true             -- Force target lock once in position (only if the target is valid)
 
     -- Reschedule the job
     job.reschedule = function (self)
@@ -604,6 +874,7 @@ function smartMove:followIndex(follow_index, distance)
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
     job.follow_distance =           -- How far behind the mob we should follow
         math.max(tonumber(distance) or 0, 0)
+    --job.autolock = true             -- Automatically lock onto the target on completion
 
     -- Reschedule the job
     job.reschedule = function (self)
@@ -635,8 +906,6 @@ function smartMove:followIndex(follow_index, distance)
             local distance = toTarget:length()
             
             local pos = vPlayer
-            
-                --print('distance: %.2f':format(distance))
             local scale = 0
             if distance > 0 then
                 scale = (distance - job.follow_distance) / distance
@@ -646,8 +915,6 @@ function smartMove:followIndex(follow_index, distance)
             end
 
             pos = pos:add(toTarget:scale(scale))
-
-            --print('pos: (%.2f, %.2f)':format(pos[1], pos[2]))
 
             return pos
         end

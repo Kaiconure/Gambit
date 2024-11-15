@@ -326,22 +326,39 @@ local _handle_actionChunk = function(id, data)
     local count = tonumber(packet['Target Count']) or 0
     if count < 1 then return end
 
+    local me = windower.ffxi.get_mob_by_target('me')
+
+    -- Note: For now, we can only reliably track buffs on trusts if they were set by ourselves. This is
+    -- because trusts don't send us messages when they lose effects we weren't responsible for.
     local actorId = tonumber(packet['Actor']) or 0
+    --if actorId <= 0 or actorId ~= me.id then return end
     if actorId <= 0 then return end
 
     local actionId = tonumber(packet['Param']) or 0
-    if actionId <= 0 then return end    
+    if actionId <= 0 then return end
 
     local category = tonumber(packet['Category']) or 0
     
     local action = nil
     local actionStatus = nil
+    local statusReaction = nil
+    local buffId = nil
+    local duration = nil
     if
-        category == 4   -- Category 4 means this was a spell
-        
+        category == 4   -- Category 4 means this was a spell        
     then
         action = resources.spells[actionId]
-        actionBuffId = tonumber(action.status) or 0
+        buffId = tonumber(action.status) or 0
+    elseif
+        category == 14  -- Unblinkable job abilities
+    then
+        action = resources.job_abilities[actionId]
+        buffId = tonumber(action.status) or 0
+    elseif
+        category == 5   -- Category 4 means item
+    then
+        action = resources.items[actionId]
+        statusReaction = 8
     end
 
     if action then
@@ -354,25 +371,42 @@ local _handle_actionChunk = function(id, data)
             if
                 target and
                 target.valid_target and
-                (target.in_party or target.in_alliance) and
-                target.spawn_type == SPAWN_TYPE_TRUST
+                (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB) -- and
+                --(actorId == me.id or target.spawn_type == SPAWN_TYPE_MOB)
             then
                 local message = tonumber(packet['Target %d Action 1 Message':format(i)]) or 0
                 local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
-                local buffId = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
+                local param = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
 
-                local canTrack = buffId > 0 and actionBuffId > 0
-                if canTrack then
-                    -- Theoretically, these should always align...right?
-                    if buffId ~= actionBuffId then
-                        writeVerbose('Warning: Event buff = %d but action buff = %d':format(buffId, actionBuffId))
+                if buffId == nil then
+                    if reaction == statusReaction then
+                        buffId = param
                     end
+                end
 
-                    local buff = resources.buffs[actionBuffId]
-                    if buff then 
-                        writeMessage('Trust %s gained effect: %s':format(
-                            target.name,
-                            buff.name
+                -- The param will be the buff id by default, unless the buff has a secondary effect (damage, etc).
+                -- In the case of a secondary effect, the param will reflect that effect (the amount of HP taken, etc).
+                -- If the buff did not land at all, the param will be 0.
+                local canTrack = param > 0 and buffId > 0
+                if canTrack then
+                    local buff = resources.buffs[buffId]
+                    if buff then
+                        local duration = action.duration or 15
+                        local byMe = actorId == me.id
+                        
+                        actionStateManager:setMobBuff(
+                            target,
+                            buffId,
+                            true,
+                            duration,
+                            byMe
+                        )
+
+                        writeVerbose('Mob %s gained effect %s (%s)':format(
+                            text_mob(target.name, Colors.verbose),
+                            text_spell(buff.name, Colors.verbose),
+                            text_number(buff.id, Colors.verbose),
+                            duration and tostring(duration) or '--'
                         ))
                     end
                 end
@@ -393,14 +427,20 @@ local _handle_actionMessageChunk = function(id, data)
         target and
         target.valid_target and
         (target.in_party or target.in_alliance) and
-        target.spawn_type == SPAWN_TYPE_TRUST
+        (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB)
     then
         local buffId = tonumber(packet['Param 1'] or 0)
         if buffId > 0 then
             local buff = resources.buffs[buffId]
 
             if buff then
-                writeMessage('Trust %s lost: %s (%d)':format(target.name, buff.name, buff.id))
+                actionStateManager:setMobBuff(target, buffId, false)
+
+                writeVerbose('Mob %s lost %s (%s)':format(
+                    text_mob(target.name, Colors.verbose),
+                    text_spell(buff.name, Colors.verbose),
+                    text_number(buff.id, Colors.verbose)
+                ))
             end
         end
     end

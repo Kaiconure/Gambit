@@ -29,6 +29,9 @@ local state_manager = {
     },
 
     memberBuffs = {        
+    },
+
+    mobBuffs = {
     }
 }
 
@@ -106,6 +109,9 @@ state_manager.setActionType = function (self, newType)
                 text_red(newMode, Colors.debug),
                 pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.debug)
             ))
+
+            -- Sync up the latest mob state on mode change
+            self:validateBuffsForMobs()
 
             self.actionTypeStartTime = os.clock()
             self.cycles = 0
@@ -308,6 +314,147 @@ state_manager.getMemberBuffsFor = function (self, member)
     return self:getMemberBuffs()[member.id] or { }
 end
 
+-- Validate the buff state for the given trust
+state_manager.validateBuffsForMob = function (self, id)
+    local value = self.mobBuffs[id]
+    if value then
+        local mob = windower.ffxi.get_mob_by_id(value.id)
+        if 
+            mob == nil or
+            not mob.valid_target or
+            mob.hpp == 0 or
+            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB) or            
+            mob.index ~= value.index or
+            mob.name ~= value.name
+        then
+            self.mobBuffs[id] = nil
+            return false
+        else
+
+            local obj = self.mobBuffs[id]
+            local now = os.clock()
+
+            for i, buffId in ipairs(obj.buffs) do
+                local byMe = obj.byMe[buffId]
+                if not byMe then
+                    local expiration = obj.expirations and obj.expirations[buffId]
+                    if expiration == nil or expiration <= now then
+                        obj.byMe[buffId] = nil
+                        if obj.expirations then
+                            obj.expirations[buffId] = nil
+                        end
+
+                        local index = arrayIndexOf(obj.buffs, buffId)
+                        if index then
+                            table.remove(obj.buffs, index)
+                        end
+                    end
+                end
+            end
+
+
+            -- If there are no buffs being tracked for this mob, then we're done
+            if self.mobBuffs[id].buffs == nil or #self.mobBuffs[id].buffs == 0 then
+                self.mobBuffs[id] = nil
+                return false
+            end
+
+            -- Otherwise, we're valid!
+            return true
+        end
+    end
+end
+
+-- Validate the entire trust buff state
+state_manager.validateBuffsForMobs = function(self)
+    local remove = { }
+    for id, value in pairs(self.mobBuffs) do
+        self:validateBuffsForMob(id)
+    end
+end
+
+-- Set the buff state of a trust
+state_manager.setMobBuff = function(self, mob, buffId, activate, timer, byMe)
+    self:validateBuffsForMob(mob.id)
+
+    if not self.mobBuffs[mob.id] then
+        self.mobBuffs[mob.id] = {
+            id = mob.id,
+            index = mob.index,
+            name = mob.name,
+            buffs = { }
+        }
+    end
+
+    local location = arrayIndexOf(self.mobBuffs[mob.id].buffs, buffId)
+    if location then
+        if not activate then
+            -- When found and deactivating, remove it
+            table.remove(self.mobBuffs[mob.id].buffs, location)
+        end
+    else
+        -- When NOT found and activating, add it
+        if activate then
+            local obj = self.mobBuffs[mob.id]
+            location = #obj.buffs + 1
+            
+            if not obj.byMe then
+                obj.byMe = {}
+            end
+
+            obj.byMe[buffId] = byMe
+            obj.buffs[location] = buffId
+            
+            -- If there's a timer, apply it
+            if timer then
+                if not obj.expirations then
+                    obj.expirations = { }
+                end
+                obj.expirations[buffId] = os.clock() + timer                
+            end
+        end
+    end
+end
+
+-- Get the active buffs for the specified trust
+state_manager.getBuffsForMob = function(self, id)
+    self:validateBuffsForMob(id)
+
+    if self.mobBuffs[id] then
+        return self.mobBuffs[id].buffs
+    end
+
+    return { }
+end
+
+-- Get the buffs for all trusts, indexed by mob id
+state_manager.getBuffsForMobs = function(self)
+    self:validateBuffsForMobs()
+
+    local result = {}
+    for id, value in pairs(self.mobBuffs) do
+        result[id] = self.mobBuffs[id].buffs
+    end
+
+    return result
+end
+
+-- Get the the buff timers for the specified id
+state_manager.getBuffTimersForMob = function(self, id)
+    self:validateBuffsForMobs()
+
+    local expirations = self.mobBuffs and self.mobBuffs[id] and self.mobBuffs[id].expirations or { }
+    local result = {}
+    local now = os.clock()
+    for buffId, expiration in pairs(expirations) do
+        if expiration > now then
+            result[buffId] = expiration - now
+        end
+    end
+
+    return result
+end
+
 -----------------------------------------------------------------------------------------
 --
 state_manager.reset = function (self)
@@ -324,6 +471,8 @@ state_manager.reset = function (self)
     self.actionTypeStartTime = os.clock()
     self.actions = { }
     self.vars = { }
+    -- self.memberBuffs = { }   -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
+    -- self.mobBuffs = { }    -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
 end
 
 return state_manager

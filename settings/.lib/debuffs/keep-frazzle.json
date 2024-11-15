@@ -9,9 +9,9 @@
   },
   "actions": [
     {
-      "when": "canUse(vars.keep_frazzle.with)",
+      "when": "bt canUse(vars.keep_frazzle.with) and not hasBuff(bt, 'Frazzle')",
       "commands": "use(bt)",
-      "frequency": 305,
+      "frequency": 5,
       "scope": "battle"
     }
   ]

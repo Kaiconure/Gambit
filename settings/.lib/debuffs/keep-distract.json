@@ -9,7 +9,7 @@
   },
   "actions": [
     {
-      "when": "canUse(vars.keep_distract.with)",
+      "when": "bt and canUse(vars.keep_distract.with) and not hasBuff(bt, 'Distract')",
       "commands": "use(bt)",
       "frequency": 305,
       "scope": "battle"

@@ -259,6 +259,7 @@ text_action               = text_blue
 text_job                  = text_cornsilk
 text_mob                  = text_lightcoral
 text_target               = text_gold
+text_buff                 = text_magenta
 
 --------------------------------------------------------------------------------------
 -- Current settings
