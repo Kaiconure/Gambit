@@ -61,7 +61,7 @@ handlers['enable'] = function (args)
 
     if not globals.enabled then
         -- Clear the mob before we enable
-        resetCurrentMob(nil)
+        resetCurrentMob(nil, true)
 
         globals.enabled = true
         changed = true
@@ -217,8 +217,10 @@ handlers['targetinfo'] = function (args)
             string.format('Speed: %.2f\n', target.movement_speed or -1337)
         )
 
-        if arrayIndexOfStrI(args, '-save') ~= nil then
-            writeJsonToFile(string.format('.\\data\\%s-%d.target.json', target.name, target.index), target)
+        if arrayIndexOfStrI(args, '-save') then
+            local filename = string.format('.\\data\\%s-%d.target.json', target.name, target.index)
+            writeMessage('Saving target info to file: ' .. filename)
+            writeJsonToFile(filename, target)
 
             local party = windower.ffxi.get_party()
             local partyMember = party[targetArg]
@@ -438,35 +440,63 @@ handlers['walkmode'] = function (args)
 end
 
 handlers['mobbuffs'] = function(args)
-    local count = 0
-    local message = text_cornsilk('\nTracked mob buffs:\n')
+    local mobs = actionStateManager:getBuffedMobs()
+    if #mobs > 0 then
+        local message = '\n' .. text_cornsilk('\nTracked Mob Buffs\n')
 
-    local buffs = actionStateManager:getBuffsForMobs()
-    for id, buffs in pairs(buffs) do        
-        local mob = windower.ffxi.get_mob_by_id(id)
-        if mob then
-            local timers = actionStateManager:getBuffTimersForMob(id)
-            count = count + 1
-            message = message .. text_cornsilk('  %s / %03X (%s)\n':format(
-                mob.name,
-                mob.index,
-                (mob.spawn_type == SPAWN_TYPE_TRUST and 'Trust' or 'Mob')
-            ))
-            for i, buffId in ipairs(buffs) do
-                local buff = resources.buffs[buffId]
-                if buff then
-                    message = message .. text_cornsilk('    %s expires in %s (applied by %s)\n':format(
-                        text_buff(buff.name, Colors.cornsilk),
-                        text_number(timers[buffId] and '%.1fs':format(timers[buffId]) or '--', Colors.cornsilk),
-                        text_target(actionStateManager.mobBuffs[id].byMe[buffId] and 'me' or 'other', Colors.cornsilk)
-                    ))
+        for i, id in ipairs(mobs) do
+            local data = actionStateManager:getBuffInfoForMob(id)
+            if 
+                data and
+                data.details and
+                data.mob
+            then
+                local mob = data.mob
+                local mobcol = mob.spawn_type == SPAWN_TYPE_TRUST and text_green or text_magenta
+                local type = (mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust' or 'Mob'
+
+                -- Mob header
+                message = message .. 
+                    '  %s / %s (%s)\n':format(
+                        mobcol(mob.name),
+                        text_number('%03X':format(mob.index)),
+                        type
+                    )
+
+                -- Mob buffs list
+                for buffId, info in pairs(data.details) do
+                    local buff = resources.buffs[buffId]
+                    local actor = info.actor
+                    local actorcol = (actor and (actor.spawn_type == SPAWN_TYPE_PLAYER or actor.spawn_type == SPAWN_TYPE_TRUST)) and text_green or text_magenta
+                    local actortype = '???'
+                    if info.byMe then
+                        actortype = 'Me'
+                    elseif actor then
+                        if actor.spawn_type == SPAWN_TYPE_PLAYER then actortype = 'Player'
+                        elseif actor.spawn_type == SPAWN_TYPE_TRUST then actortype = 'Trust'
+                        elseif actor.spawn_type == SPAWN_TYPE_MOB then actortype = 'Mob'
+                        end
+                    end
+
+                    message = message ..
+                        '    %s applied by %s (%s): %s\n':format(
+                            text_buff(buff.name),
+                            actorcol(actor and actor.name or '???'),
+                            actortype,
+                            info.timer and info.timer > 0 and pluralize('%d':format(info.timer), 'second', 'seconds') or text_cornsilk('--')
+                        )
+                end
+
+                if message:len() > 450 then
+                    writeMessage(message)
+                    message = '\n'
                 end
             end
         end
-    end
 
-    if count > 0 then
-        writeMessage(message)
+        if message:len() > 1 then
+            writeMessage(message)
+        end
     else
         writeMessage('No actively tracked mob buffs were found.')
     end

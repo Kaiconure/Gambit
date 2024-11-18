@@ -9,7 +9,7 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_paralyze.with) and not hasBuff(bt, 'Paralyze')",
+      "when": "bt and canUse(vars.keep_paralyze.with) and not hasBuff(bt, 'Paralysis')",
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

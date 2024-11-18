@@ -9,9 +9,9 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_distract.with) and not hasBuff(bt, 'Distract')",
+      "when": "bt and canUse(vars.keep_distract.with) and not hasBuff(bt, 'Evasion Down')",
       "commands": "use(bt)",
-      "frequency": 305,
+      "frequency": 300,
       "scope": "battle"
     }
   ]

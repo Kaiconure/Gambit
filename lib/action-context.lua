@@ -456,6 +456,7 @@ local function initContextTargetSymbol(context, symbol)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
+    symbol.valid_target = symbol.mob.valid_target
 end
 
 -----------------------------------------------------------------------------------------
@@ -519,11 +520,18 @@ local function loadContextTargetSymbols(context, target)
     end
 
     -- If we are the leader, or if we are the only one in the party, save that info
-    if 
+    if
         context.party == nil or
         context.party.party1_count == 1 or
         context.party.party1_leader == context.me.id
     then
+        -- It is indeed possible for p0 to be null; on death, for example.
+        if 
+            not context.p0 
+        then
+            context.p0 = context.me
+        end
+
         context.party_leader = context.p0
         context.p0.is_party_leader = true
         context.me.is_party_leader = true
@@ -1351,11 +1359,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local member = context['p' .. i]
                 if member and member.is_trust then
                     if tostring(member.name):lower() == name and member.distance <= 5 then
+                        -- We need to give aggro a chance to cool down
+                        context.wait(2)
+
                         sendActionCommand(
                             'input /returnfaith "%s"':format(member.name),
-                            context,
-                            1)
-                        context.wait(6)
+                            context)
+
+                        -- There's a 6 second delay before we can reliably use any other actions once releasing
+                        -- a trust. Further, there's a roughly 2 second delay before the trust stops reading as
+                        -- a member of the party.
+                        context.wait(6 + 2)
+
                         return true
                     end
                 end

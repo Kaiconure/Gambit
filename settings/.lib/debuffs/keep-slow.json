@@ -11,7 +11,7 @@
     {
       "when": "bt and canUse(vars.keep_slow.with) and not hasBuff(bt, 'Slow')",
       "commands": "use(bt)",
-      "frequency": 185,
+      "frequency": 5,
       "scope": "battle"
     }
   ]

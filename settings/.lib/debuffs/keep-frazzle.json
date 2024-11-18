@@ -9,9 +9,9 @@
   },
   "actions": [
     {
-      "when": "bt canUse(vars.keep_frazzle.with) and not hasBuff(bt, 'Frazzle')",
+      "when": "bt canUse(vars.keep_frazzle.with) and not hasBuff(bt, 'Magic Evasion Down')",
       "commands": "use(bt)",
-      "frequency": 5,
+      "frequency": 300,
       "scope": "battle"
     }
   ]

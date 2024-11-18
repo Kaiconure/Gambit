@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_aquaveil": {
+      "with": ["Aquaveil"]
+    }
+  },
+  "actions": [
+    {
+      "when": "not hasEffectOf('Aquaveil') and canUse(vars.keep_aquaveil.with)",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

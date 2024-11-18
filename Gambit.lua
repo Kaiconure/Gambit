@@ -23,6 +23,11 @@ require('actions')
 
 json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
+
+meta = meta or { }
+meta.dispel = require('./lib/meta-dispel')
+
+
 require('./lib/logging')
 require('./lib/helpers')
 require('./lib/settings')
@@ -89,22 +94,22 @@ end
 -- Player status change
 windower.register_event('status change', function(new_id, previous_id)
     
-    --if previous_id == STATUS_ENGAGED and new_id == STATUS_IDLE then
     if
-        new_id == STATUS_IDLE
+        --new_id == STATUS_IDLE
+        new_id ~= STATUS_ENGAGED
     then
         resetCurrentMob(nil, true)
 
         -- We'll unfollow once battle has ended to avoid the possibility of running
         -- off into space if autofollow was enabled
         windower.ffxi.follow(-1)
-    elseif 
-        new_id == 2 or  -- Dead
-        new_id == 3 or  -- Dead while engaged
-        new_id == 5 or  -- On a chocobo
-        new_id == 85    -- On a mount that is not a chocobo
-    then
-        resetCurrentMob(nil, true)
+    -- elseif 
+    --     new_id == 2 or  -- Dead
+    --     new_id == 3 or  -- Dead while engaged
+    --     new_id == 5 or  -- On a chocobo
+    --     new_id == 85    -- On a mount that is not a chocobo
+    -- then
+    --     resetCurrentMob(nil, true)
     end
 end)
 
@@ -315,6 +320,74 @@ local function parse_party_buffs(data)
     return members
 end
 
+-- 
+-- Removes tracking data of (beneficial) buffs from the specified mob.
+-- NOTE: Does not actually remove buffs, just the tracking data for them.
+local function removeTrackedBuffs(mob)
+    local is_enemy = (mob.spawn_type == SPAWN_TYPE_MOB) and true or false
+    local count = 0
+    local total = 0
+
+    local info = actionStateManager:getBuffInfoForMob(mob.id)
+    for i, details in pairs(info.details) do
+        if details.actor then
+            local is_actor_enemy = (details.actor.spawn_type == SPAWN_TYPE_MOB) and true or false
+
+            -- Beneficial buffs are those with statuses applied by actors of like type. A bit naive,
+            -- but it's easy and will work for the majority of cases. 
+            -- TODO: Investigate pets here.
+            if is_actor_enemy == is_enemy then
+                actionStateManager:setMobBuff(mob, details.buffId, false)
+                count = count + 1
+            end
+        end
+
+        total = total + 1
+    end
+
+    if total > 0 then
+        writeDebug('Untracking %s / %s buffs from %s!':format(
+            text_number(count),
+            text_number(total),
+            text_mob(mob.name, Colors.debug)
+        ))
+    end
+end
+
+-- 
+-- Removes tracking data of (detremental) debuffs from the specified mob.
+-- NOTE: Does not actually remove debuffs, just the tracking data for them.
+local function removeTrackedDebuffs(mob)
+    local is_enemy = (mob.spawn_type == SPAWN_TYPE_MOB) and true or false
+    local count = 0
+    local total = 0
+
+    local info = actionStateManager:getBuffInfoForMob(mob.id)
+    for i, details in pairs(info.details) do
+        if details.actor then
+            local is_actor_enemy = (details.actor.spawn_type == SPAWN_TYPE_MOB) and true or false
+
+            -- Detremental debuffs are those with statuses applied by actors of like type. A bit naive,
+            -- but it's easy and will work for the majority of cases. 
+            -- TODO: Investigate pets here.
+            if is_actor_enemy ~= is_enemy then
+                actionStateManager:setMobBuff(mob, details.buffId, false)
+                count = count + 1
+            end
+
+            total = total + 1
+        end
+    end
+
+    if total > 0 then
+        writeDebug('Untracking %s / %s debuffs from %s!':format(
+            text_number(count),
+            text_number(total),
+            text_mob(mob.name, Colors.debug)
+        ))
+    end
+end
+
 local _handle_partyBuffsChunk = function (id, data)
     local partyBuffs = parse_party_buffs(data)
     actionStateManager:setMemberBuffs(partyBuffs)
@@ -338,28 +411,64 @@ local _handle_actionChunk = function(id, data)
     if actionId <= 0 then return end
 
     local category = tonumber(packet['Category']) or 0
-    
+
+    local actor = windower.ffxi.get_mob_by_id(actorId)
     local action = nil
     local actionStatus = nil
     local statusReaction = nil
     local buffId = nil
     local duration = nil
+    local isRemoval = false
+    local isDispel
     if
         category == 4   -- Category 4 means this was a spell        
     then
         action = resources.spells[actionId]
         buffId = tonumber(action.status) or 0
+        
+        if action then
+            isDispel = arrayIndexOf(meta.dispel.spells, action.id)
+        end
     elseif
         category == 14  -- Unblinkable job abilities
     then
         action = resources.job_abilities[actionId]
         buffId = tonumber(action.status) or 0
+
+        if action then
+            isDispel = arrayIndexOf(meta.dispel.job_abilities, action.id)
+        end
     elseif
         category == 5   -- Category 4 means item
     then
         action = resources.items[actionId]
         statusReaction = 8
+    elseif
+        category == 11  -- Category 11 means monster weapon skill
+    then
+        local ma = resources.monster_abilities[actionId]
+        if ma then
+            -- Monster abilities generally don't list their status effect, unfortunately
+            if ma.status then
+                buffId = tonumber(ma.status)
+            end
+
+            -- If we didn't get a buff id, we can see if this ability has an 
+            -- associated BLU spell and use the information from that.
+            if not buffId then
+                local spell = findSpell(ma.name)
+                if spell then
+                    buffId = tonumber(spell.status)
+                    if buffId then 
+                        action = spell
+                    end
+                end
+            end
+        end
     end
+
+    -- TODO: Change this later; for now, dispel is the only removal action we track
+    isRemoval = isDispel
 
     if action then
         for i = 1, count do
@@ -378,7 +487,22 @@ local _handle_actionChunk = function(id, data)
                 local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
                 local param = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
 
-                if buffId == nil then
+                -- Removals will get the buff id straight from the action param
+                if isRemoval then
+                    buffId = param
+
+                    -- If this is a dispel operation with no effect, we'll assume all tracked
+                    -- buffs are invalid and clear them out. This applies only to real mobs.
+                    --
+                    if 
+                        isDispel and
+                        param == 0 and
+                        target.spawn_type == SPAWN_TYPE_MOB
+                    then
+                        buffId = nil
+                        removeTrackedBuffs(target)
+                    end
+                elseif buffId == nil then
                     if reaction == statusReaction then
                         buffId = param
                     end
@@ -387,27 +511,45 @@ local _handle_actionChunk = function(id, data)
                 -- The param will be the buff id by default, unless the buff has a secondary effect (damage, etc).
                 -- In the case of a secondary effect, the param will reflect that effect (the amount of HP taken, etc).
                 -- If the buff did not land at all, the param will be 0.
-                local canTrack = param > 0 and buffId > 0
+                local canTrack = 
+                    type(param) == 'number' and param > 0 and
+                    type(buffId) == 'number' and buffId > 0
+
                 if canTrack then
                     local buff = resources.buffs[buffId]
                     if buff then
-                        local duration = action.duration or 15
-                        local byMe = actorId == me.id
-                        
-                        actionStateManager:setMobBuff(
-                            target,
-                            buffId,
-                            true,
-                            duration,
-                            byMe
-                        )
+                        if 
+                            isRemoval
+                        then
+                            -- If this is a dispel action, remove the buff instead of add it
+                            actionStateManager:setMobBuff(target, buffId, false)
 
-                        writeVerbose('Mob %s gained effect %s (%s)':format(
-                            text_mob(target.name, Colors.verbose),
-                            text_spell(buff.name, Colors.verbose),
-                            text_number(buff.id, Colors.verbose),
-                            duration and tostring(duration) or '--'
-                        ))
+                            writeVerbose('%s\'s %s (%s) was removed via %s':format(
+                                    text_mob(target.name, Colors.verbose),
+                                    text_spell(buff.name, Colors.verbose),
+                                    text_number(buff.id, Colors.verbose),
+                                    text_spell(action.name, Colors.verbose)
+                                ))                        
+                        else
+                            local duration = action.duration or 15
+                            local byMe = actorId == me.id
+                            
+                            actionStateManager:setMobBuff(
+                                target,
+                                buffId,
+                                true,
+                                duration,
+                                byMe,
+                                actor
+                            )
+
+                            writeVerbose('Mob %s gained effect %s (%s)':format(
+                                text_mob(target.name, Colors.verbose),
+                                text_spell(buff.name, Colors.verbose),
+                                text_number(buff.id, Colors.verbose),
+                                duration and tostring(duration) or '--'
+                            ))
+                        end
                     end
                 end
             end
@@ -426,8 +568,7 @@ local _handle_actionMessageChunk = function(id, data)
     if 
         target and
         target.valid_target and
-        (target.in_party or target.in_alliance) and
-        (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB)
+        (target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST)
     then
         local buffId = tonumber(packet['Param 1'] or 0)
         if buffId > 0 then

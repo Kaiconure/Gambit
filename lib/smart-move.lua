@@ -23,7 +23,7 @@ local FORWARD           = V({1, 0})             -- The vector representing the p
 local TWO_PI            = math.pi * 2           -- 2pi
 local PI_OVER_TWO       = math.pi * 0.5         -- pi / 2
 
-local JITTER_ENABLED    = false                 -- Configure if jittering is allowed at all
+local JITTER_ENABLED    = true                  -- Configure if jittering is allowed at all
 local JITTER_ANGLE      = PI_OVER_TWO * 1.50    -- The angle we'll try to escape obstacles with. This is equiavlent to 135 degrees.
 local MAX_JITTER        = 3                     -- The maximum duration we'll spend jittering around obstacles
 
@@ -34,6 +34,22 @@ local resources = require('resources')
 -- ======================================================================================
 -- Helpers
 -- ======================================================================================
+
+-- Returns the average of the numeric values in an array.
+local function arrayAverage(array)
+    local total = 0
+    local count = 0
+    for i, val in ipairs(array) do
+        total = total + val
+        count = count + 1
+    end
+
+    if count > 0 then
+        return total / count
+    end
+
+    return 0
+end
 
 -- Returns 1 or -1 randomly
 local function randomSign()
@@ -143,8 +159,8 @@ local function sm_movement_exp(self, job)
     local paused = false
     local continue = true
 
-    local MAX_SPEEDS        = 5     -- Max number of speeds to track
-    local MIN_AVERAGING     = 5     -- Minimum number of speeds for us to do the averaging check
+    local MAX_SPEEDS        = 7     -- Max number of speeds to track
+    local MIN_AVERAGING     = 7     -- Minimum number of speeds for us to do the averaging check
 
     local speeds = {}
     local nextSpeed = 1
@@ -152,7 +168,6 @@ local function sm_movement_exp(self, job)
     local jittering = false
     local shouldJitter = false
     local jitterUntil = 0
-    local jitterCounter = 0
 
     local iteration = function ()
         local sleepDuration = 0.25
@@ -193,7 +208,7 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                if avg < 1.5 then
+                if avg < 0.5 and d2 > 5 then
                     shouldJitter = true
                 end
             end
@@ -208,19 +223,15 @@ local function sm_movement_exp(self, job)
             shouldJitter = false
             jittering = true
 
-            --local jitterAngle = JITTER_ANGLE * randomSign() * randomRange(0.75, 1.2)
-            local jitterAngle = randomRange(90, 270) * math.pi / 180.0
-            windower.ffxi.run(hdg2 + jitterAngle)
+            -- Pick a jittering exit angle that is 45 degrees off of the exact opposite angle to
+            --  the target, either left or right. 
+            local degrees = (math.random() < 0.5) and 135.0 or 225.0
+            local escapeAngle = hdg2 + (degrees * math.pi / 180.0)
 
-            jitterCounter = math.min(MAX_JITTER, jitterCounter + 0.75)
-            local jitterToAdd = jitterCounter
-            jitterUntil = now + jitterToAdd
-        end
+            writeVerbose('Jittering at %.1f degrees from target':format(degrees))
 
-        if not jittering then
-            jitterCounter = math.max(0, jitterCounter * 0.95)
-        elseif not wasJittering then
-            jitterCounter = math.min(MAX_JITTER, jitterCounter * 1.5)
+            jitterUntil = now + 2.0
+            windower.ffxi.run(escapeAngle)
         end
 
         if paused then
@@ -498,7 +509,7 @@ local function sm_movement_orig(self, job)
             -- Initiate some obstacle avoidance jitter if we're not making any forward progress
             local canJitter = 
                 JITTER_ENABLED and
-                job.canJitter ~= false and
+                job.canJitter and
                 (isZeroSpeed and zeroSpeedCycles > 8) and
                 --((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
                 distance > 2 and
@@ -564,7 +575,7 @@ local sm_movement = sm_movement_exp
 
 function sm_coroutine(self)
     while true do
-        self.cancel = false
+        --self.cancel = false
 
         local job = self.queue[1]
         if #self.queue > 0 then
@@ -611,7 +622,8 @@ local function sm_createBaseJob(self, mode)
         time = os.clock(),
         description = 'Job #%d / %s':format(jobId, mode),
         mode = mode,
-        zone = info.zone
+        zone = info.zone,
+        canJitter = true
     }
 
     -- By default, jobs will remain valid forever. This can be overridden by 
