@@ -591,9 +591,9 @@ function sm_coroutine(self)
             if Modes[job.mode] then
                 self.previousJob = job
 
-                self.log('Dequeued: %s':format(job.description))
+                self.verbose('Dequeued: %s':format(job.description))
                 sm_movement(self, job)
-                self.log('Completed: %s':format(job.description))
+                self.verbose('Completed: %s':format(job.description))
             end
         end
 

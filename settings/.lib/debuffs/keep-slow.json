@@ -9,7 +9,7 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_slow.with) and not hasBuff(bt, 'Slow')",
+      "when": "bt and canUse(vars.keep_slow.with) and not hasEffectOf(bt, 'Slow')",
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

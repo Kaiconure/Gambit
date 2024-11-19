@@ -9,7 +9,7 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_silence.with) and not hasBuff(bt, 'Silence')",
+      "when": "bt and canUse(vars.keep_silence.with) and not hasEffectOf(bt, 'Silence')",
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

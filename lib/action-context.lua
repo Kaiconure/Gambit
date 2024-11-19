@@ -138,8 +138,10 @@ local function enumerateContextByExpression(context, keys, expression)
                 -- end
 
                 -- Apply the env to the function, and execute it. Return this member if it evaluates successfully.
+                --writeDebug('Evaluating: %s':format(expression))
                 setfenv(fn, fenv)
                 if fn() then
+                    --writeDebug('Evaluation passed!')
                     retVal[#retVal + 1] = fenv
                 end
             end
@@ -196,7 +198,8 @@ local function createMemberNamesExpression(context, names)
         expression = 'true'
     else
         for i, name in ipairs(names) do
-            expression = expression .. (i == 1 and ' ' or ' or ') .. ('name == "%s"':format(name))
+            name = string.lower(name)
+            expression = expression .. (i == 1 and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
         end
     end
 
@@ -424,6 +427,8 @@ local function initContextTargetSymbol(context, symbol)
 
         -- Flag to determine if you're at the master level
         symbol.is_mastered = (player.superior_level == 5)
+
+        symbol.symbol2 = 'me'
     elseif symbol.member then
         symbol.name = symbol.member.name
         symbol.hp = symbol.member.hp
@@ -457,6 +462,13 @@ local function initContextTargetSymbol(context, symbol)
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
     symbol.valid_target = symbol.mob.valid_target
+
+    symbol.isNameMatch = function(test)
+        test = string.lower(test or '!!invalid')
+        return test == string.lower(symbol.name or '') or
+            test == string.lower(symbol.symbol or '') or
+            test == string.lower(symbol.symbol2 or '')
+    end
 end
 
 -----------------------------------------------------------------------------------------
@@ -464,7 +476,7 @@ end
 local function loadContextTargetSymbols(context, target)
     -- Fill in targets
     if target then
-        context.t = { symbol = 't', mob = target }
+        context.t = { symbol = 't', symbol2 = 'bt', mob = target }
         initContextTargetSymbol(context, context.t)
         context.bt = context.t
     else
@@ -1463,10 +1475,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.hasEffect = context.hasBuff
 
     --------------------------------------------------------------------------------------
-    -- Determine if you have the effect triggerd by the specified spell or ability
-    context.hasEffectOf = function(...)
+    -- Determine if the target has the effect triggerd by the specified spell or ability.
+    -- If no target is specified, it's assumed to be the player.
+    context.hasEffectOf = function(target, ...)
+
         local names = varargs({...})
-        local player = windower.ffxi.get_player()
+
+        -- If the target is a string that exists in the context, we'll use that
+        if type(target) == 'string' and context[target] and context[target].buffs then
+            target = context[target]
+        end
+        
+        -- If the target is not a table at this point, then we'll use ourself
+        if type(target) ~= 'table' then
+
+            -- If the target is a string, it means no target was specified and the first param was 
+            -- a buff. Let's add it to the list of buff names we're searching through.
+            if type(target) == 'string' then
+                table.insert(names, 1, target)
+            end
+
+            -- Promote the target to ourself
+            target = context.me
+        end
 
         for i, name in ipairs(names) do
             local spell = findSpell(name)
@@ -1481,7 +1512,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.spell = spell
                 context.ability = ability
 
-                local buff = hasBuff(player, buffId)
+                local buff = hasBuff(target, buffId)
                 if buff then                    
                     return i
                 end

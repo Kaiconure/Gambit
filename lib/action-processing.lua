@@ -197,10 +197,10 @@ function sendSpellCastingCommand(spell, target, context)
     end
 
     -- In debug mode, let's log that we've finished our work here
-    writeDebug('%s: Cast time %s / Observer time %s':format(
-        text_spell(spell.name, Colors.debug),
-        pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.debug),
-        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.debug)
+    writeTrace('%s: Cast time %s / Observer time %s':format(
+        text_spell(spell.name, Colors.trace),
+        pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
+        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)
         
     ))
 end
@@ -499,7 +499,7 @@ local function doNextActionCycle(time, player)
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
-        local context = ActionContext.create('resting', time, nil, mobTime)
+        local context = ActionContext.create('resting', time, mob, mobTime)
         local action = processNextAction(context);
         return
     end
@@ -632,7 +632,6 @@ function cr_actionProcessor()
 
                 -- As long as we're not dead or resting, we can process targeting info
                 if 
-                    not isResting and
                     not isDead
                 then
                     processTargeting()

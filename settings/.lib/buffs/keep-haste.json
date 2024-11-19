@@ -5,13 +5,13 @@
   "vars": {
     "keep_haste": {
       "with": ["Haste II", "Haste"],
-      "others": null
+      "targets": ["me"]
     }
   },
   "actions": [
     {
-      "when": "not hasBuff('Haste') and canUse(vars.keep_haste.with)",
-      "commands": ["use(me)"],
+      "when": "partyByName(vars.keep_haste.targets) and not hasBuff(member, 'Haste') and canUse(vars.keep_haste.with)",
+      "commands": ["use(member)"],
       "frequency": 10
     }
   ]

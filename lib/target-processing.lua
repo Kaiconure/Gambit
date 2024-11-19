@@ -161,12 +161,15 @@ local function shouldAquireNewTarget(player)
         end
     end
 
-    -- If we get to this point, we will not try to acquire a new target unless we're sitting idle
-    if player.status ~= STATUS_IDLE then
-        return false
+    -- If we get to this point, we will only allow target acquisition if we're idle or resting
+    if 
+        player.status == STATUS_IDLE or
+        player.status == STATUS_RESTING
+    then
+        return true
     end
 
-    return true
+    return false
 end
 
 --------------------------------------------------------------------------------------

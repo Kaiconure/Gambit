@@ -200,6 +200,8 @@ end
 -----------------------------------------------------------------------------------------
 --
 state_manager.setMobAbility = function(self, mob, ability, targets)
+    if not self.mobAbilities then self.mobAbilities = { } end
+
     self.mobAbilities[mob.id] = {
         time = self.currentTime,
         mob = mob,
@@ -212,22 +214,26 @@ end
 -----------------------------------------------------------------------------------------
 --
 state_manager.clearMobAbility = function(self, mob)
-    self.mobAbilities[mob.id] = nil
+    if self.mobAbilities then
+        self.mobAbilities[mob.id] = nil
+    end
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.getMobAbilityInfo = function(self, mob)
-    local info = self.mobAbilities[mob.id]
-    if info then
-        -- We'll set a maximum time that we'll allow a mob ability to remaing active
-        if self.currentTime - info.time > 10 then
-            self.mobAbilities[mob.id] = nil
-            info = nil
-        end            
-    end
+    if self.mobAbilities then
+        local info = self.mobAbilities[mob.id]
+        if info then
+            -- We'll set a maximum time that we'll allow a mob ability to remaing active
+            if self.currentTime - info.time > 10 then
+                self.mobAbilities[mob.id] = nil
+                info = nil
+            end            
+        end
 
-    return info
+        return info
+    end
 end
 
 -----------------------------------------------------------------------------------------
@@ -519,6 +525,13 @@ state_manager.getBuffInfoForMob = function(self, id)
     end
 
     return result
+end
+
+--
+-- Just get the direct mob buffs array for the given mob, without any extra
+-- validation. Always returns an array, empty if no data is tracked.
+state_manager.getRawBuffsForMob = function(self, id)
+    return self.mobBuffs and self.mobBuffs[id] and self.mobBuffs[id].buffs or {}
 end
 
 -----------------------------------------------------------------------------------------

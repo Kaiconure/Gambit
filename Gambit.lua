@@ -24,9 +24,9 @@ require('actions')
 json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
 
-meta = meta or { }
-meta.dispel = require('./lib/meta-dispel')
-
+meta = meta or {}
+meta.dispel = require('./lib/meta/dispel') or {}
+meta.monster_abilities = require('./lib/meta/monster_abilities') or {}
 
 require('./lib/logging')
 require('./lib/helpers')
@@ -135,7 +135,7 @@ windower.register_event('load', function()
 
     sendSelfCommand('disable')
 
-    smartMove:setLogger(writeDebug)
+    smartMove:setLogger(writeDebug, writeTrace)
 
     windower.send_command('unbind !~G; bind !~G ' .. makeSelfCommand('toggle')) -- Use Shift+Alt+G to toggle automation
 
@@ -247,10 +247,17 @@ windower.register_event('action', function(action)
         elseif globals.isSpellCasting and isSpellCastingComplete then
             actionStateManager:setSpellCompleted(isSpellInterrupted)
 
-            writeVerbose('  %s has %s!':format(
-                globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
-                isSpellSuccessful and text_green('completed successfully') or text_red('been interrupted')
-            ))
+            -- writeVerbose('  %s has %s':format(
+            --     globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
+            --     isSpellSuccessful and text_green('completed') or text_red('been interrupted')
+            -- ))
+
+            if not isSpellSuccessful then
+                writeVerbose('  %s has %s':format(
+                    globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
+                    text_red('been interrupted')
+                ))
+            end
             
             globals.isSpellCasting = false
             globals.currentSpell = nil
@@ -345,11 +352,11 @@ local function removeTrackedBuffs(mob)
         total = total + 1
     end
 
-    if total > 0 then
-        writeDebug('Untracking %s / %s buffs from %s!':format(
-            text_number(count),
-            text_number(total),
-            text_mob(mob.name, Colors.debug)
+    if count > 0 then
+        writeVerbose('Buffs already removed. Untracking %s of %s buffs from %s!':format(
+            text_number(count, Colors.verbose),
+            text_number(total, Colors.verbose),
+            text_mob(mob.name, Colors.verbose)
         ))
     end
 end
@@ -388,6 +395,111 @@ local function removeTrackedDebuffs(mob)
     end
 end
 
+local function reaction_statusRemoval(action, actor, target, reaction, param)
+    -- Successful:  Reaction = 0, Param = <buff-id>
+    -- No effect:   Reaction = 0, Param = 0
+    -- Resisted:    Reaction = 1, Param = 0
+    if reaction == 0 then
+        if param == 0 then
+            -- R0, P0: No effect to remove; clear buff info
+            removeTrackedBuffs(target)
+        else
+            -- R0, P<buffId>: Successful removal of <param> buff
+            
+            local buff = resources.buffs[param or 0]
+            if buff then                
+                actionStateManager:setMobBuff(target, buff.id, false)
+
+                writeVerbose('%s\'s %s effect was removed by %s':format(
+                    text_mob(target.name, Colors.verbose),
+                    text_spell(buff.name, Colors.verbose),
+                    text_mob(actor and actor.name or '???', Colors.verbose)
+                ))
+            end
+        end
+    else
+        -- R1, P0: Resisted. No-op, as the buff is still present.
+
+        writeVerbose('%s resisted %s\'s %s!':format(
+            text_mob(target.name, Colors.verbose),
+            text_mob(actor and actor.name or '???', Colors.verbose),
+            text_spell(action.name, Colors.verbose)
+        ))
+    end
+end
+
+local function reaction_statusAddition(action, actor, target, reaction, param, buffId)
+    -- Successful:  Reaction = 0, Param = <buff-id>
+    -- No effect:   Reaction = 1, Param = 0
+    -- Resisted:    Reaction = 1, Param = <buff-id>
+
+    local buff = buffId and resources.buffs[buffId]
+
+    if reaction == 1 then
+        if param == 0 then
+            -- R1, P0: No effect, already present or unsettable due to conflicting buff.
+
+            -- We'll create a new "pseudo-tracking" entry for this buff. It'll be a short-lived timer,
+            -- applied by the actor of this event. It will have the byMe flag as false to ensure that
+            -- it doesn't stick around past the timer expiry.
+            if buff then
+                local buffs = actionStateManager:getRawBuffsForMob(target.id)
+                if not arrayIndexOf(buffs, buff.id) then
+                    actionStateManager:setMobBuff(
+                        target,
+                        buff.id,
+                        true,
+                        math.min(60, action.duration or 60),
+                        false,
+                        actor
+                    )
+
+                    writeVerbose('%s\'s %s on %s had no effect!':format(
+                        text_mob(actor.name, Colors.verbose),
+                        text_spell(action.name, Colors.verbose),
+                        text_mob(target.name, Colors.verbose)
+                    ))
+                end
+            end
+
+        else
+            -- NOTE: For landed monster ability (Sticky Thread):
+            --  - Reaction: 24+
+            --  - Param: 13 (slow)
+
+            -- R1, P0: Buff resisted. Remove it if present.
+            if buff then
+                actionStateManager:setMobBuff(target, buff.id, false)
+
+                writeVerbose('%s resisted %s\'s %s!':format(
+                    text_mob(target.name, Colors.verbose),
+                    text_mob(actor.name, Colors.verbose),
+                    text_spell(action.name, Colors.verbose)
+                ))
+            end
+        end
+    elseif param > 0 then
+        -- R0, P<buff-id>: Buff applied successfully, add or update it.
+
+        local me = windower.ffxi.get_mob_by_target('me')
+        actionStateManager:setMobBuff(
+            target,
+            buff.id,
+            true,
+            action.duration or 60,
+            actor.id == me.id,
+            actor
+        )
+
+        writeVerbose('%s received %s from %s\'s %s!':format(
+            text_mob(target.name, Colors.verbose),
+            text_spell(buff.name, Colors.verbose),
+            text_mob(actor.name, Colors.verbose),
+            text_spell(action.name, Colors.verbose)
+        ))
+    end
+end
+
 local _handle_partyBuffsChunk = function (id, data)
     local partyBuffs = parse_party_buffs(data)
     actionStateManager:setMemberBuffs(partyBuffs)
@@ -419,7 +531,8 @@ local _handle_actionChunk = function(id, data)
     local buffId = nil
     local duration = nil
     local isRemoval = false
-    local isDispel
+    local isDispel = false
+
     if
         category == 4   -- Category 4 means this was a spell        
     then
@@ -446,17 +559,34 @@ local _handle_actionChunk = function(id, data)
     elseif
         category == 11  -- Category 11 means monster weapon skill
     then
-        local ma = resources.monster_abilities[actionId]
-        if ma then
+        action = resources.monster_abilities[actionId]
+        if action then
+            -- writeDebug('Mosnter ability %s (%s) detected!':format(
+            --     text_spell(action.name, Colors.debug),
+            --     text_number(action.id, Colors.debug)
+            -- ))
+
             -- Monster abilities generally don't list their status effect, unfortunately
-            if ma.status then
-                buffId = tonumber(ma.status)
+            if action.status then
+                buffId = tonumber(action.status)
             end
 
-            -- If we didn't get a buff id, we can see if this ability has an 
-            -- associated BLU spell and use the information from that.
+            -- First, try to find this ability in the additional tracked metadata table for monster abilities
             if not buffId then
-                local spell = findSpell(ma.name)
+                local ma_meta = meta.monster_abilities[action.id]
+                if ma_meta then
+                    buffId = ma_meta.statuses and ma_meta.statuses[1]
+                    -- writeDebug('Found monster ability meta for %s, which applies buff %s':format(
+                    --     text_spell(action.name, Colors.debug),
+                    --     text_number(buffId or -1, Colors.debug)
+                    -- ))
+                end
+            end
+
+            -- If we didn't get a buff id at this point, we can see if this ability has an 
+            -- associated BLU spell. We'll borrow the status data from that if present.
+            if not buffId then
+                local spell = findSpell(action.name)
                 if spell then
                     buffId = tonumber(spell.status)
                     if buffId then 
@@ -487,70 +617,30 @@ local _handle_actionChunk = function(id, data)
                 local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
                 local param = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
 
-                -- Removals will get the buff id straight from the action param
+                -- Handle removal operations; dispel, erase, -na spells, etc
                 if isRemoval then
-                    buffId = param
 
-                    -- If this is a dispel operation with no effect, we'll assume all tracked
-                    -- buffs are invalid and clear them out. This applies only to real mobs.
-                    --
-                    if 
-                        isDispel and
-                        param == 0 and
-                        target.spawn_type == SPAWN_TYPE_MOB
-                    then
-                        buffId = nil
-                        removeTrackedBuffs(target)
+                    if isDispel then
+                        reaction_statusRemoval(action, actor, target, reaction, param)
                     end
-                elseif buffId == nil then
+
+                    -- We're done if this is a removal operation. We won't try to add buffs.
+                    return
+                end
+                
+                -- If the buff id is still nil, see if there's some other way to sort it out
+                if 
+                    buffId == nil
+                then
+                    -- Some actions use a reaction to indicate whether a status was applied. If the actual
+                    -- reaction matches the status-indicator reaction for this action, try using that.
                     if reaction == statusReaction then
                         buffId = param
                     end
                 end
 
-                -- The param will be the buff id by default, unless the buff has a secondary effect (damage, etc).
-                -- In the case of a secondary effect, the param will reflect that effect (the amount of HP taken, etc).
-                -- If the buff did not land at all, the param will be 0.
-                local canTrack = 
-                    type(param) == 'number' and param > 0 and
-                    type(buffId) == 'number' and buffId > 0
-
-                if canTrack then
-                    local buff = resources.buffs[buffId]
-                    if buff then
-                        if 
-                            isRemoval
-                        then
-                            -- If this is a dispel action, remove the buff instead of add it
-                            actionStateManager:setMobBuff(target, buffId, false)
-
-                            writeVerbose('%s\'s %s (%s) was removed via %s':format(
-                                    text_mob(target.name, Colors.verbose),
-                                    text_spell(buff.name, Colors.verbose),
-                                    text_number(buff.id, Colors.verbose),
-                                    text_spell(action.name, Colors.verbose)
-                                ))                        
-                        else
-                            local duration = action.duration or 15
-                            local byMe = actorId == me.id
-                            
-                            actionStateManager:setMobBuff(
-                                target,
-                                buffId,
-                                true,
-                                duration,
-                                byMe,
-                                actor
-                            )
-
-                            writeVerbose('Mob %s gained effect %s (%s)':format(
-                                text_mob(target.name, Colors.verbose),
-                                text_spell(buff.name, Colors.verbose),
-                                text_number(buff.id, Colors.verbose),
-                                duration and tostring(duration) or '--'
-                            ))
-                        end
-                    end
+                if buffId and buffId > 0 then
+                    reaction_statusAddition(action, actor, target, reaction, param, buffId)
                 end
             end
         end
@@ -563,12 +653,21 @@ local _handle_actionMessageChunk = function(id, data)
     -- Expiring actions
 
     local targetId = tonumber(packet['Target']) or 0
+    local message = tonumber(packet['Message']) or 0
     local target = windower.ffxi.get_mob_by_id(targetId)
 
     if 
         target and
         target.valid_target and
-        (target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST)
+        (target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST) and
+        (
+            message == 206 or   -- These are the message codes for effects wearing off or being removed.
+            message == 204 or   --  Refer to: https://github.com/Windower/Lua/wiki/Message-IDs
+            message == 321 or
+            message == 322 or
+            message == 426 or
+            message == 427
+        )
     then
         local buffId = tonumber(packet['Param 1'] or 0)
         if buffId > 0 then
@@ -577,7 +676,7 @@ local _handle_actionMessageChunk = function(id, data)
             if buff then
                 actionStateManager:setMobBuff(target, buffId, false)
 
-                writeVerbose('Mob %s lost %s (%s)':format(
+                writeVerbose('%s\'s %s effect wore off.':format(
                     text_mob(target.name, Colors.verbose),
                     text_spell(buff.name, Colors.verbose),
                     text_number(buff.id, Colors.verbose)

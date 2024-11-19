@@ -110,8 +110,10 @@ local function loadVars(original, incoming)
                 -- variable of the same name. This wouldn't be an expected situation.
                 if type(original[key]) == 'table' then
                     if #original[key] > 0 and original[key][1] ~= nil then
-                        -- For straight up arrays, we'll actually just take the new value
-                        original[key] = val
+                        -- For straight up arrays, we'll just leave the original value intact. No overwrites.
+
+                        -- OLD: For straight up arrays, we'll actually just take the new value
+                        -- OLD: original[key] = val
                     else
                         -- For non-array tables, we will merge the incoming values in
                         loadVars(original[key], val)
