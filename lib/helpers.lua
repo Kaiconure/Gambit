@@ -9,6 +9,7 @@ ITEM_TYPE_FOOD      = 7
 
 BUFF_SLEEP1         = 2
 BUFF_SLEEP2         = 19
+BUFF_PETRIFIED      = 7
 BUFF_FOOD           = 251
 
 

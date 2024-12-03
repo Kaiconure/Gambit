@@ -137,17 +137,23 @@ ActionPacket.open_listener(function (act)
             local time = os.clock()
 
             local id = actionPacket.raw.param
-            local ability = resources.weapon_skills[id] or resources.monster_abilities[id]
+            local animation = action.raw and action.raw.animation or nil
 
-            if ability then
-                writeVerbose('%s: %s %s %s':format(
-                    text_player(actor.name, Colors.verbose),
-                    text_weapon_skill(ability.name, Colors.verbose),
-                    CHAR_RIGHT_ARROW,
-                    text_mob(target.name)
-                ))
+            if 
+                id ~= 46 or animation ~= 185    -- HACKHACK: Shield Bash seems to report incorrect as a weapon skill from Windower. This *should* bypass that.
+            then
+                local ability = resources.weapon_skills[id] or resources.monster_abilities[id]
 
-                setPartyWeaponSkill(actor, ability, target)
+                if ability then
+                    writeVerbose('%s: %s %s %s':format(
+                        text_player(actor.name, Colors.verbose),
+                        text_weapon_skill(ability.name, Colors.verbose),
+                        CHAR_RIGHT_ARROW,
+                        text_mob(target.name)
+                    ))
+
+                    setPartyWeaponSkill(actor, ability, target)
+                end
             end
         end
     end

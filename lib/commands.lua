@@ -17,6 +17,10 @@ end
 handlers['strategy'] = function (args)
     local strategy = (args[1] or ''):lower()
 
+    if strategy == '' then
+        writeMessage('Current strategy: ' .. text_green(settings.strategy))
+        return
+    end
     if TargetStrategy[strategy] == nil then
         writeMessage('Err: Invalid target strategy: ' .. strategy)
         return
@@ -25,7 +29,7 @@ handlers['strategy'] = function (args)
     settings.strategy = strategy
     saveSettings()
 
-    writeMessage('Target strategy has been set to: ' .. strategy)
+    writeMessage('Target strategy has been set to: ' .. text_green(strategy))
 end
 handlers['strat'] = handlers['strategy']
 
@@ -33,8 +37,6 @@ handlers['strat'] = handlers['strategy']
 -- disable
 handlers['disable'] = function (args)
     local quiet = arrayIndexOfStrI(args, '-quiet')
-
-    smartMove:cancelJob()
 
     if globals.enabled then
         globals.enabled = false
@@ -49,6 +51,8 @@ handlers['disable'] = function (args)
             writeMessage('  Status: Automation is %s.':format(text_red('disabled')))
         end
     end
+
+    smartMove:cancelJob()
 end
 
 -------------------------------------------------------------------------------
@@ -56,8 +60,6 @@ end
 handlers['enable'] = function (args)
     local quiet = arrayIndexOfStrI(args, '-quiet')
     local changed = false
-
-    smartMove:cancelJob()
 
     if not globals.enabled then
         -- Clear the mob before we enable
@@ -83,6 +85,8 @@ handlers['enable'] = function (args)
     if not quiet or changed then
         sendSelfCommand('actions')
     end
+
+    smartMove:cancelJob()
 end
 
 -------------------------------------------------------------------------------
@@ -188,6 +192,51 @@ handlers['verbosity'] = function (args)
         saveSettings()
     else
         writeMessage(string.format('Invalid verbosity setting: %s', verbosity or ''))
+    end
+end
+
+-------------------------------------------------------------------------------
+-- distance
+handlers['config'] = function(args)
+    local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
+    local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
+    local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
+    local hasChanges = false
+
+    if distance > 0 then
+        distance = tonumber(args[distance + 1])
+        if distance and distance > 0 then
+            distance = math.clamp(distance, 5, 50)
+            settings.maxDistance = distance
+            hasChanges = true
+        end
+
+        writeMessage('Max targeting distance: %s':format(text_number('%.1f':format(settings.maxDistance))))
+    end
+
+    if distancez > 0 then
+        distancez = tonumber(args[distancez + 1])
+        if distancez and distancez > 0 then
+            distancez = math.clamp(distancez, 0, 50)
+            settings.maxDistanceZ = distancez
+            hasChanges = true
+        end
+
+        writeMessage('Max Z targeting distance: %s':format(text_number('%.1f':format(settings.maxDistanceZ))))
+    end
+
+    if strat > 0 then
+        strat = tostring(args[strat + 1] or ''):lower()
+        if TargetStrategy[strat] ~= nil then
+            settings.strategy = TargetStrategy[strat]
+            hasChanges = true
+        end
+
+        writeMessage('Targeting strategy: %s':format(text_magenta(settings.strategy)))
+    end
+
+    if hasChanges then
+        saveSettings()
     end
 end
 
@@ -361,6 +410,7 @@ handlers['actions'] = function(args)
     local toggle = arrayIndexOfStrI(args, '-toggle')
 
     local load = tonumber(arrayIndexOfStrI(args, '-load') or 0)
+
     if load > 0 then
         local actionsName = args[load + 1]
         if actionsName then
@@ -375,7 +425,23 @@ handlers['actions'] = function(args)
                 saveSettings()
             end
         end
-    else
+
+        return
+    end
+    
+    local saveDefault = tonumber(arrayIndexOfStrI(args, '-save-default') or 0)
+    local force = tonumber(arrayIndexOfStrI(args, '-force') or 0)
+    if saveDefault > 0 then
+        if saveDefaultActions(windower.ffxi.get_player(), force > 0) then
+            writeMessage('Default actions were saved.')
+        else
+            writeMessage('Defaults could not be saved. Run with -force to overwrite existing actions.')
+        end
+
+        return
+    end
+
+    if load <= 0 and saveDefault <= 0 then
         if on then
             globals.actionsEnabled = true
         elseif off then

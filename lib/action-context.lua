@@ -114,6 +114,8 @@ end
 local function enumerateContextByExpression(context, keys, expression)
     local retVal = { }
 
+    if expression == nil or expression == '' or expression == '*' then expression = 'true' end
+
     if 
         type(expression) ~= 'string' or
         type(keys) ~= 'table' or
@@ -266,7 +268,12 @@ local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
     -- 
-    context.partyAll = function(expression)
+    context.partyAll = function(expression, stateless)
+        -- Stateless means don't use a context iterator. Always start from the begining of the list.
+        if stateless then
+            return context.partyAny(expression)
+        end
+
         return getNextMemberEnumerator(context) or context.partyAny(expression)
     end
 
@@ -294,7 +301,11 @@ local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
     -- 
-    context.allyAll = function(expression)
+    context.allyAll = function(expression, stateless)
+        -- Stateless means don't use a context iterator. Always start from the begining of the list.
+        if stateless then
+            return context.allyAny(expression)
+        end
         return getNextMemberEnumerator(context) or context.allyAny(expression)
     end
 
@@ -462,6 +473,12 @@ local function initContextTargetSymbol(context, symbol)
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
     symbol.valid_target = symbol.mob.valid_target
+    symbol.spawn_type = symbol.mob.spawn_type
+
+    if symbol.hpp == nil then
+        symbol.hpp = 0
+        symbol.hp = 0
+    end
 
     symbol.isNameMatch = function(test)
         test = string.lower(test or '!!invalid')
@@ -496,6 +513,10 @@ local function loadContextTargetSymbols(context, target)
         context.pet = nil
     end
 
+    -- We'll store the list of trusts in our main party. Trusts can't be called in 
+    -- an alliance, so this is all we need.
+    context.party1_trusts = {}
+
     for i = 0, 5 do
         local p = 'p' .. i
         local a1 = 'a1' .. i
@@ -513,6 +534,11 @@ local function loadContextTargetSymbols(context, target)
                 context.party_leader = context[p]
             else
                 context[p].is_party_leader = false
+            end
+
+            -- Add trusts to the list
+            if mob.spawn_type == SPAWN_TYPE_TRUST then
+                context.party1_trusts[#context.party1_trusts + 1] = context[p]
             end
         end
 
@@ -996,7 +1022,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --
     context.canUseSpell = function (...)
         local spells = varargs({...}, context.spell and context.spell.name)
-        if type(spells) == 'table' then
+        if type(spells) == 'table' and #spells > 0 then
             for key, _spell in ipairs(spells) do
                 local spell = _spell
                 if type(spell) ~= 'nil' then
@@ -1015,7 +1041,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Uses the specified spell on the specified target
-    context.useSpell = function (target, spell)
+    context.useSpell = function (target, spell, ignoreIncomplete)
         if spell == nil then spell = context.spell end
         if type(spell) == 'string' then spell = findSpell(spell) end
         
@@ -1058,7 +1084,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- sooner. This allows us to spend a little time as possible waiting for
                 -- spells to complete (fast cast, interruption, and so on can impact this).
 
-                sendSpellCastingCommand(spell, target.symbol, context)
+                sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
             end
         end
     end
@@ -1142,6 +1168,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.faceEnemy = function ()
         if context.bt == nil or context.bt.mob == nil then return end
 
+        -- Cancel any follow job in progress so it doesn't interfere with our facing action
+        local job = smartMove:getJobInfo()
+        if job ~= nil then
+            smartMove:cancelJob()
+        end
+
         writeVerbose('Facing toward %s target: %s':format(
             text_action(context.actionType, Colors.verbose),
             text_mob(context.bt.name, Colors.verbose)
@@ -1176,8 +1208,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 return true
             end
         end
-
-        return false
     end
 
     context.canAlignRear = function ()
@@ -1194,7 +1224,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Set up behind the mob and then face it
-    context.alignRear = function (duration)
+    context.alignRear = function (duration, failureDelay)
         if context.bt then
             if context.alignedRear() then
                 return true
@@ -1209,8 +1239,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             if context.bt.distance < 5 then
-                duration = tonumber(duration) or 3
-                --duration = math.clamp(duration, 1, 5)
+                duration = math.max(tonumber(duration) or 3, 1)
+                failureDelay = math.max(tonumber(failureDelay) or 5, 1)
 
                 writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
 
@@ -1221,7 +1251,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         local job = smartMove:getJobInfo()
                         if job == nil or job.jobId ~= jobId then
                             writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
-                            return context.alignedRear()
+                            local success = context.alignedRear()
+                            if not success then
+                                context.postpone(failureDelay)
+                            end
+
+                            return success
                         end
                     end
                 end
@@ -1391,6 +1426,122 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     -------------------------------------------------------------------------------------
+    -- Find a single member in the party, returning the matching context 
+    -- party member object.
+    context.findInParty = function(name)
+        if type(name) ~= 'string' then return end
+        name = string.lower(name)
+        for i = 0, 5 do
+            local symbol = 'p' .. i
+            local p = context[symbol]
+            if p ~= nil and string.lower(p.name) == name then
+                return p
+            end
+        end
+    end
+
+    -------------------------------------------------------------------------------------
+    -- Find the best spell name associated with the specified trust party name
+    context.trustSpellName = function(partyName)
+        if type(partyName) ~= 'string' then return end
+
+        partyName = string.lower(partyName)
+        
+        local player = context.player
+        local matches = {}
+        for id, spell in pairs(globals.spells.trust) do
+            -- Store any matching trust spells that we are able to cast
+            if 
+                string.lower(spell.party_name) == partyName and
+                canUseSpell(player, spell)
+            then
+                matches[#matches + 1] = spell
+            end
+        end
+
+        -- If we've found any matches...
+        if #matches > 0 then
+            -- If we found more than one match, we can try to disambiguate them by looking up 
+            -- trusts already in the party. This makes the assumption that we're calling this
+            -- to find the spell that was used to call an existing party member trust.
+            if #matches > 1 then
+                local p = context.findInParty(partyName)
+                if p then
+                    for i, spell in ipairs(matches) do
+                        if 
+                            p.mob and
+                            p.mob.models and
+                            #p.mob.models > 0 and
+                            type(spell.model) == 'number' and
+                            spell.model == p.mob.models[1]
+                        then
+                            return spell.name
+                        end
+                    end
+                end
+            end
+
+            -- If we get here, we'll just return the first result. Either we only found one, or there
+            -- were multiples without an in-party model reference to be found.
+            return matches[1].name
+        end
+    end
+
+    -------------------------------------------------------------------------------------
+    -- Ensure trusts are present. Finds the first trust in the list that is ready
+    -- to be called (not at max trusts, not already summoned, not in a city etc...)
+    -- and summons it.
+    context.needsTrust = function (...)
+        local names = varargs({...})
+
+        if
+            names and
+            #names > 0 and 
+            context.party.party1_count < 6 and
+            context.me.is_party_leader
+        then
+            local player = context.player
+            local maxTrusts = getMaxTrusts(player)
+            local numTrusts = #context.party1_trusts
+
+            -- If there's still room to call trusts...
+            if maxTrusts > numTrusts then
+                for i, name in ipairs(names) do
+                    local spell = findSpell(name)
+
+                    -- If we've found the spell, it's a Trust spell, the corresponding trust isn't already in the party,
+                    -- and the player is able to use the spell, then we've found our target.
+                    if 
+                        spell and
+                        spell.type == 'Trust' and
+                        not context.partyByName(spell.party_name) and
+                        canUseSpell(player, spell) 
+                    then
+                        context.spell = spell
+                        return context.spell
+                    end
+                end
+            end
+        end
+    end
+
+    -------------------------------------------------------------------------------------
+    -- Calls the trust referenced by the specified spell
+    context.callTrust = function(spell)
+        if spell == nil then
+            spell = context.spell
+        elseif type(spell) == 'string' then
+            spell = findSpell(spell)
+        end
+
+        if type(spell) ~= 'table' or spell.type ~= 'Trust' then
+            return
+        end
+
+        return context.useSpell(context.me)
+    end
+
+    -------------------------------------------------------------------------------------
     -- Find the first party member with one of the specified buffs
     context.partyHasBuff = function (...)
         local names = varargs({...})
@@ -1436,6 +1587,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 return true
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Tries to use the specified action to remove an effect on the target
+    context.removeEffect = function(target, effect, with)
+        effect = effect or context.effect
+        with = with or context.spell or context.ability or context.item
+
+        effect = findBuff(effect)
+        if type(target) == 'table' and effect and with then
+            if context.canUse(with) then
+                context.use(target)
+                if target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST then
+                    if context.action.complete then
+                        actionStateManager:setMobBuff(target, effect.id, false)
+                    end
+                end
+            end
+        end
+
+        context.postpone(2)
     end
 
     -- context.memberHasBuff = function(member, ...)

@@ -6,6 +6,7 @@ TargetStrategy = {
     minhp           = 'minhp',      -- Find aggroing mob with the least HP
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
     leader          = 'leader',     -- The party leader target, or the nearest aggro if none
+    manual          = 'manual',     -- You as the player pick the targets by engaging manually
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
 
@@ -305,6 +306,39 @@ local function loadDefaultActions(player, save)
 end
 
 ----------------------------------------------------------------------------------------
+--
+function saveDefaultActions(player, force)
+    local saveAsFileName = getActionsJobFileName(player)
+    local file = files.new(saveAsFileName)
+
+    -- Can't overwrite an existing file without the force flag
+    if file:exists() and not force then
+        return
+    end
+
+    return loadDefaultActions(player, true) ~= nil
+
+    -- local saveAsFileName = nil
+    -- if actionsName then
+    --     saveAsFileName = getActionsFileName(player, actionsName)
+    -- else
+    --     saveAsFileName = getActionsJobFileName(player)
+    -- end
+
+    -- -- If the actions are stored as an object, then we'll stringify it to json.
+    -- -- Otherwise, if the actions aren't already a string the we've got a problem.
+    -- if type(actions) == 'table' then actions = json.stringify(actions) end
+    -- if type(actions) ~= 'string' then return nil end
+
+    -- writeStringToFile(
+    --     saveAsFileName,
+    --     actions
+    -- )
+
+    -- return true
+end
+
+----------------------------------------------------------------------------------------
 -- Load settings
 function loadSettings(actionsName, settingsOnly)
     local player = windower.ffxi.get_player()
@@ -357,6 +391,7 @@ function loadSettings(actionsName, settingsOnly)
 
     local jobActionsName = nil
     local actions = nil
+    local defaultsLoaded = false
 
     tempSettings.actions = {}
 
@@ -399,11 +434,15 @@ function loadSettings(actionsName, settingsOnly)
 
         -- Load the default actions if nothing else has worked
         if actions == nil then
-            actions = loadDefaultActions(player, true)
+            actions = loadDefaultActions(player)
 
             if actions then
+                defaultsLoaded = true
                 actionsName = jobActionsName
-                writeMessage('No actions were found for your current job. The defaults were loaded instead.')
+                writeMessage(text_magenta('No existing actions were found, and temp defaults were loaded.'))
+                writeMessage(text_magenta('  Run %s to save these actions.':format(
+                    text_green('//' .. __shortName .. ' actions -save-default', Colors.magenta))
+                ))
             else
                 writeMessage('No actions were found for your current job, and the defaults could not be loaded.')
             end
@@ -418,7 +457,7 @@ function loadSettings(actionsName, settingsOnly)
         -- Save the post-processed actions
         writeJsonToFile('.\\settings\\%s\\.output\\%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
 
-        if actionsName then
+        if actionsName and not defaultsLoaded then
             writeMessage('Successfully loaded %s actions: %s':format(
                 text_player(player.name),
                 text_action(actionsName)

@@ -266,12 +266,17 @@ function processTargeting()
     local mobs = windower.ffxi.get_mob_array()
     local meMob = windower.ffxi.get_mob_by_target('me')
 
+    -- In 'manual' strategy, we won't do any automated target acquisition
+    if strategy == TargetStrategy.manual then
+        return
+    end
+
     -- If we're using the 'leader' strategy and we are the leader, then we'll fall back to the 
     -- 'nearest' behavior. This ensures we don't sit around getting smacked while there's no
     -- one else to start the battle for us.
     if strategy == TargetStrategy.leader then
         if 
-            party.party1_leader == meMob.id
+            not meMob or party.party1_leader == meMob.id
         then
             strategy = TargetStrategy.nearest
         end
@@ -309,12 +314,12 @@ function processTargeting()
 
     -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
     local party_by_id = { }
-    if party.p0 then party_by_id[party.p0.mob.id] = party.p0 end
-    if party.p1 then party_by_id[party.p1.mob.id] = party.p1 end
-    if party.p2 then party_by_id[party.p2.mob.id] = party.p2 end
-    if party.p3 then party_by_id[party.p3.mob.id] = party.p3 end
-    if party.p4 then party_by_id[party.p4.mob.id] = party.p4 end
-    if party.p5 then party_by_id[party.p5.mob.id] = party.p5 end
+    if party.p0 and party.p0.mob then party_by_id[party.p0.mob.id] = party.p0 end
+    if party.p1 and party.p1.mob then party_by_id[party.p1.mob.id] = party.p1 end
+    if party.p2 and party.p2.mob then party_by_id[party.p2.mob.id] = party.p2 end
+    if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
+    if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
+    if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 

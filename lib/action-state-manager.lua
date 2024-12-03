@@ -391,6 +391,11 @@ state_manager.setMobBuff = function(self, mob, buffId, activate, timer, byMe, ac
     self:validateBuffsForMob(mob.id)
 
     if not self.mobBuffs[mob.id] then
+        -- If this is a deactivation while there are no statuses, we can just bail
+        if not activate then
+            return
+        end
+
         self.mobBuffs[mob.id] = {
             id = mob.id,
             index = mob.index,

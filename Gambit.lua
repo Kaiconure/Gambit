@@ -53,8 +53,11 @@ globals = {
     selfCommand = __commands[1],
     language = 'en',
     actionsEnabled = true,
-    autoFollowIndex = nil
+    autoFollowIndex = nil,
+    spells = {}
 }
+
+globals.spells.trust = resources.spells:type('Trust')
 
 --------------------------------------------------------------------------------------
 -- Make a command that can be run against this addon with an optional wait afterward
@@ -253,7 +256,7 @@ windower.register_event('action', function(action)
             -- ))
 
             if not isSpellSuccessful then
-                writeVerbose('  %s has %s':format(
+                writeVerbose('  %s has %s!':format(
                     globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
                     text_red('been interrupted')
                 ))
@@ -410,20 +413,20 @@ local function reaction_statusRemoval(action, actor, target, reaction, param)
             if buff then                
                 actionStateManager:setMobBuff(target, buff.id, false)
 
-                writeVerbose('%s\'s %s effect was removed by %s':format(
-                    text_mob(target.name, Colors.verbose),
-                    text_spell(buff.name, Colors.verbose),
-                    text_mob(actor and actor.name or '???', Colors.verbose)
+                writeDebug('%s\'s %s effect was removed by %s':format(
+                    text_mob(target.name, Colors.debug),
+                    text_spell(buff.name, Colors.debug),
+                    text_mob(actor and actor.name or '???', Colors.debug)
                 ))
             end
         end
     else
         -- R1, P0: Resisted. No-op, as the buff is still present.
 
-        writeVerbose('%s resisted %s\'s %s!':format(
-            text_mob(target.name, Colors.verbose),
-            text_mob(actor and actor.name or '???', Colors.verbose),
-            text_spell(action.name, Colors.verbose)
+        writeDebug('%s resisted %s\'s %s!':format(
+            text_mob(target.name, Colors.debug),
+            text_mob(actor and actor.name or '???', Colors.debug),
+            text_spell(action.name, Colors.debug)
         ))
     end
 end
@@ -454,10 +457,10 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
                         actor
                     )
 
-                    writeVerbose('%s\'s %s on %s had no effect!':format(
-                        text_mob(actor.name, Colors.verbose),
-                        text_spell(action.name, Colors.verbose),
-                        text_mob(target.name, Colors.verbose)
+                    writeDebug('%s\'s %s on %s had no effect!':format(
+                        text_mob(actor.name, Colors.debug),
+                        text_spell(action.name, Colors.debug),
+                        text_mob(target.name, Colors.debug)
                     ))
                 end
             end
@@ -471,10 +474,10 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
             if buff then
                 actionStateManager:setMobBuff(target, buff.id, false)
 
-                writeVerbose('%s resisted %s\'s %s!':format(
-                    text_mob(target.name, Colors.verbose),
-                    text_mob(actor.name, Colors.verbose),
-                    text_spell(action.name, Colors.verbose)
+                writeDebug('%s resisted %s\'s %s!':format(
+                    text_mob(target.name, Colors.debug),
+                    text_mob(actor.name, Colors.debug),
+                    text_spell(action.name, Colors.debug)
                 ))
             end
         end
@@ -491,11 +494,11 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
             actor
         )
 
-        writeVerbose('%s received %s from %s\'s %s!':format(
-            text_mob(target.name, Colors.verbose),
-            text_spell(buff.name, Colors.verbose),
-            text_mob(actor.name, Colors.verbose),
-            text_spell(action.name, Colors.verbose)
+        writeDebug('%s received %s from %s\'s %s!':format(
+            text_mob(target.name, Colors.debug),
+            text_spell(buff.name, Colors.debug),
+            text_mob(actor.name, Colors.debug),
+            text_spell(action.name, Colors.debug)
         ))
     end
 end
@@ -532,6 +535,13 @@ local _handle_actionChunk = function(id, data)
     local duration = nil
     local isRemoval = false
     local isDispel = false
+
+    -- Certain buffs can be automatically removed if we see activity from the actor
+    if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_PLAYER) then
+        actionStateManager:setMobBuff(actor, BUFF_SLEEP1, false)
+        actionStateManager:setMobBuff(actor, BUFF_SLEEP2, false)
+        actionStateManager:setMobBuff(actor, BUFF_PETRIFIED, false)
+    end
 
     if
         category == 4   -- Category 4 means this was a spell        
@@ -676,10 +686,10 @@ local _handle_actionMessageChunk = function(id, data)
             if buff then
                 actionStateManager:setMobBuff(target, buffId, false)
 
-                writeVerbose('%s\'s %s effect wore off.':format(
-                    text_mob(target.name, Colors.verbose),
-                    text_spell(buff.name, Colors.verbose),
-                    text_number(buff.id, Colors.verbose)
+                writeDebug('%s\'s %s effect wore off.':format(
+                    text_mob(target.name, Colors.debug),
+                    text_spell(buff.name, Colors.debug),
+                    text_number(buff.id, Colors.debug)
                 ))
             end
         end

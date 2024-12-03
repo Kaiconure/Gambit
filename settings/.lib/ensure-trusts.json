@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": "This action should be placed at the top of your idle actions list. Set the vars.ensure_trusts variable in your actions file to customize the trusts."
+  },
+  "vars": {
+    "ensure_trusts": {
+      "trusts": []
+    }
+  },
+  "actions": [
+    {
+      "when": "needsTrust(vars.ensure_trusts.trusts)",
+      "commands": ["log('Calling trust:', spell.name)", "callTrust()"]
+    }
+  ]
+}

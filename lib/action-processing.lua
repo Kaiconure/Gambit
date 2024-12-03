@@ -72,6 +72,11 @@ function sendActionCommand(
             smartMove:reschedule(movementJob)
         end
     end
+
+    if context and context.action then
+        context.action.complete = true
+        context.action.incomplete = false
+    end
 end
 
 function sendRangedAttackCommand(target, context)
@@ -113,6 +118,11 @@ function sendRangedAttackCommand(target, context)
 
     local endTime = os.clock()
 
+    if context and context.action then
+        context.action.complete = true
+        context.action.incomplete = false
+    end
+
     writeDebug('Ranged attack observer has completed after %s!':format(
         pluralize('%.1f':format(endTime - startTime), 'second', 'seconds')
     ))
@@ -122,7 +132,7 @@ end
 -- Executes a spell casting action command.This is similar to sendActionCommand, but
 -- it will take into account traits such as Fast Cast as well as spell interruption
 -- to ensure that the operation completes as early as possible.
-function sendSpellCastingCommand(spell, target, context)
+function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     if 
         spell == nil or
         target == nil
@@ -191,9 +201,18 @@ function sendSpellCastingCommand(spell, target, context)
     if
         interrupted and
         context and
-        context.action
+        context.action and
+        ignoreIncomplete ~= true
     then
+        context.action.complete = false
         context.action.incomplete = true
+    elseif 
+        not interrupted and
+        context and 
+        context.action 
+    then
+        context.action.complete = true
+        context.action.incomplete = false
     end
 
     -- In debug mode, let's log that we've finished our work here
@@ -620,24 +639,28 @@ function cr_actionProcessor()
             local time = os.clock() - startTime
             local player = windower.ffxi.get_player()
 
-            local playerStatus = player.status
-            local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
-            local isResting = (playerStatus == STATUS_RESTING)              -- Resting
-            local isDead = player.vitals.hp <= 0                            -- Dead
+            if player then
+                local playerStatus = player.status
+                local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
+                local isResting = (playerStatus == STATUS_RESTING)              -- Resting
+                local isDead = player.vitals.hp <= 0                            -- Dead
 
-            if
-                not isMounted
-            then
-                actionStateManager:tick(time)
-
-                -- As long as we're not dead or resting, we can process targeting info
-                if 
-                    not isDead
+                if
+                    not isMounted
                 then
-                    processTargeting()
-                end
+                    actionStateManager:tick(time)
 
-                doNextActionCycle(time, player)
+                    -- As long as we're not dead or resting, we can process targeting info
+                    if 
+                        not isDead
+                    then
+                        processTargeting()
+                    end
+
+                    doNextActionCycle(time, player)
+                else
+                    sleepTimeSeconds = 2
+                end
             else
                 sleepTimeSeconds = 2
             end

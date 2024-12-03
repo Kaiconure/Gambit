@@ -606,10 +606,14 @@ end
 
 -------------------------------------------------------------------------------
 -- Create the basic job entry
-local function sm_createBaseJob(self, mode)
+local function sm_createBaseJob(self, mode, skipcancel)
     local info = windower.ffxi.get_info()
     if type(info.zone) ~= 'number' or info.zone < 1 or resources.zones[info.zone] == nil then
         return nil
+    end
+
+    if not skipcancel then
+        self:cancelJob(nil, false)
     end
 
     local jobId = self.latestJobId + 1
