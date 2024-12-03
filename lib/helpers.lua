@@ -9,14 +9,32 @@ ITEM_TYPE_FOOD      = 7
 
 BUFF_SLEEP1         = 2
 BUFF_SLEEP2         = 19
+BUFF_PETRIFIED      = 7
 BUFF_FOOD           = 251
 
 
 STATUS_IDLE           = 0
 STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
+STATUS_RESTING        = 33
 
 PACKET_TARGET_LOCK    = 0x058
+
+-- Math helper to get the sign indicator of a given number. Returns -1 if negative, 0 if 0, and +1 if positive
+math.sign = math.sign or 
+    function (num) 
+        return (num < 0 and -1) or (num > 0 and 1) or (0) 
+    end
+
+-- Math helper to clamp a number to a given range. Return value is in the range [min, max].
+math.clamp = math.clamp or 
+    function(num, min, max)
+        local _min = math.min(min, max)
+        local _max = math.max(min, max)
+
+        return math.min(_max, math.max(_min, num))
+    end
+
 
 --------------------------------------------------------------------------------------
 -- Write out a named value
@@ -65,6 +83,37 @@ end
 -- Check if an object is an array
 function isArray(value)
     return value ~= nil and type(value) == 'table' and #value > 0
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if the two arrays have a non-empty intersect set
+function arraysIntersect(a1, a2)
+    if 
+        a1 ~= nil and #a1 > 0 and
+        a2 ~= nil and #a2 > 0
+    then
+        for i, val in ipairs(a1) do
+            if arrayIndexOf(a2, val) then
+                return true
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if the two string arrays have a non-empty intersect set, with
+-- a case-insensitive comparison operation
+function arraysIntersectStrI(a1, a2)
+    if 
+        a1 ~= nil and #a1 > 0 and
+        a2 ~= nil and #a2 > 0
+    then
+        for i, val in ipairs(a1) do
+            if arrayIndexOfStrI(a2, val) then
+                return true
+            end
+        end
+    end
 end
 
 --------------------------------------------------------------------------------------

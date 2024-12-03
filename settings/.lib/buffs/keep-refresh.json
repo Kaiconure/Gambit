@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_refresh": {
+      "with": ["Refresh III", "Refresh II", "Refresh"]
+    }
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Refresh') and canUse(vars.keep_refresh.with)",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

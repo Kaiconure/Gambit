@@ -17,6 +17,10 @@ end
 handlers['strategy'] = function (args)
     local strategy = (args[1] or ''):lower()
 
+    if strategy == '' then
+        writeMessage('Current strategy: ' .. text_green(settings.strategy))
+        return
+    end
     if TargetStrategy[strategy] == nil then
         writeMessage('Err: Invalid target strategy: ' .. strategy)
         return
@@ -25,7 +29,7 @@ handlers['strategy'] = function (args)
     settings.strategy = strategy
     saveSettings()
 
-    writeMessage('Target strategy has been set to: ' .. strategy)
+    writeMessage('Target strategy has been set to: ' .. text_green(strategy))
 end
 handlers['strat'] = handlers['strategy']
 
@@ -38,15 +42,17 @@ handlers['disable'] = function (args)
         globals.enabled = false
 
         -- Clear the mob after we disable
-        resetCurrentMob(nil)
+        resetCurrentMob(nil, true)
 
-        writeMessage('  Status: Automation has been disabled.')
+        writeMessage('  Status: Automation has been %s.':format(text_red('disabled')))
     else
         -- Quiet mode means we won't message when there's no actual status change
         if not quiet then
-            writeMessage('  Status: Automation is disabled.')
+            writeMessage('  Status: Automation is %s.':format(text_red('disabled')))
         end
     end
+
+    smartMove:cancelJob()
 end
 
 -------------------------------------------------------------------------------
@@ -57,15 +63,21 @@ handlers['enable'] = function (args)
 
     if not globals.enabled then
         -- Clear the mob before we enable
-        resetCurrentMob(nil)
+        resetCurrentMob(nil, true)
 
         globals.enabled = true
         changed = true
-        writeMessage(string.format('  Status: Automation has been enabled with [%s] strategy!', settings.strategy))
+        writeMessage('  Status: Automation has been %s with the %s strategy!':format(
+            text_green('enabled'),
+            text_action(settings.strategy)
+        ))
     else
         -- Quiet mode means we won't message when there's no actual status change
         if not quiet then
-            writeMessage(string.format('  Status: Automation is enabled with [%s] strategy.', settings.strategy))
+            writeMessage('  Status: Automation is %s with the [%s] strategy.':format(
+                text_green('enabled'),
+                text_action(settings.strategy)
+            ))
         end
     end
 
@@ -73,6 +85,8 @@ handlers['enable'] = function (args)
     if not quiet or changed then
         sendSelfCommand('actions')
     end
+
+    smartMove:cancelJob()
 end
 
 -------------------------------------------------------------------------------
@@ -84,100 +98,39 @@ end
 -------------------------------------------------------------------------------
 -- follow
 handlers['follow'] = function (args)
-    local id = arrayIndexOfStrI(args, '-id')
-    local index = arrayIndexOfStrI(args, '-index')
+    local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
+    local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
+    local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
 
-    id = id and tonumber(args[id + 1]) or 0
-    index = index and tonumber(args[index + 1]) or 0
-    
-    local hasFollow = id > 0 or index > 0
-    local noOverwrite = arrayIndexOfStrI(args, '-no-overwrite')
+    distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
 
-    -- Figure out if we should skip this command; that is, if the -no-overwrite flag
-    -- was specified and the target has changed. This flag is used to resume follow
-    -- after a longer action, where the mob could have been killed the bt changed.
-    local skip = false
-    if noOverwrite then
-        local player = windower.ffxi.get_player()
-        local followIndex = player.follow_index
-
-        -- if followIndex and not globals.autoFollowIndex then
-        --     -- We have a follow index but no global follow index, we'll proceed as if we have nothing
-        --     followIndex = nil
-        -- elseif not followIndex and globals.autoFollowIndex then
-        --     -- We have no follow index but the global follow index is set; proceed as if we have nothing
-        --     -- and clear the global
-        --     globals.autoFollowIndex = nil
-        -- end
-
-        if followIndex then
-            writeDebug('Follow index: %d (%03X)':format(followIndex, followIndex))
-            writeJsonToFile('.\\data\\player.json', player)
-            -- Skip if we're following a valid target
-            local followed = windower.ffxi.get_mob_by_index(followIndex)
-            if followed and followed.valid_target then
-                skip = true
-            end
+    if cancel then
+        local jobInfo = smartMove:getJobInfo()
+        local jobId = smartMove:cancelJob()
+        if jobId then
+            writeMessage('Follow cancelled!')
+        else
+            writeMessage('There was no follow to cancel.')
         end
-
-        if not skip then
-            current = globals.target:mob()
-            
-            if hasFollow and not current then
-                -- Skip if we're being asked to follow but there's no current target
-                skip = true
-            elseif hasFollow and current then
-                -- Skip if our current id/index doesn't match the current target's id/index
-                skip = (id ~= 0 and current.id ~= id) or
-                    (index ~= 0 and current.index ~= index)
-            elseif not hasFollow and current then
-                -- Skip if this is a cancel and a target has been set
-                skip = true
-            end
+    elseif target then
+        local target = windower.ffxi.get_mob_by_target('t')
+        local job = smartMove:followIndex(target.index, distance)
+        if job then
+            writeMessage('Following %s with a distance of %.1f':format(
+                text_mob(target.name),
+                distance
+            ))
+        else
+            writeMessage('Unable to follow %s!':format(
+                text_mob(target.name)
+            ))
         end
     end
-
-    local _mobToFollow = nil
-
-    if not skip then
-        if id > 0 then
-            local mob = windower.ffxi.get_mob_by_id(id)
-            if mob and mob.valid_target and mob.hpp > 0 then
-                _mobToFollow = mob
-            end
-        elseif index > 0 then
-            local mob = windower.ffxi.get_mob_by_index(index)
-            if mob and mob.valid_target and mob.hpp > 0 then
-                _mobToFollow = mob
-            end
-        end
-    end
-
-    if skip then
-        writeTrace('Follow skipped because another target was already set.')
-    elseif _mobToFollow then
-        globals.autoFollowIndex = _mobToFollow.index
-        windower.ffxi.follow(_mobToFollow.index)        
-        
-        writeTrace(string.format('Following %s at distance %.1f with index=%d (%03X)',
-            text_mob(_mobToFollow.name, Colors.trace),
-            math.sqrt(_mobToFollow.distance),
-            _mobToFollow.index,
-            _mobToFollow.index))
-    else
-        windower.ffxi.run(false)
-
-        -- SUPER SUPER important to use -1, rather than no param at all like the docs say. If you pass nothing,
-        -- the player object's follow index is not modified and it becomes incorrect.
-        --
-        -- UPDATE: There are still bugs, so we're going to have to use our own tracking. Hence, globals.autoFollowIndex :(
-        globals.autoFollowIndex = nil
-        windower.ffxi.follow(-1)
-        
-        writeTrace('Follow cancelled.')
-    end
+    --writeMessage('Not implemented: follow')  
 end
 
+-------------------------------------------------------------------------------
+-- Start moving
 handlers['run'] = function(args)
     local start = arrayIndexOfStrI(args, '-start')
     local stop = arrayIndexOfStrI(args, '-stop')
@@ -190,99 +143,10 @@ handlers['run'] = function(args)
 end
 
 handlers['walk'] = function (args)
-
-    local stop = arrayIndexOfStrI(args, '-stop')
-    if stop then
-        windower.ffxi.run(false)
-        return
-    end
-
-    local direction = tonumber(arrayIndexOfStrI(args, '-direction'))
-    local time = tonumber(arrayIndexOfStrI(args, '-time'))
-
-    direction = direction and args[direction + 1]
-    time = time and tonumber(args[time + 1] or 0)
-
-    local radians = nil
-    local degrees = tonumber(direction)
-    if type(direction) == 'string' then
-        radians = directionality.directionToRadians(direction)
-    elseif type(degrees) == 'number' then
-        radians = directionality.degToRad(degrees)
-    end
-
-    -- If we have an angle, face toward it
-    windower.ffxi.follow(-1)
-    if radians ~= nil then
-        windower.ffxi.run(radians)
-    else
-        windower.ffxi.run()
-    end
-
-    local directionMessage = radians ~= nil and 
-        ' with heading %s degrees':format(text_number('%03d':format(directionality.radToDeg(radians)))) or ''
-
-    -- Set up the run end, if one was specified
-    if type(time) == 'number' and time > 0 then
-        
-        writeMessage('Initiating walk for %s%s.':
-            format(pluralize(time, 'second', 'seconds'),
-            directionMessage
-        ))
-
-        local stopCommand = string.format('wait %d; %s',
-            time,
-            makeSelfCommand('follow -no-overwrite')
-        )
-        windower.send_command(stopCommand)
-    else
-        writeMessage('Initiating walk%s.':format(directionMessage))
-    end
+    writeMessage('Not implemented: walk')
 end
-
 handlers['face'] = function(args)
-    local id = arrayIndexOfStrI(args, '-id')
-    local index = arrayIndexOfStrI(args, '-index')
-    local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
-    local direction = arrayIndexOfStrI(args, '-direction')
-    local skipFacing = false
-
-    id = id and tonumber(args[id + 1])
-    index = index and tonumber(args[index + 1])
-    target = target and 't'
-    direction = direction and tonumber(args[direction + 1])
-
-    local radians = nil
-
-    if direction ~= nil then
-        if type(direction) == 'number' then
-            -- The param was a numeric degree value
-            radians = directionality.degToRad(direction)
-        else
-            -- The param was a named directional value
-            radians = directionality.directionToRadians(direction)
-        end
-    else
-        local target = (id and windower.ffxi.get_mob_by_id(id)) or
-            (index and windower.ffxi.get_mob_by_index(index)) or
-            (target and windower.ffxi.get_mob_by_target(target))
-        radians = directionality.faceTarget(target, true)
-
-        local radians = directionality.faceTarget(target)
-        skipFacing = true
-    end
-
-    if type(radians) == 'number' then
-        writeMessage('Adjusting current heading to %s!':format(
-            text_number('%03d degrees':format(
-                directionality.radToDeg(radians)
-            ))
-        ))
-
-        if not skipFacing then
-            directionality.faceDirection(radians)
-        end
-    end    
+    writeMessage('Not implemented: face')  
 end
 
 -------------------------------------------------------------------------------
@@ -303,8 +167,10 @@ handlers['r'] = handlers['reload']
 -------------------------------------------------------------------------------
 -- verbosity
 handlers['verbosity'] = function (args)
-    local verbosity = (args[1] or ''):lower()
+    local level = arrayIndexOfStrI(args, '-level')
+    local verbosity = type(level) == 'number' and (args[level + 1] or ''):lower()
     local verbositySet = false
+
     if verbosity == 'normal' or verbosity == '0' then
         settings.verbosity = VERBOSITY_NORMAL
         verbositySet = true
@@ -314,13 +180,63 @@ handlers['verbosity'] = function (args)
     elseif verbosity == 'debug' or verbosity == '2' then
         settings.verbosity = VERBOSITY_DEBUG
         verbositySet = true
+    elseif verbosity == 'trace' or verbosity == '3' then
+        settings.verbosity = VERBOSITY_TRACE
+        verbositySet = true
     end
 
     if verbositySet then
-        writeMessage(string.format('Verbosity set to: %s', verbosity))
+        logging_settings.verbosity = settings.verbosity
+
+        writeMessage(string.format('Verbosity set to: %s', verbosity or ''))
         saveSettings()
     else
-        writeMessage(string.format('Invalid verbosity setting: %s', verbosity))
+        writeMessage(string.format('Invalid verbosity setting: %s', verbosity or ''))
+    end
+end
+
+-------------------------------------------------------------------------------
+-- distance
+handlers['config'] = function(args)
+    local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
+    local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
+    local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
+    local hasChanges = false
+
+    if distance > 0 then
+        distance = tonumber(args[distance + 1])
+        if distance and distance > 0 then
+            distance = math.clamp(distance, 5, 50)
+            settings.maxDistance = distance
+            hasChanges = true
+        end
+
+        writeMessage('Max targeting distance: %s':format(text_number('%.1f':format(settings.maxDistance))))
+    end
+
+    if distancez > 0 then
+        distancez = tonumber(args[distancez + 1])
+        if distancez and distancez > 0 then
+            distancez = math.clamp(distancez, 0, 50)
+            settings.maxDistanceZ = distancez
+            hasChanges = true
+        end
+
+        writeMessage('Max Z targeting distance: %s':format(text_number('%.1f':format(settings.maxDistanceZ))))
+    end
+
+    if strat > 0 then
+        strat = tostring(args[strat + 1] or ''):lower()
+        if TargetStrategy[strat] ~= nil then
+            settings.strategy = TargetStrategy[strat]
+            hasChanges = true
+        end
+
+        writeMessage('Targeting strategy: %s':format(text_magenta(settings.strategy)))
+    end
+
+    if hasChanges then
+        saveSettings()
     end
 end
 
@@ -346,21 +262,20 @@ handlers['targetinfo'] = function (args)
             string.format('Status: %s\n', tostring(target.status)) ..
             string.format('Claim id: %s\n', tostring(target.claim_id or 0)) ..
             string.format('Pos: (%.2f, %.2f, %.2f)\n', target.x or -1337, target.y or -1337, target.z or -1337) ..
+            string.format('Hdg: %.2f degrees\n', target.heading and (target.heading * 180 / math.pi) or -1337) ..
             string.format('Speed: %.2f\n', target.movement_speed or -1337)
         )
 
-        if arrayIndexOfStrI(args, '-save') ~= nil then
-            writeJsonToFile(string.format('.\\data\\%s-%d.target.json', target.name, target.index), target)
+        if arrayIndexOfStrI(args, '-save') then
+            local filename = string.format('.\\data\\%s-%d.target.json', target.name, target.index)
+            writeMessage('Saving target info to file: ' .. filename)
+            writeJsonToFile(filename, target)
 
             local party = windower.ffxi.get_party()
             local partyMember = party[targetArg]
             if partyMember then
                 writeJsonToFile(string.format('.\\data\\%s-%d.party.json', partyMember.name, partyMember.mob.index), partyMember)
             end
-
-            -- local player = windower.ffxi.get_player()
-            -- player = windower.ffxi.get_mob_by_id(player.id)
-            -- writeJsonToFile(string.format('.\\data\\%s-%d.self.json', player.name, player.index), player)
         end
     end
 end
@@ -495,6 +410,7 @@ handlers['actions'] = function(args)
     local toggle = arrayIndexOfStrI(args, '-toggle')
 
     local load = tonumber(arrayIndexOfStrI(args, '-load') or 0)
+
     if load > 0 then
         local actionsName = args[load + 1]
         if actionsName then
@@ -509,7 +425,23 @@ handlers['actions'] = function(args)
                 saveSettings()
             end
         end
-    else
+
+        return
+    end
+    
+    local saveDefault = tonumber(arrayIndexOfStrI(args, '-save-default') or 0)
+    local force = tonumber(arrayIndexOfStrI(args, '-force') or 0)
+    if saveDefault > 0 then
+        if saveDefaultActions(windower.ffxi.get_player(), force > 0) then
+            writeMessage('Default actions were saved.')
+        else
+            writeMessage('Defaults could not be saved. Run with -force to overwrite existing actions.')
+        end
+
+        return
+    end
+
+    if load <= 0 and saveDefault <= 0 then
         if on then
             globals.actionsEnabled = true
         elseif off then
@@ -526,57 +458,38 @@ handlers['actions'] = function(args)
 end
 
 handlers['align'] = function(args)
-    local id = arrayIndexOfStrI(args, '-id')
-    local index = arrayIndexOfStrI(args, '-index')
-    local t = arrayIndexOfStrI(args, '-t')
-    local duration = arrayIndexOfStrI(args, '-duration')
+    local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
+    local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
+    local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
 
-    id = id and tonumber(args[id + 1]) or 0
-    index = index and tonumber(args[index + 1]) or 0
+    distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
 
-    duration = duration and args[duration + 1]
-    duration = duration and math.max(tonumber(duration), 0) or 10
-
-    local _mob = nil
-    if t then
-        _mob = windower.ffxi.get_mob_by_target('t')
-    elseif id > 0 then
-        _mob = windower.ffxi.get_mob_by_id(id)
-    elseif index > 0 then
-        _mob = windower.ffxi.get_mob_by_index(index)
-    end
-
-    if _mob then
-        result = directionality.walkToMobRear(_mob, 1.5, 5)
-
-        -- local aligned = directionality.isAtMobRear(mob, 2) and context.facingEnemy()
-        -- if aligned then
-        --     writeVerbose('Already aligned, exiting.')
-        --     return
-        -- end
-
-        -- writeVerbose('Walking to rear of %s...':format(text_mob(mob.name, Colors.verbose)))
-
-        -- local tries = 0
-        -- local result = false
-        -- while tries < 10 and not directionality.isAtMobRear(mob, 2) do
-        --     result = directionality.walkToMobRear(mob, 2, 1)
-        --     tries = tries + 1
-        -- end
-        -- writeVerbose('  ..walk completed (%s in %d tries)':format(result and 'success' or 'exited', tries))
+    if cancel then
+        local jobInfo = smartMove:getJobInfo()
+        local jobId = smartMove:cancelJob()
+        if jobId then
+            writeMessage('Follow cancelled!')
+        else
+            writeMessage('There was no follow to cancel.')
+        end
+    elseif target then
+        local target = windower.ffxi.get_mob_by_target('t')
+        local job = smartMove:moveBehindIndex(target.index, 5)
+        if job then
+            writeMessage('Moving behind %s with a distance of %.1f':format(
+                text_mob(target.name),
+                distance
+            ))
+        else
+            writeMessage('Unable to move behind %s!':format(
+                text_mob(target.name)
+            ))
+        end
     end
 end
 
 handlers['showfollow'] = function(args)
-    local player = windower.ffxi.get_player()
-    if player and player.follow_index then
-        local mob = windower.ffxi.get_mob_by_index(player.follow_index)
-        if mob and mob.valid_target then
-            writeMessage('Following %s (%s / %s)':format(text_mob(mob.name), text_number(mob.index), text_number('%03X':format(mob.index))))
-        end
-    end
-
-    writeMessage('No follow target was found.')
+    writeMessage('Not implemented: showfollow')
 end
 
 handlers['walkmode'] = function (args)
@@ -592,6 +505,70 @@ handlers['walkmode'] = function (args)
     end
 end
 
+handlers['mobbuffs'] = function(args)
+    local mobs = actionStateManager:getBuffedMobs()
+    if #mobs > 0 then
+        local message = '\n' .. text_cornsilk('\nTracked Mob Buffs\n')
+
+        for i, id in ipairs(mobs) do
+            local data = actionStateManager:getBuffInfoForMob(id)
+            if 
+                data and
+                data.details and
+                data.mob
+            then
+                local mob = data.mob
+                local mobcol = mob.spawn_type == SPAWN_TYPE_TRUST and text_green or text_magenta
+                local type = (mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust' or 'Mob'
+
+                -- Mob header
+                message = message .. 
+                    '  %s / %s (%s)\n':format(
+                        mobcol(mob.name),
+                        text_number('%03X':format(mob.index)),
+                        type
+                    )
+
+                -- Mob buffs list
+                for buffId, info in pairs(data.details) do
+                    local buff = resources.buffs[buffId]
+                    local actor = info.actor
+                    local actorcol = (actor and (actor.spawn_type == SPAWN_TYPE_PLAYER or actor.spawn_type == SPAWN_TYPE_TRUST)) and text_green or text_magenta
+                    local actortype = '???'
+                    if info.byMe then
+                        actortype = 'Me'
+                    elseif actor then
+                        if actor.spawn_type == SPAWN_TYPE_PLAYER then actortype = 'Player'
+                        elseif actor.spawn_type == SPAWN_TYPE_TRUST then actortype = 'Trust'
+                        elseif actor.spawn_type == SPAWN_TYPE_MOB then actortype = 'Mob'
+                        end
+                    end
+
+                    message = message ..
+                        '    %s applied by %s (%s): %s\n':format(
+                            text_buff(buff.name),
+                            actorcol(actor and actor.name or '???'),
+                            actortype,
+                            info.timer and info.timer > 0 and pluralize('%d':format(info.timer), 'second', 'seconds') or text_cornsilk('--')
+                        )
+                end
+
+                if message:len() > 450 then
+                    writeMessage(message)
+                    message = '\n'
+                end
+            end
+        end
+
+        if message:len() > 1 then
+            writeMessage(message)
+        end
+    else
+        writeMessage('No actively tracked mob buffs were found.')
+    end
+end
+handlers['mb'] = handlers['mobbuffs']
+
 local BagsById = 
 {
     [0] = { field = "inventory" },
@@ -603,12 +580,6 @@ local BagsById =
     [14] = { field = "wardrobe6" },
     [15] = { field = "wardrobe7" },
     [16] = { field = "wardrobe8" },
-}
-
-local commitmentRings = {
-    "Endorsement Ring",
-    "Trizek Ring",
-    "Capacity Ring"
 }
 
 handlers['exp'] = function (args)

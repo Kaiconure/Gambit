@@ -1,5 +1,3 @@
-MAX_SKILLCHAIN_TIME = 5
-
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
 --
@@ -19,157 +17,24 @@ MAX_SKILLCHAIN_TIME = 5
 --
 -------------------------------------------------------------------------------
 
-_actionProcessorState = {
-    needsRecompile = true,
-
-    currentTime = 0,
-    cycles = 0,
-
-    skillchain = {
-        time = 0
-    },
-    
-    idleWakeTime = 0,
-    isIdleSnoozing = function (self)
-        return self.currentTime < self.idleWakeTime
-    end,
-
-    actionWakeTime = 0,
-    extendActionWakeTime = function(self, duration)
-        duration = math.max(duration or 0, 0)
-        if self.actionWakeTime < self.currentTime then
-            -- If we're not already snoozing, the wake time is now + duration
-            self.actionWakeTime = self.currentTime + duration
-        else
-            -- If we are already snoozing, the wake time is the current wake time + duration
-            self.actionWakeTime = self.actionWakeTime + duration
-        end
-        
-        -- NOTE: This sleep is how we've prevented commands from stepping on each other. It's been wrapped
-        -- in this "extend" method so we have the option to change how this works later.
-        coroutine.sleep(duration)
-    end,
-    isActionSnoozing = function(self)
-        return self.currentTime < self.actionWakeTime
-    end,
-    
-    actionType = nil,
-    actionTypeStartTime = os.clock(),
-
-    -- Sets the action type being executed, used to track how long we're in a type
-    setActionType = function (self, newType)
-        
-        -- If we're running actions, it's time to wake up from action snooze
-        self.actionWakeTime = 0
-
-        -- If we're running non-idle actions,it's time to wake up from idling
-        if newType ~= 'idle' then
-            self.idleWakeTime = 0
-        end
-        
-        if self.actionType ~= newType and newType ~= nil then
-            local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull')
-            local isIdlePullTarget = (newType == 'idle' or newType == 'pull')
-
-            -- Only reset time if we're transitioning between idle/pull and battle
-            if isIdlePull ~= isIdlePullTarget then
-                writeDebug(string.format(
-                    'Transitioning from %s to %s after %s',
-                    text_red(self.actionType ~= nil and (isIdlePull and 'idle/pull' or self.actionType) or 'init', Colors.debug),
-                    text_red(isIdlePullTarget and 'idle/pull' or newType, Colors.debug),
-                    pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.debug)
-                ))
-
-                self.actionTypeStartTime = os.clock()
-                self.cycles = 0
-            end
-
-            self.actionType = newType
-        end
-    end,
-    -- Return how long we've been in the current action type
-    elapsedTimeInType = function (self)
-        return os.clock() - (self.actionTypeStartTime or 0)
-    end,
-
-    -- How many cycles have been processed in the current action type
-    cyclesInType = function(self)
-        return self.cycles
-    end,
-
-    -- Marks the start of a new cycle
-    tick = function(self, currentTime)
-        self.currentTime = currentTime
-        self.cycles = self.cycles + 1
-    end,
-
-    setSkillchain = function(self, name)
-        self.skillchain = {
-            name = name,
-            time = self.currentTime
-        }
-    end,
-
-    getSkillchain = function(self)
-        if (self.currentTime - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
-            self:setSkillchain(nil)
-        end
-
-        return self.skillchain
-    end,
-
-    currentSpell = {
-        time = 0,
-        castTime = 0,
-        spell = nil
-    },
-
-    setSpellStart = function(self, spell)
-        self.currentSpell = {
-            time = self.currentTime,
-            spell = spell,
-            interrupted = false
-        }
-        return self.currentTime
-    end,
-
-    setSpellCompleted = function(self, interrupted)
-        self.currentSpell = {
-            time = self.currentTime,
-            spell = nil,
-            interrupted = interrupted
-        }
-    end,
-
-    reset = function (self)
-        self.currentTime = 0
-        self.cycles = 0
-        self.idleWakeTime = 0
-        self.actionWakeTime = 0
-        self.actionType = nil
-        self.skillchain = { time = 0 }
-        self.currentSpell = { time = 0 }
-        self.actionTypeStartTime = os.clock()
-        self.actions = { }
-        self.vars = { }
-    end,
-
-    actions = { }
-}
-
-CommandDurationTypes = 
-{
-    Sleep = 0,
-    Immediate = 1,
-    Scheduled = 2
-}
-
 function recompileActions()
-    _actionProcessorState.needsRecompile = true
+    actionStateManager.needsRecompile = true
 end
 
 function setSkillchain(name)
-    _actionProcessorState:setSkillchain(name)
+    actionStateManager:setSkillchain(name)
+end
+
+function markMobAbilityStart(mob, ability, targets)
+    actionStateManager:setMobAbility(mob, ability, targets)
+end
+
+function markMobAbilityEnd(mob)
+    actionStateManager:clearMobAbility(mob)
+end
+
+function setPartyWeaponSkill(actor, skill, mob)
+    actionStateManager:setPartyWeaponSkill(actor, skill, mob)
 end
 
 --------------------------------------------------------------------------------------
@@ -193,43 +58,81 @@ function sendActionCommand(
     -- Overall sleep time
     commandDuration = math.max(tonumber(commandDuration) or 0, 0)
 
-    if pauseFollow then
-        local player = context and context.player or windower.ffxi.get_player() -- TODO: Maybe just load the live player here, instead of refreshing in the action executor proc?
-        local followIndex = tonumber(player.follow_index) or 0
-
-        local followCommand = makeSelfCommand('follow')
-
-        if followIndex > 0 then
-            followCommand = followCommand ..
-                string.format(' wait %.1f; ', commandDuration) ..
-                makeSelfCommand(string.format('follow -index %d -no-overwrite', followIndex))
-        end
-
-        sendActionCommand(followCommand, context, 0.5)
-    end
-
+    local movementJob = pauseFollow and smartMove:cancelJob()
     if command and command ~= '' then
         writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
         windower.send_command(command)
     end
 
     if commandDuration > 0 then
-        if durationType == CommandDurationTypes.Immediate then
-            -- Nothing to do, execute and immediately return
-        elseif durationType == CommandDurationTypes.Scheduled then
-            --_actionProcessorState:extendActionWakeTime(commandDuration)
-            coroutine.sleep(commandDuration)
-        else
-            coroutine.sleep(commandDuration)
+        coroutine.sleep(commandDuration)
+
+        -- Kick the movement job back on, if any
+        if movementJob then
+            smartMove:reschedule(movementJob)
         end
     end
+
+    if context and context.action then
+        context.action.complete = true
+        context.action.incomplete = false
+    end
+end
+
+function sendRangedAttackCommand(target, context)
+    if 
+        target == nil
+    then
+        return
+    end
+
+    local followJob = smartMove:cancelJob()
+
+    -- Construct the actual spell casting command
+    local command = 'input /ra <%s>;':format(
+        target.symbol or target
+    )
+
+    local startTime = os.clock()
+
+    -- Send the ranged attack command. It will wait 1 second before returning (the third parameter)
+    sendActionCommand(command, context, 1)
+    
+    -- Wait until the RA is done or it expires
+    local continue = true
+    while continue do 
+        local ra = actionStateManager:getRangedAttack()
+        if ra == nil or ra.time == 0 then
+            continue = false
+        else
+            coroutine.sleep(0.5)
+        end
+    end
+
+    -- Sleep a bit more to space things out
+    coroutine.sleep(0.5)
+
+    if followJob then
+        smartMove:reschedule(followJob)
+    end
+
+    local endTime = os.clock()
+
+    if context and context.action then
+        context.action.complete = true
+        context.action.incomplete = false
+    end
+
+    writeDebug('Ranged attack observer has completed after %s!':format(
+        pluralize('%.1f':format(endTime - startTime), 'second', 'seconds')
+    ))
 end
 
 --------------------------------------------------------------------------------------
 -- Executes a spell casting action command.This is similar to sendActionCommand, but
 -- it will take into account traits such as Fast Cast as well as spell interruption
 -- to ensure that the operation completes as early as possible.
-function sendSpellCastingCommand(spell, target, context)
+function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     if 
         spell == nil or
         target == nil
@@ -237,12 +140,7 @@ function sendSpellCastingCommand(spell, target, context)
         return
     end
 
-    local player = windower.ffxi.get_player()
-    local followIndex = tonumber(player.follow_index) or 0
-
-    if followIndex then
-        sendActionCommand(makeSelfCommand('follow'), context, 0.5)
-    end
+    local followJob = smartMove:cancelJob()
 
     -- Calculate the maximum amount of time we will wait for spell casting to complete. It's
     -- safer for this to err on the slightly longer side, as we will exit early as soon as we
@@ -257,8 +155,9 @@ function sendSpellCastingCommand(spell, target, context)
     )
 
     local castingStartedAt = os.clock()
-    local interrupted = false
-    local isFirstCycle = true
+    local interrupted   = false     -- Set if the spell completes with interruption
+    local missed        = false     -- Set if the spell completed but missed (not yet implemented)
+    local isFirstCycle  = true
 
     -- Send the casting command. It will wait 1 second before returning (the third parameter)
     sendActionCommand(command, context, 1)
@@ -267,7 +166,7 @@ function sendSpellCastingCommand(spell, target, context)
     -- Note that if the spell has not begun casting after the 1 second delay used above, exit early.
     local continue = true
     while continue do
-        local currentSpell = _actionProcessorState.currentSpell
+        local currentSpell = actionStateManager.currentSpell
 
         if
             os.clock() >= endTime or
@@ -277,36 +176,50 @@ function sendSpellCastingCommand(spell, target, context)
             interrupted = currentSpell.interrupted
         else
             isFirstCycle = false
-            coroutine.sleep(0.5)
+            coroutine.sleep(0.25)
         end
     end
 
     local castingEndedAt = os.clock()
 
-    if followIndex > 0 then
-        sendActionCommand(makeSelfCommand('follow -index %d -no-overwrite':format(followIndex)), context)
-    end
-
     -- We need to pad the casting time a bit, because spell casting fires its completion event before
-    -- it's actually fully done casting. We'll reduce the pading time if casting was interrupted, or
-    -- if casting completed after the first cycle (first cycle completion means it either never went off,
-    -- or it was an extremely short casting time so it needs less padding).
-    local paddingTime = 1.75
-    if isFirstCycle or interrupted then
-        paddingTime = 1.75
-    end
+    -- it's actually fully done casting.
+    local paddingTime = 2.0
+
     coroutine.sleep(paddingTime)
+
+    if followJob then
+        smartMove:reschedule(followJob)
+    end
 
     local wokeAt = os.clock()
 
     local castingTime = castingEndedAt - castingStartedAt
     local totalTime = wokeAt - castingStartedAt
 
+    -- If the spell was interrupted, we'll adjust scheduling to allow it to be tried again
+    if
+        interrupted and
+        context and
+        context.action and
+        ignoreIncomplete ~= true
+    then
+        context.action.complete = false
+        context.action.incomplete = true
+    elseif 
+        not interrupted and
+        context and 
+        context.action 
+    then
+        context.action.complete = true
+        context.action.incomplete = false
+    end
+
     -- In debug mode, let's log that we've finished our work here
-    writeDebug('%s: Cast time %s / Observer time %s':format(
-        text_spell(spell.name, Colors.debug),
-        pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.debug),
-        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.debug)
+    writeTrace('%s: Cast time %s / Observer time %s':format(
+        text_spell(spell.name, Colors.trace),
+        pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
+        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)
         
     ))
 end
@@ -321,6 +234,12 @@ local function compileActions(actionType, rawActions)
         local _temp = {}
         for i, action in ipairs(actions) do
             local shouldAdd = false
+
+            -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second
+            if action.when == nil or action.when == '' then 
+                action.when = 'true' 
+                action.frequency = math.max(tonumber(action.frequency) or 0, 1)
+            end
 
             if action.when and action.commands and not action.disabled then
                 if type(action.commands) == 'string' then
@@ -337,14 +256,16 @@ local function compileActions(actionType, rawActions)
                     action.delay = tonumber(action.delay or 0)
                     action.enumerators = { }
 
-                    -- Force a minimum delay for each action state. This is the amount of time
-                    -- that must elapse within that state before its actions start happening.
+                    -- Force a non-zero minimum delay for certain action type states. Delay is how long
+                    -- we must be in a given state before actions can be executed.
                     if actionType == 'battle' then
+                        -- Battle actions will always wait at least 2 seconds before firing. This ensures
+                        -- we have a chance to take a swing at the enemy first (get trusts engaged, etc).
                         action.delay = math.max(action.delay, 2)
                     elseif actionType == 'pull' then
+                        -- Pull actions will always wait at least 1 second before firing. This ensures 
+                        -- that idle actions have a chance to run first.
                         action.delay = math.max(action.delay, 1)
-                    elseif actionType == 'idle' then
-                        action.delay = math.max(action.delay, 0)
                     end
                     
                     local hasErrors = type(action._whenFn) ~= 'function'
@@ -378,19 +299,22 @@ local function compileActions(actionType, rawActions)
             end
         end
 
-        _actionProcessorState.actions[actionType] = _temp
+        actionStateManager.actions[actionType] = _temp
     else
-        _actionProcessorState.actions[actionType] = {}
+        actionStateManager.actions[actionType] = {}
     end
 
-    local actionCount = #_actionProcessorState.actions[actionType]
+    local actionCount = #actionStateManager.actions[actionType]
     if actionCount > 0 then
-        writeMessage(string.format('Compilation of %s has completed.', pluralize(actionCount,
-            actionType .. ' action',
-            actionType .. ' actions')
+        writeMessage('Compilation of %s has completed.':format(
+            pluralize(actionCount,
+                text_action(actionType .. ' action'),
+                text_action(actionType .. ' actions'))
         ))
     else
-        writeMessage(string.format('No valid %s actions were compiled.', actionType))
+        writeMessage('No %s were compiled.':format(
+            text_action(actionType .. ' actions')
+        ))
     end
 end
 
@@ -399,57 +323,73 @@ end
 local function compileAllActions()
     local settingsCopy = json.parse(json.stringify(settings))
 
-    _actionProcessorState:reset()
+    actionStateManager:reset()
 
     local actions = settingsCopy.actions
 
     compileActions('battle',    actions and actions.battle or {})
     compileActions('pull',      actions and actions.pull or {})
     compileActions('idle',      actions and actions.idle or {})
+    compileActions('resting',   actions and actions.resting or {})
+    compileActions('dead',      actions and actions.dead or {})
 
-    _actionProcessorState.vars = actions and actions.vars or {}
+    actionStateManager.vars = actions and actions.vars or {}
 
-    _actionProcessorState.needsRecompile = false
+    actionStateManager.needsRecompile = false
 end
 
 --------------------------------------------------------------------------------------
 -- Determine which action should be performed next
 local function getNextBattleAction(context)
     -- We will never execute actions while snoozing
-    if _actionProcessorState:isActionSnoozing() then
+    if actionStateManager:isActionSnoozing() then
         --return nil
         -- TODO: Nothing for now, let's just log
-        writeTrace('WARNING: _actionProcessorState:isActionSnoozing() returned true (NO-OP for now)')
+        writeTrace('WARNING: actionStateManager:isActionSnoozing() returned true (NO-OP for now)')
     end
 
-    _actionProcessorState:setActionType(context.actionType)
+    actionStateManager:setActionType(context.actionType)
 
     -- Do not proceed further if actions are not enabled
     if not globals.actionsEnabled then
         return nil
     end
 
-    local actions = _actionProcessorState.actions[context.actionType]
-    local delayReference = _actionProcessorState:elapsedTimeInType()
+    local actions = actionStateManager.actions[context.actionType]
+    local delayReference = actionStateManager:elapsedTimeInType()
     -- local delayReference = context.mobTime
     -- if context.actionType == 'battle' then
     --     -- For battle actions, we'll trigger based on the delay since entering
     --     -- battle rather than from begining to target the mob.
-    --     delayReference = _actionProcessorState:elapsedTimeInType()
+    --     delayReference = actionStateManager:elapsedTimeInType()
     -- end
 
     if actions then
         for i, action in ipairs(actions) do
+            -- If this action is scoped to a battle -AND- it either has no scope yet or its scope does not
+            -- match that of the current battle scope, then it is immediately reschedulable.
+            if 
+                action.scope == 'battle' and
+                (action.lastBattleScope == nil or action.lastBattleScope ~= context.battleScope)
+            then
+                action.availableAt = 0
+            end
 
             if 
                 context.time >= action.availableAt and
                 delayReference >= action.delay
             then 
                 -- When we evaluate a new action, we need to clear the state left behind by any previous actions
-                context.spell       = nil   -- Current spell
-                context.ability     = nil   -- Current ability
-                context.item        = nil   -- Current item info [Item resource is at context.item.item]
-                context.result      = nil   -- The result of a targeting enumerator
+                context.spell                   = nil   -- Current spell
+                context.ability                 = nil   -- Current ability
+                context.item                    = nil   -- Current item info [Item resource is at context.item.item]
+                context.effect                  = nil   -- Current buff/effect
+                context.member                  = nil   -- The result of a targeting enumerator
+                context.result                  = nil   -- The result of the latest iterator operation
+                context.results                 = { }   -- The results of all current iterator operations
+                context.enemy_ability           = nil   -- The current mob ability
+                context.weapon_skill            = nil   -- The weapon skill you're trying to use
+                context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
 
                 -- Store the current action to the context
                 context.action = action
@@ -458,13 +398,20 @@ local function getNextBattleAction(context)
                 setfenv(action._whenFn, context)
 
                 if action._whenFn() then
-                    -- If this action will get run, we'll need to schedule the next run time
+                    -- If this action will get run, we'll need to schedule the next run time. We'll actually
+                    -- update this later, after the actions are executed, based on the time they complete.
                     action.availableAt = math.max(context.time + action.frequency, action.availableAt)
+
+                    -- Save the scope that was present when this action was triggered.
+                    action.lastBattleScope = context.battleScope
 
                     writeDebug('Condition met %s %s':format(
                         text_action(context.actionType .. '.' .. i, Colors.debug),
-                        colorize(Colors.green, action.when, Colors.debug)
+                        --action.when
+                        text_green(action.when, Colors.debug)
                     ))
+
+                    --print(action.when)
 
                     return action
                 end
@@ -489,6 +436,20 @@ local function executeBattleAction(context, action)
             setfenv(command._commandFn, context)
             command._commandFn()
         end
+
+        -- At this point, we'll set the next schedule time based on the later of either its
+        -- configured frequency or its own current schedulable time.
+        action.availableAt = math.max(context.time + action.frequency, action.availableAt)
+
+        -- If the action was flagged as incomplete, we'll allow it to be rescheduled again. In this
+        -- case, we'll clear the scope and set it to the earlier of its current schedulable time
+        -- or a small amount of time in the future. Don't forget to clear the incomplete flag!
+        if action.incomplete then
+            action.lastBattleScope = nil
+            action.availableAt = math.min(context.time + 1, action.availableAt)
+
+            action.incomplete = nil
+        end
     end
 
     return action
@@ -502,13 +463,43 @@ function processNextAction(context)
     return executeBattleAction(context, action)
 end
 
+--
+-- Returns true if any member of the party is engaged
+local function isPartyEngaged()
+    local party = windower.ffxi.get_party()
+    if party then
+        return
+            (party.p1 and party.p1.mob.status == STATUS_ENGAGED) or
+            (party.p2 and party.p2.mob.status == STATUS_ENGAGED) or
+            (party.p3 and party.p3.mob.status == STATUS_ENGAGED) or
+            (party.p4 and party.p4.mob.status == STATUS_ENGAGED) or
+            (party.p5 and party.p5.mob.status == STATUS_ENGAGED)
+    end
+end
+
+--
+-- Returns true if any trusts in the party are engaged
+local function isPartyTrustEngaged()
+    local party = windower.ffxi.get_party()
+    if party then
+        return
+            (party.p1 and party.p1.mob.spawn_type == SPAWN_TYPE_TRUST and party.p1.mob.status == STATUS_ENGAGED) or
+            (party.p2 and party.p2.mob.spawn_type == SPAWN_TYPE_TRUST and party.p2.mob.status == STATUS_ENGAGED) or
+            (party.p3 and party.p3.mob.spawn_type == SPAWN_TYPE_TRUST and party.p3.mob.status == STATUS_ENGAGED) or
+            (party.p4 and party.p4.mob.spawn_type == SPAWN_TYPE_TRUST and party.p4.mob.status == STATUS_ENGAGED) or
+            (party.p5 and party.p5.mob.spawn_type == SPAWN_TYPE_TRUST and party.p5.mob.status == STATUS_ENGAGED)
+    end
+end
+
 local function doNextActionCycle(time, player)
     local playerStatus = player.status
 
     local mob = globals.target:mob()
     local mobTime = globals.target:runtime()
     local mobDistance = mob and math.sqrt(mob.distance) or 0
+    local battleScope = globals.target:scopeId()
     local actionsExecuted = false
+    local restingActionsExecuted = false
     local idleActionsExecuted = false
     local battleActionsExecuted = false
     local pullActionsExecuted = false
@@ -522,7 +513,23 @@ local function doNextActionCycle(time, player)
     
     -- Determine if we're in an idling state (forced idle until a given time unless aggro'd). See the above
     -- initialization of isIdle to see the situations that would force us out of idling.
-    local isTimedIdling = isIdle and _actionProcessorState:isIdleSnoozing()
+    local isTimedIdling = isIdle and actionStateManager:isIdleSnoozing()
+
+    -- Resting: Execute any actions, and bail
+    local isResting = playerStatus == STATUS_RESTING
+    if isResting then
+        local context = ActionContext.create('resting', time, mob, mobTime)
+        local action = processNextAction(context);
+        return
+    end
+
+    -- Death: Execute any actions, and bail
+    local isDead = player.vitals.hp <= 0
+    if isDead then
+        local context = ActionContext.create('dead', time, nil, mobTime)
+        local action = processNextAction(context);
+        return
+    end
 
     -- Idle
     ----------------------------------------------------------------------------------------------------
@@ -562,13 +569,8 @@ local function doNextActionCycle(time, player)
                 hasPullableMob = not isMobEngaged
 
                 if isMobEngaged then
-                    local context = ActionContext.create('battle', time, mob, mobTime)
-
-                    -- if player.target_locked then
-                    --     sendActionCommand('input /lockon', context, 1)
-                    -- end
-
-                    local action = processNextAction(context);
+                    local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
+                    local action = processNextAction(context);                    
 
                     actionsExecuted = action ~= nil
                     battleActionsExecuted = actionsExecuted
@@ -592,23 +594,6 @@ local function doNextActionCycle(time, player)
                     commandDelay = commandDelay + 0.5
                 end
 
-                -- Follow if necessary
-                if player.follow_index == nil or player.follow_index ~= mob.index then
-                    -- if mobDistance < 2 then
-                    --     -- Cancel follow for a bit if we're very close. Follow has been known to cause an inability to engage.
-                    --     -- The faceEnemy call further below will ensure we're pointed in the right direction.
-                    --     command = command .. 
-                    --         makeSelfCommand('follow; wait 0.5') ..
-                    --         makeSelfCommand('face -index %d; wait 0.5':format(mob.index))
-                    --     commandDelay = commandDelay + 1
-
-                    --     writeDebug('Temporarily removing follow for alignment on pull.')
-                    -- end
-
-                    -- command = command .. makeSelfCommand(string.format('follow -index %d; wait 0.5', mob.index))
-                    -- commandDelay = commandDelay + 0.5
-                end
-
                 -- Engage if necessary
                 if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
                     command = command .. string.format('input /attack <t>; ')
@@ -621,7 +606,7 @@ local function doNextActionCycle(time, player)
 
                 -- Give some time for us to establish and engage with a new target before jumping straight to the pull
                 if mobTime > 1 then
-                    local context = ActionContext.create('pull', time, mob, mobTime)
+                    local context = ActionContext.create('pull', time, mob, mobTime, battleScope)
 
                     -- We'll ensure that we're facing the target mob at this point
                     -- if not context.facingEnemy() then
@@ -641,12 +626,12 @@ end
 --------------------------------------------------------------------------------------
 -- Processes battle actions in the background
 function cr_actionProcessor()
-    local startTime = os.clock()
+    local startTime = 0 --os.clock()
 
     while true do
         local sleepTimeSeconds = 0.5
 
-        if _actionProcessorState.needsRecompile then
+        if actionStateManager.needsRecompile then
             compileAllActions()
         end
 
@@ -654,25 +639,34 @@ function cr_actionProcessor()
             local time = os.clock() - startTime
             local player = windower.ffxi.get_player()
 
-            local playerStatus = player.status
-            local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
-            local isResting = (playerStatus == 33)                          -- 33 is taking a knee
-            local isDead = player.vitals.hp <= 0                            -- Dead
+            if player then
+                local playerStatus = player.status
+                local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
+                local isResting = (playerStatus == STATUS_RESTING)              -- Resting
+                local isDead = player.vitals.hp <= 0                            -- Dead
 
-            if
-                not isMounted and
-                not isResting and 
-                not isDead 
-            then
-                --_actionProcessorState.currentTime = time
-                _actionProcessorState:tick(time)
+                if
+                    not isMounted
+                then
+                    actionStateManager:tick(time)
 
-                processTargeting()
-                doNextActionCycle(time, player)
+                    -- As long as we're not dead or resting, we can process targeting info
+                    if 
+                        not isDead
+                    then
+                        processTargeting()
+                    end
+
+                    doNextActionCycle(time, player)
+                else
+                    sleepTimeSeconds = 2
+                end
             else
                 sleepTimeSeconds = 2
             end
         else
+            -- Wake from idle if we're disabled
+            actionStateManager.idleWakeTime = 0
             sleepTimeSeconds = 2
         end
         

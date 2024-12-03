@@ -15,15 +15,18 @@ local function findIgnoreListMatch(mob)
         -- We can only match if this item applies to the current zone
         local isZoneApplicable = item.zone == nil or item.zone == zoneId
         
-        if not couldEngage and isZoneApplicable then
-            if 
-                item.index == mob.index and
-                item.zone == zoneId
+        if 
+            isZoneApplicable and
+            (item.downgrade or not couldEngage)
+        then
+            -- Check for an index match
+            if
+                item.index == mob.index
             then
                 return item
             end
 
-            -- Check for a name match, and a zone match if configured
+            -- Check for a name match
             if
                 string.lower(item.name or '') == string.lower(mob.name)
             then
@@ -59,10 +62,14 @@ local function setTargetMob(mob)
 end
 
 local function shouldAquireNewTarget(player)
+    local checkEngagement = true
+
     -- Make sure we don't fixate on a mob we can't actually engage
     local currentTarget = globals.target
     local currentMob = currentTarget:mob()
     if currentMob then
+        checkEngagement = false
+
         -- We start checking to see if we're properly engaged after a configurable amount of time 
         -- has elapsed. If not configured, a dynamic value based on mob distance is used.
         local properlyEngaged = currentTarget:runtime() < settings.maxChaseTime
@@ -121,7 +128,9 @@ local function shouldAquireNewTarget(player)
         windower.ffxi.follow(-1)
         windower.send_command('input /attack off')
         resetCurrentMob(nil)
-    else
+    end
+
+    if checkEngagement then
         -- If we don't have a target, we won't try to find a new one until the retarget delay has elapsed
         local timeWithTarget = currentTarget:runtime()
         
@@ -139,7 +148,7 @@ local function shouldAquireNewTarget(player)
                 -- If we are engaged and have no valid t or bt, then we're ready to start looking for our
                 -- next target. This could be mob status latency, or an actual in-game auto-target that we
                 -- aren't properly facing.
-                if timeWithTarget >= math.max(settings.retargetDelay, 1) then
+                if timeWithTarget >= settings.retargetDelay then
                     writeDebug('Engaged without a valid target, forcing new target search.')
                     return true
                 end
@@ -152,12 +161,15 @@ local function shouldAquireNewTarget(player)
         end
     end
 
-    -- If we get to this point, we will not try to acquire a new target unless we're sitting idle
-    if player.status ~= STATUS_IDLE then
-        return false
+    -- If we get to this point, we will only allow target acquisition if we're idle or resting
+    if 
+        player.status == STATUS_IDLE or
+        player.status == STATUS_RESTING
+    then
+        return true
     end
 
-    return true
+    return false
 end
 
 --------------------------------------------------------------------------------------
@@ -178,20 +190,28 @@ function lockTarget(player, mob)
 end
 
 
+local targetScope = 0
 --------------------------------------------------------------------------------------
 --
 function resetCurrentMob(mob, force)
     -- We're setting the same mob if both old and new are nil, or both old and new share the same mob id
-    local isSameMob = 
+    local isSameMob = globals.target and (
         (mob == nil and globals.target._mob == nil) or
         (mob ~= nil and globals.target._mob ~= nil and mob.id == globals.target._mob.id)
+    )
     local allowReset = force or not isSameMob
 
     -- Only do an update if the new mob is different from the old, or if we're doing a forced update
     if allowReset then
+        -- Cancel any pending follow jobs
+        smartMove:cancelJob()
+
+        targetScope = targetScope + 1
+
         local _temp = {
+            _scopeId = targetScope,
             _mob = mob,
-            _start = os.clock(),
+            _start = os.clock(),            
 
             --------------------------------------------------------------------------------------
             -- Gets the mob, as it was originally set when found
@@ -222,6 +242,10 @@ function resetCurrentMob(mob, force)
 
             runtime = function (self)
                 return os.clock() - self._start
+            end,
+
+            scopeId = function (self)
+                return self._scopeId
             end
         }
 
@@ -237,22 +261,75 @@ function processTargeting()
         return
     end
 
+    local strategy = settings.strategy
     local party = windower.ffxi.get_party()
     local mobs = windower.ffxi.get_mob_array()
     local meMob = windower.ffxi.get_mob_by_target('me')
+
+    -- In 'manual' strategy, we won't do any automated target acquisition
+    if strategy == TargetStrategy.manual then
+        return
+    end
+
+    -- If we're using the 'leader' strategy and we are the leader, then we'll fall back to the 
+    -- 'nearest' behavior. This ensures we don't sit around getting smacked while there's no
+    -- one else to start the battle for us.
+    if strategy == TargetStrategy.leader then
+        if 
+            not meMob or party.party1_leader == meMob.id
+        then
+            strategy = TargetStrategy.nearest
+        end
+    end
+
+    -- We will bail early if we're using the leader strategy. Either we take the leader's battle target,
+    -- or the leader has no target and we remain idle.
+    if strategy == TargetStrategy.leader and party.party1_leader then
+        local leaderMob = windower.ffxi.get_mob_by_id(party.party1_leader)
+        if 
+            leaderMob and
+            type(leaderMob.target_index) == 'number' and
+            leaderMob.target_index > 0 and
+            leaderMob.status == STATUS_ENGAGED
+        then
+            local target = windower.ffxi.get_mob_by_index(leaderMob.target_index)
+            if 
+                target and
+                target.valid_target and
+                target.status == STATUS_ENGAGED and
+                target.spawn_type == SPAWN_TYPE_MOB
+            then
+                -- If the party leader is engaged with the target -AND- the target is engaged, then this is
+                -- the mob we're looking for. Move along, move along.
+                setTargetMob(target)
+            end
+        end
+
+        return
+    end
 
     local maxDistanceSquared = settings.maxDistance * settings.maxDistance
     local bestMatchingMob = nil
     local nearestAggroingMob = nil
 
+    -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
+    local party_by_id = { }
+    if party.p0 and party.p0.mob then party_by_id[party.p0.mob.id] = party.p0 end
+    if party.p1 and party.p1.mob then party_by_id[party.p1.mob.id] = party.p1 end
+    if party.p2 and party.p2.mob then party_by_id[party.p2.mob.id] = party.p2 end
+    if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
+    if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
+    if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
+    
     for id, candidateMob in pairs(mobs) do
-        local isValidCandidate = candidateMob.distance <= maxDistanceSquared
+        local isValidCandidate = 
+            candidateMob.distance <= maxDistanceSquared
             and candidateMob.valid_target 
             and candidateMob.spawn_type == 16
             and not candidateMob.charmed
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
-            and (candidateMob.status == 1 or settings.strategy == TargetStrategy.aggressor)
+            and (candidateMob.status == 1 or strategy == TargetStrategy.aggressor)
 
         local shouldIgnore = false
         if isValidCandidate then
@@ -262,8 +339,9 @@ function processTargeting()
                 shouldIgnore = true
 
                 if
-                    settings.strategy == TargetStrategy.nearest or
-                    settings.strategy == TargetStrategy.aggressor 
+                    -- strategy == TargetStrategy.nearest or
+                    -- strategy == TargetStrategy.aggressor 
+                    true
                 then
                     local downgrade = ignoreListItem.downgrade == true
 
@@ -284,84 +362,47 @@ function processTargeting()
             isValidCandidate and 
             not shouldIgnore 
         then
-            for i = 0, 5 do
-                local partyIndex = 'p' .. i
-                local member = party[partyIndex]
+            if (candidateMob.claim_id == 0 or party_by_id[candidateMob.claim_id]) then
 
-                if member ~= nil then
-                    -- Don't chase mobs that are claimed by someone else
-                    if (candidateMob.claim_id == 0 or candidateMob.claim_id == member.mob.id) then
-
-                        -- We'll store the nearest aggroing mob, and give it priority over others
-                        if candidateMob.status == STATUS_ENGAGED then
-                            if nearestAggroingMob == nil then
-                                nearestAggroingMob = candidateMob
-                            elseif candidateMob.distance < nearestAggroingMob.distance then
-                                nearestAggroingMob = candidateMob
-                            end
-                        end
-
-                        if bestMatchingMob == nil then
-                            -- If we don't have any point of reference yet, this is the one to start with
-                            bestMatchingMob = candidateMob
-                        else
-                            local isHpEqual = bestMatchingMob.hpp == candidateMob.hpp
-                            local isHpStrategy = settings.strategy == TargetStrategy.maxhp or
-                                settings.strategy == TargetStrategy.minhp
-                            local isNearer = candidateMob.distance < bestMatchingMob.distance
-
-                            local assumeStrategy = settings.strategy
-                            if assumeStrategy == TargetStrategy.aggressor then
-                                assumeStrategy = TargetStrategy.nearest
-                            end
-
-                            -- If we've already got a point of reference, compare that with the current 
-                            -- to see if it's better than what we've already looked at.
-                            if (assumeStrategy == TargetStrategy.nearest and isNearer) or
-                                (assumeStrategy == TargetStrategy.maxhp and candidateMob.hpp > bestMatchingMob.hpp) or
-                                (assumeStrategy == TargetStrategy.minhp and candidateMob.hpp < bestMatchingMob.hpp) or
-                                (isHpStrategy and isHpEqual and isNearer) -- Pick the nearest mob with the same HP if we're tracking HP
-                            then
-                                bestMatchingMob = candidateMob
-                            end
-                        end
+                -- We'll store the nearest aggroing mob, and give it priority over others
+                if candidateMob.status == STATUS_ENGAGED then
+                    if nearestAggroingMob == nil then
+                        nearestAggroingMob = candidateMob
+                    elseif candidateMob.distance < nearestAggroingMob.distance then
+                        nearestAggroingMob = candidateMob
                     end
-                end 
-            end 
+                end
+
+                if bestMatchingMob == nil then
+                    -- If we don't have any point of reference yet, this is the one to start with
+                    bestMatchingMob = candidateMob
+                else
+                    local isHpEqual = (bestMatchingMob.hpp == candidateMob.hpp)
+                    local isHpStrategy = (strategy == TargetStrategy.maxhp) or (settings.strategy == TargetStrategy.minhp)
+                    local isNearer = candidateMob.distance < bestMatchingMob.distance
+
+                    local assumeStrategy = strategy
+                    if assumeStrategy == TargetStrategy.aggressor then
+                        assumeStrategy = TargetStrategy.nearest
+                    end
+
+                    -- If we've already got a point of reference, compare that with the current 
+                    -- to see if it's better than what we've already looked at.
+                    if (assumeStrategy == TargetStrategy.nearest and isNearer) or
+                        (assumeStrategy == TargetStrategy.maxhp and candidateMob.hpp > bestMatchingMob.hpp) or
+                        (assumeStrategy == TargetStrategy.minhp and candidateMob.hpp < bestMatchingMob.hpp) or
+                        (isHpStrategy and isHpEqual and isNearer) -- Pick the nearest mob with the same HP if we're tracking HP
+                    then
+                        bestMatchingMob = candidateMob
+                    end
+                end
+            end
         end
     end
 
+    -- At this point, we'll take the nearest aggroing mob or the best match we found via strategy
     local mobToTarget = nearestAggroingMob or bestMatchingMob
     if mobToTarget ~= nil then
         setTargetMob(mobToTarget)
     end
 end
-
---------------------------------------------------------------------------------------
--- Handle auto-detection of aggroing mobs
--- NOTE: This was moved to be part of the action processing cycle
--- function cr_targetDetector()
---     local sleepTimeSeconds = 0.5
-
---     while true do
---         if globals.enabled then
-
---             local player = windower.ffxi.get_player()
---             local playerStatus = player.status
---             local isEngaged = player.status == STATUS_ENGAGED
---             local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
---             local isResting = (playerStatus == 33)                          -- 33 is taking a knee
---             local isDead = player.vitals.hp <= 0                            -- Dead
-
---             if
---                 not isMounted and
---                 not isResting and 
---                 not isDead 
---             then
---                 processTargeting()
---             end
---         end
-
---         coroutine.sleep(sleepTimeSeconds)
---     end
--- end

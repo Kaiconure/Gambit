@@ -1,0 +1,18 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_frazzle": {
+      "with": ["Frazzle III", "Frazzle II", "Frazzle"]
+    }
+  },
+  "actions": [
+    {
+      "when": "bt canUse(vars.keep_frazzle.with) and not hasEffectOf(bt, 'Frazzle')",
+      "commands": "use(bt)",
+      "frequency": 5,
+      "scope": "battle"
+    }
+  ]
+}

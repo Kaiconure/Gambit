@@ -5,6 +5,8 @@ TargetStrategy = {
     maxhp           = 'maxhp',      -- Find the aggroing mob with the most HP
     minhp           = 'minhp',      -- Find aggroing mob with the least HP
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
+    leader          = 'leader',     -- The party leader target, or the nearest aggro if none
+    manual          = 'manual',     -- You as the player pick the targets by engaging manually
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
 
@@ -20,26 +22,57 @@ TargetStrategy.default = TargetStrategy.nearest
 --  - downgrade: Pushes the mob all the way to the bottom of the target list. It will only be engaged
 --      if it is aggroing, or if it is the only mob within range.
 local DefaultIgnoreList = {
+
+    -- Mobs that will never attack and are generally ignorable
     { name = 'Numbing Blossom', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Spinescent Protuberance', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Erupting Geyser', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Pungent Fungus', zone = nil, index = nil, ignoreAlways = true },
     { name = 'Steam Spout', zone = nil, index = nil, ignoreAlways = true },
-    { name = 'Graupel Formation', zone = nil, index = nil, ignoreAlways = true }
+    { name = 'Graupel Formation', zone = nil, index = nil, ignoreAlways = true },
+
+    -- Mobs that guard colonization reives, which are just a waste of time to target
+    -- when we could be breaking down the obstacles to eliminate them.
+    { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Chilblain Snoll', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Indomitable Spurned', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Larkish Opo-opo', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Lavender Twitherym', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Lightfoot Lapinion', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Ruby Raptor', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Skittish Matamata', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Sloshmouth Snapweed', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Soiled Funguar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' }
+}
+
+--
+-- Mobs who we will always avoid trying to stand behind. These will typically be reive obstacles,
+-- where we have no reliable way of approaching from the rear.
+local DefaultNoRearList = {
+    'Amaranth Barrier',
+    'Bedrock Crag',
+    'Gnarled Rampart',
+    'Heliotrope Barrier',
+    'Icy Palisade',
+    'Knotted Root',
+    'Monolithic Boulder'
 }
 
 local defaultSettings = {
-    maxDistance = 15,
+    maxDistance = 50,
     maxDistanceZ = 5,
-    attackDelay = 1.5,
-    retargetDelay = 0.5,
+    retargetDelay = 0.0,
     strategy = TargetStrategy.default,
-    autoFollow = 0,
     verbosity = VERBOSITY_VERBOSE,
     schemaVersion = 2,
-    onEngage = '',
-    weaponSkill = '',
     ignoreList = DefaultIgnoreList,
+    noRearList = DefaultNoRearList,
     maxChaseTime = nil
 }
 
@@ -77,7 +110,15 @@ local function loadVars(original, incoming)
                 -- where the incoming data defines a table and the original already has a non-table
                 -- variable of the same name. This wouldn't be an expected situation.
                 if type(original[key]) == 'table' then
-                    loadVars(original[key], val)
+                    if #original[key] > 0 and original[key][1] ~= nil then
+                        -- For straight up arrays, we'll just leave the original value intact. No overwrites.
+
+                        -- OLD: For straight up arrays, we'll actually just take the new value
+                        -- OLD: original[key] = val
+                    else
+                        -- For non-array tables, we will merge the incoming values in
+                        loadVars(original[key], val)
+                    end
                 end
             else
                 -- For non-tables, copy the value in if it hasn't already been defined
@@ -106,13 +147,13 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
 
             -- Import any items that have an import reference and which aren't marked as disabled
             if type(action.import) == 'string' and not action.disabled then
-                -- First, try the user's own settings folder
-                local fileName = '.\\settings\\%s\\.lib\\%s.json':format(playerName, action.import)
+                -- First, try the user's actions/.libs folder
+                local fileName = './settings/%s/actions/.lib/%s.json':format(playerName, action.import)
                 local file = files.new(fileName)
 
-                -- If the import doesn't exist there, use the standard libs folder
+                -- If the import doesn't exist there, use the standard settings .lib folder
                 if not file:exists() then
-                    fileName = '.\\settings\\.lib\\%s.json':format(action.import)
+                    fileName = './settings/.lib/%s.json':format(action.import)
                     file = files.new(fileName)
                 end
 
@@ -171,7 +212,7 @@ local function loadActionImports(playerName, actions)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'pull', 'idle'}
+        local types = {'battle', 'pull', 'idle', 'resting', 'dead'}
 
         for i = 1, #types do
             local actionType = types[i]
@@ -248,7 +289,7 @@ end
 ----------------------------------------------------------------------------------------
 --
 local function loadDefaultActions(player, save)
-    local fileName = '.\\settings\\.lib\\default-actions.json'
+    local fileName = '.\\settings\\.defaults\\default-actions.json'
     local defaults = loadActionsFromFile(player.name, fileName)
 
     if defaults and save then
@@ -262,6 +303,39 @@ local function loadDefaultActions(player, save)
     end
 
     return defaults
+end
+
+----------------------------------------------------------------------------------------
+--
+function saveDefaultActions(player, force)
+    local saveAsFileName = getActionsJobFileName(player)
+    local file = files.new(saveAsFileName)
+
+    -- Can't overwrite an existing file without the force flag
+    if file:exists() and not force then
+        return
+    end
+
+    return loadDefaultActions(player, true) ~= nil
+
+    -- local saveAsFileName = nil
+    -- if actionsName then
+    --     saveAsFileName = getActionsFileName(player, actionsName)
+    -- else
+    --     saveAsFileName = getActionsJobFileName(player)
+    -- end
+
+    -- -- If the actions are stored as an object, then we'll stringify it to json.
+    -- -- Otherwise, if the actions aren't already a string the we've got a problem.
+    -- if type(actions) == 'table' then actions = json.stringify(actions) end
+    -- if type(actions) ~= 'string' then return nil end
+
+    -- writeStringToFile(
+    --     saveAsFileName,
+    --     actions
+    -- )
+
+    -- return true
 end
 
 ----------------------------------------------------------------------------------------
@@ -317,6 +391,7 @@ function loadSettings(actionsName, settingsOnly)
 
     local jobActionsName = nil
     local actions = nil
+    local defaultsLoaded = false
 
     tempSettings.actions = {}
 
@@ -330,11 +405,14 @@ function loadSettings(actionsName, settingsOnly)
         actionsName = settings.actionInfo and settings.actionInfo.name
     end
 
+    local mainJob = player.main_job
+    local subJob = player.sub_job
+
     if actions == nil then
 
         actionsName = '%s%s':format(
-            player.main_job,
-            player.sub_job_level > 0 and '-%s':format(player.sub_job) or ''
+            mainJob,
+            subJob and '-%s':format(subJob) or ''
         ):lower()
 
         jobActionsName = actionsName
@@ -356,11 +434,15 @@ function loadSettings(actionsName, settingsOnly)
 
         -- Load the default actions if nothing else has worked
         if actions == nil then
-            actions = loadDefaultActions(player, true)
+            actions = loadDefaultActions(player)
 
             if actions then
+                defaultsLoaded = true
                 actionsName = jobActionsName
-                writeMessage('No actions were found for your current job. The defaults were loaded instead.')
+                writeMessage(text_magenta('No existing actions were found, and temp defaults were loaded.'))
+                writeMessage(text_magenta('  Run %s to save these actions.':format(
+                    text_green('//' .. __shortName .. ' actions -save-default', Colors.magenta))
+                ))
             else
                 writeMessage('No actions were found for your current job, and the defaults could not be loaded.')
             end
@@ -375,7 +457,7 @@ function loadSettings(actionsName, settingsOnly)
         -- Save the post-processed actions
         writeJsonToFile('.\\settings\\%s\\.output\\%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
 
-        if actionsName then
+        if actionsName and not defaultsLoaded then
             writeMessage('Successfully loaded %s actions: %s':format(
                 text_player(player.name),
                 text_action(actionsName)

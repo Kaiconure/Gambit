@@ -74,7 +74,11 @@ end
 --------------------------------------------------------------------------------------
 --
 local function matchResourceByNameEN(resource, enNameLowerCase)
-    return resource and string.lower(resource.en) == enNameLowerCase
+    local lower = string.lower(resource.en)
+    return resource and (
+        lower == enNameLowerCase or
+        "\"%s\"":format(lower) == enNameLowerCase
+    )
 end
 
 --------------------------------------------------------------------------------------
@@ -88,6 +92,7 @@ end
 -- match with the provided name
 function findResourceByName(res, name, language)
     if type(res) ~= 'table' then return end
+    if type(name) == 'table' and name.name then name = name.name end
     if type(name) ~= 'string' then return end
 
     language = language or globals.language
@@ -127,8 +132,14 @@ end
 
 --------------------------------------------------------------------------------------
 --
+function findKeyItem(name)
+    return findResourceByName(resources.key_items, name)
+end
+
+--------------------------------------------------------------------------------------
+--
 function findBuff(name)
-    return findResourceByName(resources.buffs, name)
+    return name and findResourceByName(resources.buffs, name)
 end
 
 --------------------------------------------------------------------------------------
@@ -229,10 +240,12 @@ function hasBuff(player, buff, skiprecursion)
     if type(buff) == 'string' then buff = findBuff(buff) end
 
     if type(buff) ~= 'table' or type(buff.id) ~= 'number' or not resources.buffs[buff.id] then
-        return false
+        return nil
     end
 
-    return arrayIndexOf(player.buffs, buff.id) ~= nil
+    if arrayIndexOf(player.buffs, buff.id) ~= nil then
+        return buff
+    end
 end
 
 --------------------------------------------------------------------------------------
@@ -318,7 +331,17 @@ function canUseSpell(player, spell)
     -- Bail if it's a blue magic spell and it is not assigned
     if spell.type == 'BlueMagic' and not hasBluSpellAssigned(player, spell) then
         return false
-    end    
+    end
+
+    -- Don't allow trusts in non-trust zones
+    if spell.type == 'Trust' then
+        if 
+            globals.currentZone ~= nil and
+            globals.currentZone.can_pet ~= true 
+        then
+            return false
+        end        
+    end
 
     --
     -- NOTE: At this point we know:
@@ -330,7 +353,7 @@ function canUseSpell(player, spell)
     -- Now we just need to verify that the recast is up
     --
 
-    local recasts = windower.ffxi.get_spell_recasts()
+    local recasts = windower.ffxi.get_spell_recasts()    
 
     -- Recast will be a number in ticks, which is seconds * 60. The conversion doesn't
     -- matter if we're just checking for readiness.
@@ -366,11 +389,13 @@ function canUseAbility(player, ability)
         return false
     end
 
-    -- Bail if we have a debuff that prevents use of job abilities.
+    -- Bail if we have a status effect that prevents use of job abilities.
     -- Note: This also affects pet commands
     if
         hasBuff(player, 'Sleep') or
-        hasBuff(player, 'Amnesia')
+        hasBuff(player, 'Amnesia') or
+        (ability.type == 'Waltz' and hasBuff(player, 'Saber Dance')) or
+        (ability.type == 'Samba' and hasBuff(player, 'Fan Dance'))
     then
         return false
     end
@@ -441,4 +466,59 @@ function canUseWeaponSkill(player, weaponSkill)
     end
 
     return false
+end
+
+local FINISHING_MOVES_COUNT = 
+{
+    381,    -- 1 finishing move
+    382,    -- 2 finishing moves
+    383,    -- 3 finishing moves
+    384,    -- 4 finishing moves
+    385,    -- 5 finishing moves
+    588     -- 6 or more finishing moves
+}
+
+function getFinishingMoves(player)
+    player = player or windower.ffxi.get_player()
+
+    for i = #FINISHING_MOVES_COUNT, 1, -1 do
+        if arrayIndexOf(player.buffs, FINISHING_MOVES_COUNT[i]) then
+            return i
+        end
+    end
+
+    return 0
+end
+
+-------------------------------------------------------------------------------
+-- Key items related to being able to summon trusts
+local TrustKeyItems = 
+{
+    PermitWindurst      = 2497,   -- KI to call 3 trusts (Windurst)
+    PermitBastok        = 2499,   -- KI to call 3 trusts (Bastok)
+    PermitSandoria      = 2501,   -- KI to call 3 trusts (San d'Oria)
+    RhapsodyInWhite     = 2884,   -- KI to call 4 trusts
+    RhapsodyInCrimson   = 2887,   -- KI to call 5 trusts
+    
+}
+
+-------------------------------------------------------------------------------
+-- Get the maximum number of trusts the player can call
+function getMaxTrusts(player)
+    local myKeyItems = windower.ffxi.get_key_items()
+    if myKeyItems then
+        if arrayIndexOf(myKeyItems, TrustKeyItems.RhapsodyInCrimson) then
+            return 5
+        elseif arrayIndexOf(myKeyItems, TrustKeyItems.RhapsodyInWhite) then
+            return 4
+        elseif
+            arrayIndexOf(myKeyItems, TrustKeyItems.PermitWindurst) or
+            arrayIndexOf(myKeyItems, TrustKeyItems.PermitBastok) or
+            arrayIndexOf(myKeyItems, TrustKeyItems.PermitSandoria)
+        then
+            return 3
+        end
+    end
+
+    return 0
 end
