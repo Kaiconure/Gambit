@@ -1,0 +1,30 @@
+{
+  "vars": {
+    "ensure_trusts": {
+      "trusts": []
+    }
+  },
+  "pull": [
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "idle": [
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death"
+    }
+  ]
+}

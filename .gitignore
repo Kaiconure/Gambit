@@ -1,4 +1,4 @@
 /data/*
 /settings/*
-!/settings/.lib
+!/settings/.*
 /.backup/*
