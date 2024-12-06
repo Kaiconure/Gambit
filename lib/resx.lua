@@ -183,8 +183,8 @@ end
 --------------------------------------------------------------------------------------
 -- Gets a spell resource from an id or name
 local function getSpellResource(spell)
-    if type(spell) == 'number' then spell = resource.spells[spell] end
-    if type(spell) == 'string' then spell = findSpell(name) end
+    if type(spell) == 'number' then spell = resources.spells[spell] end
+    if type(spell) == 'string' then spell = findSpell(spell) end
 
     if type(spell) ~= 'table' or type(spell.id) ~= 'number' or spell.id < 1 then
         return nil
@@ -228,7 +228,7 @@ function hasBuff(player, buff, skiprecursion)
     -- force ourselves to check both of them if we encounter a sleep check.
     if skiprecursion ~= true then
         if 
-            (type(buff) == 'string' and buff:lower() == 'silence') or
+            --(type(buff) == 'string' and buff:lower() == 'silence') or
             (type(buff) == 'number' and (buff == BUFF_SLEEP1 or buff == BUFF_SLEEP2)) or
             (type(buff) == 'table' and (buff.id == BUFF_SLEEP1 or buff.id == BUFF_SLEEP2))
         then
@@ -521,4 +521,83 @@ function getMaxTrusts(player)
     end
 
     return 0
+end
+
+-------------------------------------------------------------------------------
+-- Get the spell used to call the trust with the specified name within a party.
+-- If more than one match is found (i.e. Shantotto / Shantotto II), then 
+-- disambiguation will be done based on the like-named trust already in your
+-- party. If none is in your party, it will find the first one you can use.
+-- If that fails, it will simply return the first one it finds.
+TrustSearchModes = { 
+    best = 'best',      -- The single best usable match
+    usable = 'usable',  -- All usable matches
+    all = 'all'         -- All matches
+}
+function getTrustSpellMeta(partyName, mode, player, party)
+    if type(partyName) ~= 'string' then return end
+
+    local matches = {}
+
+    mode = TrustSearchModes[string.lower(mode or TrustSearchModes.best)]
+    if mode == nil then return end
+
+    -- A flag that indicates whether the requested mode should be limited 
+    -- to usable trust spells only
+    local onlyUsable = mode == TrustSearchModes.best or mode == TrustSearchModes.usable
+
+    partyName = string.lower(partyName)
+
+    if onlyUsable then
+        player = player or windower.ffxi.get_player()
+    end
+
+    -- Iterate over the trust metadata. Store any entries that match the mode requirements.
+    for id, metadata in pairs(meta.trusts) do
+        if 
+            string.lower(metadata.party_name) == partyName and
+            (not onlyUsable or canUseSpell(player, metadata.id))
+        then
+            matches[#matches + 1] = metadata
+        end
+    end
+
+    -- If we're getting all results or all usable results, we're done here. Modes
+    -- that can result in multiple hits will always return an empty array rather
+    -- than nil when there are no results.
+    if 
+        mode == TrustSearchModes.all or
+        mode == TrustSearchModes.usable 
+    then
+        return matches
+    end
+
+    -- If we get here, we're looking for the single best match for the player.
+    -- Everything we have at this point is usable by the player.
+
+    if #matches > 1 then
+        party = party or windower.ffxi.get_party()
+        if party then
+            for i = 0, 5 do 
+                local p = party['p' .. i]
+                if 
+                    p and
+                    p.mob and
+                    p.mob.spawn_type == SPAWN_TYPE_TRUST 
+                then
+                    for j, metadata in ipairs(matches) do
+                        if p.mob.models and (p.mob.models[1] == metadata.model) then
+                            if string.lower(metadata.party_name) == string.lower(p.name) then
+                                return metadata
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- If we've made it here, we'll just return the first match we've found. Note
+    -- that if we found no matches, this will just return nil as expected.
+    return matches[1]
 end

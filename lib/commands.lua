@@ -164,12 +164,20 @@ handlers['reload'] = function (args)
 end
 handlers['r'] = handlers['reload']
 
+local VerbosityNames = {
+    [0] = 'normal',
+    [1] = 'verbose',
+    [2] = 'debug',
+    [3] = 'trace'
+}
 -------------------------------------------------------------------------------
 -- verbosity
 handlers['verbosity'] = function (args)
     local level = arrayIndexOfStrI(args, '-level')
     local verbosity = type(level) == 'number' and (args[level + 1] or ''):lower()
     local verbositySet = false
+
+    if verbosity == '' then verbosity = nil end
 
     if verbosity == 'normal' or verbosity == '0' then
         settings.verbosity = VERBOSITY_NORMAL
@@ -185,13 +193,19 @@ handlers['verbosity'] = function (args)
         verbositySet = true
     end
 
+    local verbosityName = VerbosityNames[settings.verbosity]
+
     if verbositySet then
         logging_settings.verbosity = settings.verbosity
 
-        writeMessage(string.format('Verbosity set to: %s', verbosity or ''))
+        writeMessage('Verbosity changed to: %s':format(text_green(verbosityName)))
         saveSettings()
     else
-        writeMessage(string.format('Invalid verbosity setting: %s', verbosity or ''))
+        if verbosityName ~= nil then
+            writeMessage('Verbosity is set to: %s':format(text_green(
+                verbosityName
+            )))
+        end
     end
 end
 
@@ -232,7 +246,7 @@ handlers['config'] = function(args)
             hasChanges = true
         end
 
-        writeMessage('Targeting strategy: %s':format(text_magenta(settings.strategy)))
+        writeMessage('Targeting strategy: %s':format(text_green(settings.strategy)))
     end
 
     if hasChanges then
@@ -243,7 +257,7 @@ end
 -------------------------------------------------------------------------------
 -- targetinfo
 handlers['targetinfo'] = function (args)
-    local targetArg = tonumber(arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t') or 0)
+    local targetArg = tonumber(arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t'))
     if targetArg then
         targetArg = args[targetArg + 1]
     end
@@ -258,6 +272,7 @@ handlers['targetinfo'] = function (args)
             string.format('Target: %s\n', target.name) ..
             string.format('Id: %s\n', tostring(target.id)) ..
             string.format('Index: %d (Hex=%03X)\n', target.index, target.index) ..
+            string.format('Target\'s target index: %d (Hex=%03X)\n', target.target_index or 0, target.target_index or 0) ..
             string.format('Spawn type: %s\n', tostring(target.spawn_type)) ..
             string.format('Status: %s\n', tostring(target.status)) ..
             string.format('Claim id: %s\n', tostring(target.claim_id or 0)) ..
