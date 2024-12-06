@@ -101,29 +101,44 @@ handlers['follow'] = function (args)
     local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
     local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
     local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
+    local toggle = arrayIndexOfStrI(args, '-toggle')
 
     distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
 
-    if cancel then
+    if toggle then
+        -- If not following, initiate follow in the current target at the specified distance
+        -- If following, cancel
+        local jobInfo = smartMove:getJobInfo()
+        if jobInfo then
+            sendSelfCommand('follow -c')
+        else
+            sendSelfCommand('follow -t -d %.1f':format(distance))
+        end
+    elseif cancel then
         local jobInfo = smartMove:getJobInfo()
         local jobId = smartMove:cancelJob()
         if jobId then
-            writeMessage('Follow cancelled!')
-        else
-            writeMessage('There was no follow to cancel.')
+            writeMessage(text_cornsilk('Follow job %s was cancelled.':format(text_number(jobId, Colors.cornsilk))))
         end
     elseif target then
         local target = windower.ffxi.get_mob_by_target('t')
-        local job = smartMove:followIndex(target.index, distance)
-        if job then
-            writeMessage('Following %s with a distance of %.1f':format(
-                text_mob(target.name),
-                distance
-            ))
-        else
-            writeMessage('Unable to follow %s!':format(
-                text_mob(target.name)
-            ))
+        if 
+            target and
+            target.valid_target and
+            target.hpp > 0 and
+            target.id ~= globals.me_id
+        then
+            local job = smartMove:followIndex(target.index, distance)
+            if job then
+                writeMessage(text_cornsilk('Following %s with a distance of %s. Use Ctrl+F to cancel.':format(
+                    text_mob(target.name, Colors.cornsilk),
+                    text_number('%.1f':format(distance), Colors.cornsilk)
+                )))
+            else
+                writeMessage('Unable to follow %s.':format(
+                    text_mob(target.name)
+                ))
+            end
         end
     end
     --writeMessage('Not implemented: follow')  
