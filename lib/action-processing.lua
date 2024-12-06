@@ -503,7 +503,7 @@ local function doNextActionCycle(time, player)
     local idleActionsExecuted = false
     local battleActionsExecuted = false
     local pullActionsExecuted = false
-    
+
     -- Status flags
     local hasPullableMob = mob ~= nil
     
@@ -638,8 +638,12 @@ function cr_actionProcessor()
         if globals.enabled then
             local time = os.clock() - startTime
             local player = windower.ffxi.get_player()
+            local me = windower.ffxi.get_mob_by_target('me')
 
-            if player then
+            if 
+                player and  -- There are conditions where these could be nil and crash the addon.
+                me          -- These conditions include things like zoning or logging out.
+            then
                 local playerStatus = player.status
                 local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
                 local isResting = (playerStatus == STATUS_RESTING)              -- Resting

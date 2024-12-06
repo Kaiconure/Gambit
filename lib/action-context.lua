@@ -109,9 +109,22 @@ function context_wait(s)
 end
 
 -----------------------------------------------------------------------------------------
+-- Evaluates to if_true if true, or if_false if false
+function context_iff(condition, if_true, if_false)
+    if condition then return if_true end
+    return if_false
+end
+
+-----------------------------------------------------------------------------------------
+-- Converts a condition to a boolean (truthy to true, falsey to false)
+function context_boolean(condition)
+    return context_iff(condition, true, false)
+end
+
+-----------------------------------------------------------------------------------------
 -- Enumerates over all fields in the context named in the given keys, and returns
 -- an array of all the matching results.
-local function enumerateContextByExpression(context, keys, expression)
+local function enumerateContextByExpression(context, keys, expression, ...)
     local retVal = { }
 
     if expression == nil or expression == '' or expression == '*' then expression = 'true' end
@@ -123,8 +136,10 @@ local function enumerateContextByExpression(context, keys, expression)
     then
         return retVal
     end
+
+    expression = expression:format(...)
     
-    local fn = loadstring('return %s':format(expression))
+    local fn = loadstring('return ' .. expression)
     if type(fn) == 'function' then
         for i, key in ipairs(keys) do
             local field = context[key]
@@ -217,7 +232,7 @@ local function setPartyEnumerators(context)
     context.partyCount = function(expression)
         expression = expression or 'true'
 
-        local fn = loadstring('return %s':format(expression))
+        local fn = loadstring('return ' .. expression)
         local count = 0
 
         for i, name in ipairs(PARTY_MEMBER_FIELD_NAMES) do
@@ -235,10 +250,10 @@ local function setPartyEnumerators(context)
 
     ----------------------------------------------------------------------------------------
     -- Count the number of party members and allies matching the specified expression
-    context.allyCount = function(expression)
-        expression = expression or 'true'
+    context.allyCount = function(expression, ...)
+        expression = (expression or 'true'):format(...)
 
-        local fn = loadstring('return %s':format(expression))
+        local fn = loadstring('return ' .. expression)
         local count = 0
         
         for i, name in ipairs(PARTY_MEMBER_FIELD_NAMES) do
@@ -256,8 +271,8 @@ local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
     -- Find a party member who matches the given expression
-    context.partyAny = function(expression)
-        local results = enumerateContextByExpression(context, PARTY_MEMBER_FIELD_NAMES, expression)
+    context.partyAny = function(expression, ...)
+        local results = enumerateContextByExpression(context, PARTY_MEMBER_FIELD_NAMES, expression, ...)
         
         context.member = results[1]
         context.members = results
@@ -268,12 +283,7 @@ local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
     -- 
-    context.partyAll = function(expression, stateless)
-        -- Stateless means don't use a context iterator. Always start from the begining of the list.
-        if stateless then
-            return context.partyAny(expression)
-        end
-
+    context.partyAll = function(expression, ...)
         return getNextMemberEnumerator(context) or context.partyAny(expression)
     end
 
@@ -289,8 +299,8 @@ local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
     -- Find a party or alliance member who match the given expression
-    context.allyAny = function(expression)
-        local results = enumerateContextByExpression(context, ALL_MEMBER_FIELD_NAMES, expression)
+    context.allyAny = function(expression, ...)
+        local results = enumerateContextByExpression(context, ALL_MEMBER_FIELD_NAMES, expression, ...)
 
         context.member = results[1]
         context.members = results
@@ -301,12 +311,8 @@ local function setPartyEnumerators(context)
 
     -----------------------------------------------------------------------------------------
     -- 
-    context.allyAll = function(expression, stateless)
-        -- Stateless means don't use a context iterator. Always start from the begining of the list.
-        if stateless then
-            return context.allyAny(expression)
-        end
-        return getNextMemberEnumerator(context) or context.allyAny(expression)
+    context.allyAll = function(expression, ...)
+        return getNextMemberEnumerator(context) or context.allyAny(expression, ...)
     end
 
     -----------------------------------------------------------------------------------------
@@ -475,6 +481,21 @@ local function initContextTargetSymbol(context, symbol)
     symbol.valid_target = symbol.mob.valid_target
     symbol.spawn_type = symbol.mob.spawn_type
 
+    -- Trusts
+    if symbol.is_trust then
+        local metadata = getTrustSpellMeta(symbol.name,
+            TrustSearchModes.best,
+            context.player,
+            context.party)
+        
+        if metadata then
+            symbol.meta = metadata
+            symbol.is_non_interactive = context_boolean(metadata.non_interactive)
+            symbol.is_magic_trust = context_boolean(
+                not symbol.is_non_interactive and (meta.jobs_with_mp[metadata.main_job] or meta.jobs_with_mp[metadata.sub_job]))
+        end
+    end
+
     if symbol.hpp == nil then
         symbol.hpp = 0
         symbol.hp = 0
@@ -517,6 +538,9 @@ local function loadContextTargetSymbols(context, target)
     -- an alliance, so this is all we need.
     context.party1_trusts = {}
 
+    context.party1_by_id = {}
+    context.party1_by_index = {}
+
     for i = 0, 5 do
         local p = 'p' .. i
         local a1 = 'a1' .. i
@@ -540,6 +564,10 @@ local function loadContextTargetSymbols(context, target)
             if mob.spawn_type == SPAWN_TYPE_TRUST then
                 context.party1_trusts[#context.party1_trusts + 1] = context[p]
             end
+
+            -- Add members to the party id list
+            context.party1_by_id[#context.party1_by_id + 1] = mob.id
+            context.party1_by_index[#context.party1_by_index + 1] = mob.index
         end
 
         context[a1] = nil
@@ -603,7 +631,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local messages = varargs({...})
         local output = ''
         for i, message in pairs(messages) do
-            output = output .. '%s ':format(message)
+            --output = output .. ('%s ':format(message))
+            if type(message) == 'boolean' then
+                message = context_iff(message, 'true', 'false')
+            end
+            output = output .. tostring(message or '') .. ' '
             --writeMessage('[Action Log] ' .. (msg or ''), Colors.gray)
         end
 
@@ -1180,7 +1212,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         ))
         directionality.faceTarget(context.bt.mob)
 
-        context.wait(0.5)
+        --context.wait(0.5)
     end
 
     --------------------------------------------------------------------------------------
@@ -1369,7 +1401,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Returns the number of mobs within [distance] of you
-    context.mobsInRange = function (distance)
+    context.mobsInRange = function (distance, withAggro)
         local count = 0
 
         if type(distance) == 'number' and distance > 0 then
@@ -1383,12 +1415,23 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     mob.spawn_type == SPAWN_TYPE_MOB and
                     mob.valid_target and
                     mob.hpp > 0 and
-                    mob.distance <= distanceSquared 
+                    mob.distance <= distanceSquared
                 then
-                    if nearest == nil or mob.distance < nearest.distance then
-                        nearest = mob
+                    local hasAggro = mob.status == STATUS_ENGAGED and (
+                        mob.claim_id == 0 or
+                        context.party1_by_id[mob.claim_id] or
+                        context.party1_by_index[mob.target_index or 0]
+                    )
+
+                    if 
+                        not withAggro or
+                        hasAggro
+                    then
+                        if nearest == nil or mob.distance < nearest.distance then
+                            nearest = mob
+                        end
+                        count = count + 1
                     end
-                    count = count + 1
                 end
             end
         end
@@ -1443,48 +1486,62 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -------------------------------------------------------------------------------------
     -- Find the best spell name associated with the specified trust party name
     context.trustSpellName = function(partyName)
-        if type(partyName) ~= 'string' then return end
+        if type(partyName) == 'string' then
+            local metadata = getTrustSpellMeta(partyName,
+                TrustSearchModes.best,
+                context.player,
+                context.party)
 
-        partyName = string.lower(partyName)
-        
-        local player = context.player
-        local matches = {}
-        for id, spell in pairs(globals.spells.trust) do
-            -- Store any matching trust spells that we are able to cast
-            if 
-                string.lower(spell.party_name) == partyName and
-                canUseSpell(player, spell)
-            then
-                matches[#matches + 1] = spell
-            end
-        end
-
-        -- If we've found any matches...
-        if #matches > 0 then
-            -- If we found more than one match, we can try to disambiguate them by looking up 
-            -- trusts already in the party. This makes the assumption that we're calling this
-            -- to find the spell that was used to call an existing party member trust.
-            if #matches > 1 then
-                local p = context.findInParty(partyName)
-                if p then
-                    for i, spell in ipairs(matches) do
-                        if 
-                            p.mob and
-                            p.mob.models and
-                            #p.mob.models > 0 and
-                            type(spell.model) == 'number' and
-                            spell.model == p.mob.models[1]
-                        then
-                            return spell.name
-                        end
-                    end
+            if metadata then
+                local spell = resources.spells[metadata.id]
+                if spell then
+                    return spell.name
                 end
             end
-
-            -- If we get here, we'll just return the first result. Either we only found one, or there
-            -- were multiples without an in-party model reference to be found.
-            return matches[1].name
         end
+
+        -- if type(partyName) ~= 'string' then return end
+
+        -- partyName = string.lower(partyName)
+        
+        -- local player = context.player
+        -- local matches = {}
+        -- for id, spell in pairs(globals.spells.trust) do
+        --     -- Store any matching trust spells that we are able to cast
+        --     if 
+        --         string.lower(spell.party_name) == partyName and
+        --         canUseSpell(player, spell)
+        --     then
+        --         matches[#matches + 1] = spell
+        --     end
+        -- end
+
+        -- -- If we've found any matches...
+        -- if #matches > 0 then
+        --     -- If we found more than one match, we can try to disambiguate them by looking up 
+        --     -- trusts already in the party. This makes the assumption that we're calling this
+        --     -- to find the spell that was used to call an existing party member trust.
+        --     if #matches > 1 then
+        --         local p = context.findInParty(partyName)
+        --         if p then
+        --             for i, spell in ipairs(matches) do
+        --                 if 
+        --                     p.mob and
+        --                     p.mob.models and
+        --                     #p.mob.models > 0 and
+        --                     type(spell.model) == 'number' and
+        --                     spell.model == p.mob.models[1]
+        --                 then
+        --                     return spell.name
+        --                 end
+        --             end
+        --         end
+        --     end
+
+        --     -- If we get here, we'll just return the first result. Either we only found one, or there
+        --     -- were multiples without an in-party model reference to be found.
+        --     return matches[1].name
+        -- end
     end
 
     -------------------------------------------------------------------------------------
@@ -2056,6 +2113,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- "Static" context functions
     context.any = context_any
     context.iff = context_iff
+    context.bool = context_boolean
     context.noop = context_noop
     context.randomize = context_randomize
     context.wait = context_wait

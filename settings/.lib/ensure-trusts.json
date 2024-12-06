@@ -1,17 +1,43 @@
 {
   "about": {
     "author": "@Kaiconure",
-    "notes": "This action should be placed at the top of your idle actions list. Set the vars.ensure_trusts variable in your actions file to customize the trusts."
+    "notes": "This action should be placed at the top of your idle actions list. Set the vars.ensure_trusts.spells variable in your actions file to customize the trusts."
   },
   "vars": {
     "ensure_trusts": {
-      "trusts": []
+      "spells": [],
+      "recall_on_mpp": 20,
+      "recall_on_hpp": 40
     }
   },
   "actions": [
     {
-      "when": "needsTrust(vars.ensure_trusts.trusts)",
+      "when": "needsTrust(vars.ensure_trusts.spells)",
       "commands": ["log('Calling trust:', spell.name)", "callTrust()"]
+    },
+    {
+      "when": "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name)) and mobsInRange(10) == 0",
+      "commands": [
+        "log('Releasing trust', member.name, 'due to mpp at', member.mpp, '%')",
+        "follow(member)",
+        "wait(1)",
+        "releaseTrust(member.name)",
+        "wait(1)",
+        "log('Recalling trust', member.name)",
+        "useSpell(me)"
+      ]
+    },
+    {
+      "when": "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name)) and mobsInRange(10) == 0",
+      "commands": [
+        "log('Releasing trust', member.name, 'due to HPP at', member.hpp, '%')",
+        "follow(member)",
+        "wait(1)",
+        "releaseTrust(member.name)",
+        "wait(1)",
+        "log('Recalling trust', member.name)",
+        "useSpell(me)"
+      ]
     }
   ]
 }

@@ -9,7 +9,7 @@
   },
   "actions": [
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.target_distance and following()",
+      "when": "bt and bt.distance <= vars.frontline_engagement.target_distance and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
@@ -21,8 +21,9 @@
       "comment": "Keep facing the enemy as we fight."
     },
     {
-      "when": "bt and bt.distance > vars.frontline_engagement.target_distance and not following()",
+      "when": "bt and bt.distance > vars.frontline_engagement.target_distance and not following(bt)",
       "commands": [
+        "faceEnemy()",
         "follow(bt, vars.frontline_engagement.target_distance)"
       ],
       "frequency": 1,

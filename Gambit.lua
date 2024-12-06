@@ -1,4 +1,4 @@
-__version = '0.91.4'
+__version = '0.95.0'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -25,8 +25,10 @@ json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
 
 meta = meta or {}
-meta.dispel = require('./lib/meta/dispel') or {}
-meta.monster_abilities = require('./lib/meta/monster_abilities') or {}
+meta.dispel = require('./meta/dispel') or {}
+meta.monster_abilities = require('./meta/monster_abilities') or {}
+meta.trusts = require('./meta/trusts')
+meta.jobs_with_mp = require('./meta/jobs_with_mp')
 
 require('./lib/logging')
 require('./lib/helpers')
