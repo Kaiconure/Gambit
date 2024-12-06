@@ -143,14 +143,19 @@ windower.register_event('load', function()
     smartMove:setLogger(writeDebug, writeTrace)
 
     windower.send_command('unbind !~G; bind !~G ' .. makeSelfCommand('toggle')) -- Use Shift+Alt+G to toggle automation
-
-    windower.send_command('unbind @R; bind @R ' .. makeSelfCommand('run -start'))
-    windower.send_command('unbind @~R; bind @~R ' .. makeSelfCommand('run -stop'))
+    windower.send_command('bind %^F ' .. makeSelfCommand('follow -toggle'))     -- Use Ctrl+F to toggle follow automation
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
     globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
     globals.language = info.language
+
+    -- Store self info
+    local me = windower.ffxi.get_mob_by_target('me')
+    if me then
+        globals.me_id = me.id
+        globals.me_name = me.name
+    end
     
     -- Reload all settings
     resetCurrentMob(nil, true)
@@ -167,6 +172,13 @@ windower.register_event('login', function ()
     local info = windower.ffxi.get_info()
     globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
     globals.language = info.language
+
+    -- Store self info
+    local me = windower.ffxi.get_mob_by_target('me')
+    if me then
+        globals.me_id = me.id
+        globals.me_name = me.name
+    end
     
     -- Reload all settings
     resetCurrentMob(nil, true)
