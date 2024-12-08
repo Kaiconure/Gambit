@@ -674,6 +674,17 @@ function cr_actionProcessor()
             else
                 sleepTimeSeconds = 2
             end
+
+            -- If automation was disabled during this iteration, forcibly stop following. Note that
+            -- this could inadvertently stop a manual follow, but there's not a good way around
+            -- that as we don't really know how it started. This will ensure that we don't keep
+            -- trying to run to a mob after being disabled (dangerous for mobs that aggro).
+            if not globals.enabled then
+                local existingJobId = smartMove:getJobId()
+                if existingJobId then
+                    smartMove:cancelJob()
+                end
+            end
         else
             -- Wake from idle if we're disabled
             actionStateManager.idleWakeTime = 0
