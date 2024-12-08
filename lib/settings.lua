@@ -73,7 +73,8 @@ local defaultSettings = {
     schemaVersion = 2,
     ignoreList = DefaultIgnoreList,
     noRearList = DefaultNoRearList,
-    maxChaseTime = nil
+    maxChaseTime = nil,
+    followCommandDistance = 1
 }
 
 ----------------------------------------------------------------------------------------
@@ -376,6 +377,9 @@ function loadSettings(actionsName, settingsOnly)
     -- acquiring targets on unreachable platforms, or to avoid walking down stairs or ramps.
     -- Must be a number greater than or equal to 1.
     tempSettings.maxDistanceZ = math.max(tempSettings.maxDistanceZ or 0, 1)
+
+    -- The default distance that the follow command will use if none is specified
+    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 1.0, 10.0)
 
     -- The maximum amount of time to wait (in seconds) before assuming an unengaged target
     -- is unreachable. This prevents you from getting into infinite wall-running ruts.

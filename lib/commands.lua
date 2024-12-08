@@ -99,11 +99,11 @@ end
 -- follow
 handlers['follow'] = function (args)
     local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
-    local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
+    local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
     local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
     local toggle = arrayIndexOfStrI(args, '-toggle')
 
-    distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
+    distance = distance > 0 and tonumber(args[distance + 1]) or settings.followCommandDistance
 
     if toggle then
         -- If not following, initiate follow in the current target at the specified distance
@@ -141,7 +141,6 @@ handlers['follow'] = function (args)
             end
         end
     end
-    --writeMessage('Not implemented: follow')  
 end
 
 -------------------------------------------------------------------------------
@@ -230,6 +229,7 @@ handlers['config'] = function(args)
     local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
     local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
     local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
+    local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
     local hasChanges = false
 
     if distance > 0 then
@@ -252,6 +252,17 @@ handlers['config'] = function(args)
         end
 
         writeMessage('Max Z targeting distance: %s':format(text_number('%.1f':format(settings.maxDistanceZ))))
+    end
+
+    if fcd > 0 then
+        fcd = tonumber(args[fcd + 1])
+        if fcd and fcd > 0 then
+            fcd = math.clamp(fcd, 1.0, 10.0)
+            settings.followCommandDistance = fcd
+            hasChanges = true
+        end
+
+        writeMessage('Follow command distance: %s':format(text_number('%.1f':format(settings.followCommandDistance))))
     end
 
     if strat > 0 then
