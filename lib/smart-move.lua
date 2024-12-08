@@ -208,7 +208,7 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                if avg < 0.5 and d2 > 5 then
+                if avg < 0.25 and d2 > 3 then
                     shouldJitter = true
                 end
             end
@@ -429,7 +429,7 @@ local function sm_movement_orig(self, job)
         -- Calculate our current and averaged velocity
         if sleepDuration > 0 then
             local movement = vpos:subtract(previousPosition)
-            velocity = movement:length()
+            velocity = movement:length() / sleepDuration
 
             --velocity = currentVelocity
         end
@@ -498,7 +498,7 @@ local function sm_movement_orig(self, job)
                 windower.ffxi.turn(newHeading)
             end            
         else
-            local isZeroSpeed = ((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5))
+            local isZeroSpeed = ((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.25))
             if isZeroSpeed then
                 zeroSpeedCycles = zeroSpeedCycles + 1
             else
@@ -825,7 +825,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
 
     -- Determine if the job is still valid
     job.is_valid = function(self)
-        local valid = self.mob and self.mob.valid_target
+        local valid = self.mob and self.mob.valid_target and self.mob.hpp > 0
         return valid
     end
 
@@ -899,8 +899,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Determine if the job is still valid
     job.is_valid = function(self)
-        local valid = self.mob and self.mob.valid_target
-        return valid
+        return self.mob and self.mob.valid_target and self.mob.hpp > 0
     end
 
     -- Cycling involves syncing up with the current state of our target mob
