@@ -18,24 +18,24 @@
     {
       "when": "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name)) and mobsInRange(10) == 0",
       "commands": [
-        "log('Releasing trust', member.name, 'due to mpp at', member.mpp, '%')",
+        "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
         "follow(member)",
         "wait(1)",
         "releaseTrust(member.name)",
         "wait(1)",
-        "log('Recalling trust', member.name)",
+        "log('Recalling trust', spell.name)",
         "useSpell(me)"
       ]
     },
     {
       "when": "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name)) and mobsInRange(10) == 0",
       "commands": [
-        "log('Releasing trust', member.name, 'due to HPP at', member.hpp, '%')",
+        "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
         "follow(member)",
         "wait(1)",
         "releaseTrust(member.name)",
         "wait(1)",
-        "log('Recalling trust', member.name)",
+        "log('Recalling trust', spell.name)",
         "useSpell(me)"
       ]
     }
