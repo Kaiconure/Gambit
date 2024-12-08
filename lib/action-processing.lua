@@ -456,10 +456,14 @@ local function executeBattleAction(context, action)
 end
 
 function processNextAction(context)
+    -- Don't proceed if automation was disabled
+    if not globals.enabled then return end
+
     local action = getNextBattleAction(context)
     
-    -- TODO: Anything to do here wrt logging, state management, etc?
-    
+    -- Don't proceed if automation was disabled    
+    if not globals.enabled then return end
+
     return executeBattleAction(context, action)
 end
 
@@ -557,6 +561,7 @@ local function doNextActionCycle(time, player)
     --  1. We have a target AND
     --  2. We are engaged AND
     --  3. The mob is engaged
+    local isBattle = false
     if not isTimedIdling then
         if not actionsExecuted then
             if playerStatus == STATUS_ENGAGED and hasPullableMob then
@@ -570,8 +575,9 @@ local function doNextActionCycle(time, player)
 
                 if isMobEngaged then
                     local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
-                    local action = processNextAction(context);                    
+                    local action = processNextAction(context);
 
+                    isBattle = true
                     actionsExecuted = action ~= nil
                     battleActionsExecuted = actionsExecuted
                 end
@@ -584,7 +590,7 @@ local function doNextActionCycle(time, player)
         --  1. We have a target that's not yet engaged AND
         --  2. There are no idle actions remaining to run.
         if not actionsExecuted then
-            if hasPullableMob then
+            if hasPullableMob and not isBattle then
                 local command = ''
                 local commandDelay = 0
 
