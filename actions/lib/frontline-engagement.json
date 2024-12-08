@@ -4,30 +4,40 @@
   },
   "vars": {
     "frontline_engagement": {
-      "target_distance": 2
+      "prioritize_melee_engagement": true
     }
   },
   "actions": [
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.target_distance and following(bt)",
-      "commands": ["cancelFollow()", "faceEnemy()"],
+      "when": "bt and bt.distance <= 2 and following(bt)",
+      "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.target_distance and not facingEnemy()",
-      "commands": ["faceEnemy()"],
+      "when": "bt and bt.distance <= 2 and not facingEnemy()",
+      "commands": ["faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
-      "when": "bt and bt.distance > vars.frontline_engagement.target_distance and not following(bt)",
-      "commands": [
-        "faceEnemy()",
-        "follow(bt, vars.frontline_engagement.target_distance)"
-      ],
+      "when": "bt and bt.distance > 2 and not following(bt)",
+      "commands": ["faceEnemy()", "follow(bt, 2)", "wait(0.5)"],
       "frequency": 1,
       "comment": "Maintain a minimum distance from the enemy."
+    },
+    {
+      "when": [
+        "vars.frontline_engagement.prioritize_melee_engagement",
+        "bt and bt.distance > 4",
+        "not hasEffect('Bind')"
+      ],
+      "commands": [
+        "not following(bt) and follow(bt, 2) and log('Unexpected: Initiated melee range following')",
+        "debug('Getting into frontline position with distance =', bt.distance)",
+        "wait(1)"
+      ],
+      "comment": "Ensure that we get into melee range without executing later actions."
     }
   ]
 }

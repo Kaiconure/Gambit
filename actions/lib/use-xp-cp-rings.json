@@ -5,7 +5,12 @@
   },
   "actions": [
     {
-      "when": "me.level == 99 and (vars.use_xp_cp_rings.ignore_master_levels or not me.is_mastered) and not hasBuff('Commitment', 'Dedication') and canUseItem(vars.use_xp_cp_rings.cp_rings)",
+      "when": [
+        "me.level == 99",
+        "vars.use_xp_cp_rings.ignore_master_levels or not me.is_mastered",
+        "not hasBuff('Commitment', 'Dedication')",
+        "canUseItem(vars.use_xp_cp_rings.cp_rings)"
+      ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
         "wait(5)",
@@ -15,7 +20,11 @@
       "comment": "Use the first available CP ring if we don't alredy have the Commitment effect. Only used if level 99 and not in the master levels."
     },
     {
-      "when": "(vars.use_xp_cp_rings.ignore_xp_level_cap or me.level < 99) and not hasBuff('Dedication', 'Commitment') and canUseItem(vars.use_xp_cp_rings.xp_rings)",
+      "when": [
+        "me.level < 99 or vars.use_xp_cp_rings.ignore_xp_level_cap",
+        "not hasBuff('Dedication', 'Commitment')",
+        "canUseItem(vars.use_xp_cp_rings.xp_rings)"
+      ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
         "wait(5)",

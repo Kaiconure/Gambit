@@ -1,7 +1,8 @@
 VERBOSITY_NORMAL       = 0
 VERBOSITY_VERBOSE      = 1
-VERBOSITY_DEBUG        = 2
-VERBOSITY_TRACE        = 3
+VERBOSITY_COMMENT      = 2
+VERBOSITY_DEBUG        = 3
+VERBOSITY_TRACE        = 4
 
 --------------------------------------------------------------------------------------
 -- Shift_JIS helper chacaters
@@ -54,6 +55,7 @@ Colors.warning  = Colors.yellow
 Colors.error    = Colors.red
 
 Colors.verbose  = Colors.powderblue
+Colors.comment  = Colors.verbose
 Colors.debug    = Colors.gray
 Colors.trace    = Colors.gray
 
@@ -177,6 +179,22 @@ function writeVerbose(message, color, returnColor)
             --     colorize(Colors.darkgray, '[verbose] ', color),
             --     message),
             message,
+            color,
+            returnColor
+        )
+
+        return true
+    end
+end
+
+function writeComment(message, color, returnColor)
+    if hasVerbosity(VERBOSITY_COMMENT) then
+        color = color or Colors.comment
+        returnColor = returnColor or Colors.comment
+        writeMessage(
+            string.format('%s%s',
+                colorize(Colors.gray, '[comment] ', color),
+                message),
             color,
             returnColor
         )

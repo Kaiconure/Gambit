@@ -12,14 +12,22 @@
   },
   "actions": [
     {
-      "when": "needsTrust(vars.ensure_trusts.spells)",
+      "when": [
+        "me.is_party_leader",
+        "needsTrust(vars.ensure_trusts.spells)"
+      ],
       "commands": ["log('Calling trust:', spell.name)", "callTrust()"]
     },
     {
-      "when": "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name)) and mobsInRange(10) == 0",
+      "when": [
+        "me.is_party_leader",
+        "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
+        "mobsInRange(10) == 0",
+        "member.distance < 5 or not vars.ensure_trusts.stationary"
+      ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
-        "follow(member)",
+        "not vars.ensure_trusts.stationary and follow(member)",
         "wait(1)",
         "releaseTrust(member.name)",
         "wait(1)",
@@ -28,10 +36,15 @@
       ]
     },
     {
-      "when": "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name)) and mobsInRange(10) == 0",
+      "when": [
+        "me.is_party_leader",
+        "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name))",
+        "mobsInRange(10) == 0",
+        "member.distance < 5 or not vars.ensure_trusts.stationary"
+      ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
-        "follow(member)",
+        "not vars.ensure_trusts.stationary and follow(member)",
         "wait(1)",
         "releaseTrust(member.name)",
         "wait(1)",

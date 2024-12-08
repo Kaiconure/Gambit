@@ -2,6 +2,11 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "vars": {
+    "ensure_trusts": {
+      "stationary": true
+    }
+  },
   "actions": [
     {
       "when": "not facingEnemy()",

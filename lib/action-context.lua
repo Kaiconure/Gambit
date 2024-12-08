@@ -55,12 +55,32 @@ end
 
 -----------------------------------------------------------------------------------------
 --
+local function context_send_command(command, ...)
+    if type(command) == 'string' then
+        command = command:format(...)
+
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('Sending action ' .. text_magenta(command))
+        end
+        
+        windower.send_command(command)
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
 local function context_iif(condition, ifYes, ifNo)
     if condition then
         return ifYes
     end
 
     return ifNo
+end
+
+-----------------------------------------------------------------------------------------
+-- Converts a condition to a boolean (truthy to true, falsey to false)
+function context_boolean(condition)
+    return context_iif(condition, true, false)
 end
 
 -----------------------------------------------------------------------------------------
@@ -109,16 +129,47 @@ function context_wait(s)
 end
 
 -----------------------------------------------------------------------------------------
--- Evaluates to if_true if true, or if_false if false
-function context_iff(condition, if_true, if_false)
-    if condition then return if_true end
-    return if_false
+-- Find the smallest number in a set
+function context_min(...)
+    local args = varargs({...})
+
+    -- Handle the basic cases
+    local count = #args
+    if count == 0 then return end
+    if count == 1 then return args[1] end
+    if count == 2 then return math.min(args[1], args[2]) end
+
+    local min = args[1]
+    for i = 2, count do
+        local current = args[i]
+        if current < min then
+            min = current
+        end
+    end
+
+    return min
 end
 
 -----------------------------------------------------------------------------------------
--- Converts a condition to a boolean (truthy to true, falsey to false)
-function context_boolean(condition)
-    return context_iff(condition, true, false)
+-- Find the largest number in a set
+function context_max(...)
+    local args = varargs({...})
+
+    -- Handle the basic cases
+    local count = #args
+    if count == 0 then return end
+    if count == 1 then return args[1] end
+    if count == 2 then return math.max(args[1], args[2]) end
+
+    local max = args[1]
+    for i = 2, count do
+        local current = args[i]
+        if current > max then
+            max = current
+        end
+    end
+
+    return max
 end
 
 -----------------------------------------------------------------------------------------
@@ -631,18 +682,36 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local messages = varargs({...})
         local output = ''
         for i, message in pairs(messages) do
-            --output = output .. ('%s ':format(message))
             if type(message) == 'boolean' then
-                message = context_iff(message, 'true', 'false')
+                message = context_iif(message, 'true', 'false')
             end
             output = output .. tostring(message or '') .. ' '
-            --writeMessage('[Action Log] ' .. (msg or ''), Colors.gray)
         end
 
         writeMessage('%s %s':format(
             text_gray('[action]'),
             text_cornsilk(output)
         ))
+    end
+
+    --------------------------------------------------------------------------------------
+    --
+    context.debug = function (...) 
+        local messages = varargs({...})
+        local output = ''
+        for i, message in pairs(messages) do
+            if type(message) == 'boolean' then
+                message = context_iif(message, 'true', 'false')
+            end
+            output = output .. tostring(message or '') .. ' '
+        end
+
+        if settings.verbosity >= VERBOSITY_DEBUG then
+            writeMessage('%s %s':format(
+                text_gray('[action.d]', Colors.debug),
+                output
+            ))
+        end
     end
 
     --------------------------------------------------------------------------------------
@@ -729,7 +798,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
 
-            sendActionCommand(
+            return sendActionCommand(
                 command,
                 context,
                 waitTime,
@@ -895,7 +964,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         writeVerbose('Using item: %s':format(text_item(itemName)))
 
-        sendActionCommand(
+        return sendActionCommand(
             command,
             context,
             waitTime,
@@ -1023,7 +1092,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             local waitTime = 1.5
-            local stopWalk = true
+            local stopWalk = false
             if 
                 ability.name == 'Sneak Attack' or
                 ability.name == 'Trick Attack'
@@ -1041,7 +1110,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             writeVerbose('Using ability: %s':format(text_ability(ability.name)))
 
-            sendActionCommand(
+            return sendActionCommand(
                 command,
                 context,
                 waitTime,
@@ -1069,6 +1138,32 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    --
+    context.spellRecast = function (spell)
+        if type(spell) == 'string' then
+            spell = findSpell(spell)
+        end
+
+        if type(spell) == 'table' and type(spell.id) == 'number' then
+            local recasts = windower.ffxi.get_spell_recasts()    
+            if type(recasts) == 'table' then
+                local recast = recasts[spell.recast_id or spell.id]
+                if type(recast) == 'number' then
+                    recast = recast / 60.0
+                    writeDebug('Recast for %s is %s':format(
+                        text_spell(spell.name, Colors.debug),
+                        pluralize('%.1f':format(recast), 'second', 'seconds', Colors.debug)
+                    ))
+                    return recast
+                end
+            end
+        end
+
+        -- If there's no recast, we'll just return a negative value. This was an invalid spell.
+        return -1
     end
 
     --------------------------------------------------------------------------------------
@@ -1116,7 +1211,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- sooner. This allows us to spend a little time as possible waiting for
                 -- spells to complete (fast cast, interruption, and so on can impact this).
 
-                sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+                -- Returns a flag indicating whether the action completed successfully
+                return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
             end
         end
     end
@@ -1210,9 +1306,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             text_action(context.actionType, Colors.verbose),
             text_mob(context.bt.name, Colors.verbose)
         ))
-        directionality.faceTarget(context.bt.mob)
-
-        --context.wait(0.5)
+        return directionality.faceTarget(context.bt.mob) ~= nil
     end
 
     --------------------------------------------------------------------------------------
@@ -1948,7 +2042,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- 
     context.shoot = function (duration)
         if context.t then
-            sendRangedAttackCommand(context.t, context)
+            return sendRangedAttackCommand(context.t, context)
         end
     end
     context.throw = context.shoot
@@ -1966,6 +2060,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.delay = function(s)
         s = math.max(0, tonumber(s) or 0)
         if s > 0 then
+            writeDebug('Postponing next action execution by %.1fs':format(s))
             context.action.availableAt = math.max(context.action.availableAt, context.time + s)
         end
     end
@@ -2112,10 +2207,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- "Static" context functions
     context.any = context_any
-    context.iff = context_iff
+    context.min = context_min
+    context.max = context_max
+    context.iif = context_iif
     context.bool = context_boolean
     context.noop = context_noop
     context.randomize = context_randomize
+    context.send_command = context_send_command
     context.wait = context_wait
 
     -- Final setup

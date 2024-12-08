@@ -174,4 +174,14 @@ function tableFirst(table, fn)
     end
 end
 
+--------------------------------------------------------------------------------------
+-- Trims leading and trailing whitespace from a string
+function trimString(s)
+    if type(s) == 'string' then
+        return string.match(s, '^()%s*$') and '' or string.match(s, '^%s*(.*%S)')
+    end
+
+    return ''
+ end
+
 

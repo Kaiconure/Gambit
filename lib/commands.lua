@@ -179,10 +179,11 @@ end
 handlers['r'] = handlers['reload']
 
 local VerbosityNames = {
-    [0] = 'normal',
-    [1] = 'verbose',
-    [2] = 'debug',
-    [3] = 'trace'
+    [0] = 'normal',     -- Minimal level
+    [1] = 'verbose',    -- More information
+    [2] = 'comment',    -- Lots more information
+    [3] = 'debug',      -- Debug spew
+    [4] = 'trace'       -- Very detailed debug spew
 }
 -------------------------------------------------------------------------------
 -- verbosity
@@ -199,10 +200,13 @@ handlers['verbosity'] = function (args)
     elseif verbosity == 'verbose' or verbosity == '1' then
         settings.verbosity = VERBOSITY_VERBOSE
         verbositySet = true
-    elseif verbosity == 'debug' or verbosity == '2' then
+    elseif verbosity == 'comment' or verbosity == '2' then
+        settings.verbosity = VERBOSITY_COMMENT
+        verbositySet = true
+    elseif verbosity == 'debug' or verbosity == '3' then
         settings.verbosity = VERBOSITY_DEBUG
         verbositySet = true
-    elseif verbosity == 'trace' or verbosity == '3' then
+    elseif verbosity == 'trace' or verbosity == '4' then
         settings.verbosity = VERBOSITY_TRACE
         verbositySet = true
     end
