@@ -80,11 +80,11 @@ local defaultSettings = {
 ----------------------------------------------------------------------------------------
 -- Determine the settings file name for this player
 local function getSettingsFileName(playerName)
-    return string.format('.\\settings\\%s\\main.json', playerName)
+    return string.format('./settings/%s/main.json', playerName)
 end
 
 local function getActionsFileName(playerName, actionsName)
-    return string.format('.\\settings\\%s\\actions\\%s.json', playerName, actionsName)
+    return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
 end
 
 local function getActionsJobFileName(player)
@@ -149,12 +149,12 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
             -- Import any items that have an import reference and which aren't marked as disabled
             if type(action.import) == 'string' and not action.disabled then
                 -- First, try the user's actions/.libs folder
-                local fileName = './settings/%s/actions/.lib/%s.json':format(playerName, action.import)
+                local fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
                 local file = files.new(fileName)
 
                 -- If the import doesn't exist there, use the standard settings .lib folder
                 if not file:exists() then
-                    fileName = './settings/.lib/%s.json':format(action.import)
+                    fileName = './actions/lib/%s.json':format(action.import)
                     file = files.new(fileName)
                 end
 
@@ -290,7 +290,7 @@ end
 ----------------------------------------------------------------------------------------
 --
 local function loadDefaultActions(player, save)
-    local fileName = '.\\settings\\.defaults\\default-actions.json'
+    local fileName = './actions/defaults/default-actions.json'
     local defaults = loadActionsFromFile(player.name, fileName)
 
     if defaults and save then
@@ -459,7 +459,7 @@ function loadSettings(actionsName, settingsOnly)
         tempSettings.actionInfo.name = actionsName
 
         -- Save the post-processed actions
-        writeJsonToFile('.\\settings\\%s\\.output\\%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
+        writeJsonToFile('./settings/%s/.output/%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
 
         if actionsName and not defaultsLoaded then
             writeMessage('Successfully loaded %s actions: %s':format(
