@@ -10,8 +10,8 @@ TargetStrategy = {
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
 
--- We will use the 'nearest' strategy if no other has been set.
-TargetStrategy.default = TargetStrategy.nearest
+-- We will use the 'leader' strategy if no other has been set
+TargetStrategy.default = TargetStrategy.leader
 
 --
 -- Ignore list fields:
@@ -65,7 +65,7 @@ local DefaultNoRearList = {
 }
 
 local defaultSettings = {
-    maxDistance = 50,
+    maxDistance = 25,
     maxDistanceZ = 5,
     retargetDelay = 0.0,
     strategy = TargetStrategy.default,
