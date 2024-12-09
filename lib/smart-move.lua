@@ -83,7 +83,7 @@ end
 -- Absolute distance between two radian angles
 local function angularDistance(rad1, rad2)
     local delta = rad2 - rad1
-    math.abs(math.atan2(math.sin(delta), math.cos(delta)))
+    return math.abs(math.atan2(math.sin(delta), math.cos(delta)))
 end
 
 -- Determines the angle between vector and from. If from is ommitted,
@@ -110,7 +110,7 @@ local function sharesHalfspace(heading1, heading2)
 
     -- Determine if the headings are within half a circle of each other
     --return math.abs(heading1 - heading2) <= PI_OVER_TWO
-
+    
     return angularDistance(heading1, heading2) <= PI_OVER_TWO
 end
 
