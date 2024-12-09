@@ -57,6 +57,7 @@ local DefaultIgnoreList = {
 local DefaultNoRearList = {
     'Amaranth Barrier',
     'Bedrock Crag',
+    'Broadleaf Palm'
     'Gnarled Rampart',
     'Heliotrope Barrier',
     'Icy Palisade',
