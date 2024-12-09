@@ -3,14 +3,14 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_haste": {
+    "haste_cycle": {
       "with": ["Haste II", "Haste"],
       "targets": ["me"]
     }
   },
   "actions": [
     {
-      "when": "partyByName(vars.keep_haste.targets) and not hasBuff(member, 'Haste') and canUse(vars.keep_haste.with)",
+      "when": "partyByName(vars.haste_cycle.targets) and not hasBuff(member, 'Haste') and canUse(vars.haste_cycle.with)",
       "commands": ["use(member)"],
       "frequency": 10
     }

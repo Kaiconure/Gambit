@@ -9,12 +9,12 @@
         "canUseSpell(randomize(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, vars.black_magic_nuke.spells)))"
       ],
       "commands": [
-        "log('Nuking with', spell.name)",
-        "useSpell()",
+        "log('Black magic nuking with', spell.name)",
+        "useSpell(bt)",
         "postpone(vars.black_magic_nuke.frequency)"
       ],
       "delay": 6,
-      "comment": "Nukes with normal, single-target black magic. Customize by defining variables: max_tier, frequency, min_mpp"
+      "comment": "Nukes with normal, single-target black magic. Customize by defining variables: max_tier, frequency, min_mpp."
     }
   ],
   "vars": {

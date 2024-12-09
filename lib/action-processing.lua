@@ -116,7 +116,7 @@ function sendRangedAttackCommand(target, context)
     end
 
     -- Sleep a bit more to space things out
-    coroutine.sleep(0.5)
+    coroutine.sleep(2.0)
 
     if followJob then
         smartMove:reschedule(followJob)
@@ -276,8 +276,9 @@ local function compileActions(actionType, rawActions)
                 action.when = combined
             end
 
-            -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second
-            if action.when == nil or action.when == '' then 
+            -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second.
+            -- Otherwise, this action (which always evaluates to true) would prevent anything further down from ever running.
+            if action.when == nil or trimString(action.when) == '' then 
                 action.when = 'true' 
                 action.frequency = math.max(tonumber(action.frequency) or 0, 1)
             end
@@ -290,12 +291,22 @@ local function compileActions(actionType, rawActions)
                 if isArray(action.commands) then
                     -- Compute the 'when' function
                     action._whenFn = loadstring(string.format('return %s', action.when))
-                    
-                    -- Force frequency to a non-negative number
-                    action.frequency = math.max(tonumber(action.frequency or 0), 0)
+
+                    if action.frequency == 'inf' or action.frequency == 'infinity' then
+                        -- We'll allow an infinity string to represent actions that should not normally be rescheduled.
+                        -- This should typically be used in conjunction with a 'scope' value.
+                        action.frequency = math.huge
+                    else
+                        -- Force frequency to a non-negative number
+                        action.frequency = math.max(tonumber(action.frequency or 0), 0)
+                    end
                     action.availableAt = 0
                     action.delay = tonumber(action.delay or 0)
                     action.enumerators = { }
+                    
+                    if type(action.scope) == 'string' then
+                        action.scope = string.lower(action.scope)
+                    end
 
                     -- Force a non-zero minimum delay for certain action type states. Delay is how long
                     -- we must be in a given state before actions can be executed.

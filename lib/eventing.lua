@@ -101,15 +101,15 @@ ActionPacket.open_listener(function (act)
                 local ability = action and action.param and resources.monster_abilities[action.param]
 
                 if ability then
+                    -- Need to load all the targets rather than just the first
+                    markMobAbilityStart(actor, ability, {target})
+
                     writeVerbose('%s: Preparing %s %s %s':format(
                         text_mob(actor.name, Colors.verbose),
                         text_weapon_skill(ability.name, Colors.verbose),
                         CHAR_RIGHT_ARROW,
                         target.spawn_type == SPAWN_TYPE_MOB and text_mob(target.name) or text_player(target.name)
                     ))
-
-                    -- Need to load all the targets rather than just the first
-                    markMobAbilityStart(actor, ability, {target})
                 end
             elseif category == 'mob_tp_finish' then
                 local ability = actionPacket.raw.param and resources.monster_abilities[actionPacket.raw.param]

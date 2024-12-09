@@ -93,8 +93,8 @@ directionality.facingOffsetAmount = function (target)
 end
 
 -------------------------------------------------------------------------------------
--- Find the absolute delta between two radian angles
-directionality.angleDelta = function(rad1, rad2)
+-- Find the absolute distance between two radian angles
+directionality.angularDistance = function(rad1, rad2)
     local delta = rad2 - rad1
     math.abs(math.atan2(math.sin(delta), math.cos(delta)))
 end

@@ -2,11 +2,6 @@
   "about": {
     "author": "@Kaiconure"
   },
-  "vars": {
-    "keep_haste": {
-      "with": ["Haste II", "Haste"]
-    }
-  },
   "actions": [
     {
       "when": "partyCount('hpp < 60') > 2 and canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",

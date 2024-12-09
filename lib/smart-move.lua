@@ -80,6 +80,12 @@ local function normalizeAngle(rad)
     return (offset - (math.floor(offset / width) * width))
 end
 
+-- Absolute distance between two radian angles
+local function angularDistance(rad1, rad2)
+    local delta = rad2 - rad1
+    math.abs(math.atan2(math.sin(delta), math.cos(delta)))
+end
+
 -- Determines the angle between vector and from. If from is ommitted,
 -- the base forward vector <1, 0> is used.
 local function vectorAngle(v, from)
@@ -99,11 +105,13 @@ end
 -- Determines if the two angles share a halfspace. Assumes that they are based on "to" vectors
 -- to a fixed point from a variable start position.
 local function sharesHalfspace(heading1, heading2)
-    heading1 = normalizeAngle(heading1)
-    heading2 = normalizeAngle(heading2)
+    --heading1 = normalizeAngle(heading1)
+    --heading2 = normalizeAngle(heading2)
 
     -- Determine if the headings are within half a circle of each other
-    return math.abs(heading1 - heading2) <= PI_OVER_TWO
+    --return math.abs(heading1 - heading2) <= PI_OVER_TWO
+
+    return angularDistance(heading1, heading2) <= PI_OVER_TWO
 end
 
 -- Gets a position vector from the specified coordinate (x,y)

@@ -4,10 +4,9 @@
   },
   "actions": [
     {
-      "when": "not isIdling() and canUseAbility('Haste Samba') and not hasBuff('Haste Samba')",
+      "when": "canUseAbility('Haste Samba') and not hasBuff('Haste Samba')",
       "commands": ["useAbility()"],
-      "frequency": 10,
-      "comment": "Use haste samba if available."
+      "frequency": 10
     }
   ]
 }
