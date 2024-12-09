@@ -73,10 +73,16 @@ function sendActionCommand(
         end
     end
 
+    -- TODO: Maybe see if there's a better way to figure this out dynamically?
+    local complete = true
+
     if context and context.action then
+        complete = true
         context.action.complete = true
         context.action.incomplete = false
     end
+
+    return complete
 end
 
 function sendRangedAttackCommand(target, context)
@@ -118,7 +124,11 @@ function sendRangedAttackCommand(target, context)
 
     local endTime = os.clock()
 
+    -- TODO: Maybe see if there's a better way to figure this out dynamically?
+    local complete = true
+
     if context and context.action then
+        complete = true
         context.action.complete = true
         context.action.incomplete = false
     end
@@ -126,6 +136,8 @@ function sendRangedAttackCommand(target, context)
     writeDebug('Ranged attack observer has completed after %s!':format(
         pluralize('%.1f':format(endTime - startTime), 'second', 'seconds')
     ))
+
+    return complete
 end
 
 --------------------------------------------------------------------------------------
@@ -197,6 +209,8 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     local castingTime = castingEndedAt - castingStartedAt
     local totalTime = wokeAt - castingStartedAt
 
+    local complete = not interrupted
+
     -- If the spell was interrupted, we'll adjust scheduling to allow it to be tried again
     if
         interrupted and
@@ -219,10 +233,19 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     writeTrace('%s: Cast time %s / Observer time %s':format(
         text_spell(spell.name, Colors.trace),
         pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
-        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)
-        
+        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)        
     ))
+
+    return complete
 end
+
+function string_trim(s)
+    if type(s) == 'string' then
+        return string:match('^()%s*$') and '' or s:match('^%s*(.*%S)')
+    end
+
+    return ''
+ end
 
 --------------------------------------------------------------------------------------
 -- Recompiles the specified action type
@@ -234,6 +257,24 @@ local function compileActions(actionType, rawActions)
         local _temp = {}
         for i, action in ipairs(actions) do
             local shouldAdd = false
+
+            -- If the "when" clause was broken into an array, we'll combine it all into
+            -- a single parenthesised AND'ed expression here.
+            if type(action.when) == 'table' then
+                local count = 0
+                local combined = ''
+                for i, _when in ipairs(action.when) do
+                    if type(_when) == 'string' then
+                        _when = trimString(_when)
+                        if _when ~= '' then
+                            combined = combined .. (count > 0 and ' and ' or '') .. '(' .. _when .. ')'
+                            count = count + 1
+                        end
+                    end
+                end
+
+                action.when = combined
+            end
 
             -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second
             if action.when == nil or action.when == '' then 
@@ -445,6 +486,8 @@ local function executeBattleAction(context, action)
         -- case, we'll clear the scope and set it to the earlier of its current schedulable time
         -- or a small amount of time in the future. Don't forget to clear the incomplete flag!
         if action.incomplete then
+            writeDebug('Action was flagged as incomplete, allowing rapid reschedule.')
+
             action.lastBattleScope = nil
             action.availableAt = math.min(context.time + 1, action.availableAt)
 
@@ -456,10 +499,14 @@ local function executeBattleAction(context, action)
 end
 
 function processNextAction(context)
+    -- Don't proceed if automation was disabled
+    if not globals.enabled then return end
+
     local action = getNextBattleAction(context)
     
-    -- TODO: Anything to do here wrt logging, state management, etc?
-    
+    -- Don't proceed if automation was disabled    
+    if not globals.enabled then return end
+
     return executeBattleAction(context, action)
 end
 
@@ -557,6 +604,7 @@ local function doNextActionCycle(time, player)
     --  1. We have a target AND
     --  2. We are engaged AND
     --  3. The mob is engaged
+    local isBattle = false
     if not isTimedIdling then
         if not actionsExecuted then
             if playerStatus == STATUS_ENGAGED and hasPullableMob then
@@ -570,8 +618,9 @@ local function doNextActionCycle(time, player)
 
                 if isMobEngaged then
                     local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
-                    local action = processNextAction(context);                    
+                    local action = processNextAction(context);
 
+                    isBattle = true
                     actionsExecuted = action ~= nil
                     battleActionsExecuted = actionsExecuted
                 end
@@ -584,7 +633,7 @@ local function doNextActionCycle(time, player)
         --  1. We have a target that's not yet engaged AND
         --  2. There are no idle actions remaining to run.
         if not actionsExecuted then
-            if hasPullableMob then
+            if hasPullableMob and not isBattle then
                 local command = ''
                 local commandDelay = 0
 
@@ -667,6 +716,17 @@ function cr_actionProcessor()
                 end
             else
                 sleepTimeSeconds = 2
+            end
+
+            -- If automation was disabled during this iteration, forcibly stop following. Note that
+            -- this could inadvertently stop a manual follow, but there's not a good way around
+            -- that as we don't really know how it started. This will ensure that we don't keep
+            -- trying to run to a mob after being disabled (dangerous for mobs that aggro).
+            if not globals.enabled then
+                local existingJobId = smartMove:getJobId()
+                if existingJobId then
+                    smartMove:cancelJob()
+                end
             end
         else
             -- Wake from idle if we're disabled

@@ -29,7 +29,7 @@ By default, an action file named after your current job/sub job will be loaded. 
 If no matching actions file can be found, default values will be loaded and saved. The default actions file is defined in the following location:
 
 ```
-./settings/.lib/default-actions.json
+./actions/defaults/default-actions.json
 ```
 
 I don't recommend editing the default actions, but if you do so just be sure to back up your changes in case they get overwritten by a version update.
@@ -101,7 +101,18 @@ The [action functions](./functions.md) section goes into detail on all of the va
 
 We've seen `when`, `commands`, and `frequency` in use so far. Here's the full list of properties you can make use of in your actions:
 
-- **when** - The condition under which the action will be triggered.
+- **when** - The condition(s) under which the action will be triggered. This can either be a string (as you've seen), or an array of strings that are internally AND'ed together when determining if the conditions have been met. For example, the following "when" specifications mean the exact same thing (though the latter might be considered more readable as the number of conditions grows).
+
+```json
+"when": "me.hpp > 20 and canUseSpell('Fire II')"
+```
+
+```json
+"when": [
+    "me.hpp > 20", 
+    "canUseSpell('Fire II')"
+]
+```
 
 - **commands** - The set of commands to execute if the *when* condition is met. This can be either a string (single command) or an array (multiple commands).
 
@@ -121,11 +132,13 @@ We've seen `when`, `commands`, and `frequency` in use so far. Here's the full li
 
 We've looked at an action example above, but that may not make sense in all situations. You're not *always* in battle, and there are often things you'd like to do between fights. 
 
-Gambit allows you to define distinct, independent actions based on current conditions. There are three categories available you:
+Gambit allows you to define distinct, independent actions based on current conditions. There are five categories available you:
 
-- **Idle** - These are actions that will be performed when outside of battle. This could be used to recast buffs, remove status ailments, cycle Trusts, or allow for recovery of MP.
-- **Pull** - These are actions that will be performed when no *Idle* actions remain and a mob is ready to be pulled. This could be used to move into position, or use a pulling spell/ability.
-- **Battle** - These are actions that are executed in the heat of battle. Note that you will always transition out of idle/pull into battle if a mob is aggroing you or a party member.
+- **battle** - These are actions that are executed in the heat of battle. Note that you will always transition out of idle/pull into battle if a mob is aggroing you or a party member.
+- **dead** - These are actions that will be performed in the unfortunate event of your death. You could send a tell to your bestie to give you a rez, or return to your home point.
+- **idle** - These are actions that will be performed when outside of battle. This could be used to recast buffs, remove status ailments, cycle Trusts, or allow for recovery of MP.
+- **pull** - These are actions that will be performed when no *Idle* actions remain and a mob is ready to be pulled. This could be used to move into position, or use a pulling spell/ability.
+- **resting** - These are actions that will be performed when you are resting (i.e. "taking a knee"). This could be used to trigger standing up when HP or MP has recovered to a certain point.
 
 In JSON, each of these categories is defined as an array of actions. The top-level definition would look like the following:
 
@@ -133,7 +146,9 @@ In JSON, each of these categories is defined as an array of actions. The top-lev
 {
     "idle": [],
     "pull": [],
-    "battle": []
+    "battle": [],
+    "resting": [],
+    "dead": []
 }
 ```
 

@@ -1,0 +1,56 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": "This action should be placed at the top of your idle actions list. Set the vars.ensure_trusts.spells variable in your actions file to customize the trusts."
+  },
+  "vars": {
+    "ensure_trusts": {
+      "spells": [],
+      "recall_on_mpp": 20,
+      "recall_on_hpp": 40
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "me.is_party_leader",
+        "needsTrust(vars.ensure_trusts.spells)"
+      ],
+      "commands": ["log('Calling trust:', spell.name)", "callTrust()"]
+    },
+    {
+      "when": [
+        "me.is_party_leader",
+        "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
+        "mobsInRange(10) == 0",
+        "member.distance < 5 or not vars.ensure_trusts.stationary"
+      ],
+      "commands": [
+        "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
+        "not vars.ensure_trusts.stationary and follow(member)",
+        "wait(1)",
+        "releaseTrust(member.name)",
+        "wait(1)",
+        "log('Recalling trust', spell.name)",
+        "useSpell(me)"
+      ]
+    },
+    {
+      "when": [
+        "me.is_party_leader",
+        "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name))",
+        "mobsInRange(10) == 0",
+        "member.distance < 5 or not vars.ensure_trusts.stationary"
+      ],
+      "commands": [
+        "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
+        "not vars.ensure_trusts.stationary and follow(member)",
+        "wait(1)",
+        "releaseTrust(member.name)",
+        "wait(1)",
+        "log('Recalling trust', spell.name)",
+        "useSpell(me)"
+      ]
+    }
+  ]
+}

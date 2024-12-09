@@ -4,7 +4,10 @@
   },
   "actions": [
     {
-      "when": "me.mpp >= vars.black_magic_nuke.min_mpp and canUseSpell(randomize(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, vars.black_magic_nuke.spells)))",
+      "when": [
+        "me.mpp >= vars.black_magic_nuke.min_mpp",
+        "canUseSpell(randomize(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, vars.black_magic_nuke.spells)))"
+      ],
       "commands": [
         "log('Nuking with', spell.name)",
         "useSpell()",

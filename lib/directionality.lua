@@ -93,6 +93,13 @@ directionality.facingOffsetAmount = function (target)
 end
 
 -------------------------------------------------------------------------------------
+-- Find the absolute delta between two radian angles
+directionality.angleDelta = function(rad1, rad2)
+    local delta = rad2 - rad1
+    math.abs(math.atan2(math.sin(delta), math.cos(delta)))
+end
+
+-------------------------------------------------------------------------------------
 -- Calculate the angle required to face the specified mob, and turn to face it,
 -- returning the new heading angle. If the calculationOnly flag is set, then the
 -- turn portion will be skipped and the return value can be used to turn directly later.

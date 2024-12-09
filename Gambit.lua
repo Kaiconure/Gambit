@@ -1,4 +1,4 @@
-__version = '0.95.1'
+__version = '0.95.2'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -370,10 +370,10 @@ local function removeTrackedBuffs(mob)
     end
 
     if count > 0 then
-        writeVerbose('Buffs already removed. Untracking %s of %s buffs from %s!':format(
-            text_number(count, Colors.verbose),
-            text_number(total, Colors.verbose),
-            text_mob(mob.name, Colors.verbose)
+        writeComment('Buffs already removed. Untracking %s of %s buffs from %s!':format(
+            text_number(count, Colors.comment),
+            text_number(total, Colors.comment),
+            text_mob(mob.name, Colors.comment)
         ))
     end
 end
@@ -404,10 +404,10 @@ local function removeTrackedDebuffs(mob)
     end
 
     if total > 0 then
-        writeDebug('Untracking %s / %s debuffs from %s!':format(
-            text_number(count),
-            text_number(total),
-            text_mob(mob.name, Colors.debug)
+        writeComment('Untracking %s / %s debuffs from %s!':format(
+            text_number(count, Colors.comment),
+            text_number(total, Colors.comment),
+            text_mob(mob.name, Colors.comment)
         ))
     end
 end
@@ -427,20 +427,20 @@ local function reaction_statusRemoval(action, actor, target, reaction, param)
             if buff then                
                 actionStateManager:setMobBuff(target, buff.id, false)
 
-                writeDebug('%s\'s %s effect was removed by %s':format(
-                    text_mob(target.name, Colors.debug),
-                    text_spell(buff.name, Colors.debug),
-                    text_mob(actor and actor.name or '???', Colors.debug)
+                writeVerbose('%s\'s %s effect was removed by %s':format(
+                    text_mob(target.name, Colors.verbose),
+                    text_spell(buff.name, Colors.verbose),
+                    text_mob(actor and actor.name or '???', Colors.verbose)
                 ))
             end
         end
     else
         -- R1, P0: Resisted. No-op, as the buff is still present.
 
-        writeDebug('%s resisted %s\'s %s!':format(
-            text_mob(target.name, Colors.debug),
-            text_mob(actor and actor.name or '???', Colors.debug),
-            text_spell(action.name, Colors.debug)
+        writeVerbose('%s resisted %s\'s %s!':format(
+            text_mob(target.name, Colors.verbose),
+            text_mob(actor and actor.name or '???', Colors.verbose),
+            text_spell(action.name, Colors.verbose)
         ))
     end
 end
@@ -471,10 +471,10 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
                         actor
                     )
 
-                    writeDebug('%s\'s %s on %s had no effect!':format(
-                        text_mob(actor.name, Colors.debug),
-                        text_spell(action.name, Colors.debug),
-                        text_mob(target.name, Colors.debug)
+                    writeVerbose('%s\'s %s on %s had no effect!':format(
+                        text_mob(actor.name, Colors.verbose),
+                        text_spell(action.name, Colors.verbose),
+                        text_mob(target.name, Colors.verbose)
                     ))
                 end
             end
@@ -488,10 +488,10 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
             if buff then
                 actionStateManager:setMobBuff(target, buff.id, false)
 
-                writeDebug('%s resisted %s\'s %s!':format(
-                    text_mob(target.name, Colors.debug),
-                    text_mob(actor.name, Colors.debug),
-                    text_spell(action.name, Colors.debug)
+                writeVerbose('%s resisted %s\'s %s!':format(
+                    text_mob(target.name, Colors.verbose),
+                    text_mob(actor.name, Colors.verbose),
+                    text_spell(action.name, Colors.verbose)
                 ))
             end
         end
@@ -508,11 +508,11 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
             actor
         )
 
-        writeDebug('%s received %s from %s\'s %s!':format(
-            text_mob(target.name, Colors.debug),
-            text_spell(buff.name, Colors.debug),
-            text_mob(actor.name, Colors.debug),
-            text_spell(action.name, Colors.debug)
+        writeComment('%s received %s from %s\'s %s!':format(
+            text_mob(target.name, Colors.comment),
+            text_spell(buff.name, Colors.comment),
+            text_mob(actor.name, Colors.comment),
+            text_spell(action.name, Colors.comment)
         ))
     end
 end

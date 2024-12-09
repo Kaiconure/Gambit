@@ -1,0 +1,12 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasEffect('Phalanx') and canUseSpell('Phalanx II', 'Phalanx')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

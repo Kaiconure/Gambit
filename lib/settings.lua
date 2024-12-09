@@ -10,8 +10,8 @@ TargetStrategy = {
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
 
--- We will use the 'nearest' strategy if no other has been set.
-TargetStrategy.default = TargetStrategy.nearest
+-- We will use the 'leader' strategy if no other has been set
+TargetStrategy.default = TargetStrategy.leader
 
 --
 -- Ignore list fields:
@@ -57,6 +57,7 @@ local DefaultIgnoreList = {
 local DefaultNoRearList = {
     'Amaranth Barrier',
     'Bedrock Crag',
+    'Broadleaf Palm'
     'Gnarled Rampart',
     'Heliotrope Barrier',
     'Icy Palisade',
@@ -65,7 +66,7 @@ local DefaultNoRearList = {
 }
 
 local defaultSettings = {
-    maxDistance = 50,
+    maxDistance = 25,
     maxDistanceZ = 5,
     retargetDelay = 0.0,
     strategy = TargetStrategy.default,
@@ -73,17 +74,18 @@ local defaultSettings = {
     schemaVersion = 2,
     ignoreList = DefaultIgnoreList,
     noRearList = DefaultNoRearList,
-    maxChaseTime = nil
+    maxChaseTime = nil,
+    followCommandDistance = 1
 }
 
 ----------------------------------------------------------------------------------------
 -- Determine the settings file name for this player
 local function getSettingsFileName(playerName)
-    return string.format('.\\settings\\%s\\main.json', playerName)
+    return string.format('./settings/%s/main.json', playerName)
 end
 
 local function getActionsFileName(playerName, actionsName)
-    return string.format('.\\settings\\%s\\actions\\%s.json', playerName, actionsName)
+    return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
 end
 
 local function getActionsJobFileName(player)
@@ -148,12 +150,12 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
             -- Import any items that have an import reference and which aren't marked as disabled
             if type(action.import) == 'string' and not action.disabled then
                 -- First, try the user's actions/.libs folder
-                local fileName = './settings/%s/actions/.lib/%s.json':format(playerName, action.import)
+                local fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
                 local file = files.new(fileName)
 
                 -- If the import doesn't exist there, use the standard settings .lib folder
                 if not file:exists() then
-                    fileName = './settings/.lib/%s.json':format(action.import)
+                    fileName = './actions/lib/%s.json':format(action.import)
                     file = files.new(fileName)
                 end
 
@@ -289,7 +291,7 @@ end
 ----------------------------------------------------------------------------------------
 --
 local function loadDefaultActions(player, save)
-    local fileName = '.\\settings\\.defaults\\default-actions.json'
+    local fileName = './actions/defaults/default-actions.json'
     local defaults = loadActionsFromFile(player.name, fileName)
 
     if defaults and save then
@@ -377,6 +379,9 @@ function loadSettings(actionsName, settingsOnly)
     -- Must be a number greater than or equal to 1.
     tempSettings.maxDistanceZ = math.max(tempSettings.maxDistanceZ or 0, 1)
 
+    -- The default distance that the follow command will use if none is specified
+    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 1.0, 10.0)
+
     -- The maximum amount of time to wait (in seconds) before assuming an unengaged target
     -- is unreachable. This prevents you from getting into infinite wall-running ruts.
     tempSettings.maxChaseTime = tonumber(tempSettings.maxChaseTime)
@@ -455,7 +460,7 @@ function loadSettings(actionsName, settingsOnly)
         tempSettings.actionInfo.name = actionsName
 
         -- Save the post-processed actions
-        writeJsonToFile('.\\settings\\%s\\.output\\%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
+        writeJsonToFile('./settings/%s/.output/%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
 
         if actionsName and not defaultsLoaded then
             writeMessage('Successfully loaded %s actions: %s':format(

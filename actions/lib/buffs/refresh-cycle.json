@@ -1,0 +1,22 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": "Cycle the best available refresh over all configured targets by name."
+  },
+  "vars": {
+    "refresh_cycle": {
+      "targets": [],
+      "trust_mpp": 60
+    }
+  },
+  "actions": [
+    {
+      "when": "canUseSpell('Refresh II', 'Refresh') and partyByName(vars.refresh_cycle.targets) and not hasBuff(member, 'Refresh') and (member.is_player or member.mpp < vars.refresh_cycle.trust_mpp)",
+      "commands": [
+        "useSpell()",
+        "postpone(spellRecast(spell.name) + 1)"
+      ],
+      "frequency": 1
+    }
+  ]
+}
