@@ -110,7 +110,7 @@ local function sharesHalfspace(heading1, heading2)
 
     -- Determine if the headings are within half a circle of each other
     --return math.abs(heading1 - heading2) <= PI_OVER_TWO
-    
+
     return angularDistance(heading1, heading2) <= PI_OVER_TWO
 end
 
@@ -167,8 +167,8 @@ local function sm_movement_exp(self, job)
     local paused = false
     local continue = true
 
-    local MAX_SPEEDS        = 7     -- Max number of speeds to track
-    local MIN_AVERAGING     = 7     -- Minimum number of speeds for us to do the averaging check
+    local MAX_SPEEDS        = 10    -- Max number of speeds to track
+    local MIN_AVERAGING     = 10    -- Minimum number of speeds for us to do the averaging check
 
     local speeds = {}
     local nextSpeed = 1
@@ -222,6 +222,18 @@ local function sm_movement_exp(self, job)
             end
         end
 
+        -- Reset jittering if requested
+        if self.resettingJitter then
+            speeds = {}
+            nextSpeed = 1
+            iterationTime = nil
+            jittering = false
+            jitterUntil = 0
+
+            shouldJitter = false
+            self.resettingJitter = false
+        end
+
         -- Start jittering if necessary
         if shouldJitter then
             -- Reset speed averaging
@@ -243,21 +255,12 @@ local function sm_movement_exp(self, job)
         end
 
         if paused then
-            -- Calculate the heading difference since the last iteration
-            local hdgDelta = math.abs(normalizeAngle(hdg) - normalizeAngle(hdg2))
-
-            if 
-                d2 > 1.0
-            then
-                -- Unpause if we're put some distance between us and the target
+            if d2 > 1.0 then
+                -- Unpause if we've put some distance between us and the target
                 paused = false
-            elseif 
-                hdgDelta > HEADING_TOLERANCE
-            then
-                
             end
 
-            -- Stay paused but turn to face the target if it's moved but is still in range
+            -- Stay paused (potentially), but turn to face the target if it's moved further out
             windower.ffxi.turn(hdg2)
         end
         
@@ -607,6 +610,7 @@ function sm_coroutine(self)
 
         self.cancel = false
         self.current = nil
+        self.resettingJitter = false
 
         coroutine.sleep(0.25)
     end
@@ -696,6 +700,17 @@ end
 -- ======================================================================================
 -- Exposed interface
 -- ======================================================================================
+
+-------------------------------------------------------------------------------
+-- If there's a job running, this will cause its jitter tracker to reset.
+-- The result will be termination of any in-progress jitter, or a reset
+-- of any impending jitter operation.
+function smartMove:resetJitter()
+    -- TODO: Consider if we should have a pause/resume jitter operation?
+    if self.current then
+        self.resettingJitter = true
+    end
+end
 
 -------------------------------------------------------------------------------
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.

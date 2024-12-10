@@ -145,14 +145,14 @@ ActionPacket.open_listener(function (act)
                 local ability = resources.weapon_skills[id] or resources.monster_abilities[id]
 
                 if ability then
+                    setPartyWeaponSkill(actor, ability, target)
+
                     writeVerbose('%s: %s %s %s':format(
                         text_player(actor.name, Colors.verbose),
                         text_weapon_skill(ability.name, Colors.verbose),
                         CHAR_RIGHT_ARROW,
                         text_mob(target.name)
                     ))
-
-                    setPartyWeaponSkill(actor, ability, target)
                 end
             end
         end
@@ -171,8 +171,8 @@ ActionPacket.open_listener(function (act)
                     local name = skillchain
 
                     if name then
-                        writeVerbose('Skillchain detected: %s':format(text_weapon_skill(name)))
                         setSkillchain(name)
+                        writeVerbose('Skillchain detected: %s':format(text_weapon_skill(name)))
                     end
                 end
             end

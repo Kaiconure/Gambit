@@ -58,6 +58,12 @@ function sendActionCommand(
     -- Overall sleep time
     commandDuration = math.max(tonumber(commandDuration) or 0, 0)
 
+    -- If we're not pausing the follow, we'll at least stop the smart move component
+    -- from thinking we're stuck while performing this action
+    if not pauseFollow then
+        smartMove:resetJitter()
+    end
+
     local movementJob = pauseFollow and smartMove:cancelJob()
     if command and command ~= '' then
         writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
@@ -70,6 +76,9 @@ function sendActionCommand(
         -- Kick the movement job back on, if any
         if movementJob then
             smartMove:reschedule(movementJob)
+        elseif not pauseFollow then
+            -- We'll reset jitter again once the command is done
+            smartMove:resetJitter()
         end
     end
 
