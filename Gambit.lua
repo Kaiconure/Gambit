@@ -551,7 +551,7 @@ local _handle_actionChunk = function(id, data)
     local isDispel = false
 
     -- Certain buffs can be automatically removed if we see activity from the actor
-    if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_PLAYER) then
+    if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_TRUST) then
         actionStateManager:setMobBuff(actor, BUFF_SLEEP1, false)
         actionStateManager:setMobBuff(actor, BUFF_SLEEP2, false)
         actionStateManager:setMobBuff(actor, BUFF_PETRIFIED, false)
