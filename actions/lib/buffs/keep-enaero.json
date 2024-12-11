@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Enaero II') and canUse('Enaero II')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    },
+    {
+      "when": "not hasBuff('Enaero II', 'Enaero') and canUse('Enaero')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

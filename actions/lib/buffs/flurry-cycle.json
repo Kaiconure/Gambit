@@ -3,14 +3,14 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "haste_cycle": {
-      "spells": ["Haste II", "Haste"],
-      "targets": ["me"]
+    "flurry_cycle": {
+      "spells": ["Flurry II", "Flurry"],
+      "targets": []
     }
   },
   "actions": [
     {
-      "when": "partyByName(vars.haste_cycle.targets) and not hasBuff(member, 'Haste') and canUse(vars.haste_cycle.spells)",
+      "when": "partyByName(vars.flurry_cycle.targets) and not hasBuff(member, 'Flurry') and canUse(vars.flurry_cycle.spells)",
       "commands": [
         "use(member)",
         "postpone(spellRecast(spell.name) + 5)"

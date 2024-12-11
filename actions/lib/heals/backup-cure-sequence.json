@@ -1,0 +1,30 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "roles": {
+      "backup_healer": true
+    }
+  },
+  "actions": [
+    {
+      "when": "partyCount('hpp < 50') >= 3 and canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": "partyAny('hpp < 40') and canUse('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')",
+      "commands": ["use()"],
+      "frequency": 1
+    },
+    {
+      "when": "partyAny('hpp < 60') and canUse('Cure IV', 'Cure III', 'Cure II', 'Cure')",
+      "commands": ["use()"],
+      "frequency": 1
+    },
+    {
+      "import": "heals/remove-sleep"
+    }
+  ]
+}

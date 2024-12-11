@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Enblizzard II') and canUse('Enblizzard II')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    },
+    {
+      "when": "not hasBuff('Enblizzard II', 'Enblizzard') and canUse('Enblizzard')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

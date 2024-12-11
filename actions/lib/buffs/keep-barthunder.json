@@ -1,0 +1,12 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Barthunder') and canUse('Barthundra', 'Barthunder')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

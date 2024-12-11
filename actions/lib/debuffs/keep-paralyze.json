@@ -4,12 +4,12 @@
   },
   "vars": {
     "keep_paralyze": {
-      "with": ["Paralyze II", "Paralyze"]
+      "spells": ["Paralyze II", "Paralyze"]
     }
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_paralyze.with) and not hasEffectOf(bt, 'Paralyze')",
+      "when": "bt and canUse(vars.keep_paralyze.spells) and not hasEffectOf(bt, 'Paralyze')",
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

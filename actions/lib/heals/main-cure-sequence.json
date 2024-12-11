@@ -1,0 +1,26 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "roles": {
+      "main_healer": true,
+      "backup_healer": false
+    }
+  },
+  "actions": [
+    {
+      "import": "heals/backup-cure-sequence"
+    },
+    {
+      "when": "partyCount('hpp <= 70') >= 3 and canUse('Curaga III', 'Curaga II', 'Curaga')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": "partyAny('hpp <= 75') and canUse('Cure III', 'Cure II', 'Cure')",
+      "commands": ["use()"],
+      "frequency": 1
+    }
+  ]
+}

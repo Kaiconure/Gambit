@@ -3,13 +3,13 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_frazzle": {
-      "spells": ["Frazzle III", "Frazzle II", "Frazzle"]
+    "keep_blind": {
+      "spells": ["Blind II", "Blind"]
     }
   },
   "actions": [
     {
-      "when": "bt canUse(vars.keep_frazzle.spells) and not hasEffectOf(bt, 'Frazzle')",
+      "when": "bt and canUse(vars.keep_blind.spells) and not hasEffectOf(bt, 'Blind')",
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

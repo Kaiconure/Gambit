@@ -1,0 +1,12 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasEffect('Stoneskin') and canUseSpell('Stoneskin')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}
