@@ -9,7 +9,10 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_distract.spells) and not hasEffectOf(bt, 'Distract')",
+      "when": [
+        "bt and bt.distance < 20",
+        "canUse(vars.keep_distract.spells) and not hasEffectOf(bt, 'Distract')"
+      ],
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

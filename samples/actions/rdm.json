@@ -42,7 +42,7 @@
         "bt.distance > 4 and bt.distance < 20",
         "canUse('Silence', 'Dia II', 'Dia')"
       ],
-      "commmands": ["facingEnemy() or faceEnemy()", "use(bt)"],
+      "commands": ["facingEnemy() or faceEnemy()", "use(bt)"],
       "frequency": 5
     },
     {

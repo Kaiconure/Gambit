@@ -310,24 +310,27 @@ local function compileActions(actionType, rawActions)
                         action.frequency = math.max(tonumber(action.frequency or 0), 0)
                     end
                     action.availableAt = 0
-                    action.delay = tonumber(action.delay or 0)
                     action.enumerators = { }
                     
                     if type(action.scope) == 'string' then
                         action.scope = string.lower(action.scope)
                     end
 
-                    -- Force a non-zero minimum delay for certain action type states. Delay is how long
-                    -- we must be in a given state before actions can be executed.
+                    -- Certain action types will have a built in default delay
                     if actionType == 'battle' then
-                        -- Battle actions will always wait at least 2 seconds before firing. This ensures
-                        -- we have a chance to take a swing at the enemy first (get trusts engaged, etc).
-                        action.delay = math.max(action.delay, 2)
-                    elseif actionType == 'pull' then
-                        -- Pull actions will always wait at least 1 second before firing. This ensures 
-                        -- that idle actions have a chance to run first.
-                        action.delay = math.max(action.delay, 1)
+                        -- Battle actions will default to a delay of 2 unless otherwise specified
+                        if tonumber(action.delay) == nil then
+                            action.delay = 2
+                        end
+                    elseif actionType ~= 'idle' then
+                        -- Other non-idle actions will default to a delay of 1 unless otherwise specified
+                        if tonumber(action.delay) == nil then
+                            action.delay = 1
+                        end
                     end
+
+                    -- Clamp the delay to (0, inf)
+                    action.delay = math.max(tonumber(action.delay) or 0, 0)
                     
                     local hasErrors = type(action._whenFn) ~= 'function'
                     if not hasErrors then
@@ -446,6 +449,7 @@ local function getNextBattleAction(context)
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.effect                  = nil   -- Current buff/effect
                 context.member                  = nil   -- The result of a targeting enumerator
+                context.mob                     = nil   -- The result of a mob search iterator
                 context.result                  = nil   -- The result of the latest iterator operation
                 context.results                 = { }   -- The results of all current iterator operations
                 context.enemy_ability           = nil   -- The current mob ability
@@ -652,7 +656,8 @@ local function doNextActionCycle(time, player)
         -- Executed when:
         --  1. We have a target that's not yet engaged AND
         --  2. There are no idle actions remaining to run.
-        if not actionsExecuted then
+        --  3. We're not in a forced/timed idle state.
+        if not actionsExecuted and not isTimedIdling then
             if hasPullableMob and not isBattle then
                 local command = ''
                 local commandDelay = 0

@@ -1,4 +1,4 @@
-__version = '0.95.3-beta3'
+__version = '0.95.3-beta5'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -29,6 +29,7 @@ meta.dispel = require('./meta/dispel') or {}
 meta.monster_abilities = require('./meta/monster_abilities') or {}
 meta.trusts = require('./meta/trusts')
 meta.jobs_with_mp = require('./meta/jobs_with_mp')
+meta.buffs = require('./meta/buffs')
 
 require('./lib/logging')
 require('./lib/helpers')
@@ -554,6 +555,7 @@ local _handle_actionChunk = function(id, data)
     if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_TRUST) then
         actionStateManager:setMobBuff(actor, BUFF_SLEEP1, false)
         actionStateManager:setMobBuff(actor, BUFF_SLEEP2, false)
+        actionStateManager:setMobBuff(actor, BUFF_TERROR, false)
         actionStateManager:setMobBuff(actor, BUFF_PETRIFIED, false)
     end
 

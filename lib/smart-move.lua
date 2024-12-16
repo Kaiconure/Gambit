@@ -216,7 +216,7 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                if avg < 0.25 and d2 > 3 then
+                if avg < 0.33 and d2 > 3 then
                     shouldJitter = true
                 end
             end

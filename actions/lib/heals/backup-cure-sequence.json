@@ -9,17 +9,13 @@
   },
   "actions": [
     {
-      "when": "partyCount('hpp < 50') >= 3 and canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
-      "commands": "use(me)",
-      "frequency": 10
+      "import": "heals/emergency-cure-sequence"
     },
     {
-      "when": "partyAny('hpp < 40') and canUse('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')",
-      "commands": ["use()"],
-      "frequency": 1
-    },
-    {
-      "when": "partyAny('hpp < 60') and canUse('Cure IV', 'Cure III', 'Cure II', 'Cure')",
+      "when": [
+        "canUse('Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 60')",
+        "member.distance <= constants.spell_distance"
+      ],
       "commands": ["use()"],
       "frequency": 1
     },

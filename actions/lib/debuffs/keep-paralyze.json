@@ -9,7 +9,10 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_paralyze.spells) and not hasEffectOf(bt, 'Paralyze')",
+      "when": [
+        "bt and bt.distance < 20",
+        "canUse(vars.keep_paralyze.spells) and not hasEffectOf(bt, 'Paralyze')"
+      ],
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

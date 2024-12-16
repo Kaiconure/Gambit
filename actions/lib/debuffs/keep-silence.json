@@ -9,7 +9,10 @@
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_silence.spells) and not hasEffectOf(bt, 'Silence')",
+      "when": [
+        "bt and bt.distance < 20",
+        "canUse(vars.keep_silence.spells) and not hasEffectOf(bt, 'Silence')"
+      ],
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

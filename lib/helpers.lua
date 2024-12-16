@@ -1,23 +1,40 @@
+-------------------------------------------------------------------------------
+-- Known spawn types
 SPAWN_TYPE_PLAYER   = 13
 SPAWN_TYPE_TRUST    = 14
 SPAWN_TYPE_MOB      = 16
 
+-------------------------------------------------------------------------------
+-- Known item slots
 ITEM_SLOTS_EARRING  = 6144
 ITEM_SLOTS_RING     = 24576
 
+-------------------------------------------------------------------------------
+-- Known item types
 ITEM_TYPE_FOOD      = 7
 
+-------------------------------------------------------------------------------
+-- Known buffs
 BUFF_SLEEP1         = 2
 BUFF_SLEEP2         = 19
+BUFF_SILENCE        = 6
 BUFF_PETRIFIED      = 7
+BUFF_STUN           = 10
+BUFF_AMNESIA        = 16
+BUFF_TERROR         = 28
+BUFF_SABER_DANCE    = 410
+BUFF_FAN_DANCE      = 411
 BUFF_FOOD           = 251
 
-
+-------------------------------------------------------------------------------
+-- Known statuses
 STATUS_IDLE           = 0
 STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
 STATUS_RESTING        = 33
 
+-------------------------------------------------------------------------------
+-- Known packet id's
 PACKET_TARGET_LOCK    = 0x058
 
 -- Math helper to get the sign indicator of a given number. Returns -1 if negative, 0 if 0, and +1 if positive

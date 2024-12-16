@@ -1,4 +1,4 @@
-MAX_SKILLCHAIN_TIME     = 5     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_SKILLCHAIN_TIME     = 6     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
 MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
@@ -103,11 +103,11 @@ state_manager.setActionType = function (self, newType)
 
         -- Only reset time if we're transitioning between idle/pull and battle
         if mode ~= newMode then
-            writeDebug(string.format(
+            writeComment(string.format(
                 'Transitioning from %s to %s after %s',
-                text_red(mode, Colors.debug),
-                text_red(newMode, Colors.debug),
-                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.debug)
+                text_red(mode, Colors.comment),
+                text_red(newMode, Colors.comment),
+                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.comment)
             ))
 
             -- Sync up the latest mob state on mode change

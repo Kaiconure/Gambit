@@ -3,15 +3,15 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_slow": {
-      "spells": ["Slow II", "Slow"]
+    "keep_addle": {
+      "spells": ["Addle II", "Addle"]
     }
   },
   "actions": [
     {
       "when": [
         "bt and bt.distance < 20",
-        "canUse(vars.keep_slow.spells) and not hasEffectOf(bt, 'Slow')"
+        "canUse(vars.keep_addle.spells) and not hasEffectOf(bt, 'Addle')"
       ],
       "commands": "use(bt)",
       "frequency": 5,

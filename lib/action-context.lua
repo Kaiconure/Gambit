@@ -42,11 +42,31 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-function context_any(search, ...)
+function __context_compare(a, b) return a == b end
+function __context_compare_strings(a, b) return string.lower(a) == string.lower(tostring(b or '')) end
+function __context_compare_strings_fast(lower_a, b) return lower_a == string.lower(tostring(b or '')) end
+
+local context_constants = {
+    ra_distance = 25,
+    spell_distance = 20,
+    
+    provoke_distance = 15,
+    
+    returnfaith_distance = 6,
+    returntrust_distance = 6
+}
+
+local function context_any(search, ...)
+    local cmp = __context_compare
+    if type(search) == 'string' then
+        search = string.lower(search)
+        cmp = __context_compare_strings_fast
+    end
+
     local _set = varargs({...})
     if type(_set) == 'table' then
         for i, v in ipairs(_set) do
-            if search == v then
+            if cmp(search, v) then
                 return true
             end
         end
@@ -79,7 +99,7 @@ end
 
 -----------------------------------------------------------------------------------------
 -- Converts a condition to a boolean (truthy to true, falsey to false)
-function context_boolean(condition)
+local function context_boolean(condition)
     return context_iif(condition, true, false)
 end
 
@@ -262,13 +282,22 @@ end
 local function createMemberNamesExpression(context, names)
     local expression = ''
 
-    if type(names) == 'table' and #names == 0 then
+    if type(names) ~= 'table' or #names == 0 then
         expression = 'true'
     else
+        local first = true
         for i, name in ipairs(names) do
-            name = string.lower(name)
-            expression = expression .. (i == 1 and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
+            if type(name) == 'string' then
+                name = string.lower(name)
+                expression = expression .. (first and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
+                first = false
+            end
         end
+    end
+
+    -- If it somehow wasn't set at all, we'll just never evaluate to true
+    if expression == '' then
+        expression = 'false'
     end
 
     return expression
@@ -524,13 +553,19 @@ local function initContextTargetSymbol(context, symbol)
     symbol.id = symbol.mob.id
     symbol.index = symbol.mob.index
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
-    symbol.is_trust = symbol.mob.spawn_type == SPAWN_TYPE_TRUST
-    symbol.is_player = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER
+    symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
+    symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
     symbol.valid_target = symbol.mob.valid_target
     symbol.spawn_type = symbol.mob.spawn_type
+    symbol.status = symbol.mob.status
+
+    if symbol.status == STATUS_RESTING then symbol.is_resting = true end
+    if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
+    if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
+    if symbol.status == STATUS_IDLE then symbol.is_idle = true end
 
     -- Trusts
     if symbol.is_trust then
@@ -826,7 +861,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         --  - It doesn't have a job requirement -OR- the job requirement is met
                         --
                         if 
-                            not hasBuff('Sleep') and
+                            not hasBuff(context.player, 'Sleep') and
                             (item.type ~= ITEM_TYPE_FOOD or not hasBuff(context.player, 'Food')) and
                             item.cast_time ~= nil and                            
                             (item.level == nil or context.player.main_job_level >= item.level) and
@@ -1493,6 +1528,62 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
+    context.findMob = function(identifier, distance, withAggro)
+        if distance == nil then distance = 50 end
+
+        if 
+            type(distance) == 'number' and
+            distance > 0 and
+            (type(identifier) == 'number' or type(identifier) == 'string')
+        then
+            local mobs = windower.ffxi.get_mob_array()
+            local distanceSquared = distance * distance
+            local isIndex = type(identifier) == 'number'
+            local isName = not isIndex
+            local nearest = nil
+
+            if isName then identifier = string.lower(identifier) end
+
+            for key, mob in pairs(mobs) do
+                if
+                    mob.spawn_type == SPAWN_TYPE_MOB and
+                    mob.valid_target and
+                    mob.hpp > 0 and
+                    mob.distance <= distanceSquared
+                then
+                    if
+                        (isIndex and identifier == mob.index) or
+                        (isName and identifier == string.lower(mob.name))
+                    then
+                        if
+                            (not withAggro or mob.status == STATUS_ENGAGED) and
+                            (nearest == nil or nearest.distance > mob.distance)
+                        then
+                            nearest = mob
+                        end
+                    end
+                end
+            end
+
+            if nearest then
+                -- Store actual distance
+                nearest.distance = math.sqrt(distance)
+
+                -- Store any managed buffs
+                nearest.buffs = actionStateManager:getBuffsForMob(nearest.id)
+
+                writeDebug('Nearest mob match: %s (%s) (distance: %s)':format(
+                    text_mob(nearest.name, Colors.debug),
+                    text_number('%03X':format(nearest.index), Colors.debug),
+                    text_number('%.1f':format(nearest.distance), Colors.debug)
+                ))
+
+                context.mob = nearest
+                return nearest
+            end
+        end
+    end
+
     --------------------------------------------------------------------------------------
     -- Returns the number of mobs within [distance] of you
     context.mobsInRange = function (distance, withAggro)
@@ -1707,6 +1798,40 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.partyHasEffect = context.partyHasBuff
 
+    context.hasBuff2 = function(target, ...)
+        local names = varargs({...})
+        local strict = target == 'use-strict' or names[1] == 'use-strict'
+
+        -- If the target is a string that exists in the context, we'll use that
+        if type(target) == 'string' and context[target] and context[target].buffs then
+            target = context[target]
+        end
+        
+        -- If the target is not a table at this point, then we'll use ourself
+        if type(target) ~= 'table' then
+
+            -- If the target is a string, it means no target was specified and the first param was 
+            -- a buff. Let's add it to the list of buff names we're searching through.
+            if type(target) == 'string' then
+                table.insert(names, 1, target)
+            end
+
+            -- Promote the target to ourself
+            target = context.me
+        end
+
+        for i = 1, #names do
+            local name = names[i]
+            local buff = hasBuffInArray(target.buffs, name, strict)
+            if buff then
+                context.effect = buff
+                if target.spawn_type ~= SPAWN_TYPE_MOB then
+                    context.member = target
+                end
+                return buff
+            end
+        end
+    end
     context.hasBuff = function(target, ...)
         local names = varargs({...})
 
@@ -1740,8 +1865,33 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
+    context.hasEffect = context.hasBuff
+
     --------------------------------------------------------------------------------------
     -- Tries to use the specified action to remove an effect on the target
+    context.removeEffect2 = function(target, effect, with)
+        target = target or context.member
+        
+        if type(target) == 'string' then target = context[target] end
+        if type(target) ~= 'table' then return end
+
+        effect = effect or context.effect
+        with = with or context.spell or context.ability or context.item
+
+        effect = hasBuffInArray(target.buffs, effect)
+        if effect and with then
+            if context.canUse(with) then
+                context.use(target)
+                if target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST then
+                    if context.action.complete then
+                        actionStateManager:setMobBuff(target, effect.id, false)
+                    end
+                end
+            end
+        end
+
+        context.postpone(2)
+    end
     context.removeEffect = function(target, effect, with)
         effect = effect or context.effect
         with = with or context.spell or context.ability or context.item
@@ -1761,45 +1911,51 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.postpone(2)
     end
 
-    -- context.memberHasBuff = function(member, ...)
-    --     member = member or context.member
-    --     if type(member) == 'string' then 
-    --         member = context[member] 
-    --     end
-
-    --     if type(member) == 'table' and type(member.buffs) == 'table' then
-            
-    --         local names = varargs({...})
-    --         for i, name in ipairs(names) do
-    --             local buff = findBuff(name)
-    --             if buff and arrayIndexOf(member.buffs, buff.id) then
-    --                 context.effect = buff
-    --                 return true
-    --             end
-    --         end
-    --     end
-    -- end
-
-    --------------------------------------------------------------------------------------
-    -- Returns true if the specified buff is active. If multiple buffs are specified,
-    -- the result will be true if -ANY- of them are active.
-    context.hasBuffOrig = function (...)
-        local names = varargs({...})
-        
-        local player = windower.ffxi.get_player()
-        for i, name in ipairs(names) do
-            local buff = hasBuff(player, name)
-            if buff then
-                context.effect = buff
-                return i
-            end
-        end
-    end
-    context.hasEffect = context.hasBuff
-
     --------------------------------------------------------------------------------------
     -- Determine if the target has the effect triggerd by the specified spell or ability.
     -- If no target is specified, it's assumed to be the player.
+    context.hasEffectOf2 = function(target, ...)
+        local names = varargs({...})
+        local strict = target == 'use-strict' or names[1] == 'use-strict'
+
+        -- If the target is a string that exists in the context, we'll use that
+        if type(target) == 'string' and context[target] and context[target].buffs then
+            target = context[target]
+        end
+        
+        -- If the target is not a table at this point, then we'll use ourself
+        if type(target) ~= 'table' then
+
+            -- If the target is a string, it means no target was specified and the first param was 
+            -- a buff. Let's add it to the list of buff names we're searching through.
+            if type(target) == 'string' then
+                table.insert(names, 1, target)
+            end
+
+            -- Promote the target to ourself
+            target = context.me
+        end
+
+        for i = 1, #names do
+            local spell = findSpell(name)
+            local ability = findJobAbility(name)
+            local res = spell or ability
+            local buffId = res and res.status
+            if buffId then
+                -- Set the effect, as well as the spell or ability that causes it, to the context.
+                -- We do it outside the check to ensure that the latest hit is saved to the context
+                -- for use in "not hasEffectOf" scenarios.
+                context.effect = buff
+                context.spell = spell
+                context.ability = ability
+
+                local buff = hasBuffInArray(target.buffs, buffId, strict)
+                if buff then                    
+                    return buff
+                end
+            end
+        end
+    end
     context.hasEffectOf = function(target, ...)
 
         local names = varargs({...})
@@ -1875,6 +2031,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             (names[1] == nil or arrayIndexOfStrI(names, sc.name))
         then
             context.skillchain_trigger_time = sc.time
+
+            -- context.log('Party skillchain: %s':format(
+            --     text_weapon_skill(sc.name)
+            -- ))
 
             -- Commenting out the below. Why *not* let multple reactions occur to the same SC?
 
@@ -1958,6 +2118,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     -- Don't let this action trigger again for the same weapon skill
                     local age = context.time - party_weapon_skill.time
                     context.delay(MAX_WEAPON_SKILL_TIME - age)
+
+                    -- context.log('Party weapon skill: %s (delaying %s)':format(
+                    --     text_weapon_skill(party_weapon_skill.name, Colors.conrsilk),
+                    --     text_number('%.1fs':format(MAX_WEAPON_SKILL_TIME - age))
+                    -- ))
 
                     return party_weapon_skill
                 end
@@ -2203,6 +2368,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local command = table.concat(commands, ';')
         sendActionCommand(command, context, 10)
     end
+
+    --------------------------------------------------------------------------------------
+    -- "Static" context properties
+    context.constants = context_constants
+    context.const = context.constants
 
     --------------------------------------------------------------------------------------
     -- "Static" context functions

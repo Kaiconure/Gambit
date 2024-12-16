@@ -7,7 +7,8 @@
     "ensure_trusts": {
       "spells": [],
       "recall_on_mpp": 20,
-      "recall_on_hpp": 40
+      "recall_on_hpp": 40,
+      "mob_safety_range": 10
     }
   },
   "actions": [
@@ -22,7 +23,7 @@
       "when": [
         "me.is_party_leader",
         "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
-        "mobsInRange(10) == 0",
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
         "member.distance < 6 or not vars.ensure_trusts.stationary"
       ],
       "commands": [
@@ -39,7 +40,7 @@
       "when": [
         "me.is_party_leader",
         "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name))",
-        "mobsInRange(10) == 0",
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
         "member.distance < 6 or not vars.ensure_trusts.stationary"
       ],
       "commands": [

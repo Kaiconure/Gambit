@@ -9,7 +9,10 @@
   },
   "actions": [
     {
-      "when": "bt canUse(vars.keep_frazzle.spells) and not hasEffectOf(bt, 'Frazzle')",
+      "when": [
+        "bt and bt.distance < 20",
+        "canUse(vars.keep_frazzle.spells) and not hasEffectOf(bt, 'Frazzle')"
+      ],
       "commands": "use(bt)",
       "frequency": 5,
       "scope": "battle"

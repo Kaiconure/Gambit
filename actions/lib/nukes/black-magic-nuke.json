@@ -5,6 +5,7 @@
   "actions": [
     {
       "when": [
+        "bt and bt.distance < 20",
         "me.mpp >= vars.black_magic_nuke.min_mpp",
         "canUseSpell(randomize(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, vars.black_magic_nuke.spells)))"
       ],
