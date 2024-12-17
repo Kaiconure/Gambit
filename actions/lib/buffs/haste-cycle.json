@@ -10,7 +10,7 @@
   },
   "actions": [
     {
-      "when": "partyByName(vars.haste_cycle.targets) and not hasBuff(member, 'Haste') and canUse(vars.haste_cycle.spells)",
+      "when": "partyByName(vars.haste_cycle.targets) and canUse(vars.haste_cycle.spells) and not hasEffectOf(member, vars.haste_cycle.spells)",
       "commands": [
         "use(member)",
         "postpone(spellRecast(spell.name) + 5)"

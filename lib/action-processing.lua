@@ -470,10 +470,11 @@ local function getNextBattleAction(context)
                     -- Save the scope that was present when this action was triggered.
                     action.lastBattleScope = context.battleScope
 
-                    writeDebug('Condition met %s %s':format(
+                    writeDebug('Condition met %s %s [scope: %s]':format(
                         text_action(context.actionType .. '.' .. i, Colors.debug),
                         --action.when
-                        text_green(action.when, Colors.debug)
+                        text_green(action.when, Colors.debug),
+                        text_gray(tostring(action.lastBattleScope), Colors.debug)
                     ))
 
                     --print(action.when)
@@ -568,7 +569,7 @@ local function doNextActionCycle(time, player)
     local mob = globals.target:mob()
     local mobTime = globals.target:runtime()
     local mobDistance = mob and math.sqrt(mob.distance) or 0
-    local battleScope = globals.target:scopeId()
+    local battleScope = actionStateManager.actionTransitionCounter --globals.target:scopeId()
     local actionsExecuted = false
     local restingActionsExecuted = false
     local idleActionsExecuted = false
@@ -589,7 +590,7 @@ local function doNextActionCycle(time, player)
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
-        local context = ActionContext.create('resting', time, mob, mobTime)
+        local context = ActionContext.create('resting', time, mob, mobTime, battleScope)
         local action = processNextAction(context);
         return
     end
@@ -597,7 +598,7 @@ local function doNextActionCycle(time, player)
     -- Death: Execute any actions, and bail
     local isDead = player.vitals.hp <= 0
     if isDead then
-        local context = ActionContext.create('dead', time, nil, mobTime)
+        local context = ActionContext.create('dead', time, nil, mobTime, battleScope)
         local action = processNextAction(context);
         return
     end
@@ -606,7 +607,7 @@ local function doNextActionCycle(time, player)
     ----------------------------------------------------------------------------------------------------
     -- Executed when we are disengaged and no mobs are aggroing us
     if isIdle then        
-        local context = ActionContext.create('idle', time, mob, mobTime)
+        local context = ActionContext.create('idle', time, mob, mobTime, battleScope)
 
         -- We'll ensure that we're facing the target mob at this point
         -- if mob and not context.facingEnemy() then

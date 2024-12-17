@@ -17,10 +17,10 @@
   },
   "actions": [
     {
-      "when": "canUseSpell(vars.regen_cycle.spells) and partyByName(vars.regen_cycle.targets) and not hasBuff(member, 'Regen')",
+      "when": "canUseSpell(vars.regen_cycle.spells) and partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, vars.regen_cycle.spells)",
       "commands": [
-        "useSpell()",
-        "postpone(spellRecast(spell.name) + 1)"
+        "useSpell(member)",
+        "postpone(spellRecast(spell.name) + 10)"
       ],
       "frequency": 1
     }

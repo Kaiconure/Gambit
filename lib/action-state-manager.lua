@@ -15,6 +15,7 @@ local state_manager = {
     actionWakeTime = 0,
 
     actionType = nil,
+    actionTransitionCounter = 0,
     actions = { },
     actionTypeStartTime = os.clock(),
 
@@ -102,11 +103,14 @@ state_manager.setActionType = function (self, newType)
             or (isNewTypeBattle and 'battle')
 
         -- Only reset time if we're transitioning between idle/pull and battle
+        --if mode ~= newMode then
         if mode ~= newMode then
             writeComment(string.format(
                 'Transitioning from %s to %s after %s',
                 text_red(mode, Colors.comment),
                 text_red(newMode, Colors.comment),
+                -- text_red(self.actionType, Colors.comment),
+                -- text_red(newType, Colors.comment),
                 pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.comment)
             ))
 
@@ -119,6 +123,8 @@ state_manager.setActionType = function (self, newType)
             -- Reset some mob state tracking on state change
             self.skillchain = { time = 0 }
             self.mobAbilities = { }
+
+            self.actionTransitionCounter = self.actionTransitionCounter + 1
         end
 
         self.actionType = newType

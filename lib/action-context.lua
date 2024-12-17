@@ -1450,26 +1450,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
-    -- context.follow = function (distance)
-    --     local party = windower.ffxi.get_party()
-    --     local leaderId = tonumber(party.party1_leader) or 0
-
-    --     if 
-    --         leaderId <= 0 or
-    --         leaderId == context.me.id
-    --     then
-    --         return false
-    --     end
-
-    --     local mob = windower.ffxi.get_mob_by_id(leaderId)
-    --     if mob == nil then
-    --         return false
-    --     end
-
-    --     distance = math.clamp(tonumber(distance) or 5, 0, 20)
-    --     return context.follow(mob, distance)
-    -- end
-
     --------------------------------------------------------------------------------------
     -- 
     context.follow = function (target, distance)
@@ -1497,6 +1477,79 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if jobInfo == nil or jobInfo.follow_index ~= target.index then
             return smartMove:followIndex(target.index, distance or 1.0)
         end
+    end
+
+    context.distanceTo = function(x, y)
+        if type(x) ~= 'number' or type(y) ~= 'number' then
+            return
+        end
+
+        local me = windower.ffxi.get_mob_by_target('me')
+
+        local v = V({x, y})
+        local vme = V({me.x, me.y})
+
+        return v:subtract(vme):length()
+    end
+
+    context.checkPosition = function(x, y)
+        local d = context.distanceTo(x, y)
+        if type(d) == 'number' then return d < 1 end
+    end
+
+    context.move = function(x, y, duration)
+        local me = windower.ffxi.get_mob_by_target('me')
+
+        if type(x) == 'number' and type(y) ~= 'number' then y = me.y end
+        if type(y) == 'number' and type(x) ~= 'number' then x = me.x end
+
+        if type(x) ~= 'number' or type(y) ~= 'number' then
+            return
+        end
+
+        local jobId = smartMove:moveTo(x, y)
+        if jobId then
+            local start = os.time()
+            local immediate = (tonumber(duration) or 1) <= 0
+            duration = math.max(tonumber(duration) or 10, 3)
+
+            if immediate then
+                return true
+            end
+
+            while true do
+                coroutine.sleep(1.0)
+
+                local now = os.time()
+                local job = smartMove:getJobInfo()
+
+                -- If the job is still running and our duration has ellapsed, cancel it
+                if 
+                    job and
+                    job.jobId == jobId and
+                    (now - start) >= duration 
+                then
+                    smartMove:cancelJob(jobId)
+                    job = nil
+                end
+
+                -- If there's no job, or the job doesn't match ours, we're done
+                if 
+                    job == nil or
+                    job.jobId ~= jobId
+                then
+                    if context.checkPosition(x, y) then
+                        context.log('Movement operation completed successfully.')
+                        return true
+                    end
+
+                    context.log('The movement operation was not completed successfully.')
+                    return
+                end
+            end
+        end
+
+        context.log('The movement operation could not be scheduled.')
     end
 
     --------------------------------------------------------------------------------------
@@ -1798,7 +1851,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.partyHasEffect = context.partyHasBuff
 
-    context.hasBuff2 = function(target, ...)
+    context.hasBuff = function(target, ...)
         local names = varargs({...})
         local strict = target == 'use-strict' or names[1] == 'use-strict'
 
@@ -1832,44 +1885,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
     end
-    context.hasBuff = function(target, ...)
-        local names = varargs({...})
-
-        -- If the target is a string that exists in the context, we'll use that
-        if type(target) == 'string' and context[target] and context[target].buffs then
-            target = context[target]
-        end
-        
-        -- If the target is not a table at this point, then we'll use ourself
-        if type(target) ~= 'table' then
-
-            -- If the target is a string, it means no target was specified and the first param was 
-            -- a buff. Let's add it to the list of buff names we're searching through.
-            if type(target) == 'string' then
-                table.insert(names, 1, target)
-            end
-
-            -- Promote the target to ourself
-            target = context.me
-        end
-
-        for i, name in ipairs(names) do
-            local buff = findBuff(name)
-            if buff and arrayIndexOf(target.buffs, buff.id) then
-                context.effect = buff
-                if target.spawn_type ~= SPAWN_TYPE_MOB then
-                    context.member = target
-                end
-                return true
-            end
-        end
-    end
-
     context.hasEffect = context.hasBuff
 
     --------------------------------------------------------------------------------------
     -- Tries to use the specified action to remove an effect on the target
-    context.removeEffect2 = function(target, effect, with)
+    context.removeEffect = function(target, effect, with)
         target = target or context.member
         
         if type(target) == 'string' then target = context[target] end
@@ -1892,29 +1912,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         context.postpone(2)
     end
-    context.removeEffect = function(target, effect, with)
-        effect = effect or context.effect
-        with = with or context.spell or context.ability or context.item
-
-        effect = findBuff(effect)
-        if type(target) == 'table' and effect and with then
-            if context.canUse(with) then
-                context.use(target)
-                if target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST then
-                    if context.action.complete then
-                        actionStateManager:setMobBuff(target, effect.id, false)
-                    end
-                end
-            end
-        end
-
-        context.postpone(2)
-    end
 
     --------------------------------------------------------------------------------------
     -- Determine if the target has the effect triggerd by the specified spell or ability.
     -- If no target is specified, it's assumed to be the player.
-    context.hasEffectOf2 = function(target, ...)
+    context.hasEffectOf = function(target, ...)
         local names = varargs({...})
         local strict = target == 'use-strict' or names[1] == 'use-strict'
 
@@ -1937,63 +1939,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         for i = 1, #names do
+            local name = names[i]
+
             local spell = findSpell(name)
             local ability = findJobAbility(name)
+
             local res = spell or ability
             local buffId = res and res.status
-            if buffId then
-                -- Set the effect, as well as the spell or ability that causes it, to the context.
-                -- We do it outside the check to ensure that the latest hit is saved to the context
-                -- for use in "not hasEffectOf" scenarios.
-                context.effect = buff
-                context.spell = spell
-                context.ability = ability
 
+            if buffId then
                 local buff = hasBuffInArray(target.buffs, buffId, strict)
-                if buff then                    
+                if buff then
+                    context.effect = buff    
                     return buff
-                end
-            end
-        end
-    end
-    context.hasEffectOf = function(target, ...)
-
-        local names = varargs({...})
-
-        -- If the target is a string that exists in the context, we'll use that
-        if type(target) == 'string' and context[target] and context[target].buffs then
-            target = context[target]
-        end
-        
-        -- If the target is not a table at this point, then we'll use ourself
-        if type(target) ~= 'table' then
-
-            -- If the target is a string, it means no target was specified and the first param was 
-            -- a buff. Let's add it to the list of buff names we're searching through.
-            if type(target) == 'string' then
-                table.insert(names, 1, target)
-            end
-
-            -- Promote the target to ourself
-            target = context.me
-        end
-
-        for i, name in ipairs(names) do
-            local spell = findSpell(name)
-            local ability = findJobAbility(name)
-            local res = spell or ability
-            local buffId = res and res.status
-            if buffId then
-                -- Set the effect, as well as the spell or ability that causes it, to the context.
-                -- We do it outside the check to ensure that the latest hit is saved to the context
-                -- for use in "not hasEffectOf" scenarios.
-                context.effect = buff
-                context.spell = spell
-                context.ability = ability
-
-                local buff = hasBuff(target, buffId)
-                if buff then                    
-                    return i
                 end
             end
         end

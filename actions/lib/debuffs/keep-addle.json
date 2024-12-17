@@ -10,12 +10,14 @@
   "actions": [
     {
       "when": [
-        "bt and bt.distance < 20",
-        "canUse(vars.keep_addle.spells) and not hasEffectOf(bt, 'Addle')"
+        "bt and bt.distance <= constants.spell_distance",
+        "canUse(vars.keep_addle.spells) and not hasEffectOf(bt, vars.keep_addle.spells)"
       ],
-      "commands": "use(bt)",
-      "frequency": 5,
-      "scope": "battle"
+      "commands": [
+        "use(bt)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 5
     }
   ]
 }

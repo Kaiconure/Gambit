@@ -9,7 +9,7 @@
   },
   "actions": [
     {
-      "when": "not hasEffectOf('Aquaveil') and canUse(vars.keep_aquaveil.spells)",
+      "when": "canUse(vars.keep_aquaveil.spells) and not hasEffectOf(vars.keep_aquaveil.spells)",
       "commands": ["use(me)"],
       "frequency": 10
     }

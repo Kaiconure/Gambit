@@ -216,7 +216,12 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                if avg < 0.33 and d2 > 3 then
+                local minAvg = 1
+
+                -- Increase the minimum averaging speed when mounted
+                --if me.status == 85 or me.status == 5 then minAvg = 1 end
+
+                if avg < minAvg and d2 > 3 then
                     shouldJitter = true
                 end
             end
@@ -250,7 +255,7 @@ local function sm_movement_exp(self, job)
 
             writeVerbose('Jittering at %.1f degrees from target':format(degrees))
 
-            jitterUntil = now + 2.0
+            jitterUntil = now + 1 + (math.random() * 3.0)
             windower.ffxi.run(escapeAngle)
         end
 
@@ -1006,6 +1011,7 @@ function smartMove:getJobInfo(jobId)
             return {
                 jobId = current.jobId,
                 mode = current.type,
+                time = current.time,
                 follow_index = current.follow_index,
                 position = current:pos()
             }

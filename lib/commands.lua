@@ -156,8 +156,33 @@ handlers['run'] = function(args)
     end
 end
 
-handlers['walk'] = function (args)
-    writeMessage('Not implemented: walk')
+handlers['move'] = function (args)
+    local x = arrayIndexOfStrI(args, '-x')
+    local y = arrayIndexOfStrI(args, '-y')
+
+    if type(x) == 'number' then x = tonumber(args[x + 1]) end
+    if type(y) == 'number' then y = tonumber(args[y + 1]) end
+
+    local me = windower.ffxi.get_mob_by_target('me')
+    if type(x) == 'number' and type(y) ~= 'number' then y = me.y end
+    if type(y) == 'number' and type(x) ~= 'number' then x = me.x end
+
+    if type(x) ~= 'number' or type(y) ~= 'number' then
+        writeMessage('A valid coordinate could not be found. Movement skipped.')
+        return
+    end
+
+    local job = smartMove:moveTo(x, y)
+    if job then
+        writeMessage(text_cornsilk('Moving to %s. Use Ctrl+F to cancel.':format(
+            text_number('(%.3f, %.3f)':format(x, y), Colors.cornsilk)
+        )))
+    else
+        writeMessage('Unable to move to %s.':format(
+            text_number('(%.2f, %.2f)':format(x, y))
+        ))
+    end
+
 end
 handlers['face'] = function(args)
     writeMessage('Not implemented: face')  
@@ -249,7 +274,7 @@ handlers['config'] = function(args)
 
     if distancez > 0 then
         distancez = tonumber(args[distancez + 1])
-        if distancez and distancez > 0 then
+        if distancez and distancez >= 0 then
             distancez = math.clamp(distancez, 0, 50)
             settings.maxDistanceZ = distancez
             hasChanges = true
@@ -306,7 +331,7 @@ handlers['targetinfo'] = function (args)
             string.format('Spawn type: %s\n', tostring(target.spawn_type)) ..
             string.format('Status: %s\n', tostring(target.status)) ..
             string.format('Claim id: %s\n', tostring(target.claim_id or 0)) ..
-            string.format('Pos: (%.2f, %.2f, %.2f)\n', target.x or -1337, target.y or -1337, target.z or -1337) ..
+            string.format('Pos: (%.2f, %.2f, %.1f)\n', target.x or -1337, target.y or -1337, target.z or -1337) ..
             string.format('Hdg: %.2f degrees\n', target.heading and (target.heading * 180 / math.pi) or -1337) ..
             string.format('Speed: %.2f\n', target.movement_speed or -1337)
         )

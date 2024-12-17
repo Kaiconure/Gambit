@@ -10,12 +10,14 @@
   "actions": [
     {
       "when": [
-        "bt and bt.distance < 20",
-        "canUse(vars.keep_silence.spells) and not hasEffectOf(bt, 'Silence')"
+        "bt and bt.distance <= constants.spell_distance",
+        "canUse(vars.keep_silence.spells) and not hasEffectOf(bt, vars.keep_silence.spells)"
       ],
-      "commands": "use(bt)",
-      "frequency": 5,
-      "scope": "battle"
+      "commands": [
+        "use(bt)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 5
     }
   ]
 }

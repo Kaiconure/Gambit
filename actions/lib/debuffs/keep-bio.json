@@ -3,15 +3,15 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_frazzle": {
-      "spells": ["Frazzle III", "Frazzle II", "Frazzle"]
+    "keep_bio": {
+      "spells": ["Bio III", "Bio II", "Bio"]
     }
   },
   "actions": [
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
-        "canUse(vars.keep_frazzle.spells) and not hasEffectOf(bt, vars.keep_frazzle.spells)"
+        "canUse(vars.keep_bio.spells) and not hasEffectOf(bt, vars.keep_bio.spells)"
       ],
       "commands": [
         "use(bt)",

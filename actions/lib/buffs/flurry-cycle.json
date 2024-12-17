@@ -10,7 +10,7 @@
   },
   "actions": [
     {
-      "when": "partyByName(vars.flurry_cycle.targets) and not hasBuff(member, 'Flurry') and canUse(vars.flurry_cycle.spells)",
+      "when": "partyByName(vars.flurry_cycle.targets) and canUse(vars.flurry_cycle.spells) and not hasEffectOf(member, vars.flurry_cycle.spells)",
       "commands": [
         "use(member)",
         "postpone(spellRecast(spell.name) + 5)"
