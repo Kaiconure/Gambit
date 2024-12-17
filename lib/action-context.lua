@@ -843,6 +843,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Find usable items in your inventory and wardrobes
+    context.findItem = function(item)
+        item = inventory.find_item(item)
+
+        context.item = item
+
+        if not item then return end
+        return item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get information about the ranged gear you have equipped
+    context.canRangedAttack = function()
+        local info = inventory.get_ranged_equipment()
+        context.ranged = info
+
+        return info and info.valid
+    end
+    context.canRA = context.canRangedAttack
+
+    --------------------------------------------------------------------------------------
     --
     context.canUseItem = function(...)
         local items = varargs({...}, context.item and context.item.name)
@@ -915,6 +936,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                                 context.item = {
                                     name = item.name,
                                     item = item,
+                                    id = item.id,
                                     type = ext and ext.type,
                                     bagItem = bagItem,
                                     secondsUntilReuse = secondsUntilReuse,
@@ -947,10 +969,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             item = context.item.item
             itemName = context.item.name
 
-            if context.item.secondsUntilReuse <= 0 then
-                if context.item.secondsUntilActivation > 0 then
-                    writeDebug('Would set secondsUntilActivation=' .. context.item.secondsUntilActivation)
-                    --secondsUntilActivation = context.item.secondsUntilActivation
+            if type(context.item.secondsUntilReuse) == 'number' then
+                if context.item.secondsUntilReuse <= 0 then
+                    if context.item.secondsUntilActivation > 0 then
+                        writeDebug('Would set secondsUntilActivation=' .. context.item.secondsUntilActivation)
+                        --secondsUntilActivation = context.item.secondsUntilActivation
+                    end
                 end
             end
         end
@@ -1737,49 +1761,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
-
-        -- if type(partyName) ~= 'string' then return end
-
-        -- partyName = string.lower(partyName)
-        
-        -- local player = context.player
-        -- local matches = {}
-        -- for id, spell in pairs(globals.spells.trust) do
-        --     -- Store any matching trust spells that we are able to cast
-        --     if 
-        --         string.lower(spell.party_name) == partyName and
-        --         canUseSpell(player, spell)
-        --     then
-        --         matches[#matches + 1] = spell
-        --     end
-        -- end
-
-        -- -- If we've found any matches...
-        -- if #matches > 0 then
-        --     -- If we found more than one match, we can try to disambiguate them by looking up 
-        --     -- trusts already in the party. This makes the assumption that we're calling this
-        --     -- to find the spell that was used to call an existing party member trust.
-        --     if #matches > 1 then
-        --         local p = context.findInParty(partyName)
-        --         if p then
-        --             for i, spell in ipairs(matches) do
-        --                 if 
-        --                     p.mob and
-        --                     p.mob.models and
-        --                     #p.mob.models > 0 and
-        --                     type(spell.model) == 'number' and
-        --                     spell.model == p.mob.models[1]
-        --                 then
-        --                     return spell.name
-        --                 end
-        --             end
-        --         end
-        --     end
-
-        --     -- If we get here, we'll just return the first result. Either we only found one, or there
-        --     -- were multiples without an in-party model reference to be found.
-        --     return matches[1].name
-        -- end
     end
 
     -------------------------------------------------------------------------------------
@@ -1851,31 +1832,57 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.partyHasEffect = context.partyHasBuff
 
-    context.hasBuff = function(target, ...)
-        local names = varargs({...})
-        local strict = target == 'use-strict' or names[1] == 'use-strict'
+    context.hasBuff = function(...)
+        local args = {...}
 
-        -- If the target is a string that exists in the context, we'll use that
-        if type(target) == 'string' and context[target] and context[target].buffs then
-            target = context[target]
+        local start_index = 1
+        local target = context.me
+
+        -- Find a target override
+        if
+            type(args[start_index]) == 'table' and
+            type(args[start_index].buffs) == 'table'
+        then
+            target = args[start_index]
+            start_index = start_index + 1
+        elseif
+            type(args[start_index]) == 'string' and
+            type(context[args[start_index]]) == 'table' and
+            type(context[args[start_index]].buffs) == 'table'
+        then
+            target = context[args[start_index]]
+            start_index = start_index + 1
+        elseif
+            args[start_index] == nil
+        then
+            start_index = start_index + 1
         end
-        
-        -- If the target is not a table at this point, then we'll use ourself
-        if type(target) ~= 'table' then
 
-            -- If the target is a string, it means no target was specified and the first param was 
-            -- a buff. Let's add it to the list of buff names we're searching through.
-            if type(target) == 'string' then
-                table.insert(names, 1, target)
+        -- Find a strictness override
+        local use_strict = false
+        if
+            args[start_index] == 'use-strict' or
+            args[start_index] == 'not-strict'
+        then
+            if args[start_index] == 'use-strict' then
+                use_strict = true
             end
-
-            -- Promote the target to ourself
-            target = context.me
+            start_index = start_index + 1
         end
 
-        for i = 1, #names do
+        local names = args
+        if
+            type(args[start_index]) == 'table' and
+            #args[start_index] > 0
+        then
+            names = args[start_index]
+            start_index = 1
+        end
+
+        for i = start_index, #names do
             local name = names[i]
             local buff = hasBuffInArray(target.buffs, name, strict)
+
             if buff then
                 context.effect = buff
                 if target.spawn_type ~= SPAWN_TYPE_MOB then
@@ -1916,7 +1923,72 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Determine if the target has the effect triggerd by the specified spell or ability.
     -- If no target is specified, it's assumed to be the player.
-    context.hasEffectOf = function(target, ...)
+    context.hasEffectOf = function(...)
+        local args = {...}
+
+        local start_index = 1
+        local target = context.me
+
+        -- Find a target override
+        if
+            type(args[start_index]) == 'table' and
+            type(args[start_index].buffs) == 'table'
+        then
+            target = args[start_index]
+            start_index = start_index + 1
+        elseif
+            type(args[start_index]) == 'string' and
+            type(context[args[start_index]]) == 'table' and
+            type(context[args[start_index]].buffs) == 'table'
+        then
+            target = context[args[start_index]]
+            start_index = start_index + 1
+        elseif
+            args[start_index] == nil
+        then
+            start_index = start_index + 1
+        end
+
+        -- Find a strictness override
+        local use_strict = false
+        if
+            args[start_index] == 'use-strict' or
+            args[start_index] == 'not-strict'
+        then
+            if args[start_index] == 'use-strict' then
+                use_strict = true
+            end
+            start_index = start_index + 1
+        end
+
+        local names = args
+        if
+            type(args[start_index]) == 'table' and
+            #args[start_index] > 0
+        then
+            names = args[start_index]
+            start_index = 1
+        end
+
+        for i = start_index, #names do
+            local name = names[i]
+            local spell = findSpell(name)
+            local ability = findJobAbility(name)
+
+            local res = spell or ability
+            local buffId = res and res.status
+
+            if buffId then
+                local buff = hasBuffInArray(target.buffs, buffId, strict)
+                if buff then
+                    context.effect = buff    
+                    return buff
+                end
+            end
+        end        
+    end
+    
+    context.hasEffectOfOld = function(target, ...)
         local names = varargs({...})
         local strict = target == 'use-strict' or names[1] == 'use-strict'
 
@@ -1924,6 +1996,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if type(target) == 'string' and context[target] and context[target].buffs then
             target = context[target]
         end
+
+        -- TODO: The issue has to do with target being where the spells are sent
         
         -- If the target is not a table at this point, then we'll use ourself
         if type(target) ~= 'table' then
@@ -2170,6 +2244,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.throw = context.shoot
     context.ra = context.shoot
+    context.RA = context.shoot
 
     --------------------------------------------------------------------------------------
     --

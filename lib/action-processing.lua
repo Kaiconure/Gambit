@@ -447,6 +447,7 @@ local function getNextBattleAction(context)
                 context.spell                   = nil   -- Current spell
                 context.ability                 = nil   -- Current ability
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
+                context.ranged                  = nil   -- Current ranged attack equipment and ammo info
                 context.effect                  = nil   -- Current buff/effect
                 context.member                  = nil   -- The result of a targeting enumerator
                 context.mob                     = nil   -- The result of a mob search iterator

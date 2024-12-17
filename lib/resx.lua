@@ -196,6 +196,19 @@ function hasMatchingTargetFlag(resource, targetFlags)
 end
 
 --------------------------------------------------------------------------------------
+-- Gets an item resource from an id or name
+local function getItemResource(item)
+    if type(item) == 'number' then item = resources.items[spell] end
+    if type(item) == 'string' then item = findItem(item) end
+
+    if type(item) ~= 'table' or type(item.id) ~= 'number' or item.id < 1 then
+        return nil
+    end
+
+    return item
+end
+
+--------------------------------------------------------------------------------------
 -- Gets a spell resource from an id or name
 local function getSpellResource(spell)
     if type(spell) == 'number' then spell = resources.spells[spell] end
@@ -256,10 +269,13 @@ function hasBuffInArray(buffs, buff, strict)
         end
     end
 
-    -- Now find if any buffs in the check list are present
-    for i, id in pairs(check_list) do
-        if arrayIndexOf(buffs, id) then
-            return resources.buffs[id]
+    -- Now find if any buffs in the check list are present. If the check list is not a table, it
+    -- means that the buff didn't correspond to something we know about (invalid name, etc)
+    if type(check_list) == 'table' then
+        for i, id in pairs(check_list) do
+            if arrayIndexOf(buffs, id) then
+                return resources.buffs[id]
+            end
         end
     end
 end

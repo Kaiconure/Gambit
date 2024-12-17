@@ -1,4 +1,4 @@
-__version = '0.95.3-beta5'
+__version = '0.95.3-beta6'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -39,6 +39,7 @@ require('./lib/eventing')
 require('./lib/commands')
 require('./lib/target-processing')
 
+inventory = require('./lib/inventory')
 smartMove = require('./lib/smart-move')
 
 actionStateManager = require('./lib/action-state-manager')
