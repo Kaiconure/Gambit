@@ -12,7 +12,7 @@
     {
       "when": [
         "vars.keep_ammo.ammo",
-        "not canRangedAttack() and findItem(vars.keep_ammo.ammo)"
+        "not canRangedAttack() and findEquippableItem(vars.keep_ammo.ammo)"
       ],
       "commands": [
         "log('Equipping ammo:', item.name)",
@@ -23,7 +23,7 @@
     {
       "when": [
         "vars.keep_ammo.ammo and vars.keep_ammo.pouch",
-        "not canRangedAttack() and findItem(vars.keep_ammo.pouch)"
+        "not canRangedAttack() and findUsableItem(vars.keep_ammo.pouch)"
       ],
       "commands": [
         "log('Using ammo pouch:', item.name)",

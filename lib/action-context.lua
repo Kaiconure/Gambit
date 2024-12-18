@@ -193,6 +193,33 @@ function context_max(...)
 end
 
 -----------------------------------------------------------------------------------------
+-- Make an x,y,duration tuple from the given args
+context_makeXYD = function(...)
+    local args = {...}
+
+    if type(args[1]) == 'table' then
+        -- If it's a table with x,y members, then we're good
+        if 
+            type(args[1].x) == 'number' and
+            type(args[1].y) == 'number' 
+        then
+            return args[1]
+        end
+    elseif
+        type(args[1]) == 'number' and
+        type(args[2]) == 'number'
+    then
+        return {
+            x = args[1],
+            y = args[2],
+            duration = args[3]
+        }
+    end
+
+    return
+end
+
+-----------------------------------------------------------------------------------------
 -- Enumerates over all fields in the context named in the given keys, and returns
 -- an array of all the matching results.
 local function enumerateContextByExpression(context, keys, expression, ...)
@@ -843,15 +870,25 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Find usable items in your inventory and wardrobes
+    -- Find items in any of your bags
     context.findItem = function(item)
-        item = inventory.find_item(item)
-
-        context.item = item
-
-        if not item then return end
-        return item
+        context.item = inventory.find_item(item)
+        return context.item
     end
+
+    --------------------------------------------------------------------------------------
+    -- Find usable items in any of your bags
+    context.findUsableItem = function(item)
+        context.item = inventory.find_item(item, { usable = true })
+        return context.item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find equippable items in any of your bags
+    context.findEquippableItem = function(item)
+        context.item = inventory.find_item(item, { equippable = true })
+        return context.item
+    end    
 
     --------------------------------------------------------------------------------------
     -- Get information about the ranged gear you have equipped
@@ -866,91 +903,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.canUseItem = function(...)
+
+        if hasBuff(context.player, 'Sleep') then
+            return
+        end
+
         local items = varargs({...}, context.item and context.item.name)
         if type(items) == 'table' then
             for key, _item in ipairs(items) do
-                local item = _item
-                
-                if type(item) == 'string' then
-                    item = findItem(item)
-                    if item then
-                        -- We first need to verify that the item is usable in general:
-                        --  - Make sure we're not asleep
-                        --  - Make sure it's not food, or if it is, that we're not already fed
-                        --  - It's got a cast time
-                        --  - It doesn't have a level requirement -OR- the level requirement is met
-                        --  - It doesn't have a job requirement -OR- the job requirement is met
-                        --
-                        if 
-                            not hasBuff(context.player, 'Sleep') and
-                            (item.type ~= ITEM_TYPE_FOOD or not hasBuff(context.player, 'Food')) and
-                            item.cast_time ~= nil and                            
-                            (item.level == nil or context.player.main_job_level >= item.level) and
-                            (item.jobs == nil or item.jobs[context.player.main_job_id] == true)
-                        then
-
-                            -- NOTE: The 'table' type check is required due to items being moved to the recycle bin turning into numbers
-                            local bagItem = tableFirst(windower.ffxi.get_items(0), 
-                                function (_i) 
-                                    return type(_i) == 'table' and _i.id == item.id 
-                                end)
-
-                            if bagItem then
-                                local ext = extdata.decode(bagItem)
-
-                                local hasTimer = ext and ext.next_use_time
-                                local secondsUntilReuse = 0
-                                local secondsUntilActivation = 0
-                                local chargesRemaining = 1
-
-                                if ext then
-                                    -- Countdown to when it can be equipped and used (ex: 15 minutes on Capacity Ring)
-                                    if ext.next_use_time ~= nil then
-                                        secondsUntilReuse = ext.next_use_time + 18000 - os.time()
-                                    end
-                                    
-                                    -- Countdown to use once it's been equiped (ex: 5 seconds on Capacity Ring).
-                                    -- It will be negative if the item is not equipped.
-                                    if ext.activation_time ~= nil then
-                                        secondsUntilActivation = ext.activation_time + 18000 - os.time()
-                                    end
-
-                                    if ext.charges_remaining ~= nil then
-                                        chargesRemaining = ext.charges_remaining
-                                    end
-                                end
-
-                                -- writeDebug('Item: %s / Reuse in: %.1fs / Equip for: %.1fs / %d charges':format(
-                                --     item.name,
-                                --     secondsUntilReuse,
-                                --     secondsUntilActivation,
-                                --     chargesRemaining
-                                -- ))
-
-                                -- This is set based on the time remaining until it is usable and the number of charges.
-                                -- It doesn't take into account the activation time -- that can be handled separately
-                                -- once we know the item can be used once equipped.
-                                local canUse = secondsUntilReuse <= 0 and chargesRemaining > 0
-
-                                -- Save the item to the context
-                                context.item = {
-                                    name = item.name,
-                                    item = item,
-                                    id = item.id,
-                                    type = ext and ext.type,
-                                    bagItem = bagItem,
-                                    secondsUntilReuse = secondsUntilReuse,
-                                    secondsUntilActivation = secondsUntilActivation,
-                                    chargesRemaining = chargesRemaining,
-                                    usable = (ext and ext.usable) or canUse
-                                }
-
-                                -- Return if we can use it
-                                if canUse then
-                                    return key
-                                end
-                            end
-                        end
+                local info = inventory.find_item(_item, { usable = true })                
+                if info then
+                    local item = info.item
+                    if 
+                        (item.type ~= ITEM_TYPE_FOOD or not hasBuff(context.player, 'Food')) and
+                        (item.level == nil or context.player.main_job_level >= item.level) and
+                        (item.jobs == nil or item.jobs[context.player.main_job_id] == true)
+                    then
+                        context.item = info
+                        return key
                     end
                 end
             end
@@ -1503,46 +1473,46 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
-    context.distanceTo = function(x, y)
-        if type(x) ~= 'number' or type(y) ~= 'number' then
-            return
-        end
+    
+
+    context.distanceTo = function(...)
+        local pos = context_makeXYD(...)
+        if not pos then return end
 
         local me = windower.ffxi.get_mob_by_target('me')
-
-        local v = V({x, y})
+        local v = V({pos.x, pos.y})
         local vme = V({me.x, me.y})
 
         return v:subtract(vme):length()
     end
 
-    context.checkPosition = function(x, y)
-        local d = context.distanceTo(x, y)
+    context.checkPosition = function(...)
+        local d = context.distanceTo(...)
         if type(d) == 'number' then return d < 1 end
     end
 
-    context.move = function(x, y, duration)
+    context.move = function(...)
+        local pos = context_makeXYD(...)
+        if not pos then return end
+
         local me = windower.ffxi.get_mob_by_target('me')
 
-        if type(x) == 'number' and type(y) ~= 'number' then y = me.y end
-        if type(y) == 'number' and type(x) ~= 'number' then x = me.x end
-
-        if type(x) ~= 'number' or type(y) ~= 'number' then
-            return
-        end
+        local x = pos.x
+        local y = pos.y
+        local duration = pos.duration
 
         local jobId = smartMove:moveTo(x, y)
         if jobId then
-            local start = os.time()
-            local immediate = (tonumber(duration) or 1) <= 0
-            duration = math.max(tonumber(duration) or 10, 3)
-
+            local immediate = (tonumber(duration) or 0) <= 0
             if immediate then
                 return true
             end
 
+            local start = os.time()
+            duration = math.max(duration, 0.5)
+
             while true do
-                coroutine.sleep(1.0)
+                coroutine.sleep(0.5)
 
                 local now = os.time()
                 local job = smartMove:getJobInfo()
