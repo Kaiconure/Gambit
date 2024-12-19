@@ -35,19 +35,25 @@ local DefaultIgnoreList = {
     -- when we could be breaking down the obstacles to eliminate them.
     { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Cerise Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Chilblain Snoll', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Indomitable Spurned', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Lancing Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Larkish Opo-opo', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lavender Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lightfoot Lapinion', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Quivering Twitherym', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Red Dropwing', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Ruby Raptor', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Shrubshredder Chapuli', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Skittish Matamata', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Sloshmouth Snapweed', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Soiled Funguar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Temblor Beetle', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' }
 }
 

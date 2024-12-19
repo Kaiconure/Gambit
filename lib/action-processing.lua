@@ -125,7 +125,7 @@ function sendRangedAttackCommand(target, context)
     end
 
     -- Sleep a bit more to space things out
-    coroutine.sleep(2.0)
+    coroutine.sleep(1.5)
 
     if followJob then
         smartMove:reschedule(followJob)
@@ -451,6 +451,7 @@ local function getNextBattleAction(context)
                 context.effect                  = nil   -- Current buff/effect
                 context.member                  = nil   -- The result of a targeting enumerator
                 context.mob                     = nil   -- The result of a mob search iterator
+                context.point                   = nil   -- The result of a position lookup
                 context.result                  = nil   -- The result of the latest iterator operation
                 context.results                 = { }   -- The results of all current iterator operations
                 context.enemy_ability           = nil   -- The current mob ability

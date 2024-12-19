@@ -123,17 +123,22 @@ local function coordVector(coord)
     return nil
 end
 
--- Find the point at the given distance behind the specified mob
-local function findMobRear(mob, distance)
+-- Find the point at the given distance and angle offset from the mob
+local function findMobOffset(mob, angleOffset, distance)
     local player = windower.ffxi.get_mob_by_target('me')
     local vPlayer = V({player.x, player.y})
     
-    local rearDirection = mob.heading + math.pi
+    local direction = mob.heading + angleOffset
 
     local vMob = V({mob.x, mob.y})
-    local vTarget = vMob:add(vector.from_radian(rearDirection):scale(distance))
+    local vTarget = vMob:add(vector.from_radian(direction):scale(distance))
 
     return vTarget
+end
+
+-- Find the point at the given distance behind the specified mob
+local function findMobRear(mob, distance)
+    return findMobOffset(mob, math.pi, distance)
 end
 
 -- ======================================================================================
@@ -798,6 +803,31 @@ function smartMove:moveTo(x, y)
     coroutine.sleep(0.25)
 
     return job.jobId
+end
+
+-----------------------------------------------------------------------------------------
+-- Find the location that is offsetDistance from the specified mob, and an offset
+-- of offsetAngle radians from its forward direction. An offset of 0 will be
+-- directly in front of the mob; an offset of PI will be directly behind the
+-- mob; and so on.
+function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
+    offsetAngle = tonumber(offsetAngle) or 0
+    offsetDistance = tonumber(offsetDistance) or 2
+    
+    return findMobOffset(mob, offsetAngle, offsetDistance)
+end
+
+-----------------------------------------------------------------------------------------
+-- Determines if the player is at the location represented by the specified
+-- offset angle and distance relative to the mob.
+function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
+    offsetAngle = tonumber(offsetAngle) or 0
+    offsetDistance = tonumber(offsetDistance) or 2
+
+    local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
+    local player = windower.ffxi.get_mob_by_target('me')
+
+    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
 end
 
 -----------------------------------------------------------------------------------------

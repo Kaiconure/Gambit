@@ -585,6 +585,7 @@ local function initContextTargetSymbol(context, symbol)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
+    symbol.heading = symbol.mob.heading
     symbol.valid_target = symbol.mob.valid_target
     symbol.spawn_type = symbol.mob.spawn_type
     symbol.status = symbol.mob.status
@@ -1356,17 +1357,60 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    --
+    context.aligned = function(target, angle, distance)
+        -- If an angle was specified, convert from degrees to radians
+        if type(angle) == 'number' then
+            angle = angle * math.pi / 180.0
+        end
+
+        return smartMove:atMobOffset(target, angle, distance)
+    end
+
+    --------------------------------------------------------------------------------------
+    --
+    context.align = function(target, angle, distance, duration)
+        -- Force angle to a valid radian value
+        if type(angle) ~= 'number' then
+            angle = math.pi
+        else
+            angle = angle * math.pi / 180
+        end
+
+        if not context.aligned(target, angle, distance) then
+            local position = smartMove:findMobOffset(target, angle, distance)
+            local success = context.move(
+                position[1],
+                position[2],
+                math.max(tonumber(duration or 3), 1))
+            
+            directionality.faceTarget(target)
+            if not success then
+                -- TODO: Make this configurable? Parameterized?
+                context.postpone(10)
+                return false
+            end
+        end
+
+        return true
+    end
+
+    --------------------------------------------------------------------------------------
     -- Returns true if we're behind the mob and facing it
-    context.alignedRear = function ()
-        if context.bt then
-            if smartMove:atMobRear(context.bt.index) then
+    context.alignedRear = function (target)
+        target = target or context.bt
+        if targett then
+            if smartMove:atMobRear(target.index) then
                 return true
             end
         end
     end
 
-    context.canAlignRear = function ()
-        if not context.bt then
+    --------------------------------------------------------------------------------------
+    --Determine if rear alignment on this mob is possible
+    context.canAlignRear = function (target)
+        target = target or context.bt
+        if not target or not target.name then
             return false
         end
 
@@ -1374,8 +1418,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return false
         end
 
-        return not arrayIndexOfStrI(settings.noRearList, context.bt.name)
+        if context.hasEffect('Bind', 'Sleep', 'Terror', 'Petrification', 'Stun') then
+            context.postone(5)
+            return false
+        end
+
+        return not arrayIndexOfStrI(settings.noRearList, target.name)
     end
+    context.canAlign = context.canAlignRear
 
     --------------------------------------------------------------------------------------
     -- Set up behind the mob and then face it
@@ -1473,8 +1523,65 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
-    
+    ---------------------------------------------------------------------------
+    -- Returns the parameter representing the furthest point from the player
+    context.furthest = function(...)
+        local args = varargs({...})
 
+        if #args == 0 or context.me == nil then return end
+
+        local furthest = nil
+        local furthestd = -1
+        local vme = V({context.me.x, context.me.y})
+        for i = 1, #args do
+            local point = args[i]
+            if point and type(point.x) == 'number' and type(point.y) == 'number' then
+                local vp = V({point.x, point.y})
+                local d = vme:subtract(vp):length()
+
+                if d > furthestd then
+                    furthest = point
+                    furthestd = d
+                end
+            end
+        end
+
+        context.point = furthest
+
+        return furthest
+    end
+    context.farthest = context.furthest
+
+    ---------------------------------------------------------------------------
+    -- Returns the parameter representing the nearest point from the player
+    context.nearest = function(...)
+        local args = varargs({...})
+
+        if #args == 0 or context.me == nil then return end
+
+        local nearest = nil
+        local nearestd = math.huge
+        local vme = V({context.me.x, context.me.y})
+        for i = 1, #args do
+            local point = args[i]
+            if point and type(point.x) == 'number' and type(point.y) == 'number' then
+                local vp = V({point.x, point.y})
+                local d = vme:subtract(vp):length()
+
+                if d < nearestd then
+                    nearest = point
+                    nearestd = d
+                end
+            end
+        end
+
+        context.point = nearest
+
+        return nearest
+    end
+
+    ---------------------------------------------------------------------------
+    --
     context.distanceTo = function(...)
         local pos = context_makeXYD(...)
         if not pos then return end
@@ -1486,11 +1593,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return v:subtract(vme):length()
     end
 
+    ---------------------------------------------------------------------------
+    --
     context.checkPosition = function(...)
         local d = context.distanceTo(...)
         if type(d) == 'number' then return d < 1 end
     end
 
+    ---------------------------------------------------------------------------
+    --
     context.move = function(...)
         local pos = context_makeXYD(...)
         if not pos then return end
@@ -1527,23 +1638,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     job = nil
                 end
 
-                -- If there's no job, or the job doesn't match ours, we're done
+                -- If we're already in position, we can stop
+                if context.checkPosition(x, y) then
+                    -- If the current job is still the one we started, we can cancel that
+                    if job and job.jobId == jobId then
+                        smartMove:cancelJob(jobId)
+                    end
+                    --context.log('The movement operation completed successfully.')
+                    return true
+                end
+
+                -- If there's no job, or the job doesn't match ours, we've finished
+                -- before we got into position for some reason (manual follow cancel, etc)
                 if 
                     job == nil or
                     job.jobId ~= jobId
                 then
-                    if context.checkPosition(x, y) then
-                        context.log('Movement operation completed successfully.')
-                        return true
-                    end
-
-                    context.log('The movement operation was not completed successfully.')
+                    --context.log('The movement operation was not completed.')
                     return
                 end
             end
         end
 
-        context.log('The movement operation could not be scheduled.')
+        --context.log('The movement operation could not be scheduled.')
     end
 
     --------------------------------------------------------------------------------------

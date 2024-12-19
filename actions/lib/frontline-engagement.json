@@ -4,10 +4,22 @@
   },
   "vars": {
     "frontline_engagement": {
-      "prioritize_melee_engagement": true
+      "prioritize_melee_engagement": true,
+      "angle": null
     }
   },
   "actions": [
+    {
+      "when": [
+        "vars.frontline_engagement.angle ~= nil",
+        "bt and bt.distance <= 2",
+        "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, 2)"
+      ],
+      "commands": ["align(bt, vars.frontline_engagement.angle, 2)"],
+      "frequency": 1,
+      "scope": "battle",
+      "delay": 2
+    },
     {
       "when": "bt and bt.distance <= 2 and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
