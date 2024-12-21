@@ -348,7 +348,7 @@ function processTargeting()
                     -- Is this a hack? We fake the distance if a deprioritization factor is present...
                     if downgrade then
                         local originalDistance = candidateMob.distance
-                        local distance = math.max(math.sqrt(originalDistance), 1) * math.max(settings.maxDistance, 1)
+                        local distance = settings.maxDistance
 
                         -- Is this hacky? Setting the distance to the new value to make it look further away?
                         candidateMob.distance = distance * distance

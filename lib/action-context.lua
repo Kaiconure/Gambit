@@ -912,11 +912,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local items = varargs({...}, context.item and context.item.name)
         if type(items) == 'table' then
             for key, _item in ipairs(items) do
-                local info = inventory.find_item(_item, { usable = true })                
+                local info = inventory.find_item(_item, { usable = true })   
                 if info then
                     local item = info.item
+                    --writeJsonToFile('./data/%s.info.json':format(_item), info)
                     if 
-                        (item.type ~= ITEM_TYPE_FOOD or not hasBuff(context.player, 'Food')) and
                         (item.level == nil or context.player.main_job_level >= item.level) and
                         (item.jobs == nil or item.jobs[context.player.main_job_id] == true)
                     then
@@ -1359,9 +1359,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.aligned = function(target, angle, distance)
-        -- If an angle was specified, convert from degrees to radians
+        -- Convert degrees to radians if an angle was provided
+        angle = tonumber(angle)
         if type(angle) == 'number' then
-            angle = angle * math.pi / 180.0
+            angle = angle * math.pi / 180
         end
 
         return smartMove:atMobOffset(target, angle, distance)
@@ -1370,10 +1371,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.align = function(target, angle, distance, duration)
-        -- Force angle to a valid radian value
-        if type(angle) ~= 'number' then
-            angle = math.pi
-        else
+        -- Convert degrees to radians if an angle was provided
+        angle = tonumber(angle)
+        if type(angle) == 'number' then
             angle = angle * math.pi / 180
         end
 
@@ -1387,7 +1387,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             directionality.faceTarget(target)
             if not success then
                 -- TODO: Make this configurable? Parameterized?
-                context.postpone(10)
+                context.postpone(5)
                 return false
             end
         end
@@ -1399,7 +1399,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Returns true if we're behind the mob and facing it
     context.alignedRear = function (target)
         target = target or context.bt
-        if targett then
+        if target then
             if smartMove:atMobRear(target.index) then
                 return true
             end
@@ -1419,7 +1419,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         if context.hasEffect('Bind', 'Sleep', 'Terror', 'Petrification', 'Stun') then
-            context.postone(5)
+            context.postpone(5)
             return false
         end
 

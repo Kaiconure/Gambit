@@ -125,7 +125,7 @@ function sendRangedAttackCommand(target, context)
     end
 
     -- Sleep a bit more to space things out
-    coroutine.sleep(1.5)
+    coroutine.sleep(1.0)
 
     if followJob then
         smartMove:reschedule(followJob)

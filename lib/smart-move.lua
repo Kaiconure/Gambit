@@ -126,14 +126,24 @@ end
 -- Find the point at the given distance and angle offset from the mob
 local function findMobOffset(mob, angleOffset, distance)
     local player = windower.ffxi.get_mob_by_target('me')
-    local vPlayer = V({player.x, player.y})
     
-    local direction = mob.heading + angleOffset
-
+    local vPlayer = V({player.x, player.y})
     local vMob = V({mob.x, mob.y})
-    local vTarget = vMob:add(vector.from_radian(direction):scale(distance))
 
-    return vTarget
+    distance = (type(distance) == 'number') and distance or 2
+
+    if type(angleOffset) == 'number' then
+        -- When an angle offset was provided, we'll calculate that from the mob
+        -- and scale it to the desired distance.
+        local direction = mob.heading + angleOffset
+        return vMob:add(vector.from_radian(direction):scale(distance))
+    else
+        -- Calculate the vector from the mob to me. This is the line we should take.
+        -- Normalize it and scale by the travel distance, and added to the mob position
+        -- that will give us the target location we're aiming for.
+        local vOffset = vPlayer:subtract(vMob):normalize():scale(distance)
+        return vMob:add(vOffset)
+    end
 end
 
 -- Find the point at the given distance behind the specified mob
@@ -172,8 +182,8 @@ local function sm_movement_exp(self, job)
     local paused = false
     local continue = true
 
-    local MAX_SPEEDS        = 10    -- Max number of speeds to track
-    local MIN_AVERAGING     = 10    -- Minimum number of speeds for us to do the averaging check
+    local MAX_SPEEDS        = 20    -- Max number of speeds to track
+    local MIN_AVERAGING     = 20    -- Minimum number of speeds for us to do the averaging check
 
     local speeds = {}
     local nextSpeed = 1
@@ -221,7 +231,7 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                local minAvg = 1
+                local minAvg = 1.0
 
                 -- Increase the minimum averaging speed when mounted
                 --if me.status == 85 or me.status == 5 then minAvg = 1 end
@@ -811,9 +821,6 @@ end
 -- directly in front of the mob; an offset of PI will be directly behind the
 -- mob; and so on.
 function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
-    offsetAngle = tonumber(offsetAngle) or 0
-    offsetDistance = tonumber(offsetDistance) or 2
-    
     return findMobOffset(mob, offsetAngle, offsetDistance)
 end
 
@@ -821,9 +828,6 @@ end
 -- Determines if the player is at the location represented by the specified
 -- offset angle and distance relative to the mob.
 function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
-    offsetAngle = tonumber(offsetAngle) or 0
-    offsetDistance = tonumber(offsetDistance) or 2
-
     local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
     local player = windower.ffxi.get_mob_by_target('me')
 
