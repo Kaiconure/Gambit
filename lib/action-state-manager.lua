@@ -144,6 +144,13 @@ state_manager.cyclesInType = function(self)
 end
 
 -----------------------------------------------------------------------------------------
+-- Resets tracking of time in the current action state
+state_manager.resetActionTime = function(self)
+    self.actionTypeStartTime = os.clock()
+    self.cycles = 0
+end
+
+-----------------------------------------------------------------------------------------
 -- Marks the start of a new cycle
 state_manager.tick = function(self, currentTime)
     self.currentTime = currentTime

@@ -64,6 +64,7 @@ handlers['enable'] = function (args)
     if not globals.enabled then
         -- Clear the mob before we enable
         resetCurrentMob(nil, true)
+        actionStateManager:resetActionTime()
 
         globals.enabled = true
         changed = true
@@ -264,7 +265,7 @@ handlers['config'] = function(args)
     if distance > 0 then
         distance = tonumber(args[distance + 1])
         if distance and distance > 0 then
-            distance = math.clamp(distance, 5, 50)
+            distance = math.clamp(distance, 3, 50)
             settings.maxDistance = distance
             hasChanges = true
         end
@@ -275,7 +276,7 @@ handlers['config'] = function(args)
     if distancez > 0 then
         distancez = tonumber(args[distancez + 1])
         if distancez and distancez >= 0 then
-            distancez = math.clamp(distancez, 0, 50)
+            distancez = math.clamp(distancez, 3, 50)
             settings.maxDistanceZ = distancez
             hasChanges = true
         end

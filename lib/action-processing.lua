@@ -452,11 +452,28 @@ local function getNextBattleAction(context)
                 context.member                  = nil   -- The result of a targeting enumerator
                 context.mob                     = nil   -- The result of a mob search iterator
                 context.point                   = nil   -- The result of a position lookup
-                context.result                  = nil   -- The result of the latest iterator operation
-                context.results                 = { }   -- The results of all current iterator operations
+                context.result                  = nil   -- The result of the latest arrayiterator operation
+                context.results                 = { }   -- The results of all current array iterator operations
+                context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
                 context.enemy_ability           = nil   -- The current mob ability
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
+
+                -- Reload the enumerator data
+                if 
+                    action.enumerators and
+                    action.enumerators.array
+                then
+                    for name, enumerator in pairs(action.enumerators.array) do
+                        if enumerator.data and enumerator.at then
+                            context.results[name] = enumerator.data[enumerator.at]
+                        end
+                    end
+
+                    if action.enumerators.array_name then
+                        context.result = context.results[action.enumerators.array_name]
+                    end
+                end
 
                 -- Store the current action to the context
                 context.action = action

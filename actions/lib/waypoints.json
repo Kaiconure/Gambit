@@ -1,0 +1,45 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": "Provides a mechanism for scripted movement between points."
+  },
+  "vars": {
+    "waypoints": {
+      "routes": {},
+      "active": "",
+      "mode": "bounce"
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "actionType == 'idle' and not bt",
+        "vars.waypoints.mode ~= 'cycle'",
+        "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
+        "(result and not checkPosition(result)) or bounce(vars.waypoints.routes[vars.waypoints.active])"
+      ],
+      "commands": [
+        "is_new_result and log('Bouncing to', vars.waypoints.active, 'location', result.x, result.y)",
+        "move(result)"
+      ],
+      "delay": 2,
+      "frequency": 5,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "actionType == 'idle' and not bt",
+        "vars.waypoints.mode == 'cycle'",
+        "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
+        "(result and not checkPosition(result)) or cycle(vars.waypoints.routes[vars.waypoints.active])"
+      ],
+      "commands": [
+        "is_new_result and log('Cycling to', vars.waypoints.active, 'location', result.x, result.y)",
+        "move(result)"
+      ],
+      "delay": 2,
+      "frequency": 5,
+      "scope": "battle"
+    }
+  ]
+}

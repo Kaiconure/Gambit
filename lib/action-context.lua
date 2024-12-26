@@ -434,6 +434,7 @@ local function setPartyEnumerators(context)
 end
 
 local function setArrayEnumerators(context)
+    -- Iterate through an array
     context.iterate = function(name, ...)
         if name == nil then
             return
@@ -453,15 +454,22 @@ local function setArrayEnumerators(context)
 
         -- Start by grabbing the current array enumerator
         local enumerator = context.action.enumerators.array[name]
-        if enumerator then
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
             -- Advance the enumerator
-            enumerator.at = enumerator.at + 1
+            enumerator.at = enumerator.at + enumerator.step
 
             -- If the new enumerator is within the array bounds, return that item
             if enumerator.at <= #enumerator.data then
                 -- Store the result
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
+                context.is_new_result      = true
+
+                context.action.enumerators.array_name = name
 
                 return context.result
             end
@@ -474,13 +482,183 @@ local function setArrayEnumerators(context)
 
         -- If there are any results, we'll set up a new array enumerator and return the first item
         if #results > 0 then
-            context.action.enumerators.array[name] = { data = results, at = 1}
+            context.action.enumerators.array[name] = { data = results, at = 1, step = 1}
             
             enumerator = context.action.enumerators.array[name]
             
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    -- Cycle through an array, starting over once the end is reached
+    context.cycle = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
+            -- Advance the enumerator
+            enumerator.at = enumerator.at + enumerator.step
+
+            -- Loop the enumerator if we've run off the end
+            if enumerator.at > #enumerator.data then
+                enumerator.at = 1
+            end
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= #enumerator.data then
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+                context.is_new_result      = true
+
+                context.action.enumerators.array_name = name
+
+                return context.result
+            end
+        end
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            context.action.enumerators.array[name] = { data = results, at = 1, step = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    -- Cycle through an array, starting over once the end is reached
+    context.bounce = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        if not context.action.results then
+            context.action.results = {}
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+
+        -- Enumerator structure:
+        --  - name: string
+        --  - data: []
+        --  - at: number
+        --  - step: number
+
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
+            local count = #enumerator.data 
+
+            if 
+                enumerator.at <= 1 and
+                enumerator.step == -1
+            then
+                enumerator.at = 2
+                enumerator.step = 1
+            elseif 
+                enumerator.at >= count and
+                enumerator.step == 1
+            then
+                enumerator.at = count - 1
+                enumerator.step = -1
+            else
+                enumerator.at = enumerator.at + enumerator.step
+            end
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= count and enumerator.at >= 1 then
+                writeDebug('%s: next bounce':format(name))
+
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+                context.is_new_result      = true
+
+                context.action.enumerators.array_name = name
+
+                return context.result
+            end
+        end
+
+        writeDebug('%s: new bounce':format(name))
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            context.action.enumerators.array[name] = { name = name, data = results, at = 1, step = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
 
             return context.result
         end
@@ -551,6 +729,9 @@ local function initContextTargetSymbol(context, symbol)
 
         -- Flag to determine if you're at the master level
         symbol.is_mastered = (player.superior_level == 5)
+
+        symbol.skills = player.skills
+        symbol.item_level = player.item_level
 
         symbol.symbol2 = 'me'
     elseif symbol.member then
@@ -1371,25 +1552,28 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.align = function(target, angle, distance, duration)
+        -- Nothing to do if we're already aligned
+        if context.aligned(target, angle, distance) then
+            return
+        end
+
         -- Convert degrees to radians if an angle was provided
         angle = tonumber(angle)
         if type(angle) == 'number' then
             angle = angle * math.pi / 180
         end
 
-        if not context.aligned(target, angle, distance) then
-            local position = smartMove:findMobOffset(target, angle, distance)
-            local success = context.move(
-                position[1],
-                position[2],
-                math.max(tonumber(duration or 3), 1))
-            
-            directionality.faceTarget(target)
-            if not success then
-                -- TODO: Make this configurable? Parameterized?
-                context.postpone(5)
-                return false
-            end
+        local position = smartMove:findMobOffset(target, angle, distance)
+        local success = context.move(
+            position[1],
+            position[2],
+            math.max(tonumber(duration or 3), 1))
+        
+        directionality.faceTarget(target)
+        if not success then
+            -- TODO: Make this configurable? Parameterized?
+            context.postpone(5)
+            return false
         end
 
         return true
@@ -1552,6 +1736,91 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.farthest = context.furthest
 
+    context.nearest_first = function(...)
+        local args = varargs({...})
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        local nearestd = math.huge
+        local nearesti = nil
+
+        -- Find the nearest entry
+        for i, p in ipairs(args) do
+            if type(p.distance) == 'number' then
+                if p.distance < nearestd then
+                    nearestd = p.distance
+                    nearesti = i
+                end
+            else
+                local dx = p.x - me.x
+                local dy = p.y - me.y
+                local d = math.sqrt((dx*dx) + (dy*dy))
+
+                if d < nearestd then
+                    nearestd = d
+                    nearesti = i
+                end
+            end
+        end
+
+        -- Shuffle any previous entries to the end of the array, in order
+        if nearesti then
+            for i = 1, nearesti - 1 do
+                local p = args[1]
+                table.remove(args, 1)
+                args[#args + 1] = p
+            end
+        end
+
+        return args
+    end
+
+    context.order_by_nearest = function(...)
+        local args = varargs({...})
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        return table.sort(args, function(a, b)
+                if type(a.distance) == 'number' and type(b.distance) == 'number' then
+                    return a.distance < b.distance
+                end
+
+                local dxA = a.x - me.x
+                local dyA = a.y - me.y
+
+                local dxB = b.x - me.x
+                local dyB = b.y - me.y
+
+                local dA2 = (dxA * dxA) + (dyA * dyA)
+                local dB2 = (dxB * dxB) + (dyB * dyB)
+
+                return dA2 < dB2
+            end)
+    end
+
+    context.order_by_furthest = function(...)
+        local args = varargs({...})
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        return table.sort(args, function(a, b)
+                if type(a.distance) == 'number' and type(b.distance) == 'number' then
+                    return a.distance < b.distance
+                end
+
+                local dxA = a.x - me.x
+                local dyA = a.y - me.y
+
+                local dxB = b.x - me.x
+                local dyB = b.y - me.y
+
+                local dA2 = (dxA * dxA) + (dyA * dyA)
+                local dB2 = (dxB * dxB) + (dyB * dyB)
+
+                return dA2 >= dB2
+            end)
+    end
+
     ---------------------------------------------------------------------------
     -- Returns the parameter representing the nearest point from the player
     context.nearest = function(...)
@@ -1597,6 +1866,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --
     context.checkPosition = function(...)
         local d = context.distanceTo(...)
+        --writeVerbose('cp.distance: %.2f':format(d))
         if type(d) == 'number' then return d < 1 end
     end
 
@@ -1611,6 +1881,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local x = pos.x
         local y = pos.y
         local duration = pos.duration
+
+        -- If there's an existing job that exactly matches the newly requested one,
+        -- then let's just let that job continue.
+        local existingJob = smartMove:getJobInfo()
+        if existingJob then
+            if existingJob.mode == 'position' then
+                local jp = existingJob.position
+                if 
+                    jp and
+                    jp[1] == pos.x and
+                    jp[2] == pos.y
+                then
+                    return true
+                end
+            end
+        end
 
         local jobId = smartMove:moveTo(x, y)
         if jobId then

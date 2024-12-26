@@ -231,7 +231,7 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                local minAvg = 1.0
+                local minAvg = 1.5
 
                 -- Increase the minimum averaging speed when mounted
                 --if me.status == 85 or me.status == 5 then minAvg = 1 end
@@ -265,12 +265,13 @@ local function sm_movement_exp(self, job)
 
             -- Pick a jittering exit angle that is 45 degrees off of the exact opposite angle to
             --  the target, either left or right. 
-            local degrees = (math.random() < 0.5) and 135.0 or 225.0
+            --local degrees = (math.random() < 0.5) and 135.0 or 225.0
+            local degrees = ((225 - 135) * math.random()) + 135
             local escapeAngle = hdg2 + (degrees * math.pi / 180.0)
 
             writeVerbose('Jittering at %.1f degrees from target':format(degrees))
 
-            jitterUntil = now + 1 + (math.random() * 3.0)
+            jitterUntil = now + 2 + (math.random() * 3.0)
             windower.ffxi.run(escapeAngle)
         end
 
@@ -1044,7 +1045,7 @@ function smartMove:getJobInfo(jobId)
         if current:is_valid() then
             return {
                 jobId = current.jobId,
-                mode = current.type,
+                mode = current.mode,
                 time = current.time,
                 follow_index = current.follow_index,
                 position = current:pos()
