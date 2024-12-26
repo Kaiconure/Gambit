@@ -161,7 +161,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
 
                 -- If the import doesn't exist there, try the user-level actions lib folder
                 if not file:exists() then
-                    fileName = './settings/lib/actions/%s.json':format(action.import)
+                    fileName = './settings/actions/lib/%s.json':format(action.import)
                     file = files.new(fileName)
                 end
 
