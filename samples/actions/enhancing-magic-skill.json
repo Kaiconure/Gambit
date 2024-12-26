@@ -26,7 +26,7 @@
       "frequency": 1
     },
     {
-      "when": "canUse('Shell III', 'Shell II', 'Protect')",
+      "when": "canUse('Shell III', 'Shell II', 'Shell')",
       "commands": ["use(me)", "wait(1)", "cancelBuff('Shell')"],
       "frequency": 1
     },
