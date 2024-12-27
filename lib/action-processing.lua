@@ -58,6 +58,12 @@ function sendActionCommand(
     -- Overall sleep time
     commandDuration = math.max(tonumber(commandDuration) or 0, 0)
 
+    -- If we're not pausing the follow, we'll at least stop the smart move component
+    -- from thinking we're stuck while performing this action
+    if not pauseFollow then
+        smartMove:resetJitter()
+    end
+
     local movementJob = pauseFollow and smartMove:cancelJob()
     if command and command ~= '' then
         writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
@@ -70,6 +76,9 @@ function sendActionCommand(
         -- Kick the movement job back on, if any
         if movementJob then
             smartMove:reschedule(movementJob)
+        elseif not pauseFollow then
+            -- We'll reset jitter again once the command is done
+            smartMove:resetJitter()
         end
     end
 
@@ -116,7 +125,7 @@ function sendRangedAttackCommand(target, context)
     end
 
     -- Sleep a bit more to space things out
-    coroutine.sleep(0.5)
+    coroutine.sleep(1.0)
 
     if followJob then
         smartMove:reschedule(followJob)
@@ -276,8 +285,9 @@ local function compileActions(actionType, rawActions)
                 action.when = combined
             end
 
-            -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second
-            if action.when == nil or action.when == '' then 
+            -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second.
+            -- Otherwise, this action (which always evaluates to true) would prevent anything further down from ever running.
+            if action.when == nil or trimString(action.when) == '' then 
                 action.when = 'true' 
                 action.frequency = math.max(tonumber(action.frequency) or 0, 1)
             end
@@ -290,24 +300,37 @@ local function compileActions(actionType, rawActions)
                 if isArray(action.commands) then
                     -- Compute the 'when' function
                     action._whenFn = loadstring(string.format('return %s', action.when))
-                    
-                    -- Force frequency to a non-negative number
-                    action.frequency = math.max(tonumber(action.frequency or 0), 0)
-                    action.availableAt = 0
-                    action.delay = tonumber(action.delay or 0)
-                    action.enumerators = { }
 
-                    -- Force a non-zero minimum delay for certain action type states. Delay is how long
-                    -- we must be in a given state before actions can be executed.
-                    if actionType == 'battle' then
-                        -- Battle actions will always wait at least 2 seconds before firing. This ensures
-                        -- we have a chance to take a swing at the enemy first (get trusts engaged, etc).
-                        action.delay = math.max(action.delay, 2)
-                    elseif actionType == 'pull' then
-                        -- Pull actions will always wait at least 1 second before firing. This ensures 
-                        -- that idle actions have a chance to run first.
-                        action.delay = math.max(action.delay, 1)
+                    if action.frequency == 'inf' or action.frequency == 'infinity' then
+                        -- We'll allow an infinity string to represent actions that should not normally be rescheduled.
+                        -- This should typically be used in conjunction with a 'scope' value.
+                        action.frequency = math.huge
+                    else
+                        -- Force frequency to a non-negative number
+                        action.frequency = math.max(tonumber(action.frequency or 0), 0)
                     end
+                    action.availableAt = 0
+                    action.enumerators = { }
+                    
+                    if type(action.scope) == 'string' then
+                        action.scope = string.lower(action.scope)
+                    end
+
+                    -- Certain action types will have a built in default delay
+                    if actionType == 'battle' then
+                        -- Battle actions will default to a delay of 2 unless otherwise specified
+                        if tonumber(action.delay) == nil then
+                            action.delay = 2
+                        end
+                    elseif actionType ~= 'idle' then
+                        -- Other non-idle actions will default to a delay of 1 unless otherwise specified
+                        if tonumber(action.delay) == nil then
+                            action.delay = 1
+                        end
+                    end
+
+                    -- Clamp the delay to (0, inf)
+                    action.delay = math.max(tonumber(action.delay) or 0, 0)
                     
                     local hasErrors = type(action._whenFn) ~= 'function'
                     if not hasErrors then
@@ -424,13 +447,33 @@ local function getNextBattleAction(context)
                 context.spell                   = nil   -- Current spell
                 context.ability                 = nil   -- Current ability
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
+                context.ranged                  = nil   -- Current ranged attack equipment and ammo info
                 context.effect                  = nil   -- Current buff/effect
                 context.member                  = nil   -- The result of a targeting enumerator
-                context.result                  = nil   -- The result of the latest iterator operation
-                context.results                 = { }   -- The results of all current iterator operations
+                context.mob                     = nil   -- The result of a mob search iterator
+                context.point                   = nil   -- The result of a position lookup
+                context.result                  = nil   -- The result of the latest arrayiterator operation
+                context.results                 = { }   -- The results of all current array iterator operations
+                context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
                 context.enemy_ability           = nil   -- The current mob ability
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
+
+                -- Reload the enumerator data
+                if 
+                    action.enumerators and
+                    action.enumerators.array
+                then
+                    for name, enumerator in pairs(action.enumerators.array) do
+                        if enumerator.data and enumerator.at then
+                            context.results[name] = enumerator.data[enumerator.at]
+                        end
+                    end
+
+                    if action.enumerators.array_name then
+                        context.result = context.results[action.enumerators.array_name]
+                    end
+                end
 
                 -- Store the current action to the context
                 context.action = action
@@ -446,10 +489,11 @@ local function getNextBattleAction(context)
                     -- Save the scope that was present when this action was triggered.
                     action.lastBattleScope = context.battleScope
 
-                    writeDebug('Condition met %s %s':format(
+                    writeDebug('Condition met %s %s [scope: %s]':format(
                         text_action(context.actionType .. '.' .. i, Colors.debug),
                         --action.when
-                        text_green(action.when, Colors.debug)
+                        text_green(action.when, Colors.debug),
+                        text_gray(tostring(action.lastBattleScope), Colors.debug)
                     ))
 
                     --print(action.when)
@@ -544,7 +588,7 @@ local function doNextActionCycle(time, player)
     local mob = globals.target:mob()
     local mobTime = globals.target:runtime()
     local mobDistance = mob and math.sqrt(mob.distance) or 0
-    local battleScope = globals.target:scopeId()
+    local battleScope = actionStateManager.actionTransitionCounter --globals.target:scopeId()
     local actionsExecuted = false
     local restingActionsExecuted = false
     local idleActionsExecuted = false
@@ -565,7 +609,7 @@ local function doNextActionCycle(time, player)
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
-        local context = ActionContext.create('resting', time, mob, mobTime)
+        local context = ActionContext.create('resting', time, mob, mobTime, battleScope)
         local action = processNextAction(context);
         return
     end
@@ -573,7 +617,7 @@ local function doNextActionCycle(time, player)
     -- Death: Execute any actions, and bail
     local isDead = player.vitals.hp <= 0
     if isDead then
-        local context = ActionContext.create('dead', time, nil, mobTime)
+        local context = ActionContext.create('dead', time, nil, mobTime, battleScope)
         local action = processNextAction(context);
         return
     end
@@ -582,7 +626,7 @@ local function doNextActionCycle(time, player)
     ----------------------------------------------------------------------------------------------------
     -- Executed when we are disengaged and no mobs are aggroing us
     if isIdle then        
-        local context = ActionContext.create('idle', time, mob, mobTime)
+        local context = ActionContext.create('idle', time, mob, mobTime, battleScope)
 
         -- We'll ensure that we're facing the target mob at this point
         -- if mob and not context.facingEnemy() then
@@ -632,7 +676,8 @@ local function doNextActionCycle(time, player)
         -- Executed when:
         --  1. We have a target that's not yet engaged AND
         --  2. There are no idle actions remaining to run.
-        if not actionsExecuted then
+        --  3. We're not in a forced/timed idle state.
+        if not actionsExecuted and not isTimedIdling then
             if hasPullableMob and not isBattle then
                 local command = ''
                 local commandDelay = 0

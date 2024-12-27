@@ -4,15 +4,20 @@
   },
   "vars": {
     "keep_slow": {
-      "with": ["Slow II", "Slow"]
+      "spells": ["Slow II", "Slow"]
     }
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_slow.with) and not hasEffectOf(bt, 'Slow')",
-      "commands": "use(bt)",
-      "frequency": 5,
-      "scope": "battle"
+      "when": [
+        "bt and bt.distance <= constants.spell_distance",
+        "canUse(vars.keep_slow.spells) and not hasEffectOf(bt, vars.keep_slow.spells)"
+      ],
+      "commands": [
+        "use(bt)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 5
     }
   ]
 }

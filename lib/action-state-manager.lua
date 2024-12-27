@@ -1,4 +1,4 @@
-MAX_SKILLCHAIN_TIME     = 5     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_SKILLCHAIN_TIME     = 6     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
 MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
@@ -15,6 +15,7 @@ local state_manager = {
     actionWakeTime = 0,
 
     actionType = nil,
+    actionTransitionCounter = 0,
     actions = { },
     actionTypeStartTime = os.clock(),
 
@@ -102,12 +103,15 @@ state_manager.setActionType = function (self, newType)
             or (isNewTypeBattle and 'battle')
 
         -- Only reset time if we're transitioning between idle/pull and battle
+        --if mode ~= newMode then
         if mode ~= newMode then
-            writeDebug(string.format(
+            writeComment(string.format(
                 'Transitioning from %s to %s after %s',
-                text_red(mode, Colors.debug),
-                text_red(newMode, Colors.debug),
-                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.debug)
+                text_red(mode, Colors.comment),
+                text_red(newMode, Colors.comment),
+                -- text_red(self.actionType, Colors.comment),
+                -- text_red(newType, Colors.comment),
+                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.comment)
             ))
 
             -- Sync up the latest mob state on mode change
@@ -119,6 +123,8 @@ state_manager.setActionType = function (self, newType)
             -- Reset some mob state tracking on state change
             self.skillchain = { time = 0 }
             self.mobAbilities = { }
+
+            self.actionTransitionCounter = self.actionTransitionCounter + 1
         end
 
         self.actionType = newType
@@ -135,6 +141,13 @@ end
 -- How many cycles have been processed in the current action type
 state_manager.cyclesInType = function(self)
     return self.cycles
+end
+
+-----------------------------------------------------------------------------------------
+-- Resets tracking of time in the current action state
+state_manager.resetActionTime = function(self)
+    self.actionTypeStartTime = os.clock()
+    self.cycles = 0
 end
 
 -----------------------------------------------------------------------------------------

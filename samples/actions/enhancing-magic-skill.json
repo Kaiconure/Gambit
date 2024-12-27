@@ -1,0 +1,49 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "comment": "Allows you to level up your enhancing magic skill automatically.",
+    "instructions": [
+      "1. Copy this file into the folder: Gambit/settings/<YourName>/actions",
+      "2. Run the following in the game chat: //gbt reload -actions enhancing-magic-skill",
+      "3. Enable Gambit using Shit+Alt+G",
+      "4. Grab a coffee or something."
+    ]
+  },
+  "idle": [
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "when": "me.mpp < 10",
+      "commands": "rest()"
+    },
+    {
+      "when": "canUse('Protect III', 'Protect II', 'Protect')",
+      "commands": ["use(me)", "wait(1)", "cancelBuff('Protect')"],
+      "frequency": 1
+    },
+    {
+      "when": "canUse('Shell III', 'Shell II', 'Shell')",
+      "commands": ["use(me)", "wait(1)", "cancelBuff('Shell')"],
+      "frequency": 1
+    },
+    {
+      "when": "canUse('Enthunder II', 'Enthunder')",
+      "commands": [
+        "use(me)",
+        "wait(1)",
+        "cancelBuff('Enthunder II', 'Enthunder')"
+      ],
+      "frequency": 1
+    }
+  ],
+  "resting": [
+    {
+      "when": "bt or me.mpp >= 100",
+      "commands": ["cancelRest()"]
+    }
+  ]
+}

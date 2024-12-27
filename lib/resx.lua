@@ -88,11 +88,26 @@ local function matchResourceByNameJP(resource, jpName)
 end
 
 --------------------------------------------------------------------------------------
--- Given the specified resource table, find the first
--- match with the provided name
+-- Given the specified resource table, find the first match with 
+-- the provided name
 function findResourceByName(res, name, language)
     if type(res) ~= 'table' then return end
-    if type(name) == 'table' and name.name then name = name.name end
+    --if type(name) == 'table' and name.name then name = name.name end
+
+    -- If it's a table, convert to its id or name
+    if type(name) == 'table' then
+        if type(name.id) == 'number' then
+            name = name.id
+        elseif type(name.name) == 'string' then
+            name = name.name
+        end
+    end
+
+    -- Allow numeric id's in
+    if type(name) == 'number' then
+        return res[name]
+    end    
+
     if type(name) ~= 'string' then return end
 
     language = language or globals.language
@@ -181,6 +196,19 @@ function hasMatchingTargetFlag(resource, targetFlags)
 end
 
 --------------------------------------------------------------------------------------
+-- Gets an item resource from an id or name
+local function getItemResource(item)
+    if type(item) == 'number' then item = resources.items[spell] end
+    if type(item) == 'string' then item = findItem(item) end
+
+    if type(item) ~= 'table' or type(item.id) ~= 'number' or item.id < 1 then
+        return nil
+    end
+
+    return item
+end
+
+--------------------------------------------------------------------------------------
 -- Gets a spell resource from an id or name
 local function getSpellResource(spell)
     if type(spell) == 'number' then spell = resources.spells[spell] end
@@ -219,9 +247,51 @@ local function getWeaponSkillResource(weaponSkill)
     return weaponSkill
 end
 
+function hasBuffInArray(buffs, buff, strict)
+    -- Nothing to do if we don't have a buffs array to search
+    if type(buffs) ~= 'table' or #buffs < 1 then return end
+
+    local check_list = { }
+
+    if type(buff) == 'string' then
+        check_list = meta.buffs:get_ids_by_name(buff)
+    elseif type(buff) == 'number' then
+        if strict then 
+            check_list = { buff } 
+        else
+            check_list = meta.buffs:get_with_shared_name_by_id(buff)
+        end
+    elseif type(buff) == 'table' and type(buff.id) == 'number' then
+        if strict then
+            check_list = { buff.id }
+        else
+            check_list = meta.buffs:get_with_shared_name_by_id(buff.id)
+        end
+    end
+
+    -- Now find if any buffs in the check list are present. If the check list is not a table, it
+    -- means that the buff didn't correspond to something we know about (invalid name, etc)
+    if type(check_list) == 'table' then
+        for i, id in pairs(check_list) do
+            if arrayIndexOf(buffs, id) then
+                return resources.buffs[id]
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- Check if the player has the specified buff. If strict, no duplication matching
+-- is performed at only the exact match is evaluated. This is only valid when
+-- and id or an actual buff table entry is provided.
+function hasBuff(player, buff, strict)
+    player = player or windower.ffxi.get_player()
+    return player and hasBuffInArray(player.buffs, buff, strict)
+end
+
 --------------------------------------------------------------------------------------
 -- Check if the player has the specified buff
-function hasBuff(player, buff, skiprecursion)
+function hasBuffOrig(player, buff, skiprecursion)
     player = player or windower.ffxi.get_player()
 
     -- Sleep is special. There are two separate status effects with the same name, so we will
@@ -313,7 +383,14 @@ function canUseSpell(player, spell)
     end
     
     -- Bail if we're silenced or asleep
-    if hasBuff(player, 'Silence') or hasBuff(player, 'Sleep') then
+    if 
+        hasBuff(player, BUFF_SILENCE) or
+        hasBuff(player, BUFF_SLEEP1) or
+        hasBuff(player, BUFF_SLEEP2) or
+        hasBuff(player, BUFF_STUN) or
+        hasBuff(player, BUFF_PETRIFIED) or
+        hasBuff(player, BUFF_TERROR)
+    then
         return false
     end
 
@@ -392,10 +469,14 @@ function canUseAbility(player, ability)
     -- Bail if we have a status effect that prevents use of job abilities.
     -- Note: This also affects pet commands
     if
-        hasBuff(player, 'Sleep') or
-        hasBuff(player, 'Amnesia') or
-        (ability.type == 'Waltz' and hasBuff(player, 'Saber Dance')) or
-        (ability.type == 'Samba' and hasBuff(player, 'Fan Dance'))
+        hasBuff(player, BUFF_SLEEP1) or
+        hasBuff(player, BUFF_SLEEP2) or
+        hasBuff(player, BUFF_STUN) or
+        hasBuff(player, BUFF_PETRIFIED) or
+        hasBuff(player, BUFF_AMNESIA) or
+        hasBuff(player, BUFF_TERROR) or
+        (ability.type == 'Waltz' and hasBuff(player, BUFF_SABER_DANCE)) or
+        (ability.type == 'Samba' and hasBuff(player, BUFF_FAN_DANCE))
     then
         return false
     end
@@ -449,8 +530,11 @@ function canUseWeaponSkill(player, weaponSkill)
 
     -- Bail if we have a debuff that prevents use of weapon skills
     if
-        hasBuff(player, 'Sleep') or
-        hasBuff(player, 'Amnesia')
+        hasBuff(player, BUFF_SLEEP1) or
+        hasBuff(player, BUFF_SLEEP2) or
+        hasBuff(player, BUFF_STUN) or
+        hasBuff(player, BUFF_PETRIFIED) or
+        hasBuff(player, BUFF_AMNESIA)
     then
         return false
     end

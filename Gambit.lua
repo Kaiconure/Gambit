@@ -1,4 +1,4 @@
-__version = '0.95.2'
+__version = '0.95.3-beta10'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -29,6 +29,7 @@ meta.dispel = require('./meta/dispel') or {}
 meta.monster_abilities = require('./meta/monster_abilities') or {}
 meta.trusts = require('./meta/trusts')
 meta.jobs_with_mp = require('./meta/jobs_with_mp')
+meta.buffs = require('./meta/buffs')
 
 require('./lib/logging')
 require('./lib/helpers')
@@ -38,6 +39,7 @@ require('./lib/eventing')
 require('./lib/commands')
 require('./lib/target-processing')
 
+inventory = require('./lib/inventory')
 smartMove = require('./lib/smart-move')
 
 actionStateManager = require('./lib/action-state-manager')
@@ -551,9 +553,10 @@ local _handle_actionChunk = function(id, data)
     local isDispel = false
 
     -- Certain buffs can be automatically removed if we see activity from the actor
-    if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_PLAYER) then
+    if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_TRUST) then
         actionStateManager:setMobBuff(actor, BUFF_SLEEP1, false)
         actionStateManager:setMobBuff(actor, BUFF_SLEEP2, false)
+        actionStateManager:setMobBuff(actor, BUFF_TERROR, false)
         actionStateManager:setMobBuff(actor, BUFF_PETRIFIED, false)
     end
 

@@ -1,0 +1,21 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "haste_cycle": {
+      "spells": ["Haste II", "Haste"],
+      "targets": ["me"]
+    }
+  },
+  "actions": [
+    {
+      "when": "partyByName(vars.haste_cycle.targets) and canUse(vars.haste_cycle.spells) and not hasEffectOf(member, vars.haste_cycle.spells)",
+      "commands": [
+        "use(member)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 1
+    }
+  ]
+}

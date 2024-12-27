@@ -1,0 +1,36 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "roles": {
+      "backup_healer": true
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
+        "partyCount('hpp < 50 and distance <= 10') >= 3"
+      ],
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": [
+        "canUse('Cure VI', 'Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 30')",
+        "member.distance <= constants.spell_distance"
+      ],
+      "commands": ["use()"],
+      "frequency": 1
+    },
+    {
+      "when": [
+        "canUse('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 50')",
+        "member.distance <= constants.spell_distance"
+      ],
+      "commands": ["use()"],
+      "frequency": 1
+    }
+  ]
+}

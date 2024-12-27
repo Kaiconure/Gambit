@@ -4,15 +4,20 @@
   },
   "vars": {
     "keep_paralyze": {
-      "with": ["Paralyze II", "Paralyze"]
+      "spells": ["Paralyze II", "Paralyze"]
     }
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_paralyze.with) and not hasEffectOf(bt, 'Paralyze')",
-      "commands": "use(bt)",
-      "frequency": 5,
-      "scope": "battle"
+      "when": [
+        "bt and bt.distance <= constants.spell_distance",
+        "canUse(vars.keep_paralyze.spells) and not hasEffectOf(bt, vars.keep_paralyze.spells)"
+      ],
+      "commands": [
+        "use(bt)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 5
     }
   ]
 }

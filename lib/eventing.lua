@@ -101,15 +101,15 @@ ActionPacket.open_listener(function (act)
                 local ability = action and action.param and resources.monster_abilities[action.param]
 
                 if ability then
+                    -- Need to load all the targets rather than just the first
+                    markMobAbilityStart(actor, ability, {target})
+
                     writeVerbose('%s: Preparing %s %s %s':format(
                         text_mob(actor.name, Colors.verbose),
                         text_weapon_skill(ability.name, Colors.verbose),
                         CHAR_RIGHT_ARROW,
                         target.spawn_type == SPAWN_TYPE_MOB and text_mob(target.name) or text_player(target.name)
                     ))
-
-                    -- Need to load all the targets rather than just the first
-                    markMobAbilityStart(actor, ability, {target})
                 end
             elseif category == 'mob_tp_finish' then
                 local ability = actionPacket.raw.param and resources.monster_abilities[actionPacket.raw.param]
@@ -145,14 +145,14 @@ ActionPacket.open_listener(function (act)
                 local ability = resources.weapon_skills[id] or resources.monster_abilities[id]
 
                 if ability then
+                    setPartyWeaponSkill(actor, ability, target)
+
                     writeVerbose('%s: %s %s %s':format(
                         text_player(actor.name, Colors.verbose),
                         text_weapon_skill(ability.name, Colors.verbose),
                         CHAR_RIGHT_ARROW,
                         text_mob(target.name)
                     ))
-
-                    setPartyWeaponSkill(actor, ability, target)
                 end
             end
         end
@@ -171,8 +171,8 @@ ActionPacket.open_listener(function (act)
                     local name = skillchain
 
                     if name then
-                        writeVerbose('Skillchain detected: %s':format(text_weapon_skill(name)))
                         setSkillchain(name)
+                        writeVerbose('Skillchain detected: %s':format(text_weapon_skill(name)))
                     end
                 end
             end

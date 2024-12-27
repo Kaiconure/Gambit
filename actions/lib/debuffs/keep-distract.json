@@ -4,15 +4,20 @@
   },
   "vars": {
     "keep_distract": {
-      "with": ["Distract III", "Distract II", "Distract"]
+      "spells": ["Distract III", "Distract II", "Distract"]
     }
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_distract.with) and not hasEffectOf(bt, 'Distract')",
-      "commands": "use(bt)",
-      "frequency": 5,
-      "scope": "battle"
+      "when": [
+        "bt and bt.distance <= constants.spell_distance",
+        "canUse(vars.keep_distract.spells) and not hasEffectOf(bt, vars.keep_distract.spells)"
+      ],
+      "commands": [
+        "use(bt)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 5
     }
   ]
 }

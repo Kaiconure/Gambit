@@ -4,15 +4,20 @@
   },
   "vars": {
     "keep_silence": {
-      "with": ["Silence"]
+      "spells": ["Silence"]
     }
   },
   "actions": [
     {
-      "when": "bt and canUse(vars.keep_silence.with) and not hasEffectOf(bt, 'Silence')",
-      "commands": "use(bt)",
-      "frequency": 5,
-      "scope": "battle"
+      "when": [
+        "bt and bt.distance <= constants.spell_distance",
+        "canUse(vars.keep_silence.spells) and not hasEffectOf(bt, vars.keep_silence.spells)"
+      ],
+      "commands": [
+        "use(bt)",
+        "postpone(spellRecast(spell.name) + 5)"
+      ],
+      "frequency": 5
     }
   ]
 }

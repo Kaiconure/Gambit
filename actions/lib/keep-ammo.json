@@ -1,0 +1,35 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_ammo": {
+      "ammo": null,
+      "pouch": null
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "vars.keep_ammo.ammo",
+        "not canRangedAttack() and findEquippableItem(vars.keep_ammo.ammo)"
+      ],
+      "commands": [
+        "log('Equipping ammo:', item.name)",
+        "equip('ammo')"
+      ],
+      "frequency": 5
+    },
+    {
+      "when": [
+        "vars.keep_ammo.ammo and vars.keep_ammo.pouch",
+        "not canRangedAttack() and findUsableItem(vars.keep_ammo.pouch)"
+      ],
+      "commands": [
+        "log('Using ammo pouch:', item.name)",
+        "useItem()"
+      ],
+      "frequency": 5
+    }
+  ]
+}

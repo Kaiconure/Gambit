@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_temper": {
+      "spells": ["Temper II", "Temper"]
+    }
+  },
+  "actions": [
+    {
+      "when": "canUseSpell(vars.keep_temper.spells) and not hasEffectOf(vars.keep_temper.spells)",
+      "commands": ["use(me)"],
+      "frequency": 20
+    }
+  ]
+}

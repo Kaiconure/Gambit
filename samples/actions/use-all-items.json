@@ -1,0 +1,31 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "comment": "Use up all items of a given name from your inventory.",
+    "instructions": [
+      "1. Copy this file into the folder: Gambit/settings/<YourName>/actions",
+      "2. Run the following in the game chat: //gbt reload -actions use-all-items",
+      "3. Enable Gambit using Shit+Alt+G",
+      "4. Look for the message that will indicate when the items have been fully consumed, and disable."
+    ]
+  },
+  "vars": {
+    "user": {
+      "item": "Silt Pouch",
+      "target": "me"
+    }
+  },
+  "idle": [
+    {
+      "when": "not canUse(vars.user.item)",
+      "commands": [
+        "log('Item', vars.user.item, 'was not found in your inventory.')"
+      ],
+      "frequency": 30
+    },
+    {
+      "when": "canUse(vars.user.item)",
+      "commands": ["use(vars.user.target)"]
+    }
+  ]
+}

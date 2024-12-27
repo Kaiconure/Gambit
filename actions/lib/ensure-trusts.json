@@ -7,28 +7,25 @@
     "ensure_trusts": {
       "spells": [],
       "recall_on_mpp": 20,
-      "recall_on_hpp": 40
+      "recall_on_hpp": 40,
+      "mob_safety_range": 10,
+      "recall_on_effects": ["Petrification"]
     }
   },
   "actions": [
     {
-      "when": [
-        "me.is_party_leader",
-        "needsTrust(vars.ensure_trusts.spells)"
-      ],
+      "when": ["me.is_party_leader", "needsTrust(vars.ensure_trusts.spells)"],
       "commands": ["log('Calling trust:', spell.name)", "callTrust()"]
     },
     {
       "when": [
-        "me.is_party_leader",
-        "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
-        "mobsInRange(10) == 0",
-        "member.distance < 5 or not vars.ensure_trusts.stationary"
+        "me.is_party_leader and actionType == 'idle'",
+        "partyAny('is_trust') and hasEffect(member, vars.ensure_trusts.recall_on_effects)"
       ],
       "commands": [
-        "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
-        "not vars.ensure_trusts.stationary and follow(member)",
-        "wait(1)",
+        "log('Release/recall trust', member.name, 'due to debuff', effect.name)",
+        "vars.ensure_trusts.stationary or align(member, nil, 1, 3)",
+        "wait(1.5)",
         "releaseTrust(member.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
@@ -37,20 +34,39 @@
     },
     {
       "when": [
-        "me.is_party_leader",
+        "me.is_party_leader and actionType == 'idle'",
+        "partyAny('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
+        "member.distance < 6 or not vars.ensure_trusts.stationary"
+      ],
+      "commands": [
+        "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
+        "vars.ensure_trusts.stationary or align(member, nil, 1, 3)",
+        "wait(1.5)",
+        "releaseTrust(member.name)",
+        "wait(1)",
+        "log('Recalling trust', spell.name)",
+        "useSpell(me)"
+      ],
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "me.is_party_leader and actionType == 'idle'",
         "partyAny('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name))",
-        "mobsInRange(10) == 0",
-        "member.distance < 5 or not vars.ensure_trusts.stationary"
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
+        "member.distance < 6 or not vars.ensure_trusts.stationary"
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
-        "not vars.ensure_trusts.stationary and follow(member)",
+        "vars.ensure_trusts.stationary or align(member, nil, 1, 3)",
         "wait(1)",
         "releaseTrust(member.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
-      ]
+      ],
+      "scope": "battle"
     }
   ]
 }

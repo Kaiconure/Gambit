@@ -4,10 +4,9 @@
   },
   "actions": [
     {
-      "when": "not isIdling() and canUseAbility('Aspir Samba II', 'Aspir Samba') and not hasBuff('Aspir Samba')",
+      "when": "canUseAbility('Aspir Samba II', 'Aspir Samba') and not hasBuff('Aspir Samba')",
       "commands": ["useAbility()"],
-      "frequency": 10,
-      "comment": "Use haste samba if available."
+      "frequency": 10
     }
   ]
 }

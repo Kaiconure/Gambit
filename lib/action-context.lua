@@ -42,11 +42,31 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-function context_any(search, ...)
+function __context_compare(a, b) return a == b end
+function __context_compare_strings(a, b) return string.lower(a) == string.lower(tostring(b or '')) end
+function __context_compare_strings_fast(lower_a, b) return lower_a == string.lower(tostring(b or '')) end
+
+local context_constants = {
+    ra_distance = 25,
+    spell_distance = 20,
+    
+    provoke_distance = 15,
+    
+    returnfaith_distance = 6,
+    returntrust_distance = 6
+}
+
+local function context_any(search, ...)
+    local cmp = __context_compare
+    if type(search) == 'string' then
+        search = string.lower(search)
+        cmp = __context_compare_strings_fast
+    end
+
     local _set = varargs({...})
     if type(_set) == 'table' then
         for i, v in ipairs(_set) do
-            if search == v then
+            if cmp(search, v) then
                 return true
             end
         end
@@ -79,7 +99,7 @@ end
 
 -----------------------------------------------------------------------------------------
 -- Converts a condition to a boolean (truthy to true, falsey to false)
-function context_boolean(condition)
+local function context_boolean(condition)
     return context_iif(condition, true, false)
 end
 
@@ -173,6 +193,33 @@ function context_max(...)
 end
 
 -----------------------------------------------------------------------------------------
+-- Make an x,y,duration tuple from the given args
+context_makeXYD = function(...)
+    local args = {...}
+
+    if type(args[1]) == 'table' then
+        -- If it's a table with x,y members, then we're good
+        if 
+            type(args[1].x) == 'number' and
+            type(args[1].y) == 'number' 
+        then
+            return args[1]
+        end
+    elseif
+        type(args[1]) == 'number' and
+        type(args[2]) == 'number'
+    then
+        return {
+            x = args[1],
+            y = args[2],
+            duration = args[3]
+        }
+    end
+
+    return
+end
+
+-----------------------------------------------------------------------------------------
 -- Enumerates over all fields in the context named in the given keys, and returns
 -- an array of all the matching results.
 local function enumerateContextByExpression(context, keys, expression, ...)
@@ -262,13 +309,22 @@ end
 local function createMemberNamesExpression(context, names)
     local expression = ''
 
-    if type(names) == 'table' and #names == 0 then
+    if type(names) ~= 'table' or #names == 0 then
         expression = 'true'
     else
+        local first = true
         for i, name in ipairs(names) do
-            name = string.lower(name)
-            expression = expression .. (i == 1 and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
+            if type(name) == 'string' then
+                name = string.lower(name)
+                expression = expression .. (first and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
+                first = false
+            end
         end
+    end
+
+    -- If it somehow wasn't set at all, we'll just never evaluate to true
+    if expression == '' then
+        expression = 'false'
     end
 
     return expression
@@ -378,6 +434,7 @@ local function setPartyEnumerators(context)
 end
 
 local function setArrayEnumerators(context)
+    -- Iterate through an array
     context.iterate = function(name, ...)
         if name == nil then
             return
@@ -397,15 +454,22 @@ local function setArrayEnumerators(context)
 
         -- Start by grabbing the current array enumerator
         local enumerator = context.action.enumerators.array[name]
-        if enumerator then
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
             -- Advance the enumerator
-            enumerator.at = enumerator.at + 1
+            enumerator.at = enumerator.at + enumerator.step
 
             -- If the new enumerator is within the array bounds, return that item
             if enumerator.at <= #enumerator.data then
                 -- Store the result
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
+                context.is_new_result      = true
+
+                context.action.enumerators.array_name = name
 
                 return context.result
             end
@@ -418,13 +482,179 @@ local function setArrayEnumerators(context)
 
         -- If there are any results, we'll set up a new array enumerator and return the first item
         if #results > 0 then
-            context.action.enumerators.array[name] = { data = results, at = 1}
+            context.action.enumerators.array[name] = { data = results, at = 1, step = 1}
             
             enumerator = context.action.enumerators.array[name]
             
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    -- Cycle through an array, starting over once the end is reached
+    context.cycle = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
+            -- Advance the enumerator
+            enumerator.at = enumerator.at + enumerator.step
+
+            -- Loop the enumerator if we've run off the end
+            if enumerator.at > #enumerator.data then
+                enumerator.at = 1
+            end
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= #enumerator.data then
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+                context.is_new_result      = true
+
+                context.action.enumerators.array_name = name
+
+                return context.result
+            end
+        end
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            context.action.enumerators.array[name] = { data = results, at = 1, step = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    -- Cycle through an array, starting over once the end is reached
+    context.bounce = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        if not context.action.results then
+            context.action.results = {}
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+
+        -- Enumerator structure:
+        --  - name: string
+        --  - data: []
+        --  - at: number
+        --  - step: number
+
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
+            local count = #enumerator.data 
+
+            if 
+                enumerator.at <= 1 and
+                enumerator.step == -1
+            then
+                enumerator.at = 2
+                enumerator.step = 1
+            elseif 
+                enumerator.at >= count and
+                enumerator.step == 1
+            then
+                enumerator.at = count - 1
+                enumerator.step = -1
+            else
+                enumerator.at = enumerator.at + enumerator.step
+            end
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= count and enumerator.at >= 1 then
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+                context.is_new_result   = true
+
+                context.action.enumerators.array_name = name
+
+                return context.result
+            end
+        end
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            context.action.enumerators.array[name] = { name = name, data = results, at = 1, step = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
 
             return context.result
         end
@@ -496,6 +726,9 @@ local function initContextTargetSymbol(context, symbol)
         -- Flag to determine if you're at the master level
         symbol.is_mastered = (player.superior_level == 5)
 
+        symbol.skills = player.skills
+        symbol.item_level = player.item_level
+
         symbol.symbol2 = 'me'
     elseif symbol.member then
         symbol.name = symbol.member.name
@@ -524,13 +757,20 @@ local function initContextTargetSymbol(context, symbol)
     symbol.id = symbol.mob.id
     symbol.index = symbol.mob.index
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
-    symbol.is_trust = symbol.mob.spawn_type == SPAWN_TYPE_TRUST
-    symbol.is_player = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER
+    symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
+    symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
+    symbol.heading = symbol.mob.heading
     symbol.valid_target = symbol.mob.valid_target
     symbol.spawn_type = symbol.mob.spawn_type
+    symbol.status = symbol.mob.status
+
+    if symbol.status == STATUS_RESTING then symbol.is_resting = true end
+    if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
+    if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
+    if symbol.status == STATUS_IDLE then symbol.is_idle = true end
 
     -- Trusts
     if symbol.is_trust then
@@ -808,92 +1048,57 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Find items in any of your bags
+    context.findItem = function(item)
+        context.item = inventory.find_item(item)
+        return context.item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find usable items in any of your bags
+    context.findUsableItem = function(item)
+        context.item = inventory.find_item(item, { usable = true })
+        return context.item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find equippable items in any of your bags
+    context.findEquippableItem = function(item)
+        context.item = inventory.find_item(item, { equippable = true })
+        return context.item
+    end    
+
+    --------------------------------------------------------------------------------------
+    -- Get information about the ranged gear you have equipped
+    context.canRangedAttack = function()
+        local info = inventory.get_ranged_equipment()
+        context.ranged = info
+
+        return info and info.valid
+    end
+    context.canRA = context.canRangedAttack
+
+    --------------------------------------------------------------------------------------
     --
     context.canUseItem = function(...)
+
+        if hasBuff(context.player, 'Sleep') then
+            return
+        end
+
         local items = varargs({...}, context.item and context.item.name)
         if type(items) == 'table' then
             for key, _item in ipairs(items) do
-                local item = _item
-                
-                if type(item) == 'string' then
-                    item = findItem(item)
-                    if item then
-                        -- We first need to verify that the item is usable in general:
-                        --  - Make sure we're not asleep
-                        --  - Make sure it's not food, or if it is, that we're not already fed
-                        --  - It's got a cast time
-                        --  - It doesn't have a level requirement -OR- the level requirement is met
-                        --  - It doesn't have a job requirement -OR- the job requirement is met
-                        --
-                        if 
-                            not hasBuff('Sleep') and
-                            (item.type ~= ITEM_TYPE_FOOD or not hasBuff(context.player, 'Food')) and
-                            item.cast_time ~= nil and                            
-                            (item.level == nil or context.player.main_job_level >= item.level) and
-                            (item.jobs == nil or item.jobs[context.player.main_job_id] == true)
-                        then
-
-                            -- NOTE: The 'table' type check is required due to items being moved to the recycle bin turning into numbers
-                            local bagItem = tableFirst(windower.ffxi.get_items(0), 
-                                function (_i) 
-                                    return type(_i) == 'table' and _i.id == item.id 
-                                end)
-
-                            if bagItem then
-                                local ext = extdata.decode(bagItem)
-
-                                local hasTimer = ext and ext.next_use_time
-                                local secondsUntilReuse = 0
-                                local secondsUntilActivation = 0
-                                local chargesRemaining = 1
-
-                                if ext then
-                                    -- Countdown to when it can be equipped and used (ex: 15 minutes on Capacity Ring)
-                                    if ext.next_use_time ~= nil then
-                                        secondsUntilReuse = ext.next_use_time + 18000 - os.time()
-                                    end
-                                    
-                                    -- Countdown to use once it's been equiped (ex: 5 seconds on Capacity Ring).
-                                    -- It will be negative if the item is not equipped.
-                                    if ext.activation_time ~= nil then
-                                        secondsUntilActivation = ext.activation_time + 18000 - os.time()
-                                    end
-
-                                    if ext.charges_remaining ~= nil then
-                                        chargesRemaining = ext.charges_remaining
-                                    end
-                                end
-
-                                -- writeDebug('Item: %s / Reuse in: %.1fs / Equip for: %.1fs / %d charges':format(
-                                --     item.name,
-                                --     secondsUntilReuse,
-                                --     secondsUntilActivation,
-                                --     chargesRemaining
-                                -- ))
-
-                                -- This is set based on the time remaining until it is usable and the number of charges.
-                                -- It doesn't take into account the activation time -- that can be handled separately
-                                -- once we know the item can be used once equipped.
-                                local canUse = secondsUntilReuse <= 0 and chargesRemaining > 0
-
-                                -- Save the item to the context
-                                context.item = {
-                                    name = item.name,
-                                    item = item,
-                                    type = ext and ext.type,
-                                    bagItem = bagItem,
-                                    secondsUntilReuse = secondsUntilReuse,
-                                    secondsUntilActivation = secondsUntilActivation,
-                                    chargesRemaining = chargesRemaining,
-                                    usable = (ext and ext.usable) or canUse
-                                }
-
-                                -- Return if we can use it
-                                if canUse then
-                                    return key
-                                end
-                            end
-                        end
+                local info = inventory.find_item(_item, { usable = true })   
+                if info then
+                    local item = info.item
+                    --writeJsonToFile('./data/%s.info.json':format(_item), info)
+                    if 
+                        (item.level == nil or context.player.main_job_level >= item.level) and
+                        (item.jobs == nil or item.jobs[context.player.main_job_id] == true)
+                    then
+                        context.item = info
+                        return key
                     end
                 end
             end
@@ -912,10 +1117,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             item = context.item.item
             itemName = context.item.name
 
-            if context.item.secondsUntilReuse <= 0 then
-                if context.item.secondsUntilActivation > 0 then
-                    writeDebug('Would set secondsUntilActivation=' .. context.item.secondsUntilActivation)
-                    --secondsUntilActivation = context.item.secondsUntilActivation
+            if type(context.item.secondsUntilReuse) == 'number' then
+                if context.item.secondsUntilReuse <= 0 then
+                    if context.item.secondsUntilActivation > 0 then
+                        writeDebug('Would set secondsUntilActivation=' .. context.item.secondsUntilActivation)
+                        --secondsUntilActivation = context.item.secondsUntilActivation
+                    end
                 end
             end
         end
@@ -1327,17 +1534,63 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    --
+    context.aligned = function(target, angle, distance)
+        -- Convert degrees to radians if an angle was provided
+        angle = tonumber(angle)
+        if type(angle) == 'number' then
+            angle = angle * math.pi / 180
+        end
+
+        return smartMove:atMobOffset(target, angle, distance)
+    end
+
+    --------------------------------------------------------------------------------------
+    --
+    context.align = function(target, angle, distance, duration)
+        -- Nothing to do if we're already aligned
+        if context.aligned(target, angle, distance) then
+            return
+        end
+
+        -- Convert degrees to radians if an angle was provided
+        angle = tonumber(angle)
+        if type(angle) == 'number' then
+            angle = angle * math.pi / 180
+        end
+
+        local position = smartMove:findMobOffset(target, angle, distance)
+        local success = context.move(
+            position[1],
+            position[2],
+            math.max(tonumber(duration or 3), 1))
+        
+        directionality.faceTarget(target)
+        if not success then
+            -- TODO: Make this configurable? Parameterized?
+            context.postpone(5)
+            return false
+        end
+
+        return true
+    end
+
+    --------------------------------------------------------------------------------------
     -- Returns true if we're behind the mob and facing it
-    context.alignedRear = function ()
-        if context.bt then
-            if smartMove:atMobRear(context.bt.index) then
+    context.alignedRear = function (target)
+        target = target or context.bt
+        if target then
+            if smartMove:atMobRear(target.index) then
                 return true
             end
         end
     end
 
-    context.canAlignRear = function ()
-        if not context.bt then
+    --------------------------------------------------------------------------------------
+    --Determine if rear alignment on this mob is possible
+    context.canAlignRear = function (target)
+        target = target or context.bt
+        if not target or not target.name then
             return false
         end
 
@@ -1345,8 +1598,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return false
         end
 
-        return not arrayIndexOfStrI(settings.noRearList, context.bt.name)
+        if context.hasEffect('Bind', 'Sleep', 'Terror', 'Petrification', 'Stun') then
+            context.postpone(5)
+            return false
+        end
+
+        return not arrayIndexOfStrI(settings.noRearList, target.name)
     end
+    context.canAlign = context.canAlignRear
 
     --------------------------------------------------------------------------------------
     -- Set up behind the mob and then face it
@@ -1415,26 +1674,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
-    -- context.follow = function (distance)
-    --     local party = windower.ffxi.get_party()
-    --     local leaderId = tonumber(party.party1_leader) or 0
-
-    --     if 
-    --         leaderId <= 0 or
-    --         leaderId == context.me.id
-    --     then
-    --         return false
-    --     end
-
-    --     local mob = windower.ffxi.get_mob_by_id(leaderId)
-    --     if mob == nil then
-    --         return false
-    --     end
-
-    --     distance = math.clamp(tonumber(distance) or 5, 0, 20)
-    --     return context.follow(mob, distance)
-    -- end
-
     --------------------------------------------------------------------------------------
     -- 
     context.follow = function (target, distance)
@@ -1464,6 +1703,290 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
+    ---------------------------------------------------------------------------
+    -- Returns the parameter representing the furthest point from the player
+    context.furthest = function(...)
+        local args = varargs({...})
+
+        if #args == 0 or context.me == nil then return end
+
+        local furthest = nil
+        local furthestd = -1
+        local vme = V({context.me.x, context.me.y})
+        for i = 1, #args do
+            local point = args[i]
+            if point and type(point.x) == 'number' and type(point.y) == 'number' then
+                local vp = V({point.x, point.y})
+                local d = vme:subtract(vp):length()
+
+                if d > furthestd then
+                    furthest = point
+                    furthestd = d
+                end
+            end
+        end
+
+        context.point = furthest
+
+        return furthest
+    end
+    context.farthest = context.furthest
+
+    context.nearest_first = function(...)
+        local args = json.parse(json.stringify(varargs({...})))
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        local nearestd = math.huge
+        local nearesti = nil
+
+        -- Find the nearest entry
+        for i, p in ipairs(args) do
+            if type(p.distance) == 'number' then
+                if p.distance < nearestd then
+                    nearestd = p.distance
+                    nearesti = i
+                end
+            else
+                local dx = p.x - me.x
+                local dy = p.y - me.y
+                local d = math.sqrt((dx*dx) + (dy*dy))
+
+                if d < nearestd then
+                    nearestd = d
+                    nearesti = i
+                end
+            end
+        end
+
+        -- Shuffle any previous entries to the end of the array, in order
+        if nearesti then
+            local count = #args
+            for i = 1, nearesti - 1 do
+                local p = args[1]
+                table.remove(args, 1)
+                args[count] = p
+            end
+        end
+
+        return args
+    end
+
+    context.farthest_first = function(...)
+        local args = json.parse(json.stringify(varargs({...})))
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        local farthestd = -1
+        local farthesti = nil
+
+        -- Find the farthest entry
+        for i, p in ipairs(args) do
+            if type(p.distance) == 'number' then
+                if p.distance > farthestd then
+                    farthestd = p.distance
+                    farthesti = i
+                end
+            else
+                local dx = p.x - me.x
+                local dy = p.y - me.y
+                local d = math.sqrt((dx*dx) + (dy*dy))
+
+                if d > farthestd then
+                    farthestd = d
+                    farthesti = i
+                end
+            end
+        end
+
+        -- Shuffle any previous entries to the end of the array, in order
+        if farthesti then
+            local count = #args
+            for i = 1, farthesti - 1 do
+                local p = args[1]
+                table.remove(args, 1)
+                args[count] = p
+            end
+        end
+
+        return args
+    end
+    context.furthest_first = context.farthest_first
+
+    context.order_by_nearest = function(...)
+        local args = varargs({...})
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        return table.sort(args, function(a, b)
+                if type(a.distance) == 'number' and type(b.distance) == 'number' then
+                    return a.distance < b.distance
+                end
+
+                local dxA = a.x - me.x
+                local dyA = a.y - me.y
+
+                local dxB = b.x - me.x
+                local dyB = b.y - me.y
+
+                local dA2 = (dxA * dxA) + (dyA * dyA)
+                local dB2 = (dxB * dxB) + (dyB * dyB)
+
+                return dA2 < dB2
+            end)
+    end
+
+    context.order_by_furthest = function(...)
+        local args = varargs({...})
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        return table.sort(args, function(a, b)
+                if type(a.distance) == 'number' and type(b.distance) == 'number' then
+                    return a.distance < b.distance
+                end
+
+                local dxA = a.x - me.x
+                local dyA = a.y - me.y
+
+                local dxB = b.x - me.x
+                local dyB = b.y - me.y
+
+                local dA2 = (dxA * dxA) + (dyA * dyA)
+                local dB2 = (dxB * dxB) + (dyB * dyB)
+
+                return dA2 >= dB2
+            end)
+    end
+
+    ---------------------------------------------------------------------------
+    -- Returns the parameter representing the nearest point from the player
+    context.nearest = function(...)
+        local args = varargs({...})
+
+        if #args == 0 or context.me == nil then return end
+
+        local nearest = nil
+        local nearestd = math.huge
+        local vme = V({context.me.x, context.me.y})
+        for i = 1, #args do
+            local point = args[i]
+            if point and type(point.x) == 'number' and type(point.y) == 'number' then
+                local vp = V({point.x, point.y})
+                local d = vme:subtract(vp):length()
+
+                if d < nearestd then
+                    nearest = point
+                    nearestd = d
+                end
+            end
+        end
+
+        context.point = nearest
+
+        return nearest
+    end
+
+    ---------------------------------------------------------------------------
+    --
+    context.distanceTo = function(...)
+        local pos = context_makeXYD(...)
+        if not pos then return end
+
+        local me = windower.ffxi.get_mob_by_target('me')
+        local v = V({pos.x, pos.y})
+        local vme = V({me.x, me.y})
+
+        return v:subtract(vme):length()
+    end
+
+    ---------------------------------------------------------------------------
+    --
+    context.checkPosition = function(...)
+        local d = context.distanceTo(...)
+        --writeVerbose('cp.distance: %.2f':format(d))
+        if type(d) == 'number' then return d < 1 end
+    end
+
+    ---------------------------------------------------------------------------
+    --
+    context.move = function(...)
+        local pos = context_makeXYD(...)
+        if not pos then return end
+
+        local me = windower.ffxi.get_mob_by_target('me')
+
+        local x = pos.x
+        local y = pos.y
+        local duration = pos.duration
+
+        -- If there's an existing job that exactly matches the newly requested one,
+        -- then let's just let that job continue.
+        local existingJob = smartMove:getJobInfo()
+        if existingJob then
+            if existingJob.mode == 'position' then
+                local jp = existingJob.position
+                if 
+                    jp and
+                    jp[1] == pos.x and
+                    jp[2] == pos.y
+                then
+                    return true
+                end
+            end
+        end
+
+        local jobId = smartMove:moveTo(x, y)
+        if jobId then
+            local immediate = (tonumber(duration) or 0) <= 0
+            if immediate then
+                return true
+            end
+
+            local start = os.time()
+            duration = math.max(duration, 0.5)
+
+            while true do
+                coroutine.sleep(0.5)
+
+                local now = os.time()
+                local job = smartMove:getJobInfo()
+
+                -- If the job is still running and our duration has ellapsed, cancel it
+                if 
+                    job and
+                    job.jobId == jobId and
+                    (now - start) >= duration 
+                then
+                    smartMove:cancelJob(jobId)
+                    job = nil
+                end
+
+                -- If we're already in position, we can stop
+                if context.checkPosition(x, y) then
+                    -- If the current job is still the one we started, we can cancel that
+                    if job and job.jobId == jobId then
+                        smartMove:cancelJob(jobId)
+                    end
+                    --context.log('The movement operation completed successfully.')
+                    return true
+                end
+
+                -- If there's no job, or the job doesn't match ours, we've finished
+                -- before we got into position for some reason (manual follow cancel, etc)
+                if 
+                    job == nil or
+                    job.jobId ~= jobId
+                then
+                    --context.log('The movement operation was not completed.')
+                    return
+                end
+            end
+        end
+
+        --context.log('The movement operation could not be scheduled.')
+    end
+
     --------------------------------------------------------------------------------------
     -- 
     context.cancelFollow = function ()
@@ -1489,6 +2012,62 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if mob and mob.valid_target then
                     return mob
                 end
+            end
+        end
+    end
+
+    context.findMob = function(identifier, distance, withAggro)
+        if distance == nil then distance = 50 end
+
+        if 
+            type(distance) == 'number' and
+            distance > 0 and
+            (type(identifier) == 'number' or type(identifier) == 'string')
+        then
+            local mobs = windower.ffxi.get_mob_array()
+            local distanceSquared = distance * distance
+            local isIndex = type(identifier) == 'number'
+            local isName = not isIndex
+            local nearest = nil
+
+            if isName then identifier = string.lower(identifier) end
+
+            for key, mob in pairs(mobs) do
+                if
+                    mob.spawn_type == SPAWN_TYPE_MOB and
+                    mob.valid_target and
+                    mob.hpp > 0 and
+                    mob.distance <= distanceSquared
+                then
+                    if
+                        (isIndex and identifier == mob.index) or
+                        (isName and identifier == string.lower(mob.name))
+                    then
+                        if
+                            (not withAggro or mob.status == STATUS_ENGAGED) and
+                            (nearest == nil or nearest.distance > mob.distance)
+                        then
+                            nearest = mob
+                        end
+                    end
+                end
+            end
+
+            if nearest then
+                -- Store actual distance
+                nearest.distance = math.sqrt(distance)
+
+                -- Store any managed buffs
+                nearest.buffs = actionStateManager:getBuffsForMob(nearest.id)
+
+                writeDebug('Nearest mob match: %s (%s) (distance: %s)':format(
+                    text_mob(nearest.name, Colors.debug),
+                    text_number('%03X':format(nearest.index), Colors.debug),
+                    text_number('%.1f':format(nearest.distance), Colors.debug)
+                ))
+
+                context.mob = nearest
+                return nearest
             end
         end
     end
@@ -1593,49 +2172,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
-
-        -- if type(partyName) ~= 'string' then return end
-
-        -- partyName = string.lower(partyName)
-        
-        -- local player = context.player
-        -- local matches = {}
-        -- for id, spell in pairs(globals.spells.trust) do
-        --     -- Store any matching trust spells that we are able to cast
-        --     if 
-        --         string.lower(spell.party_name) == partyName and
-        --         canUseSpell(player, spell)
-        --     then
-        --         matches[#matches + 1] = spell
-        --     end
-        -- end
-
-        -- -- If we've found any matches...
-        -- if #matches > 0 then
-        --     -- If we found more than one match, we can try to disambiguate them by looking up 
-        --     -- trusts already in the party. This makes the assumption that we're calling this
-        --     -- to find the spell that was used to call an existing party member trust.
-        --     if #matches > 1 then
-        --         local p = context.findInParty(partyName)
-        --         if p then
-        --             for i, spell in ipairs(matches) do
-        --                 if 
-        --                     p.mob and
-        --                     p.mob.models and
-        --                     #p.mob.models > 0 and
-        --                     type(spell.model) == 'number' and
-        --                     spell.model == p.mob.models[1]
-        --                 then
-        --                     return spell.name
-        --                 end
-        --             end
-        --         end
-        --     end
-
-        --     -- If we get here, we'll just return the first result. Either we only found one, or there
-        --     -- were multiples without an in-party model reference to be found.
-        --     return matches[1].name
-        -- end
     end
 
     -------------------------------------------------------------------------------------
@@ -1707,47 +2243,81 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.partyHasEffect = context.partyHasBuff
 
-    context.hasBuff = function(target, ...)
-        local names = varargs({...})
+    context.hasBuff = function(...)
+        local args = {...}
 
-        -- If the target is a string that exists in the context, we'll use that
-        if type(target) == 'string' and context[target] and context[target].buffs then
-            target = context[target]
+        local start_index = 1
+        local target = context.me
+
+        -- Find a target override
+        if
+            type(args[start_index]) == 'table' and
+            type(args[start_index].buffs) == 'table'
+        then
+            target = args[start_index]
+            start_index = start_index + 1
+        elseif
+            type(args[start_index]) == 'string' and
+            type(context[args[start_index]]) == 'table' and
+            type(context[args[start_index]].buffs) == 'table'
+        then
+            target = context[args[start_index]]
+            start_index = start_index + 1
+        elseif
+            args[start_index] == nil
+        then
+            start_index = start_index + 1
         end
-        
-        -- If the target is not a table at this point, then we'll use ourself
-        if type(target) ~= 'table' then
 
-            -- If the target is a string, it means no target was specified and the first param was 
-            -- a buff. Let's add it to the list of buff names we're searching through.
-            if type(target) == 'string' then
-                table.insert(names, 1, target)
+        -- Find a strictness override
+        local use_strict = false
+        if
+            args[start_index] == 'use-strict' or
+            args[start_index] == 'not-strict'
+        then
+            if args[start_index] == 'use-strict' then
+                use_strict = true
             end
-
-            -- Promote the target to ourself
-            target = context.me
+            start_index = start_index + 1
         end
 
-        for i, name in ipairs(names) do
-            local buff = findBuff(name)
-            if buff and arrayIndexOf(target.buffs, buff.id) then
+        local names = args
+        if
+            type(args[start_index]) == 'table' and
+            #args[start_index] > 0
+        then
+            names = args[start_index]
+            start_index = 1
+        end
+
+        for i = start_index, #names do
+            local name = names[i]
+            local buff = hasBuffInArray(target.buffs, name, strict)
+
+            if buff then
                 context.effect = buff
                 if target.spawn_type ~= SPAWN_TYPE_MOB then
                     context.member = target
                 end
-                return true
+                return buff
             end
         end
     end
+    context.hasEffect = context.hasBuff
 
     --------------------------------------------------------------------------------------
     -- Tries to use the specified action to remove an effect on the target
     context.removeEffect = function(target, effect, with)
+        target = target or context.member
+        
+        if type(target) == 'string' then target = context[target] end
+        if type(target) ~= 'table' then return end
+
         effect = effect or context.effect
         with = with or context.spell or context.ability or context.item
 
-        effect = findBuff(effect)
-        if type(target) == 'table' and effect and with then
+        effect = hasBuffInArray(target.buffs, effect)
+        if effect and with then
             if context.canUse(with) then
                 context.use(target)
                 if target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST then
@@ -1761,53 +2331,84 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.postpone(2)
     end
 
-    -- context.memberHasBuff = function(member, ...)
-    --     member = member or context.member
-    --     if type(member) == 'string' then 
-    --         member = context[member] 
-    --     end
-
-    --     if type(member) == 'table' and type(member.buffs) == 'table' then
-            
-    --         local names = varargs({...})
-    --         for i, name in ipairs(names) do
-    --             local buff = findBuff(name)
-    --             if buff and arrayIndexOf(member.buffs, buff.id) then
-    --                 context.effect = buff
-    --                 return true
-    --             end
-    --         end
-    --     end
-    -- end
-
-    --------------------------------------------------------------------------------------
-    -- Returns true if the specified buff is active. If multiple buffs are specified,
-    -- the result will be true if -ANY- of them are active.
-    context.hasBuffOrig = function (...)
-        local names = varargs({...})
-        
-        local player = windower.ffxi.get_player()
-        for i, name in ipairs(names) do
-            local buff = hasBuff(player, name)
-            if buff then
-                context.effect = buff
-                return i
-            end
-        end
-    end
-    context.hasEffect = context.hasBuff
-
     --------------------------------------------------------------------------------------
     -- Determine if the target has the effect triggerd by the specified spell or ability.
     -- If no target is specified, it's assumed to be the player.
-    context.hasEffectOf = function(target, ...)
+    context.hasEffectOf = function(...)
+        local args = {...}
 
+        local start_index = 1
+        local target = context.me
+
+        -- Find a target override
+        if
+            type(args[start_index]) == 'table' and
+            type(args[start_index].buffs) == 'table'
+        then
+            target = args[start_index]
+            start_index = start_index + 1
+        elseif
+            type(args[start_index]) == 'string' and
+            type(context[args[start_index]]) == 'table' and
+            type(context[args[start_index]].buffs) == 'table'
+        then
+            target = context[args[start_index]]
+            start_index = start_index + 1
+        elseif
+            args[start_index] == nil
+        then
+            start_index = start_index + 1
+        end
+
+        -- Find a strictness override
+        local use_strict = false
+        if
+            args[start_index] == 'use-strict' or
+            args[start_index] == 'not-strict'
+        then
+            if args[start_index] == 'use-strict' then
+                use_strict = true
+            end
+            start_index = start_index + 1
+        end
+
+        local names = args
+        if
+            type(args[start_index]) == 'table' and
+            #args[start_index] > 0
+        then
+            names = args[start_index]
+            start_index = 1
+        end
+
+        for i = start_index, #names do
+            local name = names[i]
+            local spell = findSpell(name)
+            local ability = findJobAbility(name)
+
+            local res = spell or ability
+            local buffId = res and res.status
+
+            if buffId then
+                local buff = hasBuffInArray(target.buffs, buffId, strict)
+                if buff then
+                    context.effect = buff    
+                    return buff
+                end
+            end
+        end        
+    end
+    
+    context.hasEffectOfOld = function(target, ...)
         local names = varargs({...})
+        local strict = target == 'use-strict' or names[1] == 'use-strict'
 
         -- If the target is a string that exists in the context, we'll use that
         if type(target) == 'string' and context[target] and context[target].buffs then
             target = context[target]
         end
+
+        -- TODO: The issue has to do with target being where the spells are sent
         
         -- If the target is not a table at this point, then we'll use ourself
         if type(target) ~= 'table' then
@@ -1822,22 +2423,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             target = context.me
         end
 
-        for i, name in ipairs(names) do
+        for i = 1, #names do
+            local name = names[i]
+
             local spell = findSpell(name)
             local ability = findJobAbility(name)
+
             local res = spell or ability
             local buffId = res and res.status
-            if buffId then
-                -- Set the effect, as well as the spell or ability that causes it, to the context.
-                -- We do it outside the check to ensure that the latest hit is saved to the context
-                -- for use in "not hasEffectOf" scenarios.
-                context.effect = buff
-                context.spell = spell
-                context.ability = ability
 
-                local buff = hasBuff(target, buffId)
-                if buff then                    
-                    return i
+            if buffId then
+                local buff = hasBuffInArray(target.buffs, buffId, strict)
+                if buff then
+                    context.effect = buff    
+                    return buff
                 end
             end
         end
@@ -1875,6 +2474,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             (names[1] == nil or arrayIndexOfStrI(names, sc.name))
         then
             context.skillchain_trigger_time = sc.time
+
+            -- context.log('Party skillchain: %s':format(
+            --     text_weapon_skill(sc.name)
+            -- ))
 
             -- Commenting out the below. Why *not* let multple reactions occur to the same SC?
 
@@ -1958,6 +2561,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     -- Don't let this action trigger again for the same weapon skill
                     local age = context.time - party_weapon_skill.time
                     context.delay(MAX_WEAPON_SKILL_TIME - age)
+
+                    -- context.log('Party weapon skill: %s (delaying %s)':format(
+                    --     text_weapon_skill(party_weapon_skill.name, Colors.conrsilk),
+                    --     text_number('%.1fs':format(MAX_WEAPON_SKILL_TIME - age))
+                    -- ))
 
                     return party_weapon_skill
                 end
@@ -2047,6 +2655,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
     context.throw = context.shoot
     context.ra = context.shoot
+    context.RA = context.shoot
 
     --------------------------------------------------------------------------------------
     --
@@ -2203,6 +2812,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local command = table.concat(commands, ';')
         sendActionCommand(command, context, 10)
     end
+
+    --------------------------------------------------------------------------------------
+    -- "Static" context properties
+    context.constants = context_constants
+    context.const = context.constants
 
     --------------------------------------------------------------------------------------
     -- "Static" context functions

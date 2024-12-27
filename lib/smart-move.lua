@@ -80,6 +80,12 @@ local function normalizeAngle(rad)
     return (offset - (math.floor(offset / width) * width))
 end
 
+-- Absolute distance between two radian angles
+local function angularDistance(rad1, rad2)
+    local delta = rad2 - rad1
+    return math.abs(math.atan2(math.sin(delta), math.cos(delta)))
+end
+
 -- Determines the angle between vector and from. If from is ommitted,
 -- the base forward vector <1, 0> is used.
 local function vectorAngle(v, from)
@@ -99,11 +105,13 @@ end
 -- Determines if the two angles share a halfspace. Assumes that they are based on "to" vectors
 -- to a fixed point from a variable start position.
 local function sharesHalfspace(heading1, heading2)
-    heading1 = normalizeAngle(heading1)
-    heading2 = normalizeAngle(heading2)
+    --heading1 = normalizeAngle(heading1)
+    --heading2 = normalizeAngle(heading2)
 
     -- Determine if the headings are within half a circle of each other
-    return math.abs(heading1 - heading2) <= PI_OVER_TWO
+    --return math.abs(heading1 - heading2) <= PI_OVER_TWO
+
+    return angularDistance(heading1, heading2) <= PI_OVER_TWO
 end
 
 -- Gets a position vector from the specified coordinate (x,y)
@@ -115,17 +123,32 @@ local function coordVector(coord)
     return nil
 end
 
+-- Find the point at the given distance and angle offset from the mob
+local function findMobOffset(mob, angleOffset, distance)
+    local player = windower.ffxi.get_mob_by_target('me')
+    
+    local vPlayer = V({player.x, player.y})
+    local vMob = V({mob.x, mob.y})
+
+    distance = (type(distance) == 'number') and distance or 2
+
+    if type(angleOffset) == 'number' then
+        -- When an angle offset was provided, we'll calculate that from the mob
+        -- and scale it to the desired distance.
+        local direction = mob.heading + angleOffset
+        return vMob:add(vector.from_radian(direction):scale(distance))
+    else
+        -- Calculate the vector from the mob to me. This is the line we should take.
+        -- Normalize it and scale by the travel distance, and added to the mob position
+        -- that will give us the target location we're aiming for.
+        local vOffset = vPlayer:subtract(vMob):normalize():scale(distance)
+        return vMob:add(vOffset)
+    end
+end
+
 -- Find the point at the given distance behind the specified mob
 local function findMobRear(mob, distance)
-    local player = windower.ffxi.get_mob_by_target('me')
-    local vPlayer = V({player.x, player.y})
-    
-    local rearDirection = mob.heading + math.pi
-
-    local vMob = V({mob.x, mob.y})
-    local vTarget = vMob:add(vector.from_radian(rearDirection):scale(distance))
-
-    return vTarget
+    return findMobOffset(mob, math.pi, distance)
 end
 
 -- ======================================================================================
@@ -159,8 +182,8 @@ local function sm_movement_exp(self, job)
     local paused = false
     local continue = true
 
-    local MAX_SPEEDS        = 7     -- Max number of speeds to track
-    local MIN_AVERAGING     = 7     -- Minimum number of speeds for us to do the averaging check
+    local MAX_SPEEDS        = 20    -- Max number of speeds to track
+    local MIN_AVERAGING     = 20    -- Minimum number of speeds for us to do the averaging check
 
     local speeds = {}
     local nextSpeed = 1
@@ -208,10 +231,27 @@ local function sm_movement_exp(self, job)
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)
-                if avg < 0.25 and d2 > 3 then
+                local minAvg = 1.5
+
+                -- Increase the minimum averaging speed when mounted
+                --if me.status == 85 or me.status == 5 then minAvg = 1 end
+
+                if avg < minAvg and d2 > 3 then
                     shouldJitter = true
                 end
             end
+        end
+
+        -- Reset jittering if requested
+        if self.resettingJitter then
+            speeds = {}
+            nextSpeed = 1
+            iterationTime = nil
+            jittering = false
+            jitterUntil = 0
+
+            shouldJitter = false
+            self.resettingJitter = false
         end
 
         -- Start jittering if necessary
@@ -225,31 +265,23 @@ local function sm_movement_exp(self, job)
 
             -- Pick a jittering exit angle that is 45 degrees off of the exact opposite angle to
             --  the target, either left or right. 
-            local degrees = (math.random() < 0.5) and 135.0 or 225.0
+            --local degrees = (math.random() < 0.5) and 135.0 or 225.0
+            local degrees = ((225 - 135) * math.random()) + 135
             local escapeAngle = hdg2 + (degrees * math.pi / 180.0)
 
             writeVerbose('Jittering at %.1f degrees from target':format(degrees))
 
-            jitterUntil = now + 2.0
+            jitterUntil = now + 2 + (math.random() * 3.0)
             windower.ffxi.run(escapeAngle)
         end
 
         if paused then
-            -- Calculate the heading difference since the last iteration
-            local hdgDelta = math.abs(normalizeAngle(hdg) - normalizeAngle(hdg2))
-
-            if 
-                d2 > 1.0
-            then
-                -- Unpause if we're put some distance between us and the target
+            if d2 > 1.0 then
+                -- Unpause if we've put some distance between us and the target
                 paused = false
-            elseif 
-                hdgDelta > HEADING_TOLERANCE
-            then
-                
             end
 
-            -- Stay paused but turn to face the target if it's moved but is still in range
+            -- Stay paused (potentially), but turn to face the target if it's moved further out
             windower.ffxi.turn(hdg2)
         end
         
@@ -599,6 +631,7 @@ function sm_coroutine(self)
 
         self.cancel = false
         self.current = nil
+        self.resettingJitter = false
 
         coroutine.sleep(0.25)
     end
@@ -690,6 +723,17 @@ end
 -- ======================================================================================
 
 -------------------------------------------------------------------------------
+-- If there's a job running, this will cause its jitter tracker to reset.
+-- The result will be termination of any in-progress jitter, or a reset
+-- of any impending jitter operation.
+function smartMove:resetJitter()
+    -- TODO: Consider if we should have a pause/resume jitter operation?
+    if self.current then
+        self.resettingJitter = true
+    end
+end
+
+-------------------------------------------------------------------------------
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.
 function smartMove:cancelJob(jobId, immediate)
     local job = self.current
@@ -770,6 +814,25 @@ function smartMove:moveTo(x, y)
     coroutine.sleep(0.25)
 
     return job.jobId
+end
+
+-----------------------------------------------------------------------------------------
+-- Find the location that is offsetDistance from the specified mob, and an offset
+-- of offsetAngle radians from its forward direction. An offset of 0 will be
+-- directly in front of the mob; an offset of PI will be directly behind the
+-- mob; and so on.
+function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
+    return findMobOffset(mob, offsetAngle, offsetDistance)
+end
+
+-----------------------------------------------------------------------------------------
+-- Determines if the player is at the location represented by the specified
+-- offset angle and distance relative to the mob.
+function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
+    local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
+    local player = windower.ffxi.get_mob_by_target('me')
+
+    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
 end
 
 -----------------------------------------------------------------------------------------
@@ -982,7 +1045,8 @@ function smartMove:getJobInfo(jobId)
         if current:is_valid() then
             return {
                 jobId = current.jobId,
-                mode = current.type,
+                mode = current.mode,
+                time = current.time,
                 follow_index = current.follow_index,
                 position = current:pos()
             }

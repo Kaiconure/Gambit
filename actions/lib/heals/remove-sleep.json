@@ -1,0 +1,15 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "partyHasEffect('Sleep') and canUse('Cure')",
+      "commands": [
+        "log('Removing sleep from', member.name, 'with', spell.name)",
+        "removeEffect(member)"
+      ],
+      "frequency": 5
+    }
+  ]
+}

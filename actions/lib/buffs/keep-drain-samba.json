@@ -1,0 +1,12 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "canUseAbility('Drain Samba II', 'Drain Samba') and not hasBuff('Drain Samba')",
+      "commands": ["useAbility()"],
+      "frequency": 10
+    }
+  ]
+}

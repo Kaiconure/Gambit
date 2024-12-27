@@ -1,0 +1,12 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Enlight') and canUse('Enlight II', 'Enlight')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

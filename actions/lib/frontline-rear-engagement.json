@@ -2,16 +2,28 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "vars": {
+    "frontline_rear_engagement": {
+      "distance": 5,
+      "duration": 5
+    }
+  },
   "actions": [
     {
       "import": "frontline-engagement"
     },
     {
-      "when": "bt.distance <= 4 and canAlignRear() and not alignedRear()",
-      "commands": "alignRear(5, 10)",
+      "when": [
+        "bt.distance <= 4",
+        "canAlignRear() and not alignedRear()"
+      ],
+      "commands": [
+        "alignRear(vars.frontline_rear_engagement.distance, vars.frontline_rear_engagement.duration)",
+        "alignedRear() or postpone(10)"
+      ],
       "frequency": 1,
       "scope": "battle",
-      "delay": 1
+      "delay": 2
     }
   ]
 }

@@ -1,0 +1,130 @@
+{
+  "vars": {
+    "ensure_trusts": {
+      "spells": [
+        "Kupipi",
+        "Valaineral",
+        "Shantotto II",
+        "Zeid II",
+        "Tenzen"
+      ]
+    },
+    "refresh_cycle": {
+      "targets": [
+        "me",
+        "Kupipi",
+        "ArkEV",
+        "Valaineral",
+        "Shantotto",
+        "Zeid"
+      ]
+    },
+    "haste_cycle": {
+      "targets": ["me", "ArkEV", "Valaineral"]
+    },
+    "flurry_cycle": {
+      "targets": []
+    },
+    "regen_cycle": {
+      "targets": ["me"]
+    },
+    "black_magic_nuke": {
+      "max_tier": "III",
+      "min_tier": "II"
+    },
+    "black_magic_burst": {
+      "max_tier": "III"
+    }
+  },
+  "pull": [
+    {
+      "when": [
+        "bt.distance > 4 and bt.distance < 20",
+        "canUse('Silence', 'Dia II', 'Dia')"
+      ],
+      "commands": ["facingEnemy() or faceEnemy()", "use(bt)"],
+      "frequency": 5
+    },
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "heals/backup-cure-sequence"
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "import": "nukes/black-magic-burst"
+    },
+    {
+      "when": [
+        "not skillchaining() and not partyUsingWeaponSkill()",
+        "canUseWeaponSkill('Savage Blade', 'Requiescat', 'Swift Blade', 'Spirits Within', 'Red Lotus Blade', 'Fast Blade')"
+      ],
+      "commands": "useWeaponSkill()"
+    },
+    {
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "import": "buffs/regen-cycle"
+    },
+    {
+      "import": "buffs/haste-cycle"
+    },
+    {
+      "import": "buffs/flurry-cycle"
+    },
+    {
+      "import": "debuffs/keep-paralyze",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-slow",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-blind",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-distract",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-frazzle",
+      "disabled": true
+    },
+    {
+      "import": "nukes/black-magic-nuke"
+    }
+  ],
+  "idle": [
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    },
+    {
+      "import": "buffs/keep-enthunder"
+    },
+    {
+      "import": "buffs/keep-phalanx"
+    },
+    {
+      "import": "buffs/keep-stoneskin"
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death"
+    }
+  ]
+}

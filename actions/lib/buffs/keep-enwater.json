@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": "not hasBuff('Enwater II') and canUse('Enwater II')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    },
+    {
+      "when": "not hasBuff('Enwater II', 'Enwater') and canUse('Enwater')",
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ]
+}

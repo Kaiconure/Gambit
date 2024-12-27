@@ -13,6 +13,21 @@ local meta = {
     statuses = {
       13        -- Slow
     }
+  },
+  [439] = {    -- Petro Gaze (1)
+    statuses = {
+      7         -- Petrifiy
+    }
+  },
+  [1174] = {    -- Petro Eyes (1)
+    statuses = {
+      7         -- Petrifiy
+    }
+  },
+  [1184] = {    -- Petro Eyes (1)
+    statuses = {
+      7         -- Petrifiy
+    }
   }
 }
 

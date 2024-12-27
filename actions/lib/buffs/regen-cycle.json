@@ -1,0 +1,28 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": "Cycle the best available regen over all configured targets by name."
+  },
+  "vars": {
+    "regen_cycle": {
+      "targets": ["me"],
+      "spells": [
+        "Regen V",
+        "Regen IV",
+        "Regen III",
+        "Regen II",
+        "Regen"
+      ]
+    }
+  },
+  "actions": [
+    {
+      "when": "canUseSpell(vars.regen_cycle.spells) and partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, vars.regen_cycle.spells)",
+      "commands": [
+        "useSpell(member)",
+        "postpone(spellRecast(spell.name) + 10)"
+      ],
+      "frequency": 1
+    }
+  ]
+}

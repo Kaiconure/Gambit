@@ -35,19 +35,25 @@ local DefaultIgnoreList = {
     -- when we could be breaking down the obstacles to eliminate them.
     { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Cerise Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Chilblain Snoll', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Indomitable Spurned', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Lancing Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Larkish Opo-opo', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lavender Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lightfoot Lapinion', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Quivering Twitherym', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Red Dropwing', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Ruby Raptor', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Shrubshredder Chapuli', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Skittish Matamata', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Sloshmouth Snapweed', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Soiled Funguar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Temblor Beetle', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' }
 }
 
@@ -57,7 +63,7 @@ local DefaultIgnoreList = {
 local DefaultNoRearList = {
     'Amaranth Barrier',
     'Bedrock Crag',
-    'Broadleaf Palm'
+    'Broadleaf Palm',
     'Gnarled Rampart',
     'Heliotrope Barrier',
     'Icy Palisade',
@@ -149,11 +155,17 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
 
             -- Import any items that have an import reference and which aren't marked as disabled
             if type(action.import) == 'string' and not action.disabled then
-                -- First, try the user's actions/.libs folder
+                -- First, try the character-level actions libs folder
                 local fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
                 local file = files.new(fileName)
 
-                -- If the import doesn't exist there, use the standard settings .lib folder
+                -- If the import doesn't exist there, try the user-level actions lib folder
+                if not file:exists() then
+                    fileName = './settings/actions/lib/%s.json':format(action.import)
+                    file = files.new(fileName)
+                end
+
+                -- If the import doesn't exist there, use the standard actions lib folder
                 if not file:exists() then
                     fileName = './actions/lib/%s.json':format(action.import)
                     file = files.new(fileName)
@@ -214,7 +226,7 @@ local function loadActionImports(playerName, actions)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'pull', 'idle', 'resting', 'dead'}
+        local types = {'battle', 'pull', 'idle', 'resting', 'dead', 'imports'}
 
         for i = 1, #types do
             local actionType = types[i]
@@ -372,7 +384,7 @@ function loadSettings(actionsName, settingsOnly)
     tempSettings.retargetDelay = math.max(tempSettings.retargetDelay or 0, 0)
 
     -- The maximum horizontal search radius to use when acquiring targets. Clamped between 5-60 units.
-    tempSettings.maxDistance = math.max(5, math.min(tempSettings.maxDistance or 0, 60))
+    tempSettings.maxDistance = math.max(3, math.min(tempSettings.maxDistance or 0, 60))
 
     -- The maximum vertical search radius to use when acquiring targets. Can be used to prevent
     -- acquiring targets on unreachable platforms, or to avoid walking down stairs or ramps.

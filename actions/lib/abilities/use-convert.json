@@ -1,0 +1,23 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "use_convert": {
+      "max_mpp": 20,
+      "min_mp": 15
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "me.hp > me.mp",
+        "me.mpp < vars.use_convert.max_mpp",
+        "me.mp >= vars.use_convert.min_mp and me.mp > 0",
+        "canUse('Convert')"
+      ],
+      "commands": ["log('WARNING: Using Convert!')", "use(me)"],
+      "frequency": 10
+    }
+  ]
+}
