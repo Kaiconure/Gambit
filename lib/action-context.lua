@@ -627,20 +627,16 @@ local function setArrayEnumerators(context)
 
             -- If the new enumerator is within the array bounds, return that item
             if enumerator.at <= count and enumerator.at >= 1 then
-                writeDebug('%s: next bounce':format(name))
-
                 -- Store the result
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
-                context.is_new_result      = true
+                context.is_new_result   = true
 
                 context.action.enumerators.array_name = name
 
                 return context.result
             end
         end
-
-        writeDebug('%s: new bounce':format(name))
 
         -- If we don'thave a valid iterator, go back to the source
         if not results then
@@ -1737,7 +1733,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.farthest = context.furthest
 
     context.nearest_first = function(...)
-        local args = varargs({...})
+        local args = json.parse(json.stringify(varargs({...})))
         local me = windower.ffxi.get_mob_by_target('me')
         local vme = V({me.x, me.y})
 
@@ -1765,15 +1761,57 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         -- Shuffle any previous entries to the end of the array, in order
         if nearesti then
+            local count = #args
             for i = 1, nearesti - 1 do
                 local p = args[1]
                 table.remove(args, 1)
-                args[#args + 1] = p
+                args[count] = p
             end
         end
 
         return args
     end
+
+    context.farthest_first = function(...)
+        local args = json.parse(json.stringify(varargs({...})))
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
+
+        local farthestd = -1
+        local farthesti = nil
+
+        -- Find the farthest entry
+        for i, p in ipairs(args) do
+            if type(p.distance) == 'number' then
+                if p.distance > farthestd then
+                    farthestd = p.distance
+                    farthesti = i
+                end
+            else
+                local dx = p.x - me.x
+                local dy = p.y - me.y
+                local d = math.sqrt((dx*dx) + (dy*dy))
+
+                if d > farthestd then
+                    farthestd = d
+                    farthesti = i
+                end
+            end
+        end
+
+        -- Shuffle any previous entries to the end of the array, in order
+        if farthesti then
+            local count = #args
+            for i = 1, farthesti - 1 do
+                local p = args[1]
+                table.remove(args, 1)
+                args[count] = p
+            end
+        end
+
+        return args
+    end
+    context.furthest_first = context.farthest_first
 
     context.order_by_nearest = function(...)
         local args = varargs({...})
