@@ -482,7 +482,7 @@ local function setArrayEnumerators(context)
 
         -- If there are any results, we'll set up a new array enumerator and return the first item
         if #results > 0 then
-            context.action.enumerators.array[name] = { data = results, at = 1, step = 1}
+            context.action.enumerators.array[name] = { name = name, data = results, at = 1, step = 1}
             
             enumerator = context.action.enumerators.array[name]
             
@@ -500,6 +500,7 @@ local function setArrayEnumerators(context)
         context.action.enumerators.array[name] = nil
     end
 
+    ---------------------------------------------------------------------------
     -- Cycle through an array, starting over once the end is reached
     context.cycle = function(name, ...)
         if name == nil then
@@ -553,7 +554,7 @@ local function setArrayEnumerators(context)
 
         -- If there are any results, we'll set up a new array enumerator and return the first item
         if #results > 0 then
-            context.action.enumerators.array[name] = { data = results, at = 1, step = 1}
+            context.action.enumerators.array[name] = { name = name, data = results, at = 1, step = 1}
             
             enumerator = context.action.enumerators.array[name]
             
@@ -571,6 +572,80 @@ local function setArrayEnumerators(context)
         context.action.enumerators.array[name] = nil
     end
 
+    ---------------------------------------------------------------------------
+    -- Same as cycle, but starts at the nearest point
+    context.cycleNearest = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
+            -- Advance the enumerator
+            enumerator.at = enumerator.at + enumerator.step
+
+            -- Loop the enumerator if we've run off the end
+            if enumerator.at > #enumerator.data then
+                enumerator.at = 1
+            end
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= #enumerator.data then
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+                context.is_new_result      = true
+
+                context.action.enumerators.array_name = name
+
+                return context.result
+            end
+        end
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            local start = context.nearestIndex(results) or 1
+            context.action.enumerators.array[name] = { name = name, data = results, at = start, step = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    ---------------------------------------------------------------------------
     -- Cycle through an array, starting over once the end is reached
     context.bounce = function(name, ...)
         if name == nil then
@@ -646,6 +721,100 @@ local function setArrayEnumerators(context)
         -- If there are any results, we'll set up a new array enumerator and return the first item
         if #results > 0 then
             context.action.enumerators.array[name] = { name = name, data = results, at = 1, step = 1}
+            
+            enumerator = context.action.enumerators.array[name]
+            
+            -- Store the results
+            context.result          = enumerator.data[enumerator.at]
+            context.results[name]   = context.result
+            context.is_new_result      = true
+
+            context.action.enumerators.array_name = name
+
+            return context.result
+        end
+
+        -- If we've gotten here, we'll clear the array enumerator
+        context.action.enumerators.array[name] = nil
+    end
+
+    ---------------------------------------------------------------------------
+    -- Same as bounce, but starts from the nearest point
+    context.bounceNearest = function(name, ...)
+        if name == nil then
+            return
+        end
+
+        if not context.action.enumerators.array then
+            context.action.enumerators.array = { }
+        end
+
+        if not context.action.results then
+            context.action.results = {}
+        end
+
+        local results = nil
+
+        -- If no name was provided and our first entry was an array
+        if type(name) == 'table' then
+            results = name
+            name = 'default'
+        end
+
+        -- Start by grabbing the current array enumerator
+        local enumerator = context.action.enumerators.array[name]
+
+        -- Enumerator structure:
+        --  - name: string
+        --  - data: []
+        --  - at: number
+        --  - step: number
+
+        if 
+            enumerator and
+            enumerator.data and
+            #enumerator.data > 0 
+        then
+            local count = #enumerator.data 
+
+            if 
+                enumerator.at <= 1 and
+                enumerator.step == -1
+            then
+                enumerator.at = 2
+                enumerator.step = 1
+            elseif 
+                enumerator.at >= count and
+                enumerator.step == 1
+            then
+                enumerator.at = count - 1
+                enumerator.step = -1
+            else
+                enumerator.at = enumerator.at + enumerator.step
+            end
+
+            -- If the new enumerator is within the array bounds, return that item
+            if enumerator.at <= count and enumerator.at >= 1 then
+                -- Store the result
+                context.result          = enumerator.data[enumerator.at]
+                context.results[name]   = context.result
+                context.is_new_result   = true
+
+                context.action.enumerators.array_name = name
+
+                return context.result
+            end
+        end
+
+        -- If we don'thave a valid iterator, go back to the source
+        if not results then
+            results = varargs({...})
+        end
+
+        -- If there are any results, we'll set up a new array enumerator and return the first item
+        if #results > 0 then
+            local start = context.nearestIndex(results) or 1
+            context.action.enumerators.array[name] = { name = name, data = results, at = start, step = 1}
             
             enumerator = context.action.enumerators.array[name]
             
@@ -1691,6 +1860,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return
         end
 
+        -- There are certain mobs that we just can't get close to. Account for those.
+        if 
+            target.name == 'Bedrock Crag'
+        then 
+            distance = math.max(distance or 6, 6)
+        end
+
         -- -- Issue the follow
         -- local command = makeSelfCommand('follow -index %d':format(target.index))
         -- sendActionCommand(command, context, 0.5)
@@ -1705,35 +1881,48 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     ---------------------------------------------------------------------------
     -- Returns the parameter representing the furthest point from the player
-    context.furthest = function(...)
+    context.furthestIndex = function(...)
         local args = varargs({...})
+        local me = windower.ffxi.get_mob_by_target('me')
+        local vme = V({me.x, me.y})
 
-        if #args == 0 or context.me == nil then return end
+        local furthestd = math.huge
+        local furthesti = nil
 
-        local furthest = nil
-        local furthestd = -1
-        local vme = V({context.me.x, context.me.y})
-        for i = 1, #args do
-            local point = args[i]
-            if point and type(point.x) == 'number' and type(point.y) == 'number' then
-                local vp = V({point.x, point.y})
-                local d = vme:subtract(vp):length()
+        -- Find the nearest entry
+        for i, p in ipairs(args) do
+            if type(p.distance) == 'number' then
+                if p.distance < furthestd then
+                    furthestd = p.distance
+                    furthesti = i
+                end
+            else
+                local dx = p.x - me.x
+                local dy = p.y - me.y
+                local d = math.sqrt((dx*dx) + (dy*dy))
 
-                if d > furthestd then
-                    furthest = point
+                if d < furthestd then
                     furthestd = d
+                    furthesti = i
                 end
             end
         end
 
-        context.point = furthest
+        return furthesti
+    end
+    context.farthestIndex = context.furthestIndex
 
-        return furthest
+    context.furthest = function(...)
+        local args = varargs({...})
+        local furthesti = context.furthestIndex(args)
+        if furthesti then
+            return args[furthesti]
+        end
     end
     context.farthest = context.furthest
 
-    context.nearest_first = function(...)
-        local args = json.parse(json.stringify(varargs({...})))
+    context.nearestIndex = function(...)
+        local args = varargs({...})
         local me = windower.ffxi.get_mob_by_target('me')
         local vme = V({me.x, me.y})
 
@@ -1759,132 +1948,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
 
-        -- Shuffle any previous entries to the end of the array, in order
-        if nearesti then
-            local count = #args
-            for i = 1, nearesti - 1 do
-                local p = args[1]
-                table.remove(args, 1)
-                args[count] = p
-            end
-        end
-
-        return args
+        return nearesti
     end
 
-    context.farthest_first = function(...)
-        local args = json.parse(json.stringify(varargs({...})))
-        local me = windower.ffxi.get_mob_by_target('me')
-        local vme = V({me.x, me.y})
-
-        local farthestd = -1
-        local farthesti = nil
-
-        -- Find the farthest entry
-        for i, p in ipairs(args) do
-            if type(p.distance) == 'number' then
-                if p.distance > farthestd then
-                    farthestd = p.distance
-                    farthesti = i
-                end
-            else
-                local dx = p.x - me.x
-                local dy = p.y - me.y
-                local d = math.sqrt((dx*dx) + (dy*dy))
-
-                if d > farthestd then
-                    farthestd = d
-                    farthesti = i
-                end
-            end
-        end
-
-        -- Shuffle any previous entries to the end of the array, in order
-        if farthesti then
-            local count = #args
-            for i = 1, farthesti - 1 do
-                local p = args[1]
-                table.remove(args, 1)
-                args[count] = p
-            end
-        end
-
-        return args
-    end
-    context.furthest_first = context.farthest_first
-
-    context.order_by_nearest = function(...)
-        local args = varargs({...})
-        local me = windower.ffxi.get_mob_by_target('me')
-        local vme = V({me.x, me.y})
-
-        return table.sort(args, function(a, b)
-                if type(a.distance) == 'number' and type(b.distance) == 'number' then
-                    return a.distance < b.distance
-                end
-
-                local dxA = a.x - me.x
-                local dyA = a.y - me.y
-
-                local dxB = b.x - me.x
-                local dyB = b.y - me.y
-
-                local dA2 = (dxA * dxA) + (dyA * dyA)
-                local dB2 = (dxB * dxB) + (dyB * dyB)
-
-                return dA2 < dB2
-            end)
-    end
-
-    context.order_by_furthest = function(...)
-        local args = varargs({...})
-        local me = windower.ffxi.get_mob_by_target('me')
-        local vme = V({me.x, me.y})
-
-        return table.sort(args, function(a, b)
-                if type(a.distance) == 'number' and type(b.distance) == 'number' then
-                    return a.distance < b.distance
-                end
-
-                local dxA = a.x - me.x
-                local dyA = a.y - me.y
-
-                local dxB = b.x - me.x
-                local dyB = b.y - me.y
-
-                local dA2 = (dxA * dxA) + (dyA * dyA)
-                local dB2 = (dxB * dxB) + (dyB * dyB)
-
-                return dA2 >= dB2
-            end)
-    end
-
-    ---------------------------------------------------------------------------
-    -- Returns the parameter representing the nearest point from the player
     context.nearest = function(...)
         local args = varargs({...})
-
-        if #args == 0 or context.me == nil then return end
-
-        local nearest = nil
-        local nearestd = math.huge
-        local vme = V({context.me.x, context.me.y})
-        for i = 1, #args do
-            local point = args[i]
-            if point and type(point.x) == 'number' and type(point.y) == 'number' then
-                local vp = V({point.x, point.y})
-                local d = vme:subtract(vp):length()
-
-                if d < nearestd then
-                    nearest = point
-                    nearestd = d
-                end
-            end
+        local nearesti = context.nearestIndex(args)
+        if nearesti then
+            return args[nearesti]
         end
-
-        context.point = nearest
-
-        return nearest
     end
 
     ---------------------------------------------------------------------------

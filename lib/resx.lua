@@ -412,12 +412,14 @@ function canUseSpell(player, spell)
 
     -- Don't allow trusts in non-trust zones
     if spell.type == 'Trust' then
-        if 
-            globals.currentZone ~= nil and
-            globals.currentZone.can_pet ~= true 
-        then
-            return false
-        end        
+        if globals.currentZone then
+            if 
+                globals.currentZone.can_pet ~= true or
+                globals.currentZone.id == 80 -- South San d'Oria [S] seems to be inappropriately tagged
+            then
+                return false
+            end
+        end
     end
 
     --

@@ -35,26 +35,37 @@ local DefaultIgnoreList = {
     -- when we could be breaking down the obstacles to eliminate them.
     { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Basalt Lizard', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Cerise Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Chilblain Snoll', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Draftrider Bat', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Embattled Roc', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Frightful Funguar', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Indomitable Spurned', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lancing Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Larkish Opo-opo', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lavender Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lightfoot Lapinion', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Matamata', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Preening Tulfaire', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Precipice Vulture', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Quivering Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Red Dropwing', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Resilient Colibri', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Ruby Raptor', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Shrubshredder Chapuli', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Skittish Matamata', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Sloshmouth Snapweed', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Soiled Funguar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Sordid Lizard', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Stonesoftener Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Temblor Beetle', ignoreAlways = true, _note = 'Reive guard' },
-    { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' }
+    { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Uprooted Sapling', ignoreAlways = true, _note = 'Reive guard' }
 }
 
 --
@@ -399,11 +410,9 @@ function loadSettings(actionsName, settingsOnly)
     tempSettings.maxChaseTime = tonumber(tempSettings.maxChaseTime)
     if tempSettings.maxChaseTime and tempSettings.maxChaseTime > 0 then
         -- Clamp the give up period to between 5-30 seconds
-        tempSettings.maxChaseTime = math.max(5, math.min(30, tempSettings.maxChaseTime))
+        tempSettings.maxChaseTime = math.clamp(tempSettings.maxChaseTime, 5, 30)
     else
-        -- If no chase time was configured, calculate it based on the max distance.
-        -- This will end up with a value between 5-20 seconds.
-        tempSettings.maxChaseTime = math.max(15, tempSettings.maxDistance) / 3
+        tempSettings.maxChaseTime = 17
     end
 
     local jobActionsName = nil

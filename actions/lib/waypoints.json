@@ -16,7 +16,7 @@
         "actionType == 'idle' and not bt",
         "vars.waypoints.mode ~= 'cycle'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
-        "(result and not checkPosition(result)) or bounce(result or nearest_first(vars.waypoints.routes[vars.waypoints.active]))"
+        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])"
       ],
       "commands": [
         "is_new_result and log('Bouncing to', vars.waypoints.active, 'location', result.x, result.y)",
@@ -31,7 +31,7 @@
         "actionType == 'idle' and not bt",
         "vars.waypoints.mode == 'cycle'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
-        "(result and not checkPosition(result)) or cycle(result or nearest_first(vars.waypoints.routes[vars.waypoints.active]))"
+        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])"
       ],
       "commands": [
         "is_new_result and log('Cycling to', vars.waypoints.active, 'location', result.x, result.y)",

@@ -260,6 +260,7 @@ handlers['config'] = function(args)
     local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
     local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
     local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
+    local ct = tonumber(arrayIndexOfStrI(args, '-chasetime') or arrayIndexOfStrI(args, '-ct') or 0)
     local hasChanges = false
 
     if distance > 0 then
@@ -303,6 +304,19 @@ handlers['config'] = function(args)
         end
 
         writeMessage('Targeting strategy: %s':format(text_green(settings.strategy)))
+    end
+
+    if ct > 0 then
+        ct = tonumber(args[ct + 1])
+        if ct and ct > 0 then
+            ct = math.clamp(ct, 5.0, 30.0)
+            settings.maxChaseTime = ct
+            hasChanges = true
+        end
+
+        writeMessage('Max chase time: %s':format(
+            pluralize('%.1f':format(settings.maxChaseTime), 'second', 'seconds')
+        ))
     end
 
     if hasChanges then
