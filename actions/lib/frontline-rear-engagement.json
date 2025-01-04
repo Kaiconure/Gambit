@@ -1,29 +1,20 @@
 {
   "about": {
-    "author": "@Kaiconure"
+    "author": "@Kaiconure",
+    "notes": [
+      "The new frontline-engagement gambit handles an alignment angle, which supercedes this file.",
+      "The file is maintained for backwards compatibility and easy of use; it simply imports the",
+      "frontline-engagement file and sets an alignment angle of 180 degrees."
+    ]
   },
   "vars": {
-    "frontline_rear_engagement": {
-      "distance": 5,
-      "duration": 5
+    "frontline_engagement": {
+      "angle": 180
     }
   },
   "actions": [
     {
       "import": "frontline-engagement"
-    },
-    {
-      "when": [
-        "bt.distance <= 4",
-        "canAlignRear() and not alignedRear()"
-      ],
-      "commands": [
-        "alignRear(vars.frontline_rear_engagement.distance, vars.frontline_rear_engagement.duration)",
-        "alignedRear() or postpone(10)"
-      ],
-      "frequency": 1,
-      "scope": "battle",
-      "delay": 2
     }
   ]
 }

@@ -34,6 +34,7 @@ local DefaultIgnoreList = {
     -- Mobs that guard colonization reives, which are just a waste of time to target
     -- when we could be breaking down the obstacles to eliminate them.
     { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Alpine Rabbit', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Basalt Lizard', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Cerise Wasp', ignoreAlways = true, _note = 'Reive guard' },
@@ -41,6 +42,7 @@ local DefaultIgnoreList = {
     { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Draftrider Bat', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Embattled Roc', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Festering Umbril', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Frightful Funguar', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
@@ -53,6 +55,8 @@ local DefaultIgnoreList = {
     { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Preening Tulfaire', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Precipice Vulture', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Procrustean Draugar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Pungent Ovim', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Quivering Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Red Dropwing', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Resilient Colibri', ignoreAlways = true, _note = 'Reive guard' },
@@ -64,8 +68,11 @@ local DefaultIgnoreList = {
     { name = 'Sordid Lizard', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Stonesoftener Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Temblor Beetle', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Territorial Lucerewe', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' },
-    { name = 'Uprooted Sapling', ignoreAlways = true, _note = 'Reive guard' }
+    { name = 'Umberwood Tiger', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Uprooted Sapling', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' }
 }
 
 --
@@ -82,6 +89,13 @@ local DefaultNoRearList = {
     'Monolithic Boulder'
 }
 
+--
+-- Some mobs cannot be approached using the standard melee distance. These can be called
+-- out here, with the appropriate minimum distance override.
+local DefaultMinDistanceList = {
+    ['Bedrock Crag'] = 6
+}
+
 local defaultSettings = {
     maxDistance = 25,
     maxDistanceZ = 5,
@@ -91,6 +105,7 @@ local defaultSettings = {
     schemaVersion = 2,
     ignoreList = DefaultIgnoreList,
     noRearList = DefaultNoRearList,
+    minDistanceList = DefaultMinDistanceList,
     maxChaseTime = nil,
     followCommandDistance = 1
 }

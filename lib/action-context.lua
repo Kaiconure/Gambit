@@ -106,7 +106,7 @@ end
 -----------------------------------------------------------------------------------------
 --
 local function context_noop() 
-    return
+    return true
 end
 
 -----------------------------------------------------------------------------------------
@@ -146,6 +146,7 @@ function context_wait(s)
     local s = math.max(tonumber(s) or 1, 0)
     writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
     coroutine.sleep(s)
+    return true
 end
 
 -----------------------------------------------------------------------------------------
@@ -1101,6 +1102,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             text_gray('[action]'),
             text_cornsilk(output)
         ))
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -1120,6 +1123,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 text_gray('[action.d]', Colors.debug),
                 output
             ))
+
+            return true
         end
     end
 
@@ -1152,6 +1157,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             context,
             1.5
         )
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -1345,7 +1352,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             context,
             waitTime,
             true
-        )        
+        )
     end
 
     --------------------------------------------------------------------------------------
@@ -1474,7 +1481,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 ability.name == 'Trick Attack'
             then
                 -- Some abilities have very strict timing requirements
-                waitTime = 1.0
+                waitTime = 2.0
                 stopWalk = false
             end
 
@@ -1859,23 +1866,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if target == nil or type(target.index) ~= 'number' or not target.valid_target then
             return
         end
-
-        -- There are certain mobs that we just can't get close to. Account for those.
-        if 
-            target.name == 'Bedrock Crag'
-        then 
-            distance = math.max(distance or 6, 6)
+        
+        if type(distance) ~= 'number' or distance < 0 then
+            distance = 1
         end
 
-        -- -- Issue the follow
-        -- local command = makeSelfCommand('follow -index %d':format(target.index))
-        -- sendActionCommand(command, context, 0.5)
+        if settings and type(settings.minDistanceList[target.name]) == 'number' then
+            distance = math.max(settings.minDistanceList[target.name], distance)
+        end
 
         -- We can follow if there isn't already a follow in progress, or if the existing
         -- follow is already for the current target
         local jobInfo = smartMove:getJobInfo()
         if jobInfo == nil or jobInfo.follow_index ~= target.index then
-            return smartMove:followIndex(target.index, distance or 1.0)
+            return smartMove:followIndex(target.index, distance)
         end
     end
 
@@ -1916,7 +1920,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local args = varargs({...})
         local furthesti = context.furthestIndex(args)
         if furthesti then
-            return args[furthesti]
+            context.point = args[furthesti]
+            return context.point
         end
     end
     context.farthest = context.furthest
@@ -1955,7 +1960,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local args = varargs({...})
         local nearesti = context.nearestIndex(args)
         if nearesti then
-            return args[nearesti]
+            context.point = args[nearesti]
+            return context.point
         end
     end
 
@@ -2631,7 +2637,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     context.skillchain_trigger_time = party_weapon_skill.time
 
                     -- Don't let this action trigger again for the same weapon skill
-                    local age = context.time - party_weapon_skill.time
+                    local age = os.clock() - party_weapon_skill.time
                     context.delay(MAX_WEAPON_SKILL_TIME - age)
 
                     -- context.log('Party weapon skill: %s (delaying %s)':format(
@@ -2646,6 +2652,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Wait the appropriate amount of time to close a skillchain
+    context.waitSkillchain = function()
+        if
+            context.skillchaining() and
+            context.skillchain_trigger_time > 0
+        then
+            -- Calculate the age of our weapon skill, and the corresponding sleep time needed
+            -- to ensure we have a chance at creating a skillchain effect
+            local age = os.clock() - context.skillchain_trigger_time
+            local sleepTime = math.max(WEAPON_SKILL_DELAY - age, WEAPON_SKILL_DELAY)
+
+            -- If we need to delay for our skillchain, do that now
+            if sleepTime > 0 then
+                context.wait(sleepTime)
+                return sleepTime
+            end
+        end
+    end
+    context.waitSC = context.waitSkillchain
+
+    --------------------------------------------------------------------------------------
     -- Close a skill chain with the specified weapon skill
     context.closeSkillchain = function (...)
         local weaponSkill = varargs({...})
@@ -2657,27 +2684,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 text_weapon_skill(context.weapon_skill.name, Colors.verbose)
             ))
 
-            -- The skillchain_trigger_time value is by a triggered 'skillchaining' or 'partyUsingWeaponSkill' check.
-            -- In either case, we have the possibility of closing a skillchain by following up with a weapon skill.
-            if 
-                context.skillchain_trigger_time > 0
-            then
-                -- Calculate the age of our weapon skill, and the corresponding sleep time needed
-                -- to ensure we have a chance at creating a skillchain effect
-                local age = context.time - context.skillchain_trigger_time
-                local sleepTime = math.max(WEAPON_SKILL_DELAY - age, WEAPON_SKILL_DELAY)
+            -- Space it out in time
+            context.waitSkillchain()
 
-                -- If we need to delay for our skillchain, do that now
-                if sleepTime > 0 then
-                    coroutine.sleep(sleepTime)
-                end
-            end
-
+            -- Use the weapon skill
             context.useWeaponSkill()
 
             return true
         end
     end
+    context.closeSC = context.closeSkillchain
 
     --------------------------------------------------------------------------------------
     --
