@@ -261,6 +261,7 @@ handlers['config'] = function(args)
     local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
     local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
     local ct = tonumber(arrayIndexOfStrI(args, '-chasetime') or arrayIndexOfStrI(args, '-ct') or 0)
+    local scd = tonumber(arrayIndexOfStrI(args, '-skillchaindelay') or arrayIndexOfStrI(args, '-scdelay') or arrayIndexOfStrI(args, '-scd') or 0)
     local hasChanges = false
 
     if distance > 0 then
@@ -316,6 +317,19 @@ handlers['config'] = function(args)
 
         writeMessage('Max chase time: %s':format(
             pluralize('%.1f':format(settings.maxChaseTime), 'second', 'seconds')
+        ))
+    end
+
+    if scd > 0 then
+        scd = tonumber(args[scd + 1])
+        if scd and scd > 0 then
+            scd = math.clamp(scd, 0.0, MAX_SKILLCHAIN_TIME)
+            settings.skillchainDelay = scd
+            hasChanges = true
+        end
+
+        writeMessage('Skillchain delay: %s':format(
+            pluralize('%.1f':format(settings.skillchainDelay), 'second', 'seconds')
         ))
     end
 

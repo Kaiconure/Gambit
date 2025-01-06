@@ -2,7 +2,7 @@ MAX_SKILLCHAIN_TIME     = 6     -- The maximum amount of time we'll allow oursel
 MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
-WEAPON_SKILL_DELAY      = 2     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
+SKILLCHAIN_DELAY        = 4     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 
 local state_manager = {

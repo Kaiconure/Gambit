@@ -107,7 +107,8 @@ local defaultSettings = {
     noRearList = DefaultNoRearList,
     minDistanceList = DefaultMinDistanceList,
     maxChaseTime = nil,
-    followCommandDistance = 1
+    followCommandDistance = 1,
+    weaponSkillDelay = nil
 }
 
 ----------------------------------------------------------------------------------------
@@ -429,6 +430,13 @@ function loadSettings(actionsName, settingsOnly)
     else
         tempSettings.maxChaseTime = 17
     end
+
+    -- The amount of time to allow between a weapon skill/skillchain being detected, 
+    -- and a skillchain being continued.
+    tempSettings.skillchainDelay = math.clamp(
+        tonumber(tempSettings.skillchainDelay) or SKILLCHAIN_DELAY,
+        0,
+        MAX_SKILLCHAIN_TIME)
 
     local jobActionsName = nil
     local actions = nil

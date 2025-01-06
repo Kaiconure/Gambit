@@ -2552,17 +2552,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             (names[1] == nil or arrayIndexOfStrI(names, sc.name))
         then
             context.skillchain_trigger_time = sc.time
-
-            -- context.log('Party skillchain: %s':format(
-            --     text_weapon_skill(sc.name)
-            -- ))
-
-            -- Commenting out the below. Why *not* let multple reactions occur to the same SC?
-
-            -- Don't let this action trigger again for the same skillchain
-            -- local age = context.time - sc.time
-            -- context.delay(MAX_SKILLCHAIN_TIME - age)
-
             return true
         end
     end
@@ -2589,35 +2578,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Need better understanding. Triggers when a skillchain opening with any of 
-    -- the specified skillchain attributes (e.g. what's in the WS description)
-    context.____partyOpeningSkillchain = function (...)
-        -- if context.bt then
-        --     local skillchains = varargs({...})
-        --     local info = actionStateManager:getPartyWeaponSkillInfo()
-            
-        --     if 
-        --         info and
-        --         info.mob and
-        --         info.mob.id == context.bt.id
-        --     then
-        --         -- We'll match if either no filters were provided, or if the requested skillchain
-        --         -- attributes are matched by the triggering weapon skill
-        --         if 
-        --             skillchains[1] == nil or
-        --             arraysIntersectStrI(skillchains, info.skillchains)
-        --         then
-        --             context.party_weapon_skill = info.skill
-        --             context.party_weapon_skill_time = actionStateManager.time
-
-        --             return context.party_weapon_skill
-        --         end
-        --     end
-        -- end
-    end
-
-    --------------------------------------------------------------------------------------
-    -- Trigger if a party member is using a tp move
+    -- Trigger if a party member is using a weapon skill or TP move
     context.partyUsingWeaponSkill = function (...)
         if context.bt then
             local skills = varargs({...})
@@ -2628,23 +2589,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 party_weapon_skill.mob and
                 party_weapon_skill.mob.id == context.bt.id
             then
-                -- We'll match if either no filters were provided, or if the requested skillchain
+                -- We'll match if either no filters were provided, or if the requested weapon skill
                 -- attributes are matched by the triggering weapon skill
                 if 
                     skills[1] == nil or
                     arrayIndexOfStrI(skills, party_weapon_skill.name)
                 then
                     context.skillchain_trigger_time = party_weapon_skill.time
-
-                    -- Don't let this action trigger again for the same weapon skill
-                    local age = os.clock() - party_weapon_skill.time
-                    context.delay(MAX_WEAPON_SKILL_TIME - age)
-
-                    -- context.log('Party weapon skill: %s (delaying %s)':format(
-                    --     text_weapon_skill(party_weapon_skill.name, Colors.conrsilk),
-                    --     text_number('%.1fs':format(MAX_WEAPON_SKILL_TIME - age))
-                    -- ))
-
                     return party_weapon_skill
                 end
             end
@@ -2652,25 +2603,64 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Wait the appropriate amount of time to close a skillchain
-    context.waitSkillchain = function()
+    -- Wait the appropriate amount of time to close a skillchain. Returns
+    context.waitSkillchain = function(seconds)
         if
-            context.skillchaining() and
+            context.partyUsingWeaponSkill() and
             context.skillchain_trigger_time > 0
         then
+            seconds = math.max(
+                tonumber(seconds) or tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY,
+                0)
+            
             -- Calculate the age of our weapon skill, and the corresponding sleep time needed
-            -- to ensure we have a chance at creating a skillchain effect
+            -- to ensure we have a chance at creating a skillchain effect. Note that we will
+            -- subtract a small amount of time to account for the general execution delay, 
+            -- since timing needs to be very precise here.
             local age = os.clock() - context.skillchain_trigger_time
-            local sleepTime = math.max(WEAPON_SKILL_DELAY - age, WEAPON_SKILL_DELAY)
+            local sleepTime = math.max(seconds - age, 0)
+
+            writeVerbose('Delaying %s for skillchaining...':format(
+                pluralize('%.1f':format(sleepTime), 'second', 'seconds', Colors.verbose)
+            ))
 
             -- If we need to delay for our skillchain, do that now
-            if sleepTime > 0 then
+            if sleepTime > 0 then                
                 context.wait(sleepTime)
                 return sleepTime
             end
+
+            -- We'll return 0 here, since that will distinguish between having no need to wait, and
+            -- the other condition in which there was no weapon skill trigger present at all (nil).
+            return 0
         end
     end
     context.waitSC = context.waitSkillchain
+
+    --------------------------------------------------------------------------------------
+    -- Similar to waitSkillchain above, except it waits for a shorter time period to
+    -- allow for use of an ability (SA, TA, flourishes, etc)
+    context.waitSkillchainWithAbility = function()
+        return context.waitSkillchain(
+            (tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY) - 1.5
+        )
+    end
+    context.waitSCWithAbility = context.waitSkillchainWithAbility
+
+    --------------------------------------------------------------------------------------
+    -- Determine if a skillchain can be opened without interfering with an
+    -- existing weapon skill already in use.
+    context.canOpenSkillchain = function()
+        local party_weapon_skill = context.party_weapon_skill
+        if
+            party_weapon_skill == nil or
+            party_weapon_skill.time == 0
+            or (os.clock() - party_weapon_skill.time) > MAX_WEAPON_SKILL_TIME
+        then
+            return true
+        end
+    end
+    context.canOpenSC = context.canOpenSkillchain
 
     --------------------------------------------------------------------------------------
     -- Close a skill chain with the specified weapon skill
