@@ -1,0 +1,68 @@
+{
+  "vars": {
+    "ensure_trusts": {
+      "spells": []
+    }
+  },
+  "pull": [
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "when": [
+        "partyUsingWeaponSkill('Red Lotus Blade', 'Burning Blade')",
+        "canUseWeaponSkill('Raging Fists', 'Tornado Kick')"
+      ],
+      "commands": [
+        "(canUse('Boost') and waitSkillchainWithAbility() and useAbility(me)) or waitSkillchain()",
+        "useWeaponSkill()"
+      ],
+      "comment": "Try to close Fusion to open up for Light."
+    },
+    {
+      "when": [
+        "partyUsingWeaponSkill('Tachi: Kaiten', 'Tachi: Shoha', 'Tachi: Gekko') or me.tp > 2500",
+        "canUseWeaponSkill(\"Ascetic's Fury\")"
+      ],
+      "commands": [
+        "(canUse('Boost') and waitSkillchainWithAbility() and useAbility(me)) or waitSkillchain()",
+        "useWeaponSkill()"
+      ]
+    },
+    {
+      "when": ["not hasBuff('Aggressor', 'Focus') and canUse('Focus')"],
+      "commands": "use(me)"
+    },
+    {
+      "when": ["not hasBuff('Aggressor', 'Focus') and canUse('Aggressor')"],
+      "commands": "use(me)"
+    },
+    {
+      "when": ["canUse('Berserk', 'Warcry')"],
+      "commands": "use(me)",
+      "frequency": 30
+    },
+    {
+      "when": ["canUse('Footwork')"],
+      "commands": "use(me)"
+    }
+  ],
+  "idle": [
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death"
+    }
+  ]
+}

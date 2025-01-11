@@ -1,4 +1,4 @@
-__version = '0.95.4-beta2'
+__version = '0.95.4-beta3'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -25,6 +25,7 @@ json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
 
 meta = meta or {}
+meta.erase = require('./meta/erase') or {}
 meta.dispel = require('./meta/dispel') or {}
 meta.monster_abilities = require('./meta/monster_abilities') or {}
 meta.trusts = require('./meta/trusts')
@@ -421,7 +422,17 @@ local function reaction_statusRemoval(action, actor, target, reaction, param)
     if reaction == 0 then
         if param == 0 then
             -- R0, P0: No effect to remove; clear buff info
-            removeTrackedBuffs(target)
+
+            local is_actor_enemy = (actor.spawn_type == SPAWN_TYPE_MOB) and true or false
+            local is_enemy = (target.spawn_type == SPAWN_TYPE_MOB) and true or false
+
+            if is_enemy ~= is_actor_enemy then
+                -- When the actor is of a different category than the target, this is a buff removal (e.g. Dispel)
+                removeTrackedBuffs(target)
+            else
+                -- When the actor is of the same category as the target, this is a debuff removal(e.g. Erase)
+                removeTrackedDebuffs(target)
+            end
         else
             -- R0, P<buffId>: Successful removal of <param> buff
             
@@ -429,9 +440,10 @@ local function reaction_statusRemoval(action, actor, target, reaction, param)
             if buff then                
                 actionStateManager:setMobBuff(target, buff.id, false)
 
-                writeVerbose('%s\'s %s effect was removed by %s':format(
+                writeVerbose('%s\'s %s (%s) effect was removed by %s':format(
                     text_mob(target.name, Colors.verbose),
                     text_spell(buff.name, Colors.verbose),
+                    text_number(buff.id, Colors.verbose),
                     text_mob(actor and actor.name or '???', Colors.verbose)
                 ))
             end
@@ -519,6 +531,17 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
     end
 end
 
+---------------------------------------------------------------------
+-- Finds the number associated with the specified target id
+-- in a packet (Target 1 ID: 654321)
+local function findPacketTargetNumber(packet, targetId)
+    for i = 1, 32 do
+        local targetKey = 'Target %d ID':format(i)
+        if packet[targetKey] == nil then return end
+        if packet[targetKey] == targetId then return i end
+    end
+end
+
 local _handle_partyBuffsChunk = function (id, data)
     local partyBuffs = parse_party_buffs(data)
     actionStateManager:setMemberBuffs(partyBuffs)
@@ -551,13 +574,13 @@ local _handle_actionChunk = function(id, data)
     local duration = nil
     local isRemoval = false
     local isDispel = false
+    local isErase = false
 
     -- Certain buffs can be automatically removed if we see activity from the actor
     if actor and (actor.spawn_type == SPAWN_TYPE_MOB or actor.spawn_type == SPAWN_TYPE_TRUST) then
-        actionStateManager:setMobBuff(actor, BUFF_SLEEP1, false)
-        actionStateManager:setMobBuff(actor, BUFF_SLEEP2, false)
-        actionStateManager:setMobBuff(actor, BUFF_TERROR, false)
-        actionStateManager:setMobBuff(actor, BUFF_PETRIFIED, false)
+        actionStateManager:clearMobBuff(actor, BUFF_SLEEP1)
+        actionStateManager:clearMobBuff(actor, BUFF_TERROR)
+        actionStateManager:clearMobBuff(actor, BUFF_PETRIFIED)
     end
 
     if
@@ -567,7 +590,8 @@ local _handle_actionChunk = function(id, data)
         buffId = tonumber(action.status) or 0
         
         if action then
-            isDispel = arrayIndexOf(meta.dispel.spells, action.id)
+            isDispel    = arrayIndexOf(meta.dispel.spells, action.id)
+            isErase     = arrayIndexOf(meta.erase.spells, action.id)
         end
     elseif
         category == 14  -- Unblinkable job abilities
@@ -576,7 +600,8 @@ local _handle_actionChunk = function(id, data)
         buffId = tonumber(action.status) or 0
 
         if action then
-            isDispel = arrayIndexOf(meta.dispel.job_abilities, action.id)
+            isDispel    = arrayIndexOf(meta.dispel.job_abilities, action.id)
+            isErase     = arrayIndexOf(meta.erase.job_abilities, action.id)
         end
     elseif
         category == 5   -- Category 4 means item
@@ -624,8 +649,7 @@ local _handle_actionChunk = function(id, data)
         end
     end
 
-    -- TODO: Change this later; for now, dispel is the only removal action we track
-    isRemoval = isDispel
+    isRemoval = isDispel or isErase
 
     if action then
         for i = 1, count do
@@ -647,7 +671,8 @@ local _handle_actionChunk = function(id, data)
                 -- Handle removal operations; dispel, erase, -na spells, etc
                 if isRemoval then
 
-                    if isDispel then
+                    if isDispel or isErase then
+                        reaction_statusRemoval(action, actor, target, reaction, param)
                         reaction_statusRemoval(action, actor, target, reaction, param)
                     end
 
@@ -670,6 +695,39 @@ local _handle_actionChunk = function(id, data)
                     reaction_statusAddition(action, actor, target, reaction, param, buffId)
                 end
             end
+        end
+    end
+    
+    if
+        category == 6   -- Job Ability
+    then
+        local ability = resources.job_abilities[actionId]
+        if 
+            ability and
+            ability.type == 'CorsairRoll'
+        then
+            local player = windower.ffxi.get_player()
+            local targetNumber = findPacketTargetNumber(packet, player.id)
+            local count = targetNumber and tonumber(packet['Target %d Action 1 Param':format(targetNumber)])
+
+            if count then
+                writeMessage('Detected %s (%s)':format(
+                    text_buff(ability.name),
+                    text_number(tostring(count))
+                ))
+
+                actionStateManager:setRollCount(ability.id, count)
+            end
+        elseif
+            ability.id == 177   -- Snake Eye
+        then
+            actionStateManager:applySnakeEye()
+        elseif
+            ability.id == 123 or    -- Double-up
+            ability.id == 177 or    -- Snake Eye
+            ability.id == 178       -- Fold
+        then
+            --writeJsonToFile('/data/rolls/%d.%s.json':format(os.clock(), ability.name), packet)
         end
     end
 end

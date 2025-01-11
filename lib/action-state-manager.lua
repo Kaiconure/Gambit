@@ -33,6 +33,9 @@ local state_manager = {
     },
 
     mobBuffs = {
+    },
+
+    rolls = {
     }
 }
 
@@ -105,13 +108,11 @@ state_manager.setActionType = function (self, newType)
         -- Only reset time if we're transitioning between idle/pull and battle
         --if mode ~= newMode then
         if mode ~= newMode then
-            writeComment(string.format(
+            writeVerbose(string.format(
                 'Transitioning from %s to %s after %s',
-                text_red(mode, Colors.comment),
-                text_red(newMode, Colors.comment),
-                -- text_red(self.actionType, Colors.comment),
-                -- text_red(newType, Colors.comment),
-                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.comment)
+                text_red(mode, Colors.verbose),
+                text_red(newMode, Colors.verbose),
+                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.verbose)
             ))
 
             -- Sync up the latest mob state on mode change
@@ -155,6 +156,81 @@ end
 state_manager.tick = function(self, currentTime)
     self.currentTime = currentTime
     self.cycles = self.cycles + 1
+end
+
+-----------------------------------------------------------------------------------------
+-- Roll counts
+state_manager.setRollCount = function(self, rollId, count)
+    if self.rolls[rollId] == nil and count <= 0 then
+        return 0 
+    end
+
+    if count <= 0 then 
+        self.rolls[rollId] = nil
+        return 0
+    end
+
+    if self.rolls[rollId] == nil then
+        self.rolls[rollId] = {
+            count = count,
+            time = os.clock()
+        }
+    else
+        self.rolls[rollId].count = count
+    end
+    
+    return count
+end
+state_manager.getRollCount = function(self, rollId)
+    if self.rolls[rollId] then
+        local roll = resources.job_abilities[rollId]
+        if roll ~= nil then
+            if hasBuff(nil, roll.status, true) then
+                return self.rolls[rollId].count
+            end
+        end
+
+        self.rolls[rollId] = nil
+    end
+
+    return 0
+end
+state_manager.getRolls = function(self, fullInfo)
+    local results = {}
+    for id, value in pairs(self.rolls) do
+        if self:getRollCount(id) then
+            if fullInfo then
+                results[id] = value
+            else
+                results[id] = value.count
+            end
+        end
+    end
+    return results
+end
+state_manager.applySnakeEye = function(self)
+    local rolls = self:getRolls(true)
+    local youngest_id = nil
+    local youngest_value = nil
+    local youngest_age = math.huge
+    local now = os.clock()
+    for id, value in pairs(rolls) do
+        local age = now - value.time
+        if age < youngest_age then
+            youngest_age = age
+            youngest_value = value.count
+            youngest_id = id
+        end
+    end
+
+    if youngest_id then
+        writeMessage('Applying %s to %s (%s)':format(
+            text_ability('Snake Eye'),
+            text_buff(resources.job_abilities[youngest_id].name),
+            text_number(tostring(youngest_value + 1))
+        ))
+        self:setRollCount(youngest_id, youngest_value + 1)
+    end
 end
 
 -----------------------------------------------------------------------------------------
@@ -476,6 +552,20 @@ state_manager.getBuffsForMob = function(self, id)
     end
 
     return { }
+end
+
+state_manager.clearMobBuff = function(self, mob, buff, strict)
+    local buffs = mob and
+        self.mobBuffs and 
+        self.mobBuffs[mob.id] and
+        self.mobBuffs[mob.id].buffs
+
+    if buffs and #buffs > 0 then
+        local foundBuff = hasBuffInArray(buffs, buff, strict)
+        if foundBuff then
+            self:setMobBuff(mob, foundBuff.id, false)
+        end
+    end
 end
 
 -- Get the buffs for all trusts, indexed by mob id

@@ -380,6 +380,23 @@ handlers['targetinfo'] = function (args)
 end
 handlers['ti'] = handlers['targetinfo']
 
+handlers['rollinfo'] = function (args)
+    local rolls = actionStateManager:getRolls()
+    local count = 0
+    for id, value in pairs(rolls) do
+        local ability = resources.job_abilities[id]
+        if ability ~= nil and ability.type == 'CorsairRoll' then
+            writeMessage('  %s %s':format(text_buff(ability.name), text_number(value)))
+            count = count + 1
+        end
+    end
+
+    if count == 0 then
+        writeMessage('  No active rolls were found.')
+    end
+end
+handlers['ri'] = handlers['rollinfo']
+
 -------------------------------------------------------------------------------
 -- ignore-list
 handlers['ignore-list'] = function (args)

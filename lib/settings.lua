@@ -69,9 +69,11 @@ local DefaultIgnoreList = {
     { name = 'Stonesoftener Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Temblor Beetle', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Territorial Lucerewe', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Trogloptera', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Umberwood Tiger', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Uprooted Sapling', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Velkk Vaticinator', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' }
 }
 

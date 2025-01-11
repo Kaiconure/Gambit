@@ -962,12 +962,21 @@ local function initContextTargetSymbol(context, symbol)
         symbol.hp = 0
     end
 
+    -----------------------------------------------------------------
+    -- Perform a name match on the specified value
     symbol.isNameMatch = function(test)
         test = string.lower(test or '!!invalid')
         return test == string.lower(symbol.name or '') or
             test == string.lower(symbol.symbol or '') or
             test == string.lower(symbol.symbol2 or '')
     end
+
+    -----------------------------------------------------------------
+    -- Check for buffs
+    symbol.hasBuff = function(buffs)
+        return context.hasBuff(symbol, buffs)
+    end
+    symbol.hasEffect = symbol.hasBuff
 end
 
 -----------------------------------------------------------------------------------------
@@ -1001,6 +1010,7 @@ local function loadContextTargetSymbols(context, target)
 
     context.party1_by_id = {}
     context.party1_by_index = {}
+    context.pinfo = {}
 
     for i = 0, 5 do
         local p = 'p' .. i
@@ -1029,6 +1039,9 @@ local function loadContextTargetSymbols(context, target)
             -- Add members to the party id list
             context.party1_by_id[#context.party1_by_id + 1] = mob.id
             context.party1_by_index[#context.party1_by_index + 1] = mob.index
+
+            -- Save an array of members by name
+            context.pinfo[mob.name] = context[p]
         end
 
         context[a1] = nil
@@ -1045,6 +1058,10 @@ local function loadContextTargetSymbols(context, target)
             initContextTargetSymbol(context, context[a2])
         end
     end
+
+    context.party1_count = (context.party and tonumber(context.party.party1_count)) or 1
+    context.party_count = context.party1_count
+    context.pinfo.count = context.party_count
 
     -- If we are the leader, or if we are the only one in the party, save that info
     if
@@ -1081,7 +1098,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     context.target = target
     context.player = windower.ffxi.get_player()
-    context.party = windower.ffxi.get_party()
+    context.party = windower.ffxi.get_party() or {}
 
     -- Must be called after the player and party have been assigned
     loadContextTargetSymbols(context, target)    
@@ -1171,7 +1188,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local target = weaponSkill.targets.Self and context.me or context.bt
                 local targetOutOfRange = target and
                     target.distance and
-                    target.distance > math.max(weaponSkill.range, 5)
+                    target.distance > math.max(weaponSkill.range, 6)
 
                 if not targetOutOfRange then
                     if canUseWeaponSkill(
@@ -2540,6 +2557,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Get the number of finishing moves
     context.finishingMoves = function ()
         return getFinishingMoves(context.player)
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get the number for the specified roll
+    context.rollNumber = function (roll)
+        local ability = findJobAbility(roll)
+        if ability and ability.type == 'CorsairRoll' then
+            return actionStateManager:getRollCount(ability.id)
+        end
+
+        return 0
     end
 
     --------------------------------------------------------------------------------------

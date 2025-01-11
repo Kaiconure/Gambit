@@ -145,8 +145,16 @@ ActionPacket.open_listener(function (act)
                 local ability = resources.weapon_skills[id] or resources.monster_abilities[id]
 
                 if ability then
-                    setPartyWeaponSkill(actor, ability, target)
-
+                    if 
+                        (ability.skillchain_a or '') ~= '' or
+                        (ability.skillchain_b or '') ~= '' or
+                        (ability.skillchain_c or '') ~= ''
+                    then
+                        setPartyWeaponSkill(actor, ability, target)
+                    else
+                        writeComment('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.comment)))
+                    end
+                    
                     writeVerbose('%s: %s %s %s':format(
                         text_player(actor.name, Colors.verbose),
                         text_weapon_skill(ability.name, Colors.verbose),
