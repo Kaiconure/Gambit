@@ -36,6 +36,8 @@ local state_manager = {
     },
 
     rolls = {
+    },
+    latestRoll = {
     }
 }
 
@@ -161,7 +163,14 @@ end
 -----------------------------------------------------------------------------------------
 -- Roll counts
 state_manager.setRollCount = function(self, rollId, count)
-    if self.rolls[rollId] == nil and count <= 0 then
+    rollId = tonumber(rollId) or 0
+    if rollId <= 0 then return 0 end
+
+    count = tonumber(count) or 0
+    if 
+        self.rolls[rollId] == nil and
+        count <= 0
+    then
         return 0 
     end
 
@@ -170,21 +179,37 @@ state_manager.setRollCount = function(self, rollId, count)
         return 0
     end
 
+    local ability = resources.job_abilities[rollId]
+    if
+        ability == nil or
+        ability.type ~= 'CorsairRoll'
+    then
+        return 0
+    end
+
     if self.rolls[rollId] == nil then
         self.rolls[rollId] = {
+            id = rollId,
+            name = ability.name,
+            status = ability.status,
             count = count,
             time = os.clock()
         }
     else
         self.rolls[rollId].count = count
     end
-    
-    return count
+
+    self.latestRoll = self.rolls[rollId]
+    return self.latestRoll.count
 end
+
 state_manager.getRollCount = function(self, rollId)
+    rollId = tonumber(rollId) or 0
+    if rollId <= 0 then return 0 end
+    
     if self.rolls[rollId] then
-        local roll = resources.job_abilities[rollId]
-        if roll ~= nil then
+        local roll = self.rolls[rollId]
+        if roll then
             if hasBuff(nil, roll.status, true) then
                 return self.rolls[rollId].count
             end
@@ -198,7 +223,7 @@ end
 state_manager.getRolls = function(self, fullInfo)
     local results = {}
     for id, value in pairs(self.rolls) do
-        if self:getRollCount(id) then
+        if self:getRollCount(id) > 0 then
             if fullInfo then
                 results[id] = value
             else
@@ -209,27 +234,23 @@ state_manager.getRolls = function(self, fullInfo)
     return results
 end
 state_manager.applySnakeEye = function(self)
-    local rolls = self:getRolls(true)
-    local youngest_id = nil
-    local youngest_value = nil
-    local youngest_age = math.huge
-    local now = os.clock()
-    for id, value in pairs(rolls) do
-        local age = now - value.time
-        if age < youngest_age then
-            youngest_age = age
-            youngest_value = value.count
-            youngest_id = id
-        end
-    end
-
-    if youngest_id then
+    local latest = self:getLatestRoll()
+    if latest then
         writeMessage('Applying %s to %s (%s)':format(
             text_ability('Snake Eye'),
-            text_buff(resources.job_abilities[youngest_id].name),
-            text_number(tostring(youngest_value + 1))
+            text_buff(latest.name),
+            text_number(tostring(latest.count + 1))
         ))
-        self:setRollCount(youngest_id, youngest_value + 1)
+        self:setRollCount(latest.id, latest.count + 1)
+    end
+end
+
+state_manager.getLatestRoll = function(self)
+    local latest = self.latestRoll
+    if latest then
+        if self:getRollCount(latest.id) > 0 then
+            return latest
+        end
     end
 end
 

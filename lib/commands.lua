@@ -381,17 +381,17 @@ end
 handlers['ti'] = handlers['targetinfo']
 
 handlers['rollinfo'] = function (args)
-    local rolls = actionStateManager:getRolls()
-    local count = 0
-    for id, value in pairs(rolls) do
-        local ability = resources.job_abilities[id]
-        if ability ~= nil and ability.type == 'CorsairRoll' then
-            writeMessage('  %s %s':format(text_buff(ability.name), text_number(value)))
-            count = count + 1
-        end
-    end
+    local latestRoll = actionStateManager:getLatestRoll()
 
-    if count == 0 then
+    if latestRoll then
+        local rolls = actionStateManager:getRolls(true)
+        for id, value in pairs(rolls) do
+            writeMessage('  %s %s%s':format(
+                text_buff(value.name),
+                text_number(value.count),
+                latestRoll.id == value.id and '*' or ''))
+        end
+    else
         writeMessage('  No active rolls were found.')
     end
 end

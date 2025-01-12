@@ -1,0 +1,81 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "use_rolls": {
+      "rolls": ["Corsair's Roll", "Chaos Roll"],
+      "logic": {
+        "Chaos Roll": {
+          "snake_eye": [3, 8, 10],
+          "double_up": [1, 2, 3, 5]
+        },
+        "Corsair's Roll": {
+          "snake_eye": [4, 9, 10],
+          "double_up": [1, 2, 3, 4]
+        },
+        "Fighter's Roll": {
+          "snake_eye": [4, 9, 10],
+          "double_up": [1, 2, 3, 4]
+        },
+        "Hunter's Roll": {
+          "snake_eye": [3, 8, 10],
+          "double_up": [1, 2, 3, 5]
+        },
+        "Samurai Roll": {
+          "snake_eye": [1, 6, 10],
+          "double_up": [1, 3, 4, 5]
+        },
+        "Tactician's Roll": {
+          "snake_eye": [4, 8, 10],
+          "double_up": [1, 2, 3, 4]
+        },
+        "Wizard's Roll": {
+          "snake_eye": [4, 9, 10],
+          "double_up": [1, 2, 3, 4]
+        }
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "iterate(vars.use_rolls.rolls)",
+        "canUse(result) and not hasEffectOf(result)"
+      ],
+      "commands": ["use(member)"],
+      "frequency": 15
+    },
+    {
+      "when": [
+        "canUse('Snake Eye')",
+        "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].snake_eye",
+        "getLatestRoll()",
+        "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye)"
+      ],
+      "commands": [
+        "log('Rolling snake eyes on', latestRoll.name, 'from', latestRoll.count)",
+        "use(me)",
+        "wait(1)"
+      ]
+    },
+    {
+      "when": [
+        "canUse('Double-Up')",
+        "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].double_up",
+        "getLatestRoll()",
+        "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up)"
+      ],
+      "commands": [
+        "log('Doubling up on', latestRoll.name, 'from', latestRoll.count)",
+        "use(me)",
+        "wait(1)"
+      ]
+    },
+    {
+      "when": ["hasEffect('Bust')", "canUse('Fold')"],
+      "commands": ["log('Busted, Folding!')", "use(me)", "wait(1)"],
+      "frequency": 5
+    }
+  ]
+}

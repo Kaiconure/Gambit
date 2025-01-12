@@ -468,7 +468,7 @@ local function setArrayEnumerators(context)
                 -- Store the result
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
-                context.is_new_result      = true
+                context.is_new_result   = true
 
                 context.action.enumerators.array_name = name
 
@@ -2568,6 +2568,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         return 0
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get the latest roll
+    context.getLatestRoll = function(name)
+        local latest = actionStateManager:getLatestRoll()
+
+        if latest ~= nil then
+            latest = json.parse(json.stringify(latest))
+            if 
+                type(latest.name) == 'string' and
+                type(name) == 'string'
+            then
+                -- If we have a roll and a name was provided, match those up
+                if latest.name:lower() == name:lower() then
+                    context.latestRoll = latest
+                end
+            else
+                context.latestRoll = latest
+            end
+        end
+
+        return context.latestRoll
     end
 
     --------------------------------------------------------------------------------------
