@@ -124,6 +124,8 @@ function sendRangedAttackCommand(target, context)
         end
     end
 
+    local complete = actionStateManager:getRangedAttackSuccessful()
+
     -- Sleep a bit more to space things out
     coroutine.sleep(1.0)
 
@@ -133,16 +135,13 @@ function sendRangedAttackCommand(target, context)
 
     local endTime = os.clock()
 
-    -- TODO: Maybe see if there's a better way to figure this out dynamically?
-    local complete = true
-
     if context and context.action then
-        complete = true
-        context.action.complete = true
-        context.action.incomplete = false
+        context.action.complete = complete
+        context.action.incomplete = not complete
     end
 
-    writeDebug('Ranged attack observer has completed after %s!':format(
+    writeDebug('Ranged attack observer has completed with %s after %s!':format(
+        complete and text_green('success') or text_red('interruption'),
         pluralize('%.1f':format(endTime - startTime), 'second', 'seconds')
     ))
 
@@ -437,6 +436,12 @@ local function getNextBattleAction(context)
                 (action.lastBattleScope == nil or action.lastBattleScope ~= context.battleScope)
             then
                 action.availableAt = 0
+
+                -- If the action uses the scoped_enumerators setting, then its enumerators
+                -- will also be cleared when a scope change is detected.
+                if action.scoped_enumerators == true then
+                    action.enumerators = { }
+                end
             end
 
             if 
@@ -484,7 +489,7 @@ local function getNextBattleAction(context)
                 if action._whenFn() then
                     -- If this action will get run, we'll need to schedule the next run time. We'll actually
                     -- update this later, after the actions are executed, based on the time they complete.
-                    action.availableAt = math.max(context.time + action.frequency, action.availableAt)
+                    action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
 
                     -- Save the scope that was present when this action was triggered.
                     action.lastBattleScope = context.battleScope
@@ -524,7 +529,7 @@ local function executeBattleAction(context, action)
 
         -- At this point, we'll set the next schedule time based on the later of either its
         -- configured frequency or its own current schedulable time.
-        action.availableAt = math.max(context.time + action.frequency, action.availableAt)
+        action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
 
         -- If the action was flagged as incomplete, we'll allow it to be rescheduled again. In this
         -- case, we'll clear the scope and set it to the earlier of its current schedulable time
@@ -533,7 +538,7 @@ local function executeBattleAction(context, action)
             writeDebug('Action was flagged as incomplete, allowing rapid reschedule.')
 
             action.lastBattleScope = nil
-            action.availableAt = math.min(context.time + 1, action.availableAt)
+            action.availableAt = math.min(os.clock() + 1, action.availableAt)
 
             action.incomplete = nil
         end
@@ -552,34 +557,6 @@ function processNextAction(context)
     if not globals.enabled then return end
 
     return executeBattleAction(context, action)
-end
-
---
--- Returns true if any member of the party is engaged
-local function isPartyEngaged()
-    local party = windower.ffxi.get_party()
-    if party then
-        return
-            (party.p1 and party.p1.mob.status == STATUS_ENGAGED) or
-            (party.p2 and party.p2.mob.status == STATUS_ENGAGED) or
-            (party.p3 and party.p3.mob.status == STATUS_ENGAGED) or
-            (party.p4 and party.p4.mob.status == STATUS_ENGAGED) or
-            (party.p5 and party.p5.mob.status == STATUS_ENGAGED)
-    end
-end
-
---
--- Returns true if any trusts in the party are engaged
-local function isPartyTrustEngaged()
-    local party = windower.ffxi.get_party()
-    if party then
-        return
-            (party.p1 and party.p1.mob.spawn_type == SPAWN_TYPE_TRUST and party.p1.mob.status == STATUS_ENGAGED) or
-            (party.p2 and party.p2.mob.spawn_type == SPAWN_TYPE_TRUST and party.p2.mob.status == STATUS_ENGAGED) or
-            (party.p3 and party.p3.mob.spawn_type == SPAWN_TYPE_TRUST and party.p3.mob.status == STATUS_ENGAGED) or
-            (party.p4 and party.p4.mob.spawn_type == SPAWN_TYPE_TRUST and party.p4.mob.status == STATUS_ENGAGED) or
-            (party.p5 and party.p5.mob.spawn_type == SPAWN_TYPE_TRUST and party.p5.mob.status == STATUS_ENGAGED)
-    end
 end
 
 local function doNextActionCycle(time, player)
@@ -655,7 +632,7 @@ local function doNextActionCycle(time, player)
                 --local mob = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('bt')
 
                 -- Determine if the target mob is engaged
-                local isMobEngaged = mob and (mob.claim_id > 0 and mob.status == STATUS_ENGAGED)
+                local isMobEngaged = mob and (mob.claim_id > 0 and isPartyId(mob.claim_id) and mob.status == STATUS_ENGAGED)
 
                 -- If the target mob is already engaged, it's not pullable (no need to pull)
                 hasPullableMob = not isMobEngaged

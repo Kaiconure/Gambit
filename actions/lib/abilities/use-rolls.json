@@ -48,22 +48,24 @@
     },
     {
       "when": [
-        "canUse('Snake Eye')",
-        "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].snake_eye",
+        "canUse('Snake Eye') and canUse('Double-Up')",
         "getLatestRoll()",
+        "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].snake_eye",
         "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye)"
       ],
       "commands": [
         "log('Rolling snake eyes on', latestRoll.name, 'from', latestRoll.count)",
-        "use(me)",
-        "wait(1)"
+        "use(me, 'Snake Eye')",
+        "wait(0.5)",
+        "use(me, 'Double-Up')",
+        "wait(1.0)"
       ]
     },
     {
       "when": [
         "canUse('Double-Up')",
-        "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].double_up",
         "getLatestRoll()",
+        "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].double_up",
         "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up)"
       ],
       "commands": [

@@ -6,6 +6,7 @@ TargetStrategy = {
     minhp           = 'minhp',      -- Find aggroing mob with the least HP
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
     leader          = 'leader',     -- The party leader target, or the nearest aggro if none
+    puller          = 'puller',     -- Similar to aggressor, but tries to limit to mobs that aren't engaged with others while unclaimed
     manual          = 'manual',     -- You as the player pick the targets by engaging manually
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
@@ -125,9 +126,9 @@ end
 
 local function getActionsJobFileName(player)
     local actionsName = player.main_job
-    if player.sub_job then
-        actionsName = actionsName .. '-' .. player.sub_job
-    end
+    -- if player.sub_job then
+    --     actionsName = actionsName .. '-' .. player.sub_job
+    -- end
 
     return getActionsFileName(player.name, actionsName:lower())
 end
@@ -360,25 +361,6 @@ function saveDefaultActions(player, force)
     end
 
     return loadDefaultActions(player, true) ~= nil
-
-    -- local saveAsFileName = nil
-    -- if actionsName then
-    --     saveAsFileName = getActionsFileName(player, actionsName)
-    -- else
-    --     saveAsFileName = getActionsJobFileName(player)
-    -- end
-
-    -- -- If the actions are stored as an object, then we'll stringify it to json.
-    -- -- Otherwise, if the actions aren't already a string the we've got a problem.
-    -- if type(actions) == 'table' then actions = json.stringify(actions) end
-    -- if type(actions) ~= 'string' then return nil end
-
-    -- writeStringToFile(
-    --     saveAsFileName,
-    --     actions
-    -- )
-
-    -- return true
 end
 
 ----------------------------------------------------------------------------------------
@@ -461,27 +443,25 @@ function loadSettings(actionsName, settingsOnly)
 
     if actions == nil then
 
-        actionsName = '%s%s':format(
-            mainJob,
-            subJob and '-%s':format(subJob) or ''
-        ):lower()
+        -- actionsName = '%s%s':format(
+        --     mainJob,
+        --     subJob and '-%s':format(subJob) or ''
+        -- ):lower()
 
+        -- jobActionsName = actionsName
+        -- actions = loadActions(player.name, actionsName)
+
+        -- Load main job actions
+        actionsName = '%s':format(mainJob):lower()
         jobActionsName = actionsName
         actions = loadActions(player.name, actionsName)
 
-        -- if actions then
-        --     writeMessage('Actions were loaded for %s/%s!':format(player.main_job, player.sub_job))
-        -- end
-
-        --
-        -- If there were no actions for this job, we can try reloading the last explicitly loaded action set
-        --
-        -- if actions == nil then
-        --     if tempSettings.actionInfo and tempSettings.actionInfo.name then
-        --         actionsName = tempSettings.actionInfo.name:lower()
-        --         actions = loadActions(player.name, actionsName)
-        --     end
-        -- end
+        -- If no actions were found, load main-sub actions (legacy backward compat)
+        if actions == nil and subJob then
+            actionsName = '%s-%s':format(mainJob, subJob):lower()
+            jobActionsName = actionsName
+            actions = loadActions(player.name, actionsName)
+        end
 
         -- Load the default actions if nothing else has worked
         if actions == nil then

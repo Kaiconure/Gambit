@@ -1,4 +1,4 @@
-__version = '0.95.4-beta5'
+__version = '0.95.4-beta8'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -672,7 +672,6 @@ local _handle_actionChunk = function(id, data)
                 if isRemoval then
 
                     if isDispel or isErase then
-                        reaction_statusRemoval(action, actor, target, reaction, param)
                         reaction_statusRemoval(action, actor, target, reaction, param)
                     end
 

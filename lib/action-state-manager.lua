@@ -234,14 +234,17 @@ state_manager.getRolls = function(self, fullInfo)
     return results
 end
 state_manager.applySnakeEye = function(self)
+    -- NOTE: Discovered that Snake Eye makes the next roll a 1, it
+    -- does not actually increase the roll number by 1!!
+
     local latest = self:getLatestRoll()
     if latest then
         writeMessage('Applying %s to %s (%s)':format(
             text_ability('Snake Eye'),
             text_buff(latest.name),
-            text_number(tostring(latest.count + 1))
+            text_number(tostring(latest.count))
         ))
-        self:setRollCount(latest.id, latest.count + 1)
+        --self:setRollCount(latest.id, latest.count + 1)
     end
 end
 
@@ -379,6 +382,13 @@ state_manager.getRangedAttack = function(self)
     end
 
     return ra
+end
+
+-----------------------------------------------------------------------------------------
+--
+state_manager.getRangedAttackSuccessful = function(self) 
+    ra = self.rangedAttack
+    return ra and ra.success
 end
 
 -----------------------------------------------------------------------------------------

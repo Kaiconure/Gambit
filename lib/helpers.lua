@@ -202,3 +202,45 @@ function trimString(s)
  end
 
 
+-------------------------------------------------------------------------------
+-- Returns true if the specified id belongs to a party member
+function isPartyId(id, party)
+    party = party or windower.ffxi.get_party()
+    if party then
+        return 
+            (party.p0 and party.p0.mob and party.p0.mob.id == id) or
+            (party.p1 and party.p1.mob and party.p1.mob.id == id) or
+            (party.p2 and party.p2.mob and party.p2.mob.id == id) or
+            (party.p3 and party.p3.mob and party.p3.mob.id == id) or
+            (party.p4 and party.p4.mob and party.p4.mob.id == id) or
+            (party.p5 and party.p5.mob and party.p5.mob.id == id)
+    end
+end
+
+-------------------------------------------------------------------------------
+-- Returns true if any member of the party is engaged
+function isPartyEngaged(party)
+    party = party or windower.ffxi.get_party()
+    if party then
+        return
+            (party.p1 and party.p1.mob.status == STATUS_ENGAGED) or
+            (party.p2 and party.p2.mob.status == STATUS_ENGAGED) or
+            (party.p3 and party.p3.mob.status == STATUS_ENGAGED) or
+            (party.p4 and party.p4.mob.status == STATUS_ENGAGED) or
+            (party.p5 and party.p5.mob.status == STATUS_ENGAGED)
+    end
+end
+
+-------------------------------------------------------------------------------
+-- Returns true if any trusts in the party are engaged
+function isPartyTrustEngaged(party)
+    party = party or windower.ffxi.get_party()
+    if party then
+        return
+            (party.p1 and party.p1.mob.spawn_type == SPAWN_TYPE_TRUST and party.p1.mob.status == STATUS_ENGAGED) or
+            (party.p2 and party.p2.mob.spawn_type == SPAWN_TYPE_TRUST and party.p2.mob.status == STATUS_ENGAGED) or
+            (party.p3 and party.p3.mob.spawn_type == SPAWN_TYPE_TRUST and party.p3.mob.status == STATUS_ENGAGED) or
+            (party.p4 and party.p4.mob.spawn_type == SPAWN_TYPE_TRUST and party.p4.mob.status == STATUS_ENGAGED) or
+            (party.p5 and party.p5.mob.spawn_type == SPAWN_TYPE_TRUST and party.p5.mob.status == STATUS_ENGAGED)
+    end
+end

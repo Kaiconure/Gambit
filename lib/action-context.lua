@@ -195,7 +195,7 @@ end
 
 -----------------------------------------------------------------------------------------
 -- Make an x,y,duration tuple from the given args
-context_makeXYD = function(...)
+context_makeXYDO = function(...)
     local args = {...}
 
     if type(args[1]) == 'table' then
@@ -213,7 +213,8 @@ context_makeXYD = function(...)
         return {
             x = args[1],
             y = args[2],
-            duration = args[3]
+            duration = args[3],
+            offset = args[4] or 0
         }
     end
 
@@ -929,6 +930,7 @@ local function initContextTargetSymbol(context, symbol)
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
     symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
     symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
+    symbol.is_mob = (symbol.mob.spawn_type == SPAWN_TYPE_MOB)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
     symbol.z = symbol.mob.z
@@ -941,6 +943,13 @@ local function initContextTargetSymbol(context, symbol)
     if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
     if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
     if symbol.status == STATUS_IDLE then symbol.is_idle = true end
+
+    if symbol.is_mob then
+        -- Set the has_claim flag when someone in the party has claimed the mob
+        if tonumber(symbol.mob.claim_id or 0) > 0 and context.party1_by_id[symbol.mob.claim_id] then
+            symbol.has_claim = true
+        end
+    end
 
     -- Trusts
     if symbol.is_trust then
@@ -1007,9 +1016,6 @@ local function loadContextTargetSymbols(context, target)
     -- We'll store the list of trusts in our main party. Trusts can't be called in 
     -- an alliance, so this is all we need.
     context.party1_trusts = {}
-
-    context.party1_by_id = {}
-    context.party1_by_index = {}
     context.pinfo = {}
 
     for i = 0, 5 do
@@ -1035,10 +1041,6 @@ local function loadContextTargetSymbols(context, target)
             if mob.spawn_type == SPAWN_TYPE_TRUST then
                 context.party1_trusts[#context.party1_trusts + 1] = context[p]
             end
-
-            -- Add members to the party id list
-            context.party1_by_id[#context.party1_by_id + 1] = mob.id
-            context.party1_by_index[#context.party1_by_index + 1] = mob.index
 
             -- Save an array of members by name
             context.pinfo[mob.name] = context[p]
@@ -1099,6 +1101,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.target = target
     context.player = windower.ffxi.get_player()
     context.party = windower.ffxi.get_party() or {}
+
+    -- Store a mapping of id->member and index->member for the party
+    context.party1_by_id = {}
+    context.party1_by_index = {}
+    if context.party then
+        for i = 0, 5 do
+            local key = 'p' .. i
+            local member = context.party[key]
+            if member and member.mob then
+                context.party1_by_id[member.mob.id] = member
+                context.party1_by_index[member.mob.index] = member
+            end
+        end
+    end
 
     -- Must be called after the player and party have been assigned
     loadContextTargetSymbols(context, target)    
@@ -1985,7 +2001,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     ---------------------------------------------------------------------------
     --
     context.distanceTo = function(...)
-        local pos = context_makeXYD(...)
+        local pos = context_makeXYDO(...)
         if not pos then return end
 
         local me = windower.ffxi.get_mob_by_target('me')
@@ -2006,7 +2022,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     ---------------------------------------------------------------------------
     --
     context.move = function(...)
-        local pos = context_makeXYD(...)
+        local pos = context_makeXYDO(...)
         if not pos then return end
 
         local me = windower.ffxi.get_mob_by_target('me')
@@ -2014,6 +2030,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local x = pos.x
         local y = pos.y
         local duration = pos.duration
+
+        if type(pos.offset) == 'number' and pos.offset ~= 0 then
+            local vme = V({me.x, me.y})
+            local vpos = V({pos.x, pos.y})
+            local vto = vpos:subtract(vme)
+            local len = vto:length()
+            if len ~= pos.offset then
+                vto = vto:normalize():scale(len + pos.offset)
+
+                x = me.x + vto[1]
+                y = me.y + vto[2]
+            end
+        end
 
         -- If there's an existing job that exactly matches the newly requested one,
         -- then let's just let that job continue.
@@ -2795,14 +2824,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Ensure that the current action does not execute again for at least
     -- the given number of seconds
-    context.delay = function(s)
+    context.postpone = function(s)
         s = math.max(0, tonumber(s) or 0)
         if s > 0 then
             writeDebug('Postponing next action execution by %.1fs':format(s))
-            context.action.availableAt = math.max(context.action.availableAt, context.time + s)
+            context.action.availableAt = math.max(context.action.availableAt, os.clock() + s)
         end
     end
-    context.postpone = context.delay
 
     --------------------------------------------------------------------------------------
     -- Stay in the idle state for the given number of seconds
@@ -2810,7 +2838,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local s = math.max(tonumber(s) or 0, 2)
         
         -- Set the wake time to the new time, or the current wake time -- whichever is later
-        actionStateManager.idleWakeTime = math.max(context.time + s, actionStateManager.idleWakeTime)
+        actionStateManager.idleWakeTime = math.max(os.clock() + s, actionStateManager.idleWakeTime)
 
         -- Don't let this action trigger again until we either wake up, or the time where
         -- the action was going to trigger anway -- whichever is later.
