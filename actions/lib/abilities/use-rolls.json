@@ -5,6 +5,7 @@
   "vars": {
     "use_rolls": {
       "rolls": ["Corsair's Roll", "Chaos Roll"],
+      "allow_crooked_cards": ["Corsair's Roll"],
       "logic": {
         "Chaos Roll": {
           "snake_eye": [3, 8, 10],
@@ -43,7 +44,7 @@
         "iterate(vars.use_rolls.rolls)",
         "canUse(result) and not hasEffectOf(result)"
       ],
-      "commands": ["use(member)"],
+      "commands": ["use(me)", "wait(1)"],
       "frequency": 15
     },
     {

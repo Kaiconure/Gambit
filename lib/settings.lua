@@ -442,23 +442,16 @@ function loadSettings(actionsName, settingsOnly)
     local subJob = player.sub_job
 
     if actions == nil then
-
-        -- actionsName = '%s%s':format(
-        --     mainJob,
-        --     subJob and '-%s':format(subJob) or ''
-        -- ):lower()
-
-        -- jobActionsName = actionsName
-        -- actions = loadActions(player.name, actionsName)
-
-        -- Load main job actions
-        actionsName = '%s':format(mainJob):lower()
-        jobActionsName = actionsName
-        actions = loadActions(player.name, actionsName)
-
-        -- If no actions were found, load main-sub actions (legacy backward compat)
-        if actions == nil and subJob then
+        -- Load main/sub job-specific actions if present
+        if subJob then
             actionsName = '%s-%s':format(mainJob, subJob):lower()
+            jobActionsName = actionsName
+            actions = loadActions(player.name, actionsName)
+        end
+
+        -- If no actions were found, load the main job actions (default)
+        if actions == nil then
+            actionsName = '%s':format(mainJob):lower()
             jobActionsName = actionsName
             actions = loadActions(player.name, actionsName)
         end

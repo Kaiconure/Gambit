@@ -325,7 +325,9 @@ function processTargeting()
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 
-            candidateMob.distance <= maxDistanceSquared
+            (candidateMob.distance <= maxDistanceSquared
+                -- or (candidateMob.distance < (25*25) and party_by_id[candidateMob.claim_id or 0]) -- This will let us see mobs that are possibly out of distance range, but claimed
+                ) 
             and candidateMob.valid_target 
             and candidateMob.spawn_type == 16
             and not candidateMob.charmed
@@ -377,10 +379,24 @@ function processTargeting()
 
                 -- We'll store the nearest aggroing mob, and give it priority over others
                 if candidateMob.status == STATUS_ENGAGED then
-                    if nearestAggroingMob == nil then
+                    if 
+                        nearestAggroingMob == nil
+                    then
                         nearestAggroingMob = candidateMob
-                    elseif candidateMob.distance < nearestAggroingMob.distance then
-                        nearestAggroingMob = candidateMob
+                    elseif 
+                        candidateMob.distance < nearestAggroingMob.distance
+                    then
+                        -- If the mob we're already tracking isn't claimed by the party, update the
+                        -- nearest to match the current candidate. This ensures that all members
+                        -- theoretically target the same claimed mob (assuming strategies allow).
+                        if 
+                            not party_by_id[nearestAggroingMob.claim_id] or
+                            party_by_id[candidateMob.claim_id]
+                        then
+                            nearestAggroingMob = candidateMob
+                        else
+                            writeMessage('skipping mob %d':format(candidateMob.id))
+                        end
                     end
                 end
 

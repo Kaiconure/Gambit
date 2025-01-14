@@ -262,14 +262,14 @@ end
 state_manager.setSkillchain = function(self, name)
     self.skillchain = {
         name = name,
-        time = self.currentTime
+        time = os.clock()
     }
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.getSkillchain = function(self)
-    if self.skillchain.time > 0 and (self.currentTime - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
+    if self.skillchain.time > 0 and (os.clock() - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
         self:setSkillchain(nil)
     end
 
@@ -287,7 +287,7 @@ state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
         if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
 
         self.weaponSkill = {
-            time = self.currentTime,
+            time = os.clock(),
             skill = skill,
             name = skill.name,
             actor = actor,
@@ -303,7 +303,7 @@ end
 --
 state_manager.getPartyWeaponSkillInfo = function(self)
     -- Keep alive for at most 6 seconds
-    if self.weaponSkill.time > 0 and (self.currentTime - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
+    if self.weaponSkill.time > 0 and (os.clock() - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
         self:setPartyWeaponSkill()
     end
 
@@ -316,7 +316,7 @@ state_manager.setMobAbility = function(self, mob, ability, targets)
     if not self.mobAbilities then self.mobAbilities = { } end
 
     self.mobAbilities[mob.id] = {
-        time = self.currentTime,
+        time = os.clock(),
         mob = mob,
         ability = ability,
         target = targets and targets[1],
@@ -339,7 +339,7 @@ state_manager.getMobAbilityInfo = function(self, mob)
         local info = self.mobAbilities[mob.id]
         if info then
             -- We'll set a maximum time that we'll allow a mob ability to remaing active
-            if self.currentTime - info.time > 10 then
+            if os.clock() - info.time > 10 then
                 self.mobAbilities[mob.id] = nil
                 info = nil
             end            
@@ -353,7 +353,7 @@ end
 --
 state_manager.markRangedAttackStart = function(self)
     self.rangedAttack = {
-        time = self.currentTime
+        time = os.clock()
     }
 
     return self.rangedAttack
@@ -375,7 +375,7 @@ state_manager.getRangedAttack = function(self)
     if ra then
         if ra.time == 0 then
             ra = nil
-        elseif self.currentTime - ra.time > RANGED_ATTACK_DELAY then
+        elseif os.clock() - ra.time > RANGED_ATTACK_DELAY then
             self:markRangedAttackCompleted()
             ra = nil
         end
@@ -395,18 +395,18 @@ end
 --
 state_manager.setSpellStart = function(self, spell)
     self.currentSpell = {
-        time = self.currentTime,
+        time = os.clock(),
         spell = spell,
         interrupted = false
     }
-    return self.currentTime
+    return self.currentSpell.time
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.setSpellCompleted = function(self, interrupted)
     self.currentSpell = {
-        time = self.currentTime,
+        time = os.clock(),
         spell = nil,
         interrupted = interrupted
     }

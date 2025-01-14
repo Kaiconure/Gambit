@@ -19,7 +19,7 @@
         "not vars.waypoints.scoped",
         "vars.waypoints.mode == 'bounce'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
-        "mobsInRange(vars.waypoints.max_aggro_range, true) <= vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
+        "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])"
       ],
       "commands": [
@@ -35,7 +35,7 @@
         "not vars.waypoints.scoped",
         "vars.waypoints.mode == 'cycle'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
-        "mobsInRange(vars.waypoints.max_aggro_range, true) <= vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
+        "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])"
       ],
       "commands": [
@@ -51,7 +51,7 @@
         "vars.waypoints.scoped",
         "vars.waypoints.mode == 'bounce'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
-        "mobsInRange(vars.waypoints.max_aggro_range, true) <= vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
+        "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])"
       ],
       "commands": [
@@ -68,7 +68,7 @@
         "vars.waypoints.scoped",
         "vars.waypoints.mode == 'cycle'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
-        "mobsInRange(vars.waypoints.max_aggro_range, true) <= vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
+        "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])"
       ],
       "commands": [

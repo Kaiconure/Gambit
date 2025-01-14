@@ -766,7 +766,7 @@ function smartMove:cancelJob(jobId, immediate)
         if not job then
             windower.ffxi.follow(-1)
             windower.ffxi.run(false)
-            coroutine.sleep(0.25)
+            --coroutine.sleep(0.25)
         end
     end
 
