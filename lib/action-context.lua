@@ -8,6 +8,18 @@ local ALL_MEMBER_FIELD_NAMES = {
     'a20', 'a21', 'a22', 'a23', 'a24', 'a25'    -- Alliance 2
 }
 
+---------------------------------------------------------------------
+-- Job abilities needing special timing due to enhancement of
+-- the next attack
+local SPECIAL_NEXT_ATTACK_JOB_ABILITIES = {
+    'Sneak Attack',
+    'Trick Attack',
+    'Climactic Flourish',
+    'Ternary Flourish',
+    'Striking Flourish',
+    'Boost'
+}
+
 -----------------------------------------------------------------------------------------
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
@@ -1510,10 +1522,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local waitTime = 1.5
             local stopWalk = false
             if 
-                ability.name == 'Sneak Attack' or
-                ability.name == 'Trick Attack'
+                SPECIAL_NEXT_ATTACK_JOB_ABILITIES[ability.name] 
             then
-                -- Some abilities have very strict timing requirements
                 waitTime = 2.0
                 stopWalk = false
             end
@@ -2071,7 +2081,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             duration = math.max(duration, 0.5)
 
             while true do
-                coroutine.sleep(0.5)
+                coroutine.sleep(0.25)
 
                 local now = os.time()
                 local job = smartMove:getJobInfo()

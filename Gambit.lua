@@ -1,4 +1,4 @@
-__version = '0.95.4-beta9'
+__version = '0.95.4-beta10'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -650,6 +650,9 @@ local _handle_actionChunk = function(id, data)
     end
 
     isRemoval = isDispel or isErase
+    
+    local firstTarget = nil
+    local targetCount = 0
 
     if action then
         for i = 1, count do
@@ -660,73 +663,96 @@ local _handle_actionChunk = function(id, data)
             -- buffs are tracked in a better way via event 0x076.
             if
                 target and
-                target.valid_target and
-                (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB) -- and
-                --(actorId == me.id or target.spawn_type == SPAWN_TYPE_MOB)
+                target.valid_target
             then
-                local message = tonumber(packet['Target %d Action 1 Message':format(i)]) or 0
-                local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
-                local param = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
+                -- Store the first target
+                firstTarget = firstTarget or target
+                targetCount = targetCount + 1
 
-                -- Handle removal operations; dispel, erase, -na spells, etc
-                if isRemoval then
-
-                    if isDispel or isErase then
-                        reaction_statusRemoval(action, actor, target, reaction, param)
-                    end
-
-                    -- We're done if this is a removal operation. We won't try to add buffs.
-                    return
-                end
-                
-                -- If the buff id is still nil, see if there's some other way to sort it out
-                if 
-                    buffId == nil
+                if
+                    (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB) -- and
+                    --(actorId == me.id or target.spawn_type == SPAWN_TYPE_MOB)
                 then
-                    -- Some actions use a reaction to indicate whether a status was applied. If the actual
-                    -- reaction matches the status-indicator reaction for this action, try using that.
-                    if reaction == statusReaction then
-                        buffId = param
-                    end
-                end
+                    local message = tonumber(packet['Target %d Action 1 Message':format(i)]) or 0
+                    local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
+                    local param = tonumber(packet['Target %d Action 1 Param':format(i)]) or 0
 
-                if buffId and buffId > 0 then
-                    reaction_statusAddition(action, actor, target, reaction, param, buffId)
+                    -- Handle removal operations; dispel, erase, -na spells, etc
+                    if isRemoval then
+
+                        if isDispel or isErase then
+                            reaction_statusRemoval(action, actor, target, reaction, param)
+                        end
+
+                        -- We're done if this is a removal operation. We won't try to add buffs.
+                        return
+                    end
+                    
+                    -- If the buff id is still nil, see if there's some other way to sort it out
+                    if 
+                        buffId == nil
+                    then
+                        -- Some actions use a reaction to indicate whether a status was applied. If the actual
+                        -- reaction matches the status-indicator reaction for this action, try using that.
+                        if reaction == statusReaction then
+                            buffId = param
+                        end
+                    end
+
+                    if buffId and buffId > 0 then
+                        reaction_statusAddition(action, actor, target, reaction, param, buffId)
+                    end
                 end
             end
         end
     end
     
     if
-        category == 6   -- Job Ability
+        category == 6 or    -- Job Ability
+        category == 14      -- Unblinkable job ability
     then
         local ability = resources.job_abilities[actionId]
-        if 
-            ability and
-            ability.type == 'CorsairRoll'
-        then
-            local player = windower.ffxi.get_player()
-            local targetNumber = findPacketTargetNumber(packet, player.id)
-            local count = targetNumber and tonumber(packet['Target %d Action 1 Param':format(targetNumber)])
+        if ability then
+            if 
+                ability.type == 'CorsairRoll'
+            then
+                local player = windower.ffxi.get_player()
+                local targetNumber = findPacketTargetNumber(packet, player.id)
+                local count = targetNumber and tonumber(packet['Target %d Action 1 Param':format(targetNumber)])
 
-            if count then
-                writeMessage('Detected %s (%s)':format(
-                    text_buff(ability.name),
-                    text_number(tostring(count))
-                ))
+                if count then
+                    writeMessage('Detected %s (%s)':format(
+                        text_buff(ability.name),
+                        text_number(tostring(count))
+                    ))
 
-                actionStateManager:setRollCount(ability.id, count)
+                    actionStateManager:setRollCount(ability.id, count)
+                end
+            elseif
+                ability.id == 177   -- Snake Eye
+            then
+                actionStateManager:applySnakeEye()
+            elseif
+                ability.id == 209 or    -- Wild Flourish
+                ability.id == 320       -- Konzen-ittai
+            then
+                if 
+                    actor and 
+                    actor.in_alliance and
+                    firstTarget
+                then
+                    -- These are abilities that act as skillchain openers.
+                    setPartyWeaponSkill(actor, ability, firstTarget)
+
+                    writeVerbose('%s: %s %s %s %s':format(
+                        text_player(actor.name, Colors.verbose),
+                        text_weapon_skill(ability.name, Colors.verbose),
+                        CHAR_RIGHT_ARROW,
+                        text_mob(firstTarget.name),
+                        text_red('Chainbound!', Colors.verbose)
+                    ))
+                end
             end
-        elseif
-            ability.id == 177   -- Snake Eye
-        then
-            actionStateManager:applySnakeEye()
-        elseif
-            ability.id == 123 or    -- Double-up
-            ability.id == 177 or    -- Snake Eye
-            ability.id == 178       -- Fold
-        then
-            --writeJsonToFile('/data/rolls/%d.%s.json':format(os.clock(), ability.name), packet)
         end
     end
 end
