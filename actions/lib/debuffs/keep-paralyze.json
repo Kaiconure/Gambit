@@ -11,13 +11,11 @@
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
-        "canUse(vars.keep_paralyze.spells) and not hasEffectOf(bt, vars.keep_paralyze.spells)"
+        "hasSpell(vars.keep_paralyze.spells) and canUse(spell)",
+        "not hasEffectOf(bt, spell)"
       ],
-      "commands": [
-        "use(bt)",
-        "postpone(spellRecast(spell.name) + 5)"
-      ],
-      "frequency": 5
+      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 5)"],
+      "frequency": 1
     }
   ]
 }

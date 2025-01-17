@@ -15,7 +15,11 @@
   "actions": [
     {
       "when": ["me.is_party_leader", "needsTrust(vars.ensure_trusts.spells)"],
-      "commands": ["log('Calling trust:', spell.name)", "callTrust()"]
+      "commands": [
+        "log('Calling trust:', spell.name)",
+        "callTrust()",
+        "wait(1.0)"
+      ]
     },
     {
       "when": [
@@ -24,12 +28,13 @@
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to debuff', effect.name)",
-        "vars.ensure_trusts.stationary or align(member, nil, 1, 3)",
-        "wait(1.5)",
+        "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
+        "wait(2.5)",
         "releaseTrust(member.name)",
-        "wait(1)",
+        "wait(2.0)",
         "log('Recalling trust', spell.name)",
-        "useSpell(me)"
+        "useSpell(me)",
+        "wait(1.0)"
       ]
     },
     {
@@ -41,12 +46,13 @@
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
-        "vars.ensure_trusts.stationary or align(member, nil, 1, 3)",
-        "wait(1.5)",
+        "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
+        "wait(2.5)",
         "releaseTrust(member.name)",
-        "wait(1)",
+        "wait(2.0)",
         "log('Recalling trust', spell.name)",
-        "useSpell(me)"
+        "useSpell(me)",
+        "wait(1.0)"
       ],
       "scope": "battle"
     },
@@ -59,12 +65,13 @@
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
-        "vars.ensure_trusts.stationary or align(member, nil, 1, 3)",
-        "wait(1)",
+        "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
+        "wait(2.5)",
         "releaseTrust(member.name)",
-        "wait(1)",
+        "wait(2.0)",
         "log('Recalling trust', spell.name)",
-        "useSpell(me)"
+        "useSpell(me)",
+        "wait(1.0)"
       ],
       "scope": "battle"
     }

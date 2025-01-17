@@ -2,10 +2,20 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "vars": {
+    "keep_haste_samba": {
+      "min_tp": 0,
+      "reapply_when_tp": 3500,
+      "reapply_when_recast": 30
+    }
+  },
   "actions": [
     {
-      "when": "canUseAbility('Haste Samba') and not hasBuff('Haste Samba')",
-      "commands": ["useAbility()"],
+      "when": [
+        "hasAbility('Haste Samba') and canUse(ability)",
+        "(me.tp >= vars.keep_haste_samba.min_tp and not hasEffectOf(ability)) or (me.tp >= vars.keep_haste_samba.reapply_when_tp and ability_recast <= vars.keep_haste_samba.reapply_when_recast)"
+      ],
+      "commands": ["use(me)"],
       "frequency": 10
     }
   ]

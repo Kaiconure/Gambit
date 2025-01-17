@@ -260,6 +260,8 @@ handlers['config'] = function(args)
     local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
     local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
     local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
+    local ct = tonumber(arrayIndexOfStrI(args, '-chasetime') or arrayIndexOfStrI(args, '-ct') or 0)
+    local scd = tonumber(arrayIndexOfStrI(args, '-skillchaindelay') or arrayIndexOfStrI(args, '-scdelay') or arrayIndexOfStrI(args, '-scd') or 0)
     local hasChanges = false
 
     if distance > 0 then
@@ -303,6 +305,32 @@ handlers['config'] = function(args)
         end
 
         writeMessage('Targeting strategy: %s':format(text_green(settings.strategy)))
+    end
+
+    if ct > 0 then
+        ct = tonumber(args[ct + 1])
+        if ct and ct > 0 then
+            ct = math.clamp(ct, 5.0, 30.0)
+            settings.maxChaseTime = ct
+            hasChanges = true
+        end
+
+        writeMessage('Max chase time: %s':format(
+            pluralize('%.1f':format(settings.maxChaseTime), 'second', 'seconds')
+        ))
+    end
+
+    if scd > 0 then
+        scd = tonumber(args[scd + 1])
+        if scd and scd > 0 then
+            scd = math.clamp(scd, 0.0, MAX_SKILLCHAIN_TIME)
+            settings.skillchainDelay = scd
+            hasChanges = true
+        end
+
+        writeMessage('Skillchain delay: %s':format(
+            pluralize('%.1f':format(settings.skillchainDelay), 'second', 'seconds')
+        ))
     end
 
     if hasChanges then
@@ -351,6 +379,23 @@ handlers['targetinfo'] = function (args)
     end
 end
 handlers['ti'] = handlers['targetinfo']
+
+handlers['rollinfo'] = function (args)
+    local latestRoll = actionStateManager:getLatestRoll()
+
+    if latestRoll then
+        local rolls = actionStateManager:getRolls(true)
+        for id, value in pairs(rolls) do
+            writeMessage('  %s %s%s':format(
+                text_buff(value.name),
+                text_number(value.count),
+                latestRoll.id == value.id and '*' or ''))
+        end
+    else
+        writeMessage('  No active rolls were found.')
+    end
+end
+handlers['ri'] = handlers['rollinfo']
 
 -------------------------------------------------------------------------------
 -- ignore-list

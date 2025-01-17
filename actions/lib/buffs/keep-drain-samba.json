@@ -4,8 +4,10 @@
   },
   "actions": [
     {
-      "when": "canUseAbility('Drain Samba II', 'Drain Samba') and not hasBuff('Drain Samba')",
-      "commands": ["useAbility()"],
+      "when": [
+        "hasAbility('Drain Samba II', 'Drain Samba') and not hasEffectOf(ability) and canUse(ability)"
+      ],
+      "commands": "use(me)",
       "frequency": 10
     }
   ]

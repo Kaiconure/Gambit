@@ -6,6 +6,7 @@ TargetStrategy = {
     minhp           = 'minhp',      -- Find aggroing mob with the least HP
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
     leader          = 'leader',     -- The party leader target, or the nearest aggro if none
+    puller          = 'puller',     -- Similar to aggressor, but tries to limit to mobs that aren't engaged with others while unclaimed
     manual          = 'manual',     -- You as the player pick the targets by engaging manually
     camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
 }
@@ -34,27 +35,47 @@ local DefaultIgnoreList = {
     -- Mobs that guard colonization reives, which are just a waste of time to target
     -- when we could be breaking down the obstacles to eliminate them.
     { name = 'Acuex', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Alpine Rabbit', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Bounding Chapuli', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Basalt Lizard', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Cerise Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Chilblain Snoll', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Crabapple Treant', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Draftrider Bat', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Embattled Roc', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Festering Umbril', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Floodplain Spider', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Frightful Funguar', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Furfluff Lapinion', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Indomitable Spurned', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lancing Wasp', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Larkish Opo-opo', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lavender Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Lightfoot Lapinion', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Matamata', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Oregorger Worm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Preening Tulfaire', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Precipice Vulture', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Procrustean Draugar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Pungent Ovim', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Quivering Twitherym', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Red Dropwing', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Resilient Colibri', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Ruby Raptor', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Shrubshredder Chapuli', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Skittish Matamata', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Sloshmouth Snapweed', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Soiled Funguar', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Sordid Lizard', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Stonesoftener Acuex', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Temblor Beetle', ignoreAlways = true, _note = 'Reive guard' },
-    { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' }
+    { name = 'Territorial Lucerewe', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Trogloptera', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Twitherym Windstorm', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Umberwood Tiger', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Uprooted Sapling', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Velkk Vaticinator', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' }
 }
 
 --
@@ -71,6 +92,13 @@ local DefaultNoRearList = {
     'Monolithic Boulder'
 }
 
+--
+-- Some mobs cannot be approached using the standard melee distance. These can be called
+-- out here, with the appropriate minimum distance override.
+local DefaultMinDistanceList = {
+    ['Bedrock Crag'] = 6
+}
+
 local defaultSettings = {
     maxDistance = 25,
     maxDistanceZ = 5,
@@ -80,8 +108,10 @@ local defaultSettings = {
     schemaVersion = 2,
     ignoreList = DefaultIgnoreList,
     noRearList = DefaultNoRearList,
+    minDistanceList = DefaultMinDistanceList,
     maxChaseTime = nil,
-    followCommandDistance = 1
+    followCommandDistance = 1,
+    weaponSkillDelay = nil
 }
 
 ----------------------------------------------------------------------------------------
@@ -96,9 +126,9 @@ end
 
 local function getActionsJobFileName(player)
     local actionsName = player.main_job
-    if player.sub_job then
-        actionsName = actionsName .. '-' .. player.sub_job
-    end
+    -- if player.sub_job then
+    --     actionsName = actionsName .. '-' .. player.sub_job
+    -- end
 
     return getActionsFileName(player.name, actionsName:lower())
 end
@@ -331,25 +361,6 @@ function saveDefaultActions(player, force)
     end
 
     return loadDefaultActions(player, true) ~= nil
-
-    -- local saveAsFileName = nil
-    -- if actionsName then
-    --     saveAsFileName = getActionsFileName(player, actionsName)
-    -- else
-    --     saveAsFileName = getActionsJobFileName(player)
-    -- end
-
-    -- -- If the actions are stored as an object, then we'll stringify it to json.
-    -- -- Otherwise, if the actions aren't already a string the we've got a problem.
-    -- if type(actions) == 'table' then actions = json.stringify(actions) end
-    -- if type(actions) ~= 'string' then return nil end
-
-    -- writeStringToFile(
-    --     saveAsFileName,
-    --     actions
-    -- )
-
-    -- return true
 end
 
 ----------------------------------------------------------------------------------------
@@ -399,12 +410,17 @@ function loadSettings(actionsName, settingsOnly)
     tempSettings.maxChaseTime = tonumber(tempSettings.maxChaseTime)
     if tempSettings.maxChaseTime and tempSettings.maxChaseTime > 0 then
         -- Clamp the give up period to between 5-30 seconds
-        tempSettings.maxChaseTime = math.max(5, math.min(30, tempSettings.maxChaseTime))
+        tempSettings.maxChaseTime = math.clamp(tempSettings.maxChaseTime, 5, 30)
     else
-        -- If no chase time was configured, calculate it based on the max distance.
-        -- This will end up with a value between 5-20 seconds.
-        tempSettings.maxChaseTime = math.max(15, tempSettings.maxDistance) / 3
+        tempSettings.maxChaseTime = 17
     end
+
+    -- The amount of time to allow between a weapon skill/skillchain being detected, 
+    -- and a skillchain being continued.
+    tempSettings.skillchainDelay = math.clamp(
+        tonumber(tempSettings.skillchainDelay) or SKILLCHAIN_DELAY,
+        0,
+        MAX_SKILLCHAIN_TIME)
 
     local jobActionsName = nil
     local actions = nil
@@ -426,28 +442,19 @@ function loadSettings(actionsName, settingsOnly)
     local subJob = player.sub_job
 
     if actions == nil then
+        -- Load main/sub job-specific actions if present
+        if subJob then
+            actionsName = '%s-%s':format(mainJob, subJob):lower()
+            jobActionsName = actionsName
+            actions = loadActions(player.name, actionsName)
+        end
 
-        actionsName = '%s%s':format(
-            mainJob,
-            subJob and '-%s':format(subJob) or ''
-        ):lower()
-
-        jobActionsName = actionsName
-        actions = loadActions(player.name, actionsName)
-
-        -- if actions then
-        --     writeMessage('Actions were loaded for %s/%s!':format(player.main_job, player.sub_job))
-        -- end
-
-        --
-        -- If there were no actions for this job, we can try reloading the last explicitly loaded action set
-        --
-        -- if actions == nil then
-        --     if tempSettings.actionInfo and tempSettings.actionInfo.name then
-        --         actionsName = tempSettings.actionInfo.name:lower()
-        --         actions = loadActions(player.name, actionsName)
-        --     end
-        -- end
+        -- If no actions were found, load the main job actions (default)
+        if actions == nil then
+            actionsName = '%s':format(mainJob):lower()
+            jobActionsName = actionsName
+            actions = loadActions(player.name, actionsName)
+        end
 
         -- Load the default actions if nothing else has worked
         if actions == nil then

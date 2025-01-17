@@ -251,7 +251,7 @@ end
 -- Semantic formatting helpers
 
 function pluralize(count, ifOne, ifOther, returnColor)
-    local word = (count == 1 and ifOne or ifOther)
+    local word = (tonumber(count) == 1 and ifOne or ifOther)
     --return text_number(count, returnColor) .. ' ' .. colorize(returnColor, word, returnColor)
     return text_number(count .. ' ' .. word, returnColor)
 end

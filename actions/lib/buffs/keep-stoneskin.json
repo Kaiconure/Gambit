@@ -4,8 +4,10 @@
   },
   "actions": [
     {
-      "when": "not hasEffect('Stoneskin') and canUseSpell('Stoneskin')",
-      "commands": ["use(me)"],
+      "when": [
+        "hasSpell('Stoneskin') and not hasEffectOf(spell) and canUse(spell)"
+      ],
+      "commands": ["use(me)", "postpone(spellRecast(spell.name) + 10)"],
       "frequency": 10
     }
   ]

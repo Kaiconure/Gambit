@@ -320,16 +320,31 @@ function processTargeting()
     if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
     if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
     if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
+
+    local can_initiate = strategy == TargetStrategy.aggressor or strategy == TargetStrategy.puller
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 
-            candidateMob.distance <= maxDistanceSquared
+            (candidateMob.distance <= maxDistanceSquared
+                -- or (candidateMob.distance < (25*25) and party_by_id[candidateMob.claim_id or 0]) -- This will let us see mobs that are possibly out of distance range, but claimed
+                ) 
             and candidateMob.valid_target 
             and candidateMob.spawn_type == 16
             and not candidateMob.charmed
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
-            and (candidateMob.status == 1 or strategy == TargetStrategy.aggressor)
+            and (candidateMob.status == 1 or can_initiate)
+
+        -- This ensures that the 'puller' strategy only tries to get mobs that are at full health,
+        -- or are already claimed by a member of our party. This prevents pullers
+        -- from fetching mobs that may already have hate for some other person.
+        -- NOTE: This is based on AoE pullers in other parties camped nearby.
+        if 
+            isValidCandidate and
+            strategy == TargetStrategy.puller 
+        then
+            isValidCandidate = candidateMob.hpp == 100 or party_by_id[candidateMob.claim_id or 0]
+        end
 
         local shouldIgnore = false
         if isValidCandidate then
@@ -339,8 +354,6 @@ function processTargeting()
                 shouldIgnore = true
 
                 if
-                    -- strategy == TargetStrategy.nearest or
-                    -- strategy == TargetStrategy.aggressor 
                     true
                 then
                     local downgrade = ignoreListItem.downgrade == true
@@ -366,10 +379,24 @@ function processTargeting()
 
                 -- We'll store the nearest aggroing mob, and give it priority over others
                 if candidateMob.status == STATUS_ENGAGED then
-                    if nearestAggroingMob == nil then
+                    if 
+                        nearestAggroingMob == nil
+                    then
                         nearestAggroingMob = candidateMob
-                    elseif candidateMob.distance < nearestAggroingMob.distance then
-                        nearestAggroingMob = candidateMob
+                    elseif 
+                        candidateMob.distance < nearestAggroingMob.distance
+                    then
+                        -- If the mob we're already tracking isn't claimed by the party, update the
+                        -- nearest to match the current candidate. This ensures that all members
+                        -- theoretically target the same claimed mob (assuming strategies allow).
+                        if 
+                            not party_by_id[nearestAggroingMob.claim_id] or
+                            party_by_id[candidateMob.claim_id]
+                        then
+                            nearestAggroingMob = candidateMob
+                        else
+                            writeMessage('skipping mob %d':format(candidateMob.id))
+                        end
                     end
                 end
 
@@ -382,7 +409,7 @@ function processTargeting()
                     local isNearer = candidateMob.distance < bestMatchingMob.distance
 
                     local assumeStrategy = strategy
-                    if assumeStrategy == TargetStrategy.aggressor then
+                    if can_initiate then
                         assumeStrategy = TargetStrategy.nearest
                     end
 

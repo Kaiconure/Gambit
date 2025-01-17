@@ -2,7 +2,7 @@ MAX_SKILLCHAIN_TIME     = 6     -- The maximum amount of time we'll allow oursel
 MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
-WEAPON_SKILL_DELAY      = 2     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
+SKILLCHAIN_DELAY        = 4     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 
 local state_manager = {
@@ -33,6 +33,11 @@ local state_manager = {
     },
 
     mobBuffs = {
+    },
+
+    rolls = {
+    },
+    latestRoll = {
     }
 }
 
@@ -105,13 +110,11 @@ state_manager.setActionType = function (self, newType)
         -- Only reset time if we're transitioning between idle/pull and battle
         --if mode ~= newMode then
         if mode ~= newMode then
-            writeComment(string.format(
+            writeVerbose(string.format(
                 'Transitioning from %s to %s after %s',
-                text_red(mode, Colors.comment),
-                text_red(newMode, Colors.comment),
-                -- text_red(self.actionType, Colors.comment),
-                -- text_red(newType, Colors.comment),
-                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.comment)
+                text_red(mode, Colors.verbose),
+                text_red(newMode, Colors.verbose),
+                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.verbose)
             ))
 
             -- Sync up the latest mob state on mode change
@@ -158,18 +161,115 @@ state_manager.tick = function(self, currentTime)
 end
 
 -----------------------------------------------------------------------------------------
+-- Roll counts
+state_manager.setRollCount = function(self, rollId, count)
+    rollId = tonumber(rollId) or 0
+    if rollId <= 0 then return 0 end
+
+    count = tonumber(count) or 0
+    if 
+        self.rolls[rollId] == nil and
+        count <= 0
+    then
+        return 0 
+    end
+
+    if count <= 0 then 
+        self.rolls[rollId] = nil
+        return 0
+    end
+
+    local ability = resources.job_abilities[rollId]
+    if
+        ability == nil or
+        ability.type ~= 'CorsairRoll'
+    then
+        return 0
+    end
+
+    if self.rolls[rollId] == nil then
+        self.rolls[rollId] = {
+            id = rollId,
+            name = ability.name,
+            status = ability.status,
+            count = count,
+            time = os.clock()
+        }
+    else
+        self.rolls[rollId].count = count
+    end
+
+    self.latestRoll = self.rolls[rollId]
+    return self.latestRoll.count
+end
+
+state_manager.getRollCount = function(self, rollId)
+    rollId = tonumber(rollId) or 0
+    if rollId <= 0 then return 0 end
+    
+    if self.rolls[rollId] then
+        local roll = self.rolls[rollId]
+        if roll then
+            if hasBuff(nil, roll.status, true) then
+                return self.rolls[rollId].count
+            end
+        end
+
+        self.rolls[rollId] = nil
+    end
+
+    return 0
+end
+state_manager.getRolls = function(self, fullInfo)
+    local results = {}
+    for id, value in pairs(self.rolls) do
+        if self:getRollCount(id) > 0 then
+            if fullInfo then
+                results[id] = value
+            else
+                results[id] = value.count
+            end
+        end
+    end
+    return results
+end
+state_manager.applySnakeEye = function(self)
+    -- NOTE: Discovered that Snake Eye makes the next roll a 1, it
+    -- does not actually increase the roll number by 1!!
+
+    local latest = self:getLatestRoll()
+    if latest then
+        writeMessage('Applying %s to %s (%s)':format(
+            text_ability('Snake Eye'),
+            text_buff(latest.name),
+            text_number(tostring(latest.count))
+        ))
+        --self:setRollCount(latest.id, latest.count + 1)
+    end
+end
+
+state_manager.getLatestRoll = function(self)
+    local latest = self.latestRoll
+    if latest then
+        if self:getRollCount(latest.id) > 0 then
+            return latest
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
 --
 state_manager.setSkillchain = function(self, name)
     self.skillchain = {
         name = name,
-        time = self.currentTime
+        time = os.clock()
     }
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.getSkillchain = function(self)
-    if self.skillchain.time > 0 and (self.currentTime - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
+    if self.skillchain.time > 0 and (os.clock() - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
         self:setSkillchain(nil)
     end
 
@@ -187,7 +287,7 @@ state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
         if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
 
         self.weaponSkill = {
-            time = self.currentTime,
+            time = os.clock(),
             skill = skill,
             name = skill.name,
             actor = actor,
@@ -203,7 +303,7 @@ end
 --
 state_manager.getPartyWeaponSkillInfo = function(self)
     -- Keep alive for at most 6 seconds
-    if self.weaponSkill.time > 0 and (self.currentTime - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
+    if self.weaponSkill.time > 0 and (os.clock() - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
         self:setPartyWeaponSkill()
     end
 
@@ -216,7 +316,7 @@ state_manager.setMobAbility = function(self, mob, ability, targets)
     if not self.mobAbilities then self.mobAbilities = { } end
 
     self.mobAbilities[mob.id] = {
-        time = self.currentTime,
+        time = os.clock(),
         mob = mob,
         ability = ability,
         target = targets and targets[1],
@@ -239,7 +339,7 @@ state_manager.getMobAbilityInfo = function(self, mob)
         local info = self.mobAbilities[mob.id]
         if info then
             -- We'll set a maximum time that we'll allow a mob ability to remaing active
-            if self.currentTime - info.time > 10 then
+            if os.clock() - info.time > 10 then
                 self.mobAbilities[mob.id] = nil
                 info = nil
             end            
@@ -253,7 +353,7 @@ end
 --
 state_manager.markRangedAttackStart = function(self)
     self.rangedAttack = {
-        time = self.currentTime
+        time = os.clock()
     }
 
     return self.rangedAttack
@@ -275,7 +375,7 @@ state_manager.getRangedAttack = function(self)
     if ra then
         if ra.time == 0 then
             ra = nil
-        elseif self.currentTime - ra.time > RANGED_ATTACK_DELAY then
+        elseif os.clock() - ra.time > RANGED_ATTACK_DELAY then
             self:markRangedAttackCompleted()
             ra = nil
         end
@@ -286,20 +386,27 @@ end
 
 -----------------------------------------------------------------------------------------
 --
+state_manager.getRangedAttackSuccessful = function(self) 
+    ra = self.rangedAttack
+    return ra and ra.success
+end
+
+-----------------------------------------------------------------------------------------
+--
 state_manager.setSpellStart = function(self, spell)
     self.currentSpell = {
-        time = self.currentTime,
+        time = os.clock(),
         spell = spell,
         interrupted = false
     }
-    return self.currentTime
+    return self.currentSpell.time
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.setSpellCompleted = function(self, interrupted)
     self.currentSpell = {
-        time = self.currentTime,
+        time = os.clock(),
         spell = nil,
         interrupted = interrupted
     }
@@ -476,6 +583,20 @@ state_manager.getBuffsForMob = function(self, id)
     end
 
     return { }
+end
+
+state_manager.clearMobBuff = function(self, mob, buff, strict)
+    local buffs = mob and
+        self.mobBuffs and 
+        self.mobBuffs[mob.id] and
+        self.mobBuffs[mob.id].buffs
+
+    if buffs and #buffs > 0 then
+        local foundBuff = hasBuffInArray(buffs, buff, strict)
+        if foundBuff then
+            self:setMobBuff(mob, foundBuff.id, false)
+        end
+    end
 end
 
 -- Get the buffs for all trusts, indexed by mob id

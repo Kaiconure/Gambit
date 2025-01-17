@@ -8,13 +8,13 @@
       "when": [
         "me.level == 99",
         "vars.use_xp_cp_rings.ignore_master_levels or not me.is_mastered",
-        "not hasBuff('Commitment', 'Dedication')",
+        "not hasBuff('Commitment', 'Dedication') or (not hasBuff('Commitment') and hasBuff('Dedication') and partyByName('Kupofried'))",
         "canUseItem(vars.use_xp_cp_rings.cp_rings)"
       ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
-        "wait(5)",
-        "useItem()"
+        "wait(6.0, 'pause-follow')",
+        "useItem(me)"
       ],
       "frequency": 15,
       "comment": "Use the first available CP ring if we don't alredy have the Commitment effect. Only used if level 99 and not in the master levels."
@@ -27,11 +27,11 @@
       ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
-        "wait(5)",
-        "useItem()"
+        "wait(6.0, 'pause-follow')",
+        "useItem(me)"
       ],
       "frequency": 15,
-      "comment": "Use the first available EXP ring if we don't have the Dedication effect. Only used if level is below 99."
+      "comment": "Use the first available XP ring if we don't have the Dedication effect. Only used if level is below 99."
     }
   ],
   "vars": {
@@ -49,6 +49,7 @@
       "xp_rings": [
         "Echad Ring",
         "Emperor Band",
+        "Caliber Ring",
         "Resolution Ring",
         "Empress Band",
         "Duodecennial Ring",
