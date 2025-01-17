@@ -6,22 +6,16 @@
   "vars": {
     "regen_cycle": {
       "targets": ["me"],
-      "spells": [
-        "Regen V",
-        "Regen IV",
-        "Regen III",
-        "Regen II",
-        "Regen"
-      ]
+      "spells": ["Regen V", "Regen IV", "Regen III", "Regen II", "Regen"]
     }
   },
   "actions": [
     {
-      "when": "canUseSpell(vars.regen_cycle.spells) and partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, vars.regen_cycle.spells)",
-      "commands": [
-        "useSpell(member)",
-        "postpone(spellRecast(spell.name) + 10)"
+      "when": [
+        "hasSpell(vars.regen_cycle.spells) and canUse(spell)",
+        "partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, spell)"
       ],
+      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 10)"],
       "frequency": 1
     }
   ]

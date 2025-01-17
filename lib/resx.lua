@@ -368,7 +368,7 @@ end
 
 --------------------------------------------------------------------------------------
 --
-function canUseSpell(player, spell)
+function canUseSpell(player, spell, recasts)
     player = player or windower.ffxi.get_player()
 
     spell = getSpellResource(spell)
@@ -432,16 +432,19 @@ function canUseSpell(player, spell)
     -- Now we just need to verify that the recast is up
     --
 
-    local recasts = windower.ffxi.get_spell_recasts()    
+    recasts = recasts or windower.ffxi.get_spell_recasts()
+    if not recasts then return false end
 
-    -- Recast will be a number in ticks, which is seconds * 60. The conversion doesn't
-    -- matter if we're just checking for readiness.
-    return recasts and recasts[spell.recast_id or spell.id] <= 0
+    local recast = recasts[spell.recast_id or spell.id]
+    if not recast then return false end
+
+    -- Recast will be a number in ticks, which is seconds * 60
+    return recast <= 0, (recast / 60)
 end
 
 --------------------------------------------------------------------------------------
 --
-function canUseAbility(player, ability)
+function canUseAbility(player, ability, recasts)
     player = player or windower.ffxi.get_player()
 
     ability = getJobAbilityResource(ability)
@@ -501,13 +504,13 @@ function canUseAbility(player, ability)
             foundJobAbility or
             (foundPetCommand and windower.ffxi.get_mob_by_target('pet')) 
         then
-            local recasts = windower.ffxi.get_ability_recasts()
+            recasts = recasts or windower.ffxi.get_ability_recasts()
 
             local recast = recasts and recasts[ability.recast_id]
-            if type(recast) == 'number' and recast <= 0 then
-                -- Recast will be a number in ticks, which is seconds * 60. The conversion doesn't
-                -- matter if we're just checking for readiness, though.
-                return true
+            if type(recast) == 'number' then
+                -- Recast will be a number in ticks, which is seconds * 60
+                recast = recast / 60
+                return recast <= 0, recast
             end
         end
     end

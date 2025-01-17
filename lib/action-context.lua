@@ -17,7 +17,8 @@ local SPECIAL_NEXT_ATTACK_JOB_ABILITIES = {
     'Climactic Flourish',
     'Ternary Flourish',
     'Striking Flourish',
-    'Boost'
+    'Boost',
+    "Assassin's Charge"
 }
 
 -----------------------------------------------------------------------------------------
@@ -154,10 +155,21 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-function context_wait(s)
+function context_wait(s, ...)
+    local args = varargs({...})
+    local followJob = nil
+    if arrayIndexOfStrI(args, 'pause-follow') then
+        followJob = smartMove:cancelJob()
+    end
+
     local s = math.max(tonumber(s) or 1, 0)
     writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
     coroutine.sleep(s)
+
+    if followJob then
+        smartMove:reschedule(followJob)
+    end
+
     return true
 end
 
@@ -1465,22 +1477,61 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Get the recast timer (in seconds) for the specified ability
+    context.abilityRecast = function(...)
+        local abilities = varargs({...}, context.ability and context.ability.name)
+
+        if type(abilities) == 'table' then
+            local player = windower.ffxi.get_player()
+            local recasts = windower.ffxi.get_ability_recasts()
+
+            for key, _ability in ipairs(abilities) do
+                local ability = _ability
+                if type(ability) ~= 'nil' then
+                    ability = findJobAbility(ability)
+
+                    if ability and type(ability.recast_id) == 'number' then
+                        local usable, recast = canUseAbility(player, ability, recasts)
+                        
+                        if type(recast) == 'number' then
+                            context.ability = ability
+                            context.ability_recast = recast
+
+                            return recast
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if the specified spell is available
+    context.hasAbility = function(...)
+        return context.abilityRecast(...) ~= nil
+    end
+
+    --------------------------------------------------------------------------------------
     --
     context.canUseAbility = function (...)
         local abilities = varargs({...}, context.ability and context.ability.name)
 
         if type(abilities) == 'table' then
             local player = windower.ffxi.get_player()
+            local recasts = windower.ffxi.get_ability_recasts()
 
             for key, _ability in ipairs(abilities) do
                 local ability = _ability
-                if type(ability) == 'string' then
+                if type(ability) ~= 'nil' then
                     ability = findJobAbility(ability)
 
                     if ability then
-                        context.ability = ability
+                        local canUse, recast = canUseAbility(player, ability, recasts)
 
-                        if canUseAbility(player, ability) then
+                        context.ability = ability
+                        context.ability_recast = recast
+
+                        if canUse then
                             return key
                         end
                     end
@@ -1546,19 +1597,26 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    --
-    context.canUseSpell = function (...)
+    -- Get the recast timer (in seconds) for the specified spell
+    context.spellRecast = function(...)
         local spells = varargs({...}, context.spell and context.spell.name)
-        if type(spells) == 'table' and #spells > 0 then
+
+        if type(spells) == 'table' then
+            local player = windower.ffxi.get_player()
+            local recasts = windower.ffxi.get_spell_recasts()
+
             for key, _spell in ipairs(spells) do
                 local spell = _spell
                 if type(spell) ~= 'nil' then
                     spell = findSpell(spell)
-                    if spell then
-                        context.spell = spell
-                        
-                        if canUseSpell(nil, spell) then
-                            return key
+
+                    if spell and type(spell.recast_id) == 'number' then
+                        local usable, recast = canUseSpell(player, spell, recasts)
+                        if type(recast) == 'number' then
+                            context.spell = spell
+                            context.spell_recast = recast
+
+                            return recast
                         end
                     end
                 end
@@ -1567,29 +1625,36 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    --
-    context.spellRecast = function (spell)
-        if type(spell) == 'string' then
-            spell = findSpell(spell)
-        end
+    -- Determine if the specified spell is available
+    context.hasSpell = function(...)
+        return context.spellRecast(...) ~= nil
+    end
 
-        if type(spell) == 'table' and type(spell.id) == 'number' then
-            local recasts = windower.ffxi.get_spell_recasts()    
-            if type(recasts) == 'table' then
-                local recast = recasts[spell.recast_id or spell.id]
-                if type(recast) == 'number' then
-                    recast = recast / 60.0
-                    writeDebug('Recast for %s is %s':format(
-                        text_spell(spell.name, Colors.debug),
-                        pluralize('%.1f':format(recast), 'second', 'seconds', Colors.debug)
-                    ))
-                    return recast
+    --------------------------------------------------------------------------------------
+    --
+    context.canUseSpell = function (...)
+        local spells = varargs({...}, context.spell and context.spell.name)
+        if type(spells) == 'table' and #spells > 0 then
+            local player = windower.ffxi.get_player()
+            local recasts = windower.ffxi.get_spell_recasts()
+
+            for key, _spell in ipairs(spells) do
+                local spell = _spell
+                if type(spell) ~= 'nil' then
+                    spell = findSpell(spell)
+                    if spell then
+                        local canUse, recast = canUseSpell(player, spell, recasts)
+
+                        context.spell = spell
+                        context.spell_recast = recast
+                        
+                        if canUse then
+                            return key
+                        end
+                    end
                 end
             end
         end
-
-        -- If there's no recast, we'll just return a negative value. This was an invalid spell.
-        return -1
     end
 
     --------------------------------------------------------------------------------------
@@ -1667,8 +1732,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         -- Now, we get to find the first hit in the set (if any) and return based on that
         if names and #names > 0 then
-            for i, name in ipairs(names) do
-                if context.canUseSpell(name) or context.canUseAbility(name) or context.canUseItem(name) then
+            for i, _name in ipairs(names) do
+                local name = _name
+                if type(name) == 'table' then
+                    name = name.name or name
+                end
+
+                if 
+                    context.canUseSpell(name) or
+                    context.canUseAbility(name) or
+                    context.canUseItem(name) 
+                then
                     return true
                 end
             end
@@ -1678,7 +1752,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Uses the specified spell, ability, or item, if possible.
     context.use = function(target, name)
-        
         -- If a name was provided, we don't know what it is until we check if it can be used. This
         -- will set the appropriate context variable based on that if it succeeds.
         if name then
@@ -2517,6 +2590,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         for i = start_index, #names do
             local name = names[i]
+
+            if type(name) == 'table' then
+                name = name.name or name
+            end
+
             local spell = findSpell(name)
             local ability = findJobAbility(name)
 
@@ -2531,49 +2609,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end        
-    end
-    
-    context.hasEffectOfOld = function(target, ...)
-        local names = varargs({...})
-        local strict = target == 'use-strict' or names[1] == 'use-strict'
-
-        -- If the target is a string that exists in the context, we'll use that
-        if type(target) == 'string' and context[target] and context[target].buffs then
-            target = context[target]
-        end
-
-        -- TODO: The issue has to do with target being where the spells are sent
-        
-        -- If the target is not a table at this point, then we'll use ourself
-        if type(target) ~= 'table' then
-
-            -- If the target is a string, it means no target was specified and the first param was 
-            -- a buff. Let's add it to the list of buff names we're searching through.
-            if type(target) == 'string' then
-                table.insert(names, 1, target)
-            end
-
-            -- Promote the target to ourself
-            target = context.me
-        end
-
-        for i = 1, #names do
-            local name = names[i]
-
-            local spell = findSpell(name)
-            local ability = findJobAbility(name)
-
-            local res = spell or ability
-            local buffId = res and res.status
-
-            if buffId then
-                local buff = hasBuffInArray(target.buffs, buffId, strict)
-                if buff then
-                    context.effect = buff    
-                    return buff
-                end
-            end
-        end
     end
 
     --------------------------------------------------------------------------------------
@@ -2818,7 +2853,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- 
     context.shoot = function (duration)
         if context.t then
-            return sendRangedAttackCommand(context.t, context)
+            return sendRangedAttackCommand(context.t, context, duration or 1.0)
         end
     end
     context.throw = context.shoot

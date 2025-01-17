@@ -4,13 +4,10 @@
   },
   "actions": [
     {
-      "when": "not hasBuff('Enblizzard II') and canUse('Enblizzard II')",
-      "commands": ["use(me)"],
-      "frequency": 10
-    },
-    {
-      "when": "not hasBuff('Enblizzard II', 'Enblizzard') and canUse('Enblizzard')",
-      "commands": ["use(me)"],
+      "when": [
+        "hasSpell('Enblizzard II', 'Enblizzard') and not hasEffectOf(spell) and canUse(spell)"
+      ],
+      "commands": ["use(me)", "postpone(spellRecast(spell.name) + 10)"],
       "frequency": 10
     }
   ]

@@ -4,20 +4,18 @@
   },
   "vars": {
     "keep_dia": {
-      "spells": ["Bia III", "Dia II", "Dia"]
+      "spells": ["Dia III", "Dia II", "Dia"]
     }
   },
   "actions": [
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
-        "canUse(vars.keep_dia.spells) and not hasEffectOf(bt, vars.keep_dia.spells)"
+        "hasSpell(vars.keep_dia.spells) and canUse(spell)",
+        "not hasEffectOf(bt, spell)"
       ],
-      "commands": [
-        "use(bt)",
-        "postpone(spellRecast(spell.name) + 5)"
-      ],
-      "frequency": 5
+      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 5)"],
+      "frequency": 1
     }
   ]
 }

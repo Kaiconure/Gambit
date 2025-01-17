@@ -14,10 +14,8 @@
         "vars.keep_ammo.ammo",
         "not canRangedAttack() and findEquippableItem(vars.keep_ammo.ammo)"
       ],
-      "commands": [
-        "log('Equipping ammo:', item.name)",
-        "equip('ammo')"
-      ],
+      "commands": ["log('Equipping ammo:', item.name)", "equip('ammo')"],
+      "delay": 0,
       "frequency": 5
     },
     {
@@ -25,10 +23,8 @@
         "vars.keep_ammo.ammo and vars.keep_ammo.pouch",
         "not canRangedAttack() and findUsableItem(vars.keep_ammo.pouch)"
       ],
-      "commands": [
-        "log('Using ammo pouch:', item.name)",
-        "useItem()"
-      ],
+      "commands": ["log('Using ammo pouch:', item.name)", "useItem()"],
+      "delay": 0,
       "frequency": 5
     }
   ]

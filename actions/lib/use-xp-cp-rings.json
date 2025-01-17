@@ -13,7 +13,7 @@
       ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
-        "wait(6.0)",
+        "wait(6.0, 'pause-follow')",
         "useItem(me)"
       ],
       "frequency": 15,
@@ -27,11 +27,11 @@
       ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
-        "wait(6.0)",
+        "wait(6.0, 'pause-follow')",
         "useItem(me)"
       ],
       "frequency": 15,
-      "comment": "Use the first available EXP ring if we don't have the Dedication effect. Only used if level is below 99."
+      "comment": "Use the first available XP ring if we don't have the Dedication effect. Only used if level is below 99."
     }
   ],
   "vars": {

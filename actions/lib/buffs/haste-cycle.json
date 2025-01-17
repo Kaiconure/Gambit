@@ -10,11 +10,11 @@
   },
   "actions": [
     {
-      "when": "partyByName(vars.haste_cycle.targets) and canUse(vars.haste_cycle.spells) and not hasEffectOf(member, vars.haste_cycle.spells)",
-      "commands": [
-        "use(member)",
-        "postpone(spellRecast(spell.name) + 5)"
+      "when": [
+        "hasSpell(vars.haste_cycle.spells) and canUse(spell)",
+        "partyByName(vars.haste_cycle.targets) and not hasEffectOf(member, spell)"
       ],
+      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 5)"],
       "frequency": 1
     }
   ]

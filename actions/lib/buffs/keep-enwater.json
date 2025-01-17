@@ -4,13 +4,10 @@
   },
   "actions": [
     {
-      "when": "not hasBuff('Enwater II') and canUse('Enwater II')",
-      "commands": ["use(me)"],
-      "frequency": 10
-    },
-    {
-      "when": "not hasBuff('Enwater II', 'Enwater') and canUse('Enwater')",
-      "commands": ["use(me)"],
+      "when": [
+        "hasSpell('Enwater II', 'Enwater') and not hasEffectOf(spell) and canUse(spell)"
+      ],
+      "commands": ["use(me)", "postpone(spellRecast(spell.name) + 10)"],
       "frequency": 10
     }
   ]

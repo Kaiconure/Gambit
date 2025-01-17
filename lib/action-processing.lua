@@ -94,7 +94,7 @@ function sendActionCommand(
     return complete
 end
 
-function sendRangedAttackCommand(target, context)
+function sendRangedAttackCommand(target, context, waitFor)
     if 
         target == nil
     then
@@ -127,7 +127,9 @@ function sendRangedAttackCommand(target, context)
     local complete = actionStateManager:getRangedAttackSuccessful()
 
     -- Sleep a bit more to space things out
-    coroutine.sleep(1.0)
+    if type(waitFor) == 'number' and waitFor > 0 then
+        coroutine.sleep(waitFor)
+    end
 
     if followJob then
         smartMove:reschedule(followJob)
@@ -450,7 +452,9 @@ local function getNextBattleAction(context)
             then 
                 -- When we evaluate a new action, we need to clear the state left behind by any previous actions
                 context.spell                   = nil   -- Current spell
+                context.spell_recast            = nil   -- Recast (in seconds) of the current spell
                 context.ability                 = nil   -- Current ability
+                context.ability_recast          = nil   -- Recast (in seconds) of the current ability
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.ranged                  = nil   -- Current ranged attack equipment and ammo info
                 context.effect                  = nil   -- Current buff/effect

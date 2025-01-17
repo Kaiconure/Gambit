@@ -237,7 +237,25 @@ local function sm_movement_exp(self, job)
                 --if me.status == 85 or me.status == 5 then minAvg = 1 end
 
                 if avg < minAvg and d2 > 3 then
-                    shouldJitter = true
+                    if 
+                        me.status == 1 -- Engaged
+                    then
+                        -- Jittering mid-battle can lead to undesired behavior. We'll only allow it
+                        -- when one or more specific conditions is met.
+                        local bt = windower.ffxi.get_mob_by_target('t') or windower.ffxi.get_mob_by_target('bt')
+                        if 
+                            bt == nil or            -- No battle target
+                            bt.spawn_type ~= 16 or  -- Battle target is not a mob
+                            not bt.valid_target or  -- Not a valid battle target
+                            bt.hpp <= 0 or          -- Battle target is dead
+                            bt.status ~= 1 or       -- The battle target mob is not engaged
+                            bt.claim_id == 0        -- The battle target is not claimed
+                        then
+                            shouldJitter = true
+                        end
+                    else
+                        shouldJitter = true
+                    end
                 end
             end
         end
@@ -312,7 +330,7 @@ local function sm_movement_exp(self, job)
             else
                 if not jittering then
                     -- Use a shorter sleep as we get closer to the target
-                    sleepDuration = d2 < 5 and 0.15 or sleepDuration
+                    sleepDuration = d2 < 8 and 0.15 or sleepDuration
                     
                     if wasJittering then
                         -- Let's randomize the jitter recovery a little bit
