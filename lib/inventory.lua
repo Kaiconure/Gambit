@@ -39,14 +39,90 @@ local INVENTORY_ID_BY_NAME = {
     ["wardrobe8"] = 16,
 }
 
--- Value	Location
--- 0	Inventory
--- 1	Mog Safe
--- 2	Storage
--- 3	Mog Locker
--- 4	Temp Items
--- 5	Satchel
--- 6	Sack
+local GEAR_SLOT_INFO = 
+{
+	{slot = 'main', field = 'main', id = 0},
+	{slot = 'range', field = 'range', id = 2},
+	{slot = 'head', field = 'head', id = 4},
+	{slot = 'neck', field = 'neck', id = 9},
+	{slot = 'body', field = 'body', id = 5},
+	{slot = 'hands', field = 'hands', id = 6},
+	{slot = 'back', field = 'back', id = 15},
+	{slot = 'waist', field = 'waist', id = 10},
+	{slot = 'legs', field = 'legs', id = 7},
+	{slot = 'feet', field = 'feet', id = 8},
+    {slot = 'ear1', field = 'left_ear', id = 11},
+	{slot = 'ear2', field = 'right_ear', id = 12},
+    {slot = 'ring1', field = 'left_ring', id = 13},
+	{slot = 'ring2', field = 'right_ring', id = 14},
+	{slot = 'sub', field = 'sub', id = 1},
+	{slot = 'ammo', field = 'ammo', id = 3},
+}
+
+---------------------------------------------------------------------
+-- Equipment slot names by ID
+local GEAR_SLOT_NAMES_BY_ID = {
+    [0] = 'main',
+    [1] = 'sub',
+    [2] = 'range',
+    [3] = 'ammo',
+    [4] = 'head',
+    [5] = 'body',
+    [6] = 'hands',
+    [7] = 'legs',
+    [8] = 'feet',
+    [9] = 'neck',
+    [10] = 'waist',
+    [11] = 'ear1',
+    [12] = 'ear2',
+    [13] = 'ring1',
+    [14] = 'ring2',
+    [15] = 'back',
+}
+
+---------------------------------------------------------------------
+-- Equipment slot field names by ID
+local GEAR_SLOT_FIELDS_BY_ID = {
+    [0] = 'main',
+    [1] = 'sub',
+    [2] = 'range',
+    [3] = 'ammo',
+    [4] = 'head',
+    [5] = 'body',
+    [6] = 'hands',
+    [7] = 'legs',
+    [8] = 'feet',
+    [9] = 'neck',
+    [10] = 'waist',
+    [11] = 'left_ear',
+    [12] = 'right_ear',
+    [13] = 'left_ring',
+    [14] = 'right_ring',
+    [15] = 'back',
+}
+
+---------------------------------------------------------------------
+-- Equipment slot ID's by name
+local GEAR_SLOT_IDS_BY_NAME = {
+    ['main'] = 0,
+    ['sub'] = 1,
+    ['range'] = 2,
+    ['ammo'] = 3,
+    ['head'] = 4,
+    ['body'] = 5,
+    ['hands'] = 6,
+    ['legs'] = 7,
+    ['feet'] = 8,
+    ['neck'] = 9,
+    ['waist'] = 10,
+    ['ear1'] = 11,
+    ['ear2'] = 12,
+    ['ring1'] = 13,
+    ['ring2'] = 14,
+    ['back'] = 15
+}
+
+
 
 --
 -- Find the actual item resource represented by the specified bag location.
@@ -82,17 +158,58 @@ local default_find_item_flags = {
     equippable = false
 }
 
-inventory.find_item = function(item, flags)
+inventory.find_equipment_in_slot = function(slot, items)
+    if slot == nil then return end
+
+    local slotId = GEAR_SLOT_IDS_BY_NAME[slot]
+    if slotId == nil then return end
+    local slotField = GEAR_SLOT_FIELDS_BY_ID[slotId]
+    if slotField == nil then return end
+
+    items = items or windower.ffxi.get_items()
+    if not items then return end
+
+    -- 0 in the slot item id (local id) means nothing is equipped
+    local localId = items.equipment[slotField]
+    if localId <= 0 then return end
+
+    local bagId = items.equipment[slotField .. '_bag']
+    if bagId < 0 then return end
+
+    local bagInfo = INVENTORY_BAGS_BY_ID[bagId]
+    local bag = items[bagInfo.field]
+
+    if not bag then return end
+
+    -- Get the item entry from the bag
+    local bagItem = bag[localId]
+    if not bagItem then return end
+
+    return inventory.find_item(nil,
+        {
+            equippable = true,
+            bag_id = bagId,
+            local_id = localId
+        },
+        items)
+end
+
+inventory.find_item = function(item, flags, items)
     flags = flags or default_find_item_flags
 
     local only_usable = flags.usable
     local only_equippable = flags.equippable
 
-    item = findItem(item)
-    
-    if item == nil then return end
+    if not flags.local_id then
+        item = findItem(item)    
+        if item == nil then return end
+    end
 
-    for bagId, bagInfo in pairs(INVENTORY_BAGS_BY_ID) do
+    items = items or windower.ffxi.get_items()
+
+    local bags_to_search = (flags.bag_id and { INVENTORY_BAGS_BY_ID[flags.bag_id] }) or INVENTORY_BAGS_BY_ID
+
+    for bagId, bagInfo in pairs(bags_to_search) do
         local bag_is_usable = bagInfo.usable
         local bag_is_equippable = bagInfo.equippable
 
@@ -100,10 +217,22 @@ inventory.find_item = function(item, flags)
             (bag_is_usable or not only_usable) and
             (bag_is_equippable or not only_equippable)
         then
-            local bag = windower.ffxi.get_items(bagId)
-            local bagItem = tableFirst(bag, function (_i) 
-                return type(_i) == 'table' and _i.id == item.id 
-            end)
+            local bag = items[bagInfo.field]
+            local bagItem = nil
+
+            if flags.local_id then
+                -- If a specific local id was specified, use that directly. We'll also
+                -- update the underlying item to match this one.
+                bagItem = bag[flags.local_id]
+                if bagItem then
+                    item = findItem(bagItem.id)
+                end
+            else
+                -- Otherwise, find the first item whose ID matches the item provided
+                bagItem = tableFirst(bag, function (_i) 
+                    return type(_i) == 'table' and _i.id == item.id 
+                end)
+            end
 
             -- Bag item structure
             -- count: int,
@@ -119,7 +248,7 @@ inventory.find_item = function(item, flags)
             --  19: Linkshell Equipped
             --  25: In Bazaar
 
-            if bagItem then
+            if bagItem and item then
                 local ext = extdata.decode(bagItem)
 
                 local chargesRemaining = 1
@@ -156,19 +285,42 @@ inventory.find_item = function(item, flags)
                     bagInfo.equippable and
                     bagItem.status ~= 25
 
-                -- writeMessage('item: %s: isUsableItem=%s, isEquippableItem=%s':format(
-                --     item.name,
-                --     tostring(isUsableItem),
-                --     tostring(isEquippableItem)
-                -- ))
-                -- coroutine.sleep(1)
+                local isEquipped = bagItem.status == 5 or bagItem.status == 19
 
-                -- writeJsonToFile('./data/%s.json':format(item.name), item)
-                -- writeJsonToFile('/data/%s.extdata.json':format(item.name), ext)
+                local slots = {}
+                local slot = nil
+                if type(item.slots) == 'table' then
+                    for slotId, validSlot in pairs(item.slots) do
+                        local slotName = GEAR_SLOT_NAMES_BY_ID[slotId]
+                        if validSlot and slotName then
+                            slots[#slots + 1] = slotName
+                        end
+
+                        if items.equipment then
+                            local slotField = GEAR_SLOT_FIELDS_BY_ID[slotId]
+                            if slotField then
+                                local slotEquipment = items.equipment[slotField]
+                                local slotEquipmentBag = items.equipment[slotField .. '_bag']
+
+                                if 
+                                    slotEquipment == bagItem.slot and
+                                    slotEquipmentBag == bagId
+                                then
+                                    slot = slotName
+                                end
+                            end
+                        end
+                    end
+                end
 
                 if 
-                    (isUsableItem or not flags.usable) and
-                    (isEquippableItem or not flags.equippable)
+                    (isUsableItem or not flags.usable) and          -- Usable flag
+                    (isEquippableItem or not flags.equippable) and  -- Equippable flag
+                    (
+                        flags.equipped == nil or                    -- Equipped flag
+                        (flags.equipped ~= false and isEquipped) or
+                        (flags.equipped == false and not isEquipped)
+                    )
                 then
                     return {
                         bagId = bagId,
@@ -182,12 +334,14 @@ inventory.find_item = function(item, flags)
                         extdata = ext,
                         item_type = item.type,
                         ext_type = ext and ext.type,
-                        is_equipped = bagItem.status == 5 or bagItem.status == 19,
+                        is_equipped = isEquipped,
                         is_bazaar = bagItem.status == 25,
                         charges_remaining = charges,
                         seconds_until_reuse = secondsUntilReuse,
                         seconds_until_activation = secondsUntilActivation,
-                        can_use = isUsableItem
+                        can_use = isUsableItem,
+                        slot = slot or (slots and slots[1]), -- Save the current slot, or first valid slot, for easy access (equipment only)
+                        slots = slots -- Save all slots (equipment only)
                     }
                 end
             end

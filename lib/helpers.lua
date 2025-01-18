@@ -244,3 +244,11 @@ function isPartyTrustEngaged(party)
             (party.p5 and party.p5.mob.spawn_type == SPAWN_TYPE_TRUST and party.p5.mob.status == STATUS_ENGAGED)
     end
 end
+
+-------------------------------------------------------------------------------
+-- Searches an action message for field names
+function fieldsearch(message)
+    local fieldarr = {}
+    string.gsub(message,'{(.-)}', function(a) fieldarr[a] = true end)
+    return fieldarr
+end

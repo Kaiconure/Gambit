@@ -1110,7 +1110,7 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope)
+local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
     local context = {
         actionType = actionType,
         time = time,
@@ -1124,7 +1124,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     context.target = target
     context.player = windower.ffxi.get_player()
-    context.party = windower.ffxi.get_party() or {}
+    context.party = party or windower.ffxi.get_party() or {}
 
     -- Store a mapping of id->member and index->member for the party
     context.party1_by_id = {}
@@ -1188,13 +1188,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.equip = function(slot, name)
-        if slot == nil then return end
-
+        -- Get the item name
         if name == nil then
             if context.item == nil then return end            
             name = context.item.name
 
             if name == nil then
+                return
+            end
+        end
+
+        -- Get the item slot
+        if slot == nil then
+            if context.item then
+                slot = context.item.slot
+            end
+            if slot == nil then
                 return
             end
         end
@@ -1212,7 +1221,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         sendActionCommand(
             command,
             context,
-            1.5
+            0.5
         )
 
         return true
@@ -1294,12 +1303,122 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return context.item
     end
 
+    context.findEquipmentInSlot = function(slot)
+        context.item = inventory.find_equipment_in_slot(slot)
+        return context.item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if an item is in the specified slot. Optionally require a strict
+    -- match, which looks at the specific item instance. Strict matches are only
+    -- available when a context item was set with all the appropriate metadata.
+    context.isEquipmentInSlot = function(slot, item, strict, all_items)
+        if item == nil then
+            item = context.item
+        elseif type(item) == 'string' then
+            item = findItem(item)
+        end
+
+        if type(item) ~= 'table' then return end
+
+        slot = slot or (item and item.slot)
+        if slot == nil then return end
+
+        strict = strict and item and item.bagId and item.localId
+
+        if type(all_items) ~= 'table' or type(all_items.equipment) ~= 'table' then
+            all_items = windower.ffxi.get_items()
+        end
+
+        local itemInSlot = inventory.find_equipment_in_slot(slot, all_items)
+        if itemInSlot then
+            local match = item.id == itemInSlot.id
+
+            -- When strict, we'll need to match up all the id's rather than just the underlying item id
+            if strict and match then
+                match =
+                    item.bagId == itemInSlot.bagId and
+                    item.localId == itemInSlot.localId
+            end
+
+            if match then
+                context.item = itemInSlot
+                return context.item
+            end
+        end
+    end
+
     --------------------------------------------------------------------------------------
     -- Find equippable items in any of your bags
-    context.findEquippableItem = function(item)
-        context.item = inventory.find_item(item, { equippable = true })
-        return context.item
-    end    
+    context.findEquippableItem = function(...)
+        local items = varargs({...})
+        context.item = nil
+        if #items > 0 then
+            local all_items = windower.ffxi.get_items()
+            for key, item in ipairs(items) do
+                context.item = inventory.find_item(
+                    item,
+                    { equippable = true },
+                    all_items
+                )
+
+                if context.item then
+                    return context.item
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find the first equippable item from the list that is NOT currently equipped
+    context.findUnequippedItem = function(...)
+        local items = varargs({...})
+        context.item = nil
+
+        if #items > 0 then
+            local all_items = windower.ffxi.get_items()
+            for key, item in ipairs(items) do
+                local item = inventory.find_item(
+                    item,
+                    { equippable = true, equipped = false },
+                    all_items
+                )
+
+                if item then
+                    if not context.isEquipmentInSlot(item.slot, item, false, all_items) then
+                        context.item = item
+                        return context.item
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find the first equippable item from the list that is NOT currently equipped.
+    -- Uses a strict match (excact item match required)
+    context.findUnequippedItemStrict = function(...)
+        local items = varargs({...})
+        context.item = nil
+
+        if #items > 0 then
+            local all_items = windower.ffxi.get_items()
+            for key, item in ipairs(items) do
+                local item = inventory.find_item(
+                    item,
+                    { equippable = true, equipped = false },
+                    all_items
+                )
+
+                if item then
+                    if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
+                        context.item = item
+                        return context.item
+                    end
+                end
+            end
+        end
+    end
 
     --------------------------------------------------------------------------------------
     -- Get information about the ranged gear you have equipped
@@ -3039,7 +3158,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 end
 
 return {
-    create = function(actionType, time, target, mobEngagedTime, battleScope)
-        return makeActionContext(actionType, time, target, mobEngagedTime, battleScope)
+    create = function(actionType, time, target, mobEngagedTime, battleScope, party)
+        return makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
     end
 }

@@ -61,7 +61,7 @@ local function setTargetMob(mob)
     resetCurrentMob(mob)
 end
 
-local function shouldAquireNewTarget(player)
+local function shouldAquireNewTarget(player, party, party_by_id)
     local checkEngagement = true
 
     -- Make sure we don't fixate on a mob we can't actually engage
@@ -70,64 +70,24 @@ local function shouldAquireNewTarget(player)
     if currentMob then
         checkEngagement = false
 
-        -- We start checking to see if we're properly engaged after a configurable amount of time 
-        -- has elapsed. If not configured, a dynamic value based on mob distance is used.
-        local properlyEngaged = currentTarget:runtime() < settings.maxChaseTime
-        if not properlyEngaged then
-            local party = windower.ffxi.get_party()
-            local selfEngaged = player.status == STATUS_ENGAGED
-            local hasTrusts = false
-            local partyEngaged = false
-            local trustsEngaged = false
-            local mobClaimedByParty = false
+        local mobClaimed = currentMob.claim_id > 0
+        local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
-            if party then
-                for key, member in pairs(party) do
-                    if member and type(member) == 'table' and type(member.mob) == 'table' and member.mob.in_party then
-                        if currentMob.status == STATUS_ENGAGED and currentMob.claim_id == member.mob.id then
-                            -- Flag for if the mob is engaged with anyone in the party
-                            mobClaimedByParty = true
-                        end
+        local claimStolen = 
+            mobClaimed and
+            not mobClaimedByParty
+        local claimTimedOut = 
+            not mobClaimedByParty and
+            currentTarget:runtime() >= settings.maxChaseTime
 
-                        -- Flag for if anyone in the party is engaged
-                        if member.mob.status == STATUS_ENGAGED then partyEngaged = true end
-
-                        if member.mob.spawn_type == SPAWN_TYPE_TRUST and member.mob.in_party then
-                            -- Flag for if anyone in the party is a Trust
-                            hasTrusts = true
-
-                            if member.mob.status == STATUS_ENGAGED then
-                                -- Flag for if any of our trusts are engaged
-                                trustsEngaged = true
-                            end
-                        end
-                    end
-                end
-            end
-
-            if mobClaimedByParty then
-                -- Is this dangerous? Just because the mob is claimed, does that mean we can reach it? 
-                -- TODO: Experiment
-                properlyEngaged = true
-            else
-                -- Otherwise, we'll be properly engaged when:
-                --  1. We're within 10 units of the mob
-                --  2. We are engaged
-                --  3. The mob has some HP missing
-                properlyEngaged = 
-                    (currentMob.distance < (10 * 10) and player.status == STATUS_ENGAGED and currentMob.hpp < 100)
-            end
-        end
-
-        -- If we're still properly engaged with the mob we have, then we have no further work to do for now
-        if properlyEngaged then
+        if claimStolen or claimTimedOut then
+            writeMessage('Cannot engage current target, will find another...')
+            windower.ffxi.follow(-1)
+            windower.send_command('input /attack off')
+            resetCurrentMob(nil)
+        else
             return false
         end
-
-        writeMessage('Cannot engage current target, will find another...')
-        windower.ffxi.follow(-1)
-        windower.send_command('input /attack off')
-        resetCurrentMob(nil)
     end
 
     if checkEngagement then
@@ -255,14 +215,25 @@ end
 
 --------------------------------------------------------------------------------------
 -- 
-function processTargeting()
+function processTargeting(player, party)
     local player = windower.ffxi.get_player()
-    if not shouldAquireNewTarget(player) then
+
+    party = party or windower.ffxi.get_party()
+
+    -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
+    local party_by_id = { }
+    if party.p0 and party.p0.mob then party_by_id[party.p0.mob.id] = party.p0 end
+    if party.p1 and party.p1.mob then party_by_id[party.p1.mob.id] = party.p1 end
+    if party.p2 and party.p2.mob then party_by_id[party.p2.mob.id] = party.p2 end
+    if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
+    if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
+    if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
+
+    if not shouldAquireNewTarget(player, party, party_by_id) then
         return
     end
 
     local strategy = settings.strategy
-    local party = windower.ffxi.get_party()
     local mobs = windower.ffxi.get_mob_array()
     local meMob = windower.ffxi.get_mob_by_target('me')
 
@@ -311,15 +282,6 @@ function processTargeting()
     local maxDistanceSquared = settings.maxDistance * settings.maxDistance
     local bestMatchingMob = nil
     local nearestAggroingMob = nil
-
-    -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
-    local party_by_id = { }
-    if party.p0 and party.p0.mob then party_by_id[party.p0.mob.id] = party.p0 end
-    if party.p1 and party.p1.mob then party_by_id[party.p1.mob.id] = party.p1 end
-    if party.p2 and party.p2.mob then party_by_id[party.p2.mob.id] = party.p2 end
-    if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
-    if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
-    if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
 
     local can_initiate = strategy == TargetStrategy.aggressor or strategy == TargetStrategy.puller
     

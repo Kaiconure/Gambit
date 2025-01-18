@@ -139,29 +139,50 @@ ActionPacket.open_listener(function (act)
             local id = actionPacket.raw.param
             local animation = action.raw and action.raw.animation or nil
 
-            if 
-                id ~= 46 or animation ~= 185    -- HACKHACK: Shield Bash seems to report incorrect as a weapon skill from Windower. This *should* bypass that.
-            then
-                local ability = resources.weapon_skills[id] or resources.monster_abilities[id]
+            local action_message = action and action.message and resources.action_messages[action.message]
+            local message = action_message and action_message.en or ''
+            local fields = fieldsearch(message)
 
-                if ability then
-                    if 
-                        (ability.skillchain_a or '') ~= '' or
-                        (ability.skillchain_b or '') ~= '' or
-                        (ability.skillchain_c or '') ~= ''
-                    then
-                        setPartyWeaponSkill(actor, ability, target)
-                    else
-                        writeComment('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.comment)))
-                    end
-                    
-                    writeVerbose('%s: %s %s %s':format(
-                        text_player(actor.name, Colors.verbose),
-                        text_weapon_skill(ability.name, Colors.verbose),
-                        CHAR_RIGHT_ARROW,
-                        text_mob(target.name)
-                    ))
+            local ability = nil
+            local is_ws = false
+            if 
+                fields.ability
+            then
+                -- This is an ability. Test things like Wild Flourish, etc. Refer to Gambit.lua/_handle_actionChunk for cross-reference.
+                ability = resources.job_abilities[id]
+            elseif
+                fields.spell
+            then
+                -- This is a spell. TODO: Test things like chain affinity for BLU, etc.
+                ability = resources.spells[id]
+            else
+                -- fields.weapon_skill
+                if id < 256 then
+                    ability = resources.weapon_skills[id]
+                    is_ws = true
+                else
+                    ability = resources.monster_abilities[id]
                 end
+            end
+
+            if ability then
+                if
+                    not is_ws or 
+                    (ability.skillchain_a or '') ~= '' or
+                    (ability.skillchain_b or '') ~= '' or
+                    (ability.skillchain_c or '') ~= ''
+                then
+                    setPartyWeaponSkill(actor, ability, target)
+                else
+                    writeComment('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.comment)))
+                end
+                
+                writeVerbose('%s: %s %s %s':format(
+                    text_player(actor.name, Colors.verbose),
+                    text_weapon_skill(ability.name, Colors.verbose),
+                    CHAR_RIGHT_ARROW,
+                    text_mob(target.name)
+                ))
             end
         end
     end

@@ -563,7 +563,7 @@ function processNextAction(context)
     return executeBattleAction(context, action)
 end
 
-local function doNextActionCycle(time, player)
+local function doNextActionCycle(time, player, party)
     local playerStatus = player.status
 
     local mob = globals.target:mob()
@@ -590,7 +590,7 @@ local function doNextActionCycle(time, player)
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
-        local context = ActionContext.create('resting', time, mob, mobTime, battleScope)
+        local context = ActionContext.create('resting', time, mob, mobTime, battleScope, party)
         local action = processNextAction(context);
         return
     end
@@ -598,7 +598,7 @@ local function doNextActionCycle(time, player)
     -- Death: Execute any actions, and bail
     local isDead = player.vitals.hp <= 0
     if isDead then
-        local context = ActionContext.create('dead', time, nil, mobTime, battleScope)
+        local context = ActionContext.create('dead', time, nil, mobTime, battleScope, party)
         local action = processNextAction(context);
         return
     end
@@ -607,7 +607,7 @@ local function doNextActionCycle(time, player)
     ----------------------------------------------------------------------------------------------------
     -- Executed when we are disengaged and no mobs are aggroing us
     if isIdle then        
-        local context = ActionContext.create('idle', time, mob, mobTime, battleScope)
+        local context = ActionContext.create('idle', time, mob, mobTime, battleScope, party)
 
         -- We'll ensure that we're facing the target mob at this point
         -- if mob and not context.facingEnemy() then
@@ -642,7 +642,7 @@ local function doNextActionCycle(time, player)
                 hasPullableMob = not isMobEngaged
 
                 if isMobEngaged then
-                    local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
+                    local context = ActionContext.create('battle', time, mob, mobTime, battleScope, party)
                     local action = processNextAction(context);
 
                     isBattle = true
@@ -681,7 +681,7 @@ local function doNextActionCycle(time, player)
 
                 -- Give some time for us to establish and engage with a new target before jumping straight to the pull
                 if mobTime > 1 then
-                    local context = ActionContext.create('pull', time, mob, mobTime, battleScope)
+                    local context = ActionContext.create('pull', time, mob, mobTime, battleScope, party)
 
                     -- We'll ensure that we're facing the target mob at this point
                     -- if not context.facingEnemy() then
@@ -714,6 +714,7 @@ function cr_actionProcessor()
             local time = os.clock() - startTime
             local player = windower.ffxi.get_player()
             local me = windower.ffxi.get_mob_by_target('me')
+            local party = windower.ffxi.get_party()
 
             if 
                 player and  -- There are conditions where these could be nil and crash the addon.
@@ -733,10 +734,10 @@ function cr_actionProcessor()
                     if 
                         not isDead
                     then
-                        processTargeting()
+                        processTargeting(player, party)
                     end
 
-                    doNextActionCycle(time, player)
+                    doNextActionCycle(time, player, party)
                 else
                     sleepTimeSeconds = 2
                 end
