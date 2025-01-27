@@ -17,7 +17,7 @@
         "partyByName(vars.refresh_cycle.targets) and not hasEffectOf(member, spell)",
         "member.is_player or (member.is_trust and member.mpp < vars.refresh_cycle.trust_mpp)"
       ],
-      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 10)"],
+      "commands": ["use()", "postpone(spellRecast(spell.name) or 0 + 10)"],
       "frequency": 1
     }
   ]

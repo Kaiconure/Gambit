@@ -1,8 +1,8 @@
-MAX_SKILLCHAIN_TIME     = 6     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
-MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_SKILLCHAIN_TIME     = 8     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_WEAPON_SKILL_TIME   = 8     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
-SKILLCHAIN_DELAY        = 4     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
+SKILLCHAIN_DELAY        = 5     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 
 local state_manager = {
@@ -282,9 +282,9 @@ state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
     if actor and skill and mob then
         local skillchains = {}
 
-        if skill.skillchain_a and skill.skillchain_a ~= '' then skillchains[#skillchains + 1] = skill.skillchain_a end
-        if skill.skillchain_b and skill.skillchain_b ~= '' then skillchains[#skillchains + 1] = skill.skillchain_b end
-        if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
+        -- if skill.skillchain_a and skill.skillchain_a ~= '' then skillchains[#skillchains + 1] = skill.skillchain_a end
+        -- if skill.skillchain_b and skill.skillchain_b ~= '' then skillchains[#skillchains + 1] = skill.skillchain_b end
+        -- if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
 
         self.weaponSkill = {
             time = os.clock(),

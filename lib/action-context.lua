@@ -237,8 +237,8 @@ context_makeXYDO = function(...)
         return {
             x = args[1],
             y = args[2],
-            duration = args[3],
-            offset = args[4] or 0
+            duration = tonumber(args[3]),
+            offset = tonumber(args[4]) or 0
         }
     end
 
@@ -1221,10 +1221,63 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         sendActionCommand(
             command,
             context,
-            0.5
+            0.1
         )
 
         return true
+    end
+
+    context.equipMany = function(...)
+        local entries = varargs({...})
+
+        if #entries == 0 then return end
+
+        local command = ''
+        local count = 0
+
+        if type(entries[1]) == 'string' then
+            for i = 1, #entries, 2 do 
+                local slot = entries[i]
+                local equipment = entries[i + 1]
+
+                if slot and equipment then
+                    if context.findUnequippedItem(equipment) then
+                        command = command .. 
+                            'input /equip %s "%s";':format(slot, equipment)
+                        count = count + 1
+                    end
+                end
+            end
+        elseif type(entries[1]) == 'table' then
+            for i, entry in ipairs(entries) do
+                if type(entry) == 'table' then
+                    local slot = entry.slot
+                    local equipment = entry.equipment or entry.item or entry.gear
+
+                    if slot and equipment then
+                        if context.findUnequippedItem(equipment) then
+                            command = command .. 
+                                'input /equip %s "%s";':format(slot, equipment)
+                            count = count + 1
+                        end
+                    end
+                end
+            end
+        end
+
+        if command ~= '' then
+            writeVerbose('Equipping %s':format(
+                pluralize(count, 'gear item', 'gear items', Colors.verbose)
+            ))
+
+            sendActionCommand(
+                command,
+                context,
+                0.25
+            )
+
+            return true
+        end
     end
 
     --------------------------------------------------------------------------------------
@@ -1741,6 +1794,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get the recast timer (in seconds) for the specified spell, or zero if there is none
+    context.spellRecastOrZero = function(...)
+        return context.spellRecast(...) or 0
     end
 
     --------------------------------------------------------------------------------------
@@ -2272,9 +2331,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local start = os.time()
             duration = math.max(duration, 0.5)
 
-            while true do
-                coroutine.sleep(0.25)
+            coroutine.sleep(0.5)
 
+            while true do
                 local now = os.time()
                 local job = smartMove:getJobInfo()
 
@@ -2307,6 +2366,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     --context.log('The movement operation was not completed.')
                     return
                 end
+
+                coroutine.sleep(0.25)
             end
         end
 

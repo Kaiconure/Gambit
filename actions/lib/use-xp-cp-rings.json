@@ -22,6 +22,7 @@
     {
       "when": [
         "me.level < 99 or vars.use_xp_cp_rings.ignore_xp_level_cap",
+        "me.level >= vars.use_xp_cp_rings.min_xp_level",
         "not hasBuff('Dedication', 'Commitment')",
         "canUseItem(vars.use_xp_cp_rings.xp_rings)"
       ],
@@ -38,6 +39,7 @@
     "use_xp_cp_rings": {
       "ignore_master_levels": false,
       "ignore_xp_level_cap": false,
+      "min_xp_level": 10,
       "slot": "ring1",
       "cp_rings": [
         "Endorsement Ring",

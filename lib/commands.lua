@@ -382,16 +382,18 @@ handlers['ti'] = handlers['targetinfo']
 
 handlers['rollinfo'] = function (args)
     local latestRoll = actionStateManager:getLatestRoll()
+    local hasRolls = false
+    local rolls = actionStateManager:getRolls(true)
+    
+    for id, value in pairs(rolls) do
+        hasRolls = true
+        writeMessage('  %s %s%s':format(
+            text_buff(value.name),
+            text_number(value.count),
+            latestRoll and latestRoll.id == value.id and '*' or ''))
+    end
 
-    if latestRoll then
-        local rolls = actionStateManager:getRolls(true)
-        for id, value in pairs(rolls) do
-            writeMessage('  %s %s%s':format(
-                text_buff(value.name),
-                text_number(value.count),
-                latestRoll.id == value.id and '*' or ''))
-        end
-    else
+    if not hasRolls then
         writeMessage('  No active rolls were found.')
     end
 end

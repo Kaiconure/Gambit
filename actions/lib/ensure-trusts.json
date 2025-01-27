@@ -18,7 +18,7 @@
       "commands": [
         "log('Calling trust:', spell.name)",
         "callTrust()",
-        "wait(1.0)"
+        "wait(1.5)"
       ]
     },
     {
@@ -29,12 +29,10 @@
       "commands": [
         "log('Release/recall trust', member.name, 'due to debuff', effect.name)",
         "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
-        "wait(2.5)",
         "releaseTrust(member.name)",
-        "wait(2.0)",
+        "wait(1)",
         "log('Recalling trust', spell.name)",
-        "useSpell(me)",
-        "wait(1.0)"
+        "useSpell(me)"
       ]
     },
     {
@@ -47,12 +45,10 @@
       "commands": [
         "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
         "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
-        "wait(2.5)",
         "releaseTrust(member.name)",
-        "wait(2.0)",
+        "wait(1)",
         "log('Recalling trust', spell.name)",
-        "useSpell(me)",
-        "wait(1.0)"
+        "useSpell(me)"
       ],
       "scope": "battle"
     },

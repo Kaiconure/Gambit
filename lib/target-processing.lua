@@ -75,13 +75,17 @@ local function shouldAquireNewTarget(player, party, party_by_id)
 
         local claimStolen = 
             mobClaimed and
-            not mobClaimedByParty
-        local claimTimedOut = 
             not mobClaimedByParty and
+            player.status ~= STATUS_ENGAGED
+        local claimTimedOut = 
+            not mobClaimed and
             currentTarget:runtime() >= settings.maxChaseTime
 
         if claimStolen or claimTimedOut then
-            writeMessage('Cannot engage current target, will find another...')
+            writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
+                text_number('%.1f':format(currentTarget:runtime())),
+                text_number(currentMob.claim_id)
+            ))
             windower.ffxi.follow(-1)
             windower.send_command('input /attack off')
             resetCurrentMob(nil)
@@ -216,8 +220,7 @@ end
 --------------------------------------------------------------------------------------
 -- 
 function processTargeting(player, party)
-    local player = windower.ffxi.get_player()
-
+    player = player or windower.ffxi.get_player()
     party = party or windower.ffxi.get_party()
 
     -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
