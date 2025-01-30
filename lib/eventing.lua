@@ -150,6 +150,14 @@ ActionPacket.open_listener(function (act)
             then
                 -- This is an ability. Test things like Wild Flourish, etc. Refer to Gambit.lua/_handle_actionChunk for cross-reference.
                 ability = resources.job_abilities[id]
+                if ability then
+                    if 
+                        ability.id ~= 209 and   -- Wild Flourish
+                        ability.id ~= 320       -- Konzen-ittai
+                    then
+                        ability = nil
+                    end
+                end
             elseif
                 fields.spell
             then
@@ -166,22 +174,31 @@ ActionPacket.open_listener(function (act)
             end
 
             if ability then
+                local damage = (action and type(action.param) == 'number' and action.param) or nil
+                local damage_text = (damage == nil and text_red('??', Colors.verbose)) or
+                    (damage > 0 and
+                        'for %s':format(text_number(damage, Colors.verbose)) or
+                        text_red('(miss)', Colors.verbose))
+
                 if
                     not is_ws or 
                     (ability.skillchain_a or '') ~= '' or
                     (ability.skillchain_b or '') ~= '' or
                     (ability.skillchain_c or '') ~= ''
                 then
-                    setPartyWeaponSkill(actor, ability, target)
+                    if damage > 0 then
+                        setPartyWeaponSkill(actor, ability, target)
+                    end
                 else
                     writeComment('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.comment)))
                 end
                 
-                writeVerbose('%s: %s %s %s':format(
+                writeVerbose('%s: %s %s %s %s':format(
                     text_player(actor.name, Colors.verbose),
                     text_weapon_skill(ability.name, Colors.verbose),
                     CHAR_RIGHT_ARROW,
-                    text_mob(target.name)
+                    text_mob(target.name, Colors.verbose),
+                    damage_text
                 ))
             end
         end
@@ -201,7 +218,23 @@ ActionPacket.open_listener(function (act)
 
                     if name then
                         setSkillchain(name)
-                        writeVerbose('Skillchain detected: %s':format(text_weapon_skill(name)))
+
+                        -- NOTE: action.param is the closing WS damage; action.add_effect_param is the SC damage.
+                        local damage = (action and type(action.add_effect_param) == 'number' and action.add_effect_param) or nil
+                        local multiplier = 0
+                        if type(action.param) == 'number' and action.param > 0 then
+                            multiplier = action.add_effect_param / action.param
+                        end
+
+                        local damage_text = (damage == nil and text_red('??', Colors.verbose)) or
+                            (damage > 0 and
+                                'for %s (%s)':format(
+                                    text_number(damage, Colors.verbose),
+                                    text_number('%.2fx':format(multiplier), Colors.verbose)
+                                ) or
+                                text_red('(miss)', Colors.verbose))
+
+                        writeVerbose('Skillchain detected: %s %s':format(text_weapon_skill(name), damage_text))
                     end
                 end
             end

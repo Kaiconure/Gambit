@@ -1331,7 +1331,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 weaponSkill.targets.Self and 'me' or 't'
             )
 
-            writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
+            --writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
 
             return sendActionCommand(
                 command,
@@ -2945,10 +2945,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Similar to waitSkillchain above, except it waits for a shorter time period to
     -- allow for use of an ability (SA, TA, flourishes, etc)
-    context.waitSkillchainWithAbility = function()
-        return context.waitSkillchain(
-            (tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY) - 1.5
-        )
+    context.waitSkillchainWithAbility = function(abilityCount)
+        if context.ability then
+
+            local scd = tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY
+            local modifier = (tonumber(abilityCount) or 1) + 0.5
+
+            scd = math.max(scd - modifier, 0)
+            context.waitSkillchain(scd)
+
+            return true
+        else
+            context.waitSkillchain()
+        end
     end
     context.waitSCWithAbility = context.waitSkillchainWithAbility
 

@@ -641,6 +641,8 @@ local function doNextActionCycle(time, player, party)
                 -- If the target mob is already engaged, it's not pullable (no need to pull)
                 hasPullableMob = not isMobEngaged
 
+                -- TODO: Multi-party mobs switch between idle/pull and battle because of the party claim check. Think about this.
+
                 if isMobEngaged then
                     local context = ActionContext.create('battle', time, mob, mobTime, battleScope, party)
                     local action = processNextAction(context);
