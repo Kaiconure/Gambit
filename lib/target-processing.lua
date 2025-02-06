@@ -76,7 +76,7 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         local claimStolen = 
             mobClaimed and
             not mobClaimedByParty and
-            player.status ~= STATUS_ENGAGED
+            (player.status ~= STATUS_ENGAGED or settings.strategy == TargetStrategy.puller)
         local claimTimedOut = 
             not mobClaimed and
             currentTarget:runtime() >= settings.maxChaseTime

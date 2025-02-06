@@ -117,6 +117,27 @@ local function context_boolean(condition)
 end
 
 -----------------------------------------------------------------------------------------
+-- Gets a numeric value, or a default if not a valid number
+local function context_number(value, default)
+    return tonumber(value) or tonumber(default)
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets a recast timer value, or a default fallback if not a valid number. The fallback will
+-- have a value of 100,000 by default, but it can be overridden with the second argument.
+local function context_recastTime(value, default)
+    return math.max(
+        context_number(value, tonumber(default) or 100000),
+        0)
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if the specified recast time value represents a "ready" status.
+local function context_recastReady(value)
+    return context_recastTime(value) == 0
+end
+
+-----------------------------------------------------------------------------------------
 --
 local function context_noop() 
     return true
@@ -1715,7 +1736,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.useAbility = function (target, ability)
-        if ability == nil then ability = context.ability end
+        if ability == nil then
+            ability = context.ability
+        end
         if type(ability) == 'string' then ability = findJobAbility(ability) end
         
         if ability ~= nil then
@@ -2946,7 +2969,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Similar to waitSkillchain above, except it waits for a shorter time period to
     -- allow for use of an ability (SA, TA, flourishes, etc)
     context.waitSkillchainWithAbility = function(abilityCount)
-        if context.ability then
+        if context.ability_recast and context.ability_recast <= 0 then
 
             local scd = tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY
             local modifier = (tonumber(abilityCount) or 1) + 0.5
@@ -3216,6 +3239,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.max = context_max
     context.iif = context_iif
     context.bool = context_boolean
+    context.number = context_number
+    context.recastTime = context_recastTime
+    context.recastReady = context_recastReady
     context.noop = context_noop
     context.randomize = context_randomize
     context.send_command = context_send_command

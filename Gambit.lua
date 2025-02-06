@@ -1,4 +1,4 @@
-__version = '0.95.5-beta3'
+__version = '0.95.5-beta5'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -145,8 +145,14 @@ windower.register_event('load', function()
 
     smartMove:setLogger(writeDebug, writeTrace)
 
-    windower.send_command('unbind !~G; bind !~G ' .. makeSelfCommand('toggle')) -- Use Shift+Alt+G to toggle automation
-    windower.send_command('bind %^F ' .. makeSelfCommand('follow -toggle'))     -- Use Ctrl+F to toggle follow automation
+    local bind_toggle = 'bind !~g ' .. makeSelfCommand('toggle')
+    local bind_follow = 'bind %^f ' .. makeSelfCommand('follow -toggle')
+
+    -- writeMessage('bind_toggle: ' .. text_green(bind_toggle))
+    -- writeMessage('bind_follow: ' .. text_green(bind_follow))
+
+    windower.send_command(bind_toggle)  -- Use Shift+Alt+G to toggle automation
+    windower.send_command(bind_follow)  -- Use Ctrl+F to toggle follow automation
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
@@ -670,8 +676,7 @@ local _handle_actionChunk = function(id, data)
                 targetCount = targetCount + 1
 
                 if
-                    (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB) -- and
-                    --(actorId == me.id or target.spawn_type == SPAWN_TYPE_MOB)
+                    (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB)
                 then
                     local message = tonumber(packet['Target %d Action 1 Message':format(i)]) or 0
                     local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
