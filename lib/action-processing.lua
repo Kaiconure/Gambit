@@ -712,11 +712,12 @@ function cr_actionProcessor()
             compileAllActions()
         end
 
+        local time = os.clock() - startTime
+        local party = windower.ffxi.get_party()
+
         if globals.enabled then
-            local time = os.clock() - startTime
             local player = windower.ffxi.get_player()
             local me = windower.ffxi.get_mob_by_target('me')
-            local party = windower.ffxi.get_party()
 
             if 
                 player and  -- There are conditions where these could be nil and crash the addon.
@@ -758,6 +759,15 @@ function cr_actionProcessor()
                 end
             end
         else
+            -- We will create a context when disabled. This simply ensures that we have context-based
+            -- state changes available and up to date once we re-enable.
+            local context = ActionContext.create('idle', 
+                time,
+                nil,
+                0,
+                -1,
+                party)
+
             -- Wake from idle if we're disabled
             actionStateManager.idleWakeTime = 0
             sleepTimeSeconds = 2

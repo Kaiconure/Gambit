@@ -38,7 +38,9 @@ local state_manager = {
     rolls = {
     },
     latestRoll = {
-    }
+    },
+
+    context = nil
 }
 
 -----------------------------------------------------------------------------------------
@@ -70,6 +72,16 @@ state_manager.isActionSnoozing = function(self)
     return self.currentTime < self.actionWakeTime
 end
 
+-----------------------------------------------------------------------------------------
+-- Set the most recently created context
+state_manager.setContext = function(self, context)
+    self.context = context
+end
+-----------------------------------------------------------------------------------------
+-- Set the most recently created context
+state_manager.getContext = function(self)
+    return self.context
+end
 
 -----------------------------------------------------------------------------------------
 -- Sets the action type being executed, used to track how long we're in a type

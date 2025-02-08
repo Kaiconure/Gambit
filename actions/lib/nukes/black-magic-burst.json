@@ -6,6 +6,7 @@
     {
       "when": [
         "bt and bt.distance < 20",
+        "not hasBuff('Immanence')",
         "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp and canUseSpell(withMaxTier(vars.black_magic_burst.max_tier, vars.black_magic_burst[skillchain.name]))"
       ],
       "commands": [
@@ -13,7 +14,10 @@
         "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
         "useSpell()"
       ],
-      "comment": "Burst with single-target black magic spells. Customize by defining variables: max_tier, min_mpp"
+      "comment": [
+        "Burst with single-target black magic spells. Customize by defining variables: max_tier, min_mpp",
+        "Note: Immanence is a SCH ability that turns single-target black magic spells into pseudo weapon skills."
+      ]
     }
   ],
   "vars": {
@@ -92,14 +96,7 @@
         "Thunder",
         "Aero"
       ],
-      "Fusion": [
-        "Fire VI",
-        "Fire V",
-        "Fire IV",
-        "Fire III",
-        "Fire II",
-        "Fire"
-      ],
+      "Fusion": ["Fire VI", "Fire V", "Fire IV", "Fire III", "Fire II", "Fire"],
       "Gravitation": [
         "Stone VI",
         "Stone V",

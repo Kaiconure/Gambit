@@ -1,4 +1,4 @@
-__version = '0.95.5-beta5'
+__version = '0.95.5-beta6'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -31,6 +31,7 @@ meta.monster_abilities = require('./meta/monster_abilities') or {}
 meta.trusts = require('./meta/trusts')
 meta.jobs_with_mp = require('./meta/jobs_with_mp')
 meta.buffs = require('./meta/buffs')
+meta.immanence = require('./meta/immanence')
 
 require('./lib/logging')
 require('./lib/helpers')
@@ -598,6 +599,66 @@ local _handle_actionChunk = function(id, data)
         if action then
             isDispel    = arrayIndexOf(meta.dispel.spells, action.id)
             isErase     = arrayIndexOf(meta.erase.spells, action.id)
+
+            -- Try to identify whether this is a weapon skill-like spell
+            if
+                actor and
+                actor.id and
+                actor.in_party
+            then
+                local context = actionStateManager:getContext()
+                if
+                    context and
+                    context.party1_by_id and
+                    context.party1_by_id[actor.id]
+                then
+                    local member = context.party1_by_id[actor.id]
+                    if
+                        member and
+                        type(member.hasBuff) == 'function'
+                    then
+                        local chain_ability = nil
+                        local ws_action = action
+                        if
+                            member.hasBuff(470) and
+                            action.type == 'BlackMagic'
+                        then
+                            local category = meta.immanence:category_of(action.name)
+                            if category then
+                                local base_spell = findSpell(category)
+                                if base_spell then
+                                    ws_action = base_spell
+                                end
+
+                                chain_ability = resources.job_abilities[317] -- Immanence (SCH)
+                            end
+                        elseif member.hasBuff(164) and action.type == 'BlueMagic' and action.element then
+                            chain_ability = resources.job_abilities[94] -- Chain Affinity (BLU)
+                        end
+
+                        if chain_ability then
+                            local targetId = tonumber(packet['Target 1 ID':format(i)]) or 0
+                            local target = windower.ffxi.get_mob_by_id(targetId)
+
+                            if 
+                                target and
+                                target.valid_target and
+                                target.spawn_type == SPAWN_TYPE_MOB
+                            then
+                                -- These are spells that act as skillchain openers
+                                setPartyWeaponSkill(actor, ws_action, target)
+
+                                writeVerbose('%s: %s %s %s':format(
+                                    text_player(actor.name, Colors.verbose),
+                                    text_weapon_skill('%s: %s':format(chain_ability.name, ws_action.name), Colors.verbose),
+                                    CHAR_RIGHT_ARROW,
+                                    text_mob(target.name)
+                                ))
+                            end
+                        end
+                    end
+                end
+            end
         end
     elseif
         category == 14  -- Unblinkable job abilities
@@ -725,9 +786,15 @@ local _handle_actionChunk = function(id, data)
                 local targetNumber = findPacketTargetNumber(packet, player.id)
                 local count = targetNumber and tonumber(packet['Target %d Action 1 Param':format(targetNumber)])
 
-                if count then
-                    writeMessage('Detected %s (%s)':format(
+                if 
+                    count and
+                    actor and
+                    (actor.in_party or actor.id == player.id)
+                then
+                    writeMessage('%s: %s %s %s':format(
+                        text_player(actor.name),
                         text_buff(ability.name),
+                        CHAR_RIGHT_ARROW,
                         text_number(tostring(count))
                     ))
 

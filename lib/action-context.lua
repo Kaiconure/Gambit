@@ -906,7 +906,7 @@ local function initContextTargetSymbol(context, symbol)
         Party = symbol.mob.in_party,
         NPC = symbol.mob.is_npc,
         Player = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER,
-        Ally = symbol.mob.is_ally,
+        Ally = symbol.mob.in_alliance,
         Enemy = symbol.mob.spawn_type == SPAWN_TYPE_MOB
     }
 
@@ -1071,8 +1071,11 @@ local function loadContextTargetSymbols(context, target)
         context[p] = nil
         if context.party[p] and context.party[p].mob then
             local mob = context.party[p].mob
-            context[p] = { symbol = p, mob = mob, member = context.party[p], targets = {}, isParty = true, isAlly = true }
+            context[p] = { symbol = p, mob = mob, member = context.party[p], targets = {}, in_party = true, in_alliance = true }
             initContextTargetSymbol(context, context[p])
+
+            context.party1_by_id[mob.id] = context[p]
+            context.party1_by_index[mob.index] = context[p]
 
             -- Store party leader info as well
             if context.party.party1_leader == mob.id then
@@ -1094,14 +1097,14 @@ local function loadContextTargetSymbols(context, target)
         context[a1] = nil
         if context.party[a1] then
             local mob = context.party[a1].mob
-            context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, isParty = false, isAlly = true }
+            context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, in_party = false, in_alliance = true }
             initContextTargetSymbol(context, context[a1])
         end
 
         context[a2] = nil
         if context.party[a2] then
             local mob = context.party[a2].mob
-            context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, isParty = false, isAlly = true }
+            context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, in_party = false, in_alliance = true }
             initContextTargetSymbol(context, context[a2])
         end
     end
@@ -1150,16 +1153,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Store a mapping of id->member and index->member for the party
     context.party1_by_id = {}
     context.party1_by_index = {}
-    if context.party then
-        for i = 0, 5 do
-            local key = 'p' .. i
-            local member = context.party[key]
-            if member and member.mob then
-                context.party1_by_id[member.mob.id] = member
-                context.party1_by_index[member.mob.index] = member
-            end
-        end
-    end
+    -- if context.party then
+    --     for i = 0, 5 do
+    --         local key = 'p' .. i
+    --         local member = context.party[key]
+    --         if member and member.mob then
+    --             context.party1_by_id[member.mob.id] = member
+    --             context.party1_by_index[member.mob.index] = member
+    --         end
+    --     end
+    -- end
 
     -- Must be called after the player and party have been assigned
     loadContextTargetSymbols(context, target)    
@@ -3255,6 +3258,11 @@ end
 
 return {
     create = function(actionType, time, target, mobEngagedTime, battleScope, party)
-        return makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+        local context = makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+
+        -- Store the most recently created context
+        actionStateManager:setContext(context)
+
+        return context
     end
 }
