@@ -70,6 +70,11 @@ local function shouldAquireNewTarget(player, party, party_by_id)
     if currentMob then
         checkEngagement = false
 
+        -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
+        if hasBuff(player, BUFF_ELVORSEAL) then
+            return false
+        end
+
         local mobClaimed = currentMob.claim_id > 0
         local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
@@ -298,7 +303,7 @@ function processTargeting(player, party)
             and not candidateMob.charmed
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
-            and (candidateMob.status == 1 or can_initiate)
+            and (candidateMob.status == STATUS_ENGAGED or can_initiate)
 
         -- This ensures that the 'puller' strategy only tries to get mobs that are at full health,
         -- or are already claimed by a member of our party. This prevents pullers
@@ -308,7 +313,9 @@ function processTargeting(player, party)
             isValidCandidate and
             strategy == TargetStrategy.puller 
         then
-            isValidCandidate = candidateMob.hpp == 100 or party_by_id[candidateMob.claim_id or 0]
+            isValidCandidate = 
+                candidateMob.hpp == 100 or
+                party_by_id[candidateMob.claim_id or 0]
         end
 
         local shouldIgnore = false
@@ -340,7 +347,11 @@ function processTargeting(player, party)
             isValidCandidate and 
             not shouldIgnore 
         then
-            if (candidateMob.claim_id == 0 or party_by_id[candidateMob.claim_id]) then
+            if 
+                candidateMob.claim_id == 0 or 
+                hasBuff(player, BUFF_ELVORSEAL) or
+                party_by_id[candidateMob.claim_id] 
+            then
 
                 -- We'll store the nearest aggroing mob, and give it priority over others
                 if candidateMob.status == STATUS_ENGAGED then

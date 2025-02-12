@@ -636,7 +636,10 @@ local function doNextActionCycle(time, player, party)
                 --local mob = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('bt')
 
                 -- Determine if the target mob is engaged
-                local isMobEngaged = mob and (mob.claim_id > 0 and isPartyId(mob.claim_id) and mob.status == STATUS_ENGAGED)
+                local isMobEngaged = 
+                    mob and 
+                    mob.status == STATUS_ENGAGED and
+                    (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or isPartyId(mob.claim_id)))
 
                 -- If the target mob is already engaged, it's not pullable (no need to pull)
                 hasPullableMob = not isMobEngaged
