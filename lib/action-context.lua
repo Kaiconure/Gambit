@@ -1017,6 +1017,13 @@ local function initContextTargetSymbol(context, symbol)
     end
 
     -----------------------------------------------------------------
+    -- Save the vertical/z distance offset
+    if  context.me and context.me.z and symbol.z then
+        symbol.delta_z      = math.abs(symbol.z - context.me.z)
+        symbol.distance_z   = symbol.delta_z
+    end
+
+    -----------------------------------------------------------------
     -- Perform a name match on the specified value
     symbol.isNameMatch = function(test)
         test = string.lower(test or '!!invalid')
@@ -1036,7 +1043,14 @@ end
 -----------------------------------------------------------------------------------------
 --
 local function loadContextTargetSymbols(context, target)
-    -- Fill in targets
+    -- Fill in all symbols
+
+    -- Set up the "me" symbol
+    context.me = { symbol = 'me', mob = windower.ffxi.get_mob_by_target('me') }
+    initContextTargetSymbol(context, context.me)
+    context.self = context.me
+    
+    -- Set up the t/bt symbols
     if target then
         context.t = { symbol = 't', symbol2 = 'bt', mob = target }
         initContextTargetSymbol(context, context.t)
@@ -1046,16 +1060,22 @@ local function loadContextTargetSymbols(context, target)
         context.bt = nil
     end
 
-    context.me = { symbol = 'me', mob = windower.ffxi.get_mob_by_target('me') }
-    initContextTargetSymbol(context, context.me)
-    context.self = context.me
-
+    -- Set up the pet symbol
     local pet = windower.ffxi.get_mob_by_target('pet')
     if pet then
-        context.pet = { symbol = 'pet', mob = windower.ffxi.get_mob_by_target('pet') }
+        context.pet = { symbol = 'pet', mob = pet }
         initContextTargetSymbol(context, context.pet)
     else
         context.pet = nil
+    end
+
+    -- Set up the scan symbol
+    local scan = windower.ffxi.get_mob_by_target('scan')
+    if scan then
+        context.scan = { symbol = 'scan', mob = scan }
+        initContextTargetSymbol(context, context.scan)
+    else
+        context.scan = nil
     end
 
     -- We'll store the list of trusts in our main party. Trusts can't be called in 
@@ -3263,6 +3283,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- "Static" context properties
     context.constants = context_constants
     context.const = context.constants
+
+    -- Expose some timing related values
+    context.state_time  = actionStateManager:elapsedTimeInType()
+    context.mob_time    = globals.target:runtime()
+    if context.bt then
+        context.bt.mob_time = context.mob_time
+    end
 
     --------------------------------------------------------------------------------------
     -- "Static" context functions
