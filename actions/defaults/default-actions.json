@@ -2,6 +2,11 @@
   "vars": {
     "ensure_trusts": {
       "spells": []
+    },
+    "frontline_engagement": {
+      "distance": null,
+      "angle": null,
+      "comment": "Drives frontline engagement positioning. Use distance and/or angle (degrees) to set placement around the enemy."
     }
   },
   "pull": [
@@ -16,10 +21,20 @@
   ],
   "idle": [
     {
-      "import": "ensure-trusts"
+      "import": "follow-leader",
+      "comment": "Follows the party leader when idle. Does nothing if you are the party leader."
     },
     {
-      "import": "use-xp-cp-rings"
+      "import": "ensure-trusts",
+      "comment": "Calls trusts based on the spells configured in vars.ensure_trusts.spells. Recalls trusts on low HP/MP."
+    },
+    {
+      "import": "use-xp-cp-rings",
+      "comment": "Uses the appropriate XP or CP rings based on current level and mastery."
+    },
+    {
+      "import": "common-consumables",
+      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress)."
     }
   ],
   "dead": [

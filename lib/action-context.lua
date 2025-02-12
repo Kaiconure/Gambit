@@ -2187,8 +2187,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return
         end
         
+        -- Validate the distance value. If no value is provided, or it is invalid,
+        -- we will fall back to the follow command distance. If that is not valid,
+        -- we will fall back to a default of 1.0.
         if type(distance) ~= 'number' or distance < 0 then
-            distance = 1
+            distance = math.max(tonumber(settings.followCommandDistance) or 1, 1)
         end
 
         if settings and type(settings.minDistanceList[target.name]) == 'number' then
@@ -2888,6 +2891,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Similar to skillchaining, but only triggers if a minimum amount
+    -- of time has ellapsed since the weapon skill was used.
+    context.skillchaining2 = function(...)
+        local result = context.skillchaining(...)
+        if result then
+            local t = os.clock()
+            if t - context.skillchain_trigger_time >= 4 then
+                return result
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Trigger if our enemy is using a TP move
     context.enemyUsingAbility = function (...)
         if context.bt then
@@ -2929,6 +2945,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     context.skillchain_trigger_time = party_weapon_skill.time
                     return party_weapon_skill
                 end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Similar to partyUsingWeaponSkill, but only triggers if a minimum amount
+    -- of time has ellapsed since the weapon skill was used.
+    context.partyUsingWeaponSkill2 = function(...)
+        local result = context.partyUsingWeaponSkill(...)
+        if result then
+            local t = os.clock()
+            if t - context.skillchain_trigger_time >= 4 then
+                return result
             end
         end
     end

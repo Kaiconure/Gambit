@@ -460,6 +460,14 @@ function canUseAbility(player, ability, recasts)
         return false
     end
 
+    -- Bail if the ability is a Corsair double-up, without the double-up buff active
+    if
+        ability.id == 123 and       -- Double-up
+        not hasBuff(player, 308)    -- Double-up chance
+    then
+        return false
+    end
+
     -- Bail if the ability requires MP, and we don't have enough. Note 
     -- that "Monster" abilities have an MP cost but it's our pet rather than ourselves.
     -- TODO: Research pet MP requirements and filtering.

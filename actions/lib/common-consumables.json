@@ -1,0 +1,26 @@
+{
+  "vars": {
+    "common_consumables": {
+      "escha_items": [
+        "Silt Pouch",
+        "Bead Pouch",
+        "Frayed Sack (Pel)",
+        "Frayed Sack (Fer)",
+        "Frayed Sack (Tau)"
+      ],
+      "unm_items": ["Bakunawa's Coffer", "Vedrfolnir's Coffer"]
+    }
+  },
+  "actions": [
+    {
+      "when": "canUseItem(vars.common_consumables.escha_items)",
+      "commands": ["useItem(me)"],
+      "comment": "Escha Items"
+    },
+    {
+      "when": "canUseItem(vars.common_consumables.unm_items)",
+      "commands": ["useItem(me)"],
+      "comment": "UNM Items"
+    }
+  ]
+}

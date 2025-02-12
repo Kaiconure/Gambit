@@ -124,6 +124,10 @@ local function getActionsFileName(playerName, actionsName)
     return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
 end
 
+local function getActionsAlternateFileName(playerName, actionsName)
+    return string.format('./settings/actions/%s.json', actionsName)
+end
+
 local function getActionsJobFileName(player)
     local actionsName = player.main_job
     -- if player.sub_job then
@@ -514,7 +518,13 @@ end
 -- Load actions by player and action set name
 function loadActions(playerName, actionsName)
     local fileName = getActionsFileName(playerName, actionsName)
-    return loadActionsFromFile(playerName, fileName)
+    local actions = loadActionsFromFile(playerName, fileName)
+    if actions == nil then
+        fileName = getActionsAlternateFileName(playerName, actionsName)
+        actions = loadActionsFromFile(playerName, fileName)
+    end
+
+    return actions
 end
 
 ----------------------------------------------------------------------------------------
