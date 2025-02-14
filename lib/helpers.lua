@@ -247,6 +247,32 @@ function isPartyTrustEngaged(party)
 end
 
 -------------------------------------------------------------------------------
+-- 
+function stringStartsWith(str, start)
+    if type(str) == 'string' and type('start') == 'string' then
+        local sub = str:sub(1, #start)
+        if sub == start then
+            return true
+        end
+    end
+
+    return false
+end
+
+-------------------------------------------------------------------------------
+--
+function stringStartsWithI(str, start)
+    if type(str) == 'string' and type('start') == 'string' then
+        local sub = str:sub(1, #start)
+        if sub:lower() == start:lower() then
+            return true
+        end
+    end
+
+    return false
+end
+
+-------------------------------------------------------------------------------
 -- Searches an action message for field names
 function fieldsearch(message)
     local fieldarr = {}

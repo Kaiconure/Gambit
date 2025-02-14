@@ -1,4 +1,10 @@
 --------------------------------------------------------------------------------------
+-- These are mobs that should be ignored when you have an elvorseal
+local ELVORSEAL_BACKGROUND_MOBS = {
+    "Eschan Il'Aern"
+}
+
+--------------------------------------------------------------------------------------
 -- Determines if a mob should be ignored by the auto-engage algorithm.
 -- Note that this assumes the mob passes all other checks, and it just
 -- runs it by the ignore list to see if it gets a hit.
@@ -71,31 +77,29 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         checkEngagement = false
 
         -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
-        if hasBuff(player, BUFF_ELVORSEAL) then
-            return false
-        end
+        if not hasBuff(player, BUFF_ELVORSEAL) then
+            local mobClaimed = currentMob.claim_id > 0
+            local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
-        local mobClaimed = currentMob.claim_id > 0
-        local mobClaimedByParty = party_by_id[currentMob.claim_id]
+            local claimStolen = 
+                mobClaimed and
+                not mobClaimedByParty and
+                (player.status ~= STATUS_ENGAGED or settings.strategy == TargetStrategy.puller)
+            local claimTimedOut = 
+                not mobClaimed and
+                currentTarget:runtime() >= settings.maxChaseTime
 
-        local claimStolen = 
-            mobClaimed and
-            not mobClaimedByParty and
-            (player.status ~= STATUS_ENGAGED or settings.strategy == TargetStrategy.puller)
-        local claimTimedOut = 
-            not mobClaimed and
-            currentTarget:runtime() >= settings.maxChaseTime
-
-        if claimStolen or claimTimedOut then
-            writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
-                text_number('%.1f':format(currentTarget:runtime())),
-                text_number(currentMob.claim_id)
-            ))
-            windower.ffxi.follow(-1)
-            windower.send_command('input /attack off')
-            resetCurrentMob(nil)
-        else
-            return false
+            if claimStolen or claimTimedOut then
+                writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
+                    text_number('%.1f':format(currentTarget:runtime())),
+                    text_number(currentMob.claim_id)
+                ))
+                windower.ffxi.follow(-1)
+                windower.send_command('input /attack off')
+                resetCurrentMob(nil)
+            else
+                return false
+            end
         end
     end
 
@@ -292,6 +296,7 @@ function processTargeting(player, party)
     local nearestAggroingMob = nil
 
     local can_initiate = strategy == TargetStrategy.aggressor or strategy == TargetStrategy.puller
+    local hasElvorseal = hasBuff(player, BUFF_ELVORSEAL)
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 
@@ -300,10 +305,15 @@ function processTargeting(player, party)
                 ) 
             and candidateMob.valid_target 
             and candidateMob.spawn_type == 16
+            and candidateMob.is_npc
+            and (tonumber(candidateMob.model_scale) or 0) > 0
+            and (tonumber(candidateMob.model_size) or 0) > 0
             and not candidateMob.charmed
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
             and (candidateMob.status == STATUS_ENGAGED or can_initiate)
+            and (not hasElvorseal or not arrayIndexOfStrI(ELVORSEAL_BACKGROUND_MOBS, candidateMob.name))
+
 
         -- This ensures that the 'puller' strategy only tries to get mobs that are at full health,
         -- or are already claimed by a member of our party. This prevents pullers
@@ -349,7 +359,7 @@ function processTargeting(player, party)
         then
             if 
                 candidateMob.claim_id == 0 or 
-                hasBuff(player, BUFF_ELVORSEAL) or
+                hasElvorseal or
                 party_by_id[candidateMob.claim_id] 
             then
 

@@ -1,0 +1,27 @@
+{
+  "vars": {
+    "configuration": {
+      "commands": [],
+      "disabled": false
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "vars.configuration and not vars.configuration.disabled and isArray(vars.configuration.commands)"
+      ],
+      "commands": [
+        "log('Preparing execution of one-time configuration commands:')",
+        "logEach(vars.configuration.commands)",
+        "sendCommands(vars.configuration.commands)"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "comment": [
+        "This will run once and only once, until the next reload (either addon or action file).",
+        "It should be placed at the top of your idle section to ensure it always runs immediately.",
+        "Note that the changes would NOT go into effect until actually idle (configs won't change mid-battle)."
+      ]
+    }
+  ]
+}

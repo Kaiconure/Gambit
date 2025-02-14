@@ -1,4 +1,4 @@
-__version = '0.95.5-beta7b'
+__version = '0.95.5-beta8'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'

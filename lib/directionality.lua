@@ -127,6 +127,33 @@ directionality.faceTarget = function (target, calculationOnly)
 end
 
 -------------------------------------------------------------------------------------
+-- Calculate the angle required to face the specified mob, and turn to face it,
+-- returning the new heading angle. If the calculationOnly flag is set, then the
+-- turn portion will be skipped and the return value can be used to turn directly later.
+directionality.faceAwayFromTarget = function (target, calculationOnly)
+    if type(target) == 'table' then
+        local me = windower.ffxi.get_mob_by_target('me')
+        if me and (target.id == nil or me.id ~= target.id) then
+            local forward = V({1, 0})
+            local fromTarget = vector.normalize(V({
+                (me.x - target.x),
+                (me.y - target.y)
+                
+            }))
+
+            local heading = -directionality.vectorAngle(forward, fromTarget)
+            if not calculationOnly then
+                return directionality.faceDirection(heading)
+            end
+
+            return heading
+        end
+    end
+
+    return nil
+end
+
+-------------------------------------------------------------------------------------
 directionality.isAtMobRear = function (mob, distanceBehind)
     local vMob = V({mob.x, mob.y})
     local vMobFwd = vector.from_radian(mob.heading or 0):normalize()

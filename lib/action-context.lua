@@ -54,6 +54,23 @@ local function varargs(args, default)
 end
 
 -----------------------------------------------------------------------------------------
+-- Gets the full path to a variable under the 'vars' action object. This splits on
+-- all the dot (.) characters, and omits the 'vars' parent.
+local function get_action_variable_path(s)
+    result = {};
+    for match in (s..'.'):gmatch('(.-)%.') do
+        match = trimString(match)
+        if 
+            match ~= '' and
+            (match ~= 'vars' or #result > 0)
+        then
+            result[#result + 1] = match
+        end
+    end
+    return result;
+end
+
+-----------------------------------------------------------------------------------------
 --
 function __context_compare(a, b) return a == b end
 function __context_compare_strings(a, b) return string.lower(a) == string.lower(tostring(b or '')) end
@@ -93,11 +110,143 @@ local function context_send_command(command, ...)
         command = command:format(...)
 
         if settings.verbosity >= VERBOSITY_TRACE then
-            writeTrace('Sending action ' .. text_magenta(command))
+            writeTrace('Sending command: ' .. text_magenta(command))
         end
         
         windower.send_command(command)
     end
+end
+
+-----------------------------------------------------------------------------------------
+-- Send multiple commands at once
+local function context_send_commands(...)
+    local commands = varargs({...})
+    local result = ''
+    local count = 0
+    for i, _command in ipairs(commands) do
+        local command = trimString(_command)
+        if command ~= '' then
+            result = result .. command .. ';'
+            count = count + 1
+        end
+    end
+
+    if count > 0 then
+        writeMessage('Sending %s to Windower!':format(pluralize(count, 'command', 'commands')))
+        windower.send_command(result)
+    else
+        writeMessage('No valid commands were provided.')
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_send_text(command, ...)
+    if type(command) == 'string' then
+        command = ('input ' .. command):format(...)
+
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('Sending text: ' .. text_magenta(command))
+        end
+        
+        windower.send_command(command)
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_array_length(array)
+    if type(array) == 'table' and array[1] then
+        return #array
+    end
+
+    return 0
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_is_array(array)
+    return context_array_length(array) > 0
+end
+
+
+-----------------------------------------------------------------------------------------
+--
+local function context_is_apex(mob)
+    if type(mob) == 'table' then mob = mob.name end
+    return type(mob) == 'string' and stringStartsWithI(mob, 'apex ')
+end
+local function context_is_locus(mob)
+    if type(mob) == 'table' then mob = mob.name end
+    return type(mob) == 'string' and stringStartsWithI(mob, 'locus ')
+end
+local function context_is_apex_tier(mob)
+    return context_is_apex(mob) or context_is_locus(mob)
+end
+
+-----------------------------------------------------------------------------------------
+-- Sets an action context variable by name, allowing for dot ('.') syntax. The leading
+-- 'vars' name is implicit, and can be either provided or omitted with the same result.
+local function context_set_var(name, value)
+    local levels = get_action_variable_path(name)
+
+    -- If only one level is necessary, we'll just set it now and be done
+    if #levels == 1 then
+        actionStateManager.vars[levels[1]] = value
+        return value
+    end
+
+    local ref = actionStateManager.vars
+
+    -- Go through all levels --except-- the final one that we'll actually set below
+    for i = 1, #levels - 1 do
+        local level = levels[i]
+        local cur = ref[level]
+        
+        if type(cur) == 'nil' then
+            -- If the current level does not exist, we will create it
+            ref[level] = { }
+            cur = ref[level]            
+        elseif type(cur) ~= 'table' then
+            -- We will not allow a scalar to be overwritten with a table as part of this
+            return nil
+        end
+
+        ref = cur
+    end
+
+    ref[levels[#levels]] = value
+    return value
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets an action context variable by name, allowing for dot ('.') syntax. The leading
+-- 'vars' name is implicit, and can be either provided or omitted with the same result.
+local function context_get_var(name, value)
+    local levels = get_action_variable_path(name)
+
+    -- If only one level is necessary, we'll just set it now and be done
+    if #levels == 1 then
+        return actionStateManager.vars[levels[1]]
+    end
+
+    local ref = actionStateManager.vars
+
+    -- Go through all levels to find the final value
+    for i = 1, #levels - 1 do
+        local level = levels[i]
+        local cur = ref[level]
+
+        -- If this is not a table, we've reached the end of the search
+        if type(cur) ~= 'table' then
+            return nil
+        end
+
+        ref = cur
+    end
+
+    -- Return the final level
+    return ref[levels[#levels]]
 end
 
 -----------------------------------------------------------------------------------------
@@ -1019,7 +1168,8 @@ local function initContextTargetSymbol(context, symbol)
     -----------------------------------------------------------------
     -- Save the vertical/z distance offset
     if  context.me and context.me.z and symbol.z then
-        symbol.delta_z      = math.abs(symbol.z - context.me.z)
+        symbol.offset_z     = symbol.z - context.me.z
+        symbol.delta_z      = math.abs(symbol.offset_z)
         symbol.distance_z   = symbol.delta_z
     end
 
@@ -1051,8 +1201,15 @@ local function loadContextTargetSymbols(context, target)
     context.self = context.me
     
     -- Set up the t/bt symbols
-    if target then
-        context.t = { symbol = 't', symbol2 = 'bt', mob = target }
+    if type(target) == 'table' then
+        context.t = { 
+            symbol = 't',
+            symbol2 = 'bt',
+            mob = target,
+            is_apex = context_is_apex(target.name),
+            is_locus = context_is_locus(target.name),
+            is_apex_tier = context_is_apex_tier(target.name)
+        }
         initContextTargetSymbol(context, context.t)
         context.bt = context.t
     else
@@ -1188,7 +1345,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     loadContextTargetSymbols(context, target)    
 
     --------------------------------------------------------------------------------------
-    --
+    -- Writes a concatenation of all arguments to the action log
     context.log = function (...) 
         local messages = varargs({...})
         local output = ''
@@ -1205,6 +1362,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         ))
 
         return true
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Writes each argument to the log as a separate line item
+    context.logEach = function(...)
+        local logs = varargs({...})
+        for i, _log in ipairs(logs) do
+            local log = trimString(_log)
+            if log ~= '' then
+                context.log('  ' .. log)
+            end
+        end
     end
 
     --------------------------------------------------------------------------------------
@@ -2034,19 +2203,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    context.faceAway = function ()
-        if context.bt == nil or context.bt.mob == nil then return end
+    context.faceAway = function (target)
+        target = target or context.bt
+        if type(target) == 'string' then target = context[target] end
+        if type(target) ~= 'table' or target.mob == nil then return end
 
-        local angle = directionality.facingOffset(context.bt.mob)
-        if type(angle) == 'number' then
-            writeVerbose('Turning away from %s target: %s':format(
-                text_action(context.actionType, Colors.verbose),
-                text_mob(context.bt.name, Colors.verbose)
-            ))
-            directionality.faceDirection(angle + math.pi)
-
-            context.wait(0.5)
+        local player = windower.ffxi.get_player()
+        if player.target_locked then
+            windower.send_command('input /lockon')
         end
+
+        directionality.faceAwayFromTarget(target.mob)
+        context.wait(0.5)
     end
 
     --------------------------------------------------------------------------------------
@@ -2924,7 +3092,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Trigger if our enemy is using a TP move
+    -- Trigger if our enemy is in the process of using a TP move.
     context.enemyUsingAbility = function (...)
         if context.bt then
             local skills = varargs({...})
@@ -2935,8 +3103,32 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     skills[1] == nil or
                     arrayIndexOfStrI(skills, info.ability.name) 
                 then
-                    -- We'll only allow one trigger per single mob ability. TODO: Maybe change this in the future?
+                    -- Clear the mob ability. It will still be available for what we're calling 'windowed' detection via
+                    -- context.enemyUsedAbility. That is, the ability will be detectable for a certain window of time.
                     actionStateManager:clearMobAbility(context.bt)
+
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy used a TP move recently.
+    context.enemyUsedAbility = function (...)
+        if context.bt then
+            local skills = varargs({...})
+            local info = actionStateManager:getMobAbilityInfo(context.bt, true)
+            if info then
+                -- We'll match if either no filters were provided, or if the current  ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- Clear the mob ability for good. When the second argument is true, it will no longer be tracked.
+                    actionStateManager:clearMobAbility(context.bt, true)
+
                     context.enemy_ability = info.ability
                     return info.ability
                 end
@@ -3303,8 +3495,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.recastReady = context_recastReady
     context.noop = context_noop
     context.randomize = context_randomize
-    context.send_command = context_send_command
+    context.sendCommand = context_send_command
+    context.sendCommands = context_send_commands
+    context.sendText = context_send_text
+    context.isApex = context_is_apex
+    context.isLocus = context_is_locus
+    context.isApexTier = context_is_apex_tier
+    context.isArray = context_is_array
+    context.arrayLength = context_array_length    
     context.wait = context_wait
+    context.setVar = context_set_var
+    context.getVar = context_get_var
 
     -- Final setup
     setEnumerators(context)

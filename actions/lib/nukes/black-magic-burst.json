@@ -24,7 +24,7 @@
     "black_magic_burst": {
       "max_tier": "III",
       "min_mpp": 25,
-      "abilities": ["Elemental Seal"],
+      "abilities": ["Elemental Seal", "Manawell"],
       "Darkness": [
         "Blizzard VI",
         "Water VI",

@@ -1,5 +1,6 @@
-MAX_SKILLCHAIN_TIME     = 9.5   -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
-MAX_WEAPON_SKILL_TIME   = 9.5   -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_SKILLCHAIN_TIME     = 7.5   -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_WEAPON_SKILL_TIME   = 7.5   -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_MOB_ABILITY_TIME    = 5     -- The maximum amount of time we'll allow ourselves to respond to a mob ability event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
 SKILLCHAIN_DELAY        = 5     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
@@ -338,26 +339,34 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.clearMobAbility = function(self, mob)
-    if self.mobAbilities then
-        self.mobAbilities[mob.id] = nil
+state_manager.clearMobAbility = function(self, mob, finalize)
+    if self.mobAbilities and self.mobAbilities[mob.id] then
+        if finalize then
+            self.mobAbilities[mob.id] = nil
+        else
+            self.mobAbilities[mob.id].cleared = true
+        end
     end
 end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.getMobAbilityInfo = function(self, mob)
+state_manager.getMobAbilityInfo = function(self, mob, windowed)
     if self.mobAbilities then
         local info = self.mobAbilities[mob.id]
         if info then
-            -- We'll set a maximum time that we'll allow a mob ability to remaing active
-            if os.clock() - info.time > 10 then
+            -- If the maximum time has ellapsed, then we'll clear the ability
+            if os.clock() - info.time > MAX_MOB_ABILITY_TIME then
                 self.mobAbilities[mob.id] = nil
                 info = nil
-            end            
-        end
+            end
 
-        return info
+            -- If we have a tracked ability and we're either windowed or haven't been cleared yet,
+            -- we can return the info we have at this point.
+            if info and (windowed or not info.cleared) then
+                return info
+            end
+        end
     end
 end
 

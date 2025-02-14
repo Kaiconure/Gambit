@@ -13,7 +13,7 @@
       ],
       "commands": ["follow(member, vars.follow_leader.distance)"],
       "frequency": 1,
-      "comment": "A distance value of null will result in the configured follow command distance (set or viewed with: //gbt config -fcd)."
+      "comment": "A distance value of null will result in the configured follow command distance (set or viewed with: //gbt config -fd)."
     }
   ]
 }

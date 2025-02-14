@@ -500,6 +500,17 @@ function canUseAbility(player, ability, recasts)
         ability and
         ability.recast_id
     then
+        recasts = recasts or windower.ffxi.get_ability_recasts()
+
+        if 
+            ability.recast_id == 231 and    -- Strategems
+            getMaxStratagems(player) > 0
+        then
+            if getAvailableStratagems(player, recasts) > 0 then
+                return 0
+            end
+        end
+
         local abilities = windower.ffxi.get_abilities()
         local jobAbilities = abilities and abilities.job_abilities or {}
         local petCommands = abilities and abilities.pet_commands or {}
@@ -512,8 +523,6 @@ function canUseAbility(player, ability, recasts)
             foundJobAbility or
             (foundPetCommand and windower.ffxi.get_mob_by_target('pet')) 
         then
-            recasts = recasts or windower.ffxi.get_ability_recasts()
-
             local recast = recasts and recasts[ability.recast_id]
             if type(recast) == 'number' then
                 -- Recast will be a number in ticks, which is seconds * 60
@@ -585,6 +594,41 @@ function getFinishingMoves(player)
     end
 
     return 0
+end
+
+
+local stratagem_charge_time = {
+    [1] = 240,
+    [2] = 120,
+    [3] = 80,
+    [4] = 60,
+    [5] = 48
+}
+function getMaxStratagems(player)
+    --
+    -- The following was obtained from the StrategemCounter addon:
+    --  https://github.com/lorand-ffxi/addons/blob/master/StratagemCounter/StratagemCounter.lua
+    --
+    player = player or windower.ffxi.get_player()
+	if S{player.main_job, player.sub_job}:contains('SCH') then
+		local lvl = (player.main_job == 'SCH') and player.main_job_level or player.sub_job_level
+		return math.floor(((lvl  - 10) / 20) + 1)
+	else
+		return 0
+	end
+end
+function getAvailableStratagems(player, recasts)
+    --
+    -- The following was obtained from the StrategemCounter addon:
+    --  https://github.com/lorand-ffxi/addons/blob/master/StratagemCounter/StratagemCounter.lua
+    --
+    player = player or windower.ffxi.get_player()
+
+	local recastTime = (recasts or windower.ffxi.get_ability_recasts())[231] or 0
+	local maxStrats = getMaxStratagems()
+	if (maxStrats == 0) then return 0 end
+	local stratsUsed = (recastTime / stratagem_charge_time[maxStrats]):ceil()
+	return maxStrats - stratsUsed
 end
 
 -------------------------------------------------------------------------------

@@ -89,6 +89,9 @@ end
 -- Determines the angle between vector and from. If from is ommitted,
 -- the base forward vector <1, 0> is used.
 local function vectorAngle(v, from)
+    local len = v:length()
+    if len == 0 then return 0 end
+
     v = v:normalize()
     from = (from or FORWARD):normalize()
 
@@ -105,12 +108,6 @@ end
 -- Determines if the two angles share a halfspace. Assumes that they are based on "to" vectors
 -- to a fixed point from a variable start position.
 local function sharesHalfspace(heading1, heading2)
-    --heading1 = normalizeAngle(heading1)
-    --heading2 = normalizeAngle(heading2)
-
-    -- Determine if the headings are within half a circle of each other
-    --return math.abs(heading1 - heading2) <= PI_OVER_TWO
-
     return angularDistance(heading1, heading2) <= PI_OVER_TWO
 end
 
