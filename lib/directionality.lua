@@ -116,7 +116,8 @@ directionality.faceTarget = function (target, calculationOnly)
 
             local heading = -directionality.vectorAngle(forward, toTarget)
             if not calculationOnly then
-                return directionality.faceDirection(heading)
+                windower.ffxi.turn(heading)
+                --return directionality.faceDirection(heading)
             end
 
             return heading
@@ -143,7 +144,7 @@ directionality.faceAwayFromTarget = function (target, calculationOnly)
 
             local heading = -directionality.vectorAngle(forward, fromTarget)
             if not calculationOnly then
-                return directionality.faceDirection(heading)
+                windower.ffxi.turn(heading)
             end
 
             return heading

@@ -1486,7 +1486,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             sendActionCommand(
                 command,
                 context,
-                0.25
+                0.0
             )
 
             return true
@@ -3092,13 +3092,41 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Trigger if our enemy is in the process of casting a spell
+    context.enemyCastingSpell = function (...)
+        if context.bt then
+            local spells = varargs({...})
+            local info = actionStateManager:getOthersSpellInfo(context.bt)
+            if info then
+                -- We'll match if either no filters were provided, or if the current spell is in the filter list
+                if 
+                    spells[1] == nil or
+                    arrayIndexOfStrI(spells, info.spell.name) 
+                then
+                    context.enemy_spell = info.spell
+
+                    if info.targetId == context.bt.id then
+                        context.enemy_spell_target = context.bt
+                    elseif context.party1_by_id[info.targetId] then
+                        context.enemy_spell_target = context.party1_by_id[info.targetId]
+                    else
+                        context.enemy_spell_target = windower.ffxi.get_mob_by_id(info.targetId)
+                    end
+
+                    return info.spell
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Trigger if our enemy is in the process of using a TP move.
     context.enemyUsingAbility = function (...)
         if context.bt then
             local skills = varargs({...})
             local info = actionStateManager:getMobAbilityInfo(context.bt)
             if info then
-                -- We'll match if either no filters were provided, or if the current  ability is in the filter list
+                -- We'll match if either no filters were provided, or if the current ability is in the filter list
                 if 
                     skills[1] == nil or
                     arrayIndexOfStrI(skills, info.ability.name) 

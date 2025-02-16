@@ -71,15 +71,15 @@ function sendActionCommand(
     end
 
     if commandDuration > 0 then
-        coroutine.sleep(commandDuration)
+        coroutine.sleep(commandDuration)        
+    end
 
-        -- Kick the movement job back on, if any
-        if movementJob then
-            smartMove:reschedule(movementJob)
-        elseif not pauseFollow then
-            -- We'll reset jitter again once the command is done
-            smartMove:resetJitter()
-        end
+    -- Kick the movement job back on, if any
+    if movementJob then
+        smartMove:reschedule(movementJob)
+    elseif not pauseFollow then
+        -- We'll reset jitter again once the command is done
+        smartMove:resetJitter()
     end
 
     -- TODO: Maybe see if there's a better way to figure this out dynamically?
@@ -465,6 +465,8 @@ local function getNextBattleAction(context)
                 context.results                 = { }   -- The results of all current array iterator operations
                 context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
                 context.enemy_ability           = nil   -- The current mob ability
+                context.enemy_spell             = nil   -- The current mob spell
+                context.enemy_spell_target      = nil   -- The current mob spell's target
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
 
@@ -706,7 +708,10 @@ end
 --------------------------------------------------------------------------------------
 -- Processes battle actions in the background
 function cr_actionProcessor()
+    local GARBAGE_COLLECTION_INTERVAL = 30
+
     local startTime = 0 --os.clock()
+    local latestGarbageCollection = os.clock()
 
     while true do
         local sleepTimeSeconds = 0.5
@@ -715,8 +720,16 @@ function cr_actionProcessor()
             compileAllActions()
         end
 
-        local time = os.clock() - startTime
+        local now = os.clock()
+        local time = now - startTime
         local party = windower.ffxi.get_party()
+
+        -- Perform background garbage collection operations
+        local garbageCollectionAge = now - latestGarbageCollection
+        if garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL then
+            actionStateManager:clearOthersSpells(true)
+            latestGarbageCollection = os.clock()
+        end
 
         if globals.enabled then
             local player = windower.ffxi.get_player()

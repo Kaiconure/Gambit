@@ -1,4 +1,4 @@
-__version = '0.95.5-beta8'
+__version = '0.95.5-beta9'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -128,6 +128,9 @@ windower.register_event('zone change', function(zone_id)
     -- Store the new zone
     globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil
 
+    -- Clear tracking info
+    actionStateManager:clearOthersSpells()
+
     -- Disable all the things
     sendSelfCommand('disable -quiet')
     resetCurrentMob(nil, true)
@@ -217,19 +220,26 @@ local PARAM_INTERRUPTED             = 28787 -- Interrupted before completion
 ---------------------------------------------------------------------
 -- Handle actions
 windower.register_event('action', function(action)
-    if action == nil or
+    if
+        action == nil or
         action.actor_id == nil or
         action.param == nil
     then
         return
     end
 
-    local player    = windower.ffxi.get_player()
-    local playerId  = player.id
-    local actorId   = action.actor_id
-    local isSelf    = actorId == playerId
+    local player        = windower.ffxi.get_player()
+    local playerId      = player.id
+    local actorId       = action.actor_id
+    local isSelf        = actorId == playerId
+    local actor         = windower.ffxi.get_mob_by_id(actorId)
+    local isActorValid  = actor 
+        and actor.valid_target 
+        and actor.hpp 
+        and actor.hpp > 0
+    local isActorEnemy  = isActorValid and actor.spawn_type == SPAWN_TYPE_MOB
 
-    if isSelf then
+    if isActorValid then
         local isSpellStart              = action.category == CATEGORY_SPELL_START and action.param == PARAM_STARTED
         local isSpellInterrupted        = action.category == CATEGORY_SPELL_INTERRUPT and action.param == PARAM_INTERRUPTED
         local isSpellSuccessful         = action.category == CATEGORY_SPELL_END
@@ -240,61 +250,93 @@ windower.register_event('action', function(action)
         local isRangedSuccessful    = action.category == CATEGORY_RANGED_END
         local isRangedComplete      = isRangedInterrupted or isRangedSuccessful
 
-        if isSpellStart then            
-            globals.isSpellCasting = true
-            globals.currentSpell = nil
-            globals.spellTarget = nil
-
-            local actionTarget = action.targets and action.targets[1]
-
-            if actionTarget then
-                local targetId = actionTarget.id
-                if targetId then
-                    globals.spellTarget = windower.ffxi.get_mob_by_id(targetId)
+        if isSelf then
+            if isSpellStart then
+                if isSelf then     
+                    globals.isSpellCasting = true
+                    globals.currentSpell = nil
+                    globals.spellTarget = nil
                 end
 
-                local spellId = actionTarget.actions and actionTarget.actions[1] and actionTarget.actions[1].param
-                local spell = spellId and resources.spells[spellId]
+                local actionTarget = action.targets and action.targets[1]
 
-                globals.currentSpell = spell
-            end
+                if actionTarget then
+                    local targetId = actionTarget.id
+                    if targetId then
+                        globals.spellTarget = windower.ffxi.get_mob_by_id(targetId)
+                    end
 
-            if globals.currentSpell then
-                actionStateManager:setSpellStart(globals.currentSpell)
+                    local spellId = actionTarget.actions and actionTarget.actions[1] and actionTarget.actions[1].param
+                    local spell = spellId and resources.spells[spellId]
 
-                local message = 'Casting %s':format(text_spell(globals.currentSpell.name, Colors.verbose))
-                if globals.spellTarget then
-                    message = '%s %s %s':format(message, CHAR_RIGHT_ARROW, text_target(globals.spellTarget.name, Colors.verbose))
+                    globals.currentSpell = spell
                 end
-                writeVerbose(message)
-            else
-                writeVerbose('Casting has started')
+
+                if globals.currentSpell then
+                    actionStateManager:setSpellStart(globals.currentSpell)
+
+                    local message = 'Casting %s':format(text_spell(globals.currentSpell.name, Colors.verbose))
+                    if globals.spellTarget then
+                        message = '%s %s %s':format(message, CHAR_RIGHT_ARROW, text_target(globals.spellTarget.name, Colors.verbose))
+                    end
+                    writeVerbose(message)
+                else
+                    writeVerbose('Casting has started')
+                end
+
+            elseif globals.isSpellCasting and isSpellCastingComplete then
+                actionStateManager:setSpellCompleted(isSpellInterrupted)
+
+                if not isSpellSuccessful then
+                    writeVerbose('  %s has %s!':format(
+                        globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
+                        text_red('been interrupted')
+                    ))
+                end
+                
+                globals.isSpellCasting = false
+                globals.currentSpell = nil
+                globals.spellTarget = nil
             end
+        else
+            if isSpellStart then
+                local actionTarget = action.targets and action.targets[1]
+                local target = nil
+                local spell = nil
 
-        elseif globals.isSpellCasting and isSpellCastingComplete then
-            actionStateManager:setSpellCompleted(isSpellInterrupted)
+                if actionTarget then
+                    local targetId = actionTarget.id
+                    if targetId then
+                        target = windower.ffxi.get_mob_by_id(targetId)
+                    end
 
-            -- writeVerbose('  %s has %s':format(
-            --     globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
-            --     isSpellSuccessful and text_green('completed') or text_red('been interrupted')
-            -- ))
+                    local spellId = actionTarget.actions and actionTarget.actions[1] and actionTarget.actions[1].param
+                    spell = spellId and resources.spells[spellId]
+                end
 
-            if not isSpellSuccessful then
-                writeVerbose('  %s has %s!':format(
-                    globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
-                    text_red('been interrupted')
-                ))
+                if spell and target then
+                    -- writeMessage('%s casting spell %s':format(
+                    --     text_mob(actor.name),
+                    --     text_spell(spell.name)
+                    -- ))
+                    actionStateManager:setOthersSpellStart(spell, actor, target)
+                end
+            elseif isSpellCastingComplete then
+                -- writeMessage('%s\'s casting %s!':format(
+                --     text_mob(actor.name),
+                --     isSpellInterrupted and text_red('interrupted') or text_green('completed')
+                -- ))
+                actionStateManager:setOthersSpellCompleted(actor, isSpellInterrupted)
             end
-            
-            globals.isSpellCasting = false
-            globals.currentSpell = nil
-            globals.spellTarget = nil
         end
 
-        if isRangedStart then
-            actionStateManager:markRangedAttackStart()
-        elseif isRangedComplete then
-            actionStateManager:markRangedAttackCompleted(isRangedSuccessful)
+        -- NOTE: For now, ranged tracking is only for self
+        if isSelf then
+            if isRangedStart then
+                actionStateManager:markRangedAttackStart()
+            elseif isRangedComplete then
+                actionStateManager:markRangedAttackCompleted(isRangedSuccessful)
+            end
         end
     end
 end)
@@ -824,6 +866,13 @@ local _handle_actionChunk = function(id, data)
                         text_red('Chainbound!', Colors.verbose)
                     ))
                 end
+            elseif
+                actor and
+                actor.id == me.id and (
+                    ability.id == 233   -- Sublimation
+                )
+            then
+                actionStateManager:markTimedAbility(ability, target)
             end
         end
     end

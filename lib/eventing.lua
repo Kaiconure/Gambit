@@ -115,6 +115,10 @@ ActionPacket.open_listener(function (act)
                 local ability = actionPacket.raw.param and resources.monster_abilities[actionPacket.raw.param]
 
                 if ability then
+                    -- writeMessage('%s: finishing %s':format(
+                    --     text_mob(actor.name, Colors.verbose),
+                    --     text_weapon_skill(ability.name, Colors.verbose)
+                    -- ))
                     markMobAbilityEnd(actor)
                 end
             end

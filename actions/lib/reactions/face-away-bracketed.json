@@ -8,45 +8,51 @@
     ]
   },
   "vars": {
-    "bracketed_face_away": {
+    "face_away_bracketed": {
       "initiators": ["Primordial Surge"],
       "terminators": ["Waning Vigor", "Expunge"],
+      "mobs": [],
       "triggered": false
     }
   },
   "actions": [
     {
-      "commands": ["setVar('vars.bracketed_face_away.triggered', false)"],
+      "commands": ["setVar('vars.face_away_bracketed.triggered', false)"],
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
-      "comment": "This will run exactly once at the start of any battle, and ensure that the bracketed_face_away flag is cleared."
+      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_bracketed.triggered flag is cleared."
     },
     {
       "when": [
-        "vars.bracketed_face_away.triggered",
-        "enemyUsedAbility(vars.bracketed_face_away.terminators)"
+        "vars.face_away_bracketed.triggered",
+        "enemyUsedAbility(vars.face_away_bracketed.terminators)"
       ],
       "commands": [
-        "setVar('vars.bracketed_face_away.triggered', false)",
+        "setVar('vars.face_away_bracketed.triggered', false)",
         "log('====== END BRACKETED FACE-AWAY SEQUENCE ====== ')"
       ]
     },
     {
       "when": [
-        "not vars.bracketed_face_away.triggered",
-        "enemyUsedAbility(vars.bracketed_face_away.initiators)"
+        "not vars.face_away_bracketed.triggered",
+        "enemyUsedAbility(vars.face_away_bracketed.initiators)",
+        "arrayLength(vars.face_away_bracketed.mobs) == 0 or any(bt.name, vars.face_away_bracketed.mobs)"
       ],
       "commands": [
         "faceAway(bt)",
-        "setVar('vars.bracketed_face_away.triggered', true)",
+        "setVar('vars.face_away_bracketed.triggered', true)",
         "log('====== BEGIN BRACKETED FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
     },
     {
-      "when": "vars.bracketed_face_away.triggered",
-      "commands": ["log('keeping away...')", "faceAway(bt)", "wait(1)"],
+      "when": "vars.face_away_bracketed.triggered",
+      "commands": [
+        "log('Continuing bracketed face away...')",
+        "faceAway(bt)",
+        "wait(1)"
+      ],
       "delay": 0
     }
   ]

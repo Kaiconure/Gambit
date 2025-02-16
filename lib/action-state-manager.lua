@@ -30,6 +30,10 @@ local state_manager = {
         spell = nil
     },
 
+    othersSpells = { },
+
+    timedAbilities = { },
+
     memberBuffs = {        
     },
 
@@ -433,6 +437,66 @@ state_manager.setSpellCompleted = function(self, interrupted)
     }
 end
 
+state_manager.setOthersSpellStart = function(self, spell, actor, target)
+    if spell and actor then
+        local now = os.clock()
+        self.othersSpells[actor.id] = {
+            actorId = actor.id,
+            time = now,
+            expires = now + (spell.cast_time * 2) + 10,
+            spell = spell,
+            interrupted = false,
+            targetId = target and target.id
+        }
+    end
+end
+
+state_manager.setOthersSpellCompleted = function(self, mob, interrupted)
+    if type(mob) == 'table' and type(mob.id) == 'number' then
+        self.othersSpells[mob.id] = nil
+    end
+end
+
+state_manager.getOthersSpellInfo = function(self, mob)
+    if type(mob) == 'table' and type(mob.id) == 'number' then
+        local info = self.othersSpells[mob.id]
+        if 
+            info and
+            info.expires > os.clock() 
+        then
+            return info
+        end
+    end
+end
+
+state_manager.clearOthersSpells = function(self, expiredOnly)
+    if expiredOnly then
+        local now = os.clock()
+        for actorId, info in pairs(self.othersSpells) do
+            if
+                info and
+                info.expires < now
+            then
+                self.othersSpells[actorId] = nil
+            end
+        end
+    else
+        self.othersSpells = { }
+    end
+end
+
+state_manager.markTimedAbility = function(self, ability, target)
+    self.timedAbilities[ability.id] = {
+        ability = ability,
+        time = os.clock(),
+        target = target
+    }
+end
+
+state_manager.getTimedAbilityInfo = function(self, abilityId)
+    return self.timedAbilities[abilityId]
+end
+
 -----------------------------------------------------------------------------------------
 -- 
 state_manager.setMemberBuffs = function(self, buffs)
@@ -706,6 +770,8 @@ state_manager.reset = function (self)
     self.mobAbilities = {}
     self.weaponSkill = { time = 0 }
     self.currentSpell = { time = 0 }
+    self.othersSpells = { }
+    self.timedAbilities = { }
     self.rangedAttack = { time = 0}
     self.actionTypeStartTime = os.clock()
     self.actions = { }

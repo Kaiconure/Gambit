@@ -121,10 +121,12 @@ local function getSettingsFileName(playerName)
 end
 
 local function getActionsFileName(playerName, actionsName)
+    if actionsName == nil then print('no actionsName provided') end
     return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
 end
 
 local function getActionsAlternateFileName(playerName, actionsName)
+    if actionsName == nil then print('no actionsName provided') end
     return string.format('./settings/actions/%s.json', actionsName)
 end
 

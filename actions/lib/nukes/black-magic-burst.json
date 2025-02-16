@@ -11,8 +11,10 @@
       ],
       "commands": [
         "log('Magic bursting', skillchain.name, 'with', spell.name)",
+        "equipMany(vars.black_magic_burst.gear.casting)",
         "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
-        "useSpell()"
+        "useSpell()",
+        "equipMany(vars.black_magic_burst.gear.battle)"
       ],
       "comment": [
         "Burst with single-target black magic spells. Customize by defining variables: max_tier, min_mpp",
@@ -25,6 +27,10 @@
       "max_tier": "III",
       "min_mpp": 25,
       "abilities": ["Elemental Seal", "Manawell"],
+      "gear": {
+        "casting": [],
+        "battle": []
+      },
       "Darkness": [
         "Blizzard VI",
         "Water VI",

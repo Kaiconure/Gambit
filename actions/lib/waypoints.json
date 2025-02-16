@@ -20,7 +20,8 @@
         "vars.waypoints.mode == 'bounce'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
         "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
-        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])"
+        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])",
+        "result and not checkPosition(result)"
       ],
       "commands": [
         "is_new_result and log('Bouncing to', vars.waypoints.active, 'location', result.x, result.y)",
@@ -36,7 +37,8 @@
         "vars.waypoints.mode == 'cycle'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
         "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
-        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])"
+        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])",
+        "result and not checkPosition(result)"
       ],
       "commands": [
         "is_new_result and log('Cycling to', vars.waypoints.active, 'location', result.x, result.y)",
@@ -52,7 +54,8 @@
         "vars.waypoints.mode == 'bounce'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
         "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
-        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])"
+        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints.routes[vars.waypoints.active])",
+        "result and not checkPosition(result)"
       ],
       "commands": [
         "is_new_result and log('Bouncing to', vars.waypoints.active, 'location', result.x, result.y)",
@@ -69,7 +72,8 @@
         "vars.waypoints.mode == 'cycle'",
         "vars.waypoints.active and vars.waypoints.routes and vars.waypoints.routes[vars.waypoints.active]",
         "mobsInRange(vars.waypoints.max_aggro_range, true) < vars.waypoints.max_aggro or (actionType == 'idle' and not bt)",
-        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])"
+        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints.routes[vars.waypoints.active])",
+        "result and not checkPosition(result)"
       ],
       "commands": [
         "is_new_result and log('Cycling to', vars.waypoints.active, 'location', result.x, result.y)",
