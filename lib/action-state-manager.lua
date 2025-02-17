@@ -30,6 +30,9 @@ local state_manager = {
         spell = nil
     },
 
+    meritPointInfo = { current = 0, max = 30, limits = 0 },
+    capacityPointInfo = { capacityPoints = 0, jobPoints = 0 },
+
     othersSpells = { },
 
     timedAbilities = { },
@@ -86,6 +89,31 @@ end
 -- Set the most recently created context
 state_manager.getContext = function(self)
     return self.context
+end
+
+-----------------------------------------------------------------------------------------
+-- Set/get merit/limit point info
+state_manager.setMeritPointInfo = function(self, current, max, limits)
+    self.meritPointInfo = {
+        current = current,
+        max = max > 0 and max or 30,
+        limits = limits
+    }
+end
+state_manager.getMeritPointInfo = function(self)
+    return self.meritPointInfo
+end
+
+-----------------------------------------------------------------------------------------
+-- Set/get capacity/job point info
+state_manager.setCapacityPointInfo = function(self, capacityPoints, jobPoints)
+    self.capacityPointInfo = {
+        capacityPoints = capacityPoints,
+        jobPoints = jobPoints
+    }
+end
+state_manager.getCapacityPointInfo = function(self)
+    return self.capacityPointInfo
 end
 
 -----------------------------------------------------------------------------------------
@@ -772,10 +800,12 @@ state_manager.reset = function (self)
     self.currentSpell = { time = 0 }
     self.othersSpells = { }
     self.timedAbilities = { }
-    self.rangedAttack = { time = 0}
+    self.rangedAttack = { time = 0 }
     self.actionTypeStartTime = os.clock()
     self.actions = { }
     self.vars = { }
+    self.meritPointInfo = { current = 0, max = 30, limits = 0 }
+    self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0 }
     -- self.memberBuffs = { }   -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
     -- self.mobBuffs = { }    -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
 end

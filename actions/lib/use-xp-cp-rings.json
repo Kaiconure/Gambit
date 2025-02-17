@@ -33,6 +33,21 @@
       ],
       "frequency": 15,
       "comment": "Use the first available XP ring if we don't have the Dedication effect. Only used if level is below 99."
+    },
+    {
+      "when": [
+        "me.level == 99",
+        "hasCappedMerits()",
+        "not hasBuff(\"Emporox's Gift\")",
+        "canUseItem(\"Emporox's Ring\")"
+      ],
+      "commands": [
+        "equip(vars.use_xp_cp_rings.slot)",
+        "wait(7, 'pause-follow')",
+        "useItem(me)"
+      ],
+      "frequency": 15,
+      "comment": "Use Emperox's Ring when we're at max level and max limits."
     }
   ],
   "vars": {

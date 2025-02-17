@@ -1240,6 +1240,12 @@ local function loadContextTargetSymbols(context, target)
     context.party1_trusts = {}
     context.pinfo = {}
 
+    local cpi = actionStateManager:getCapacityPointInfo()
+    context.jobPoints = tonumber(cpi and cpi.jobPoints) or 0
+
+    local mpi = actionStateManager:getMeritPointInfo()
+    context.meritPoints = tonumber(mpi and mpi.current) or 0
+
     for i = 0, 5 do
         local p = 'p' .. i
         local a1 = 'a1' .. i
@@ -1448,6 +1454,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local command = ''
         local count = 0
 
+        if context.action then
+            context.action.equipment_exclusion_list = { }
+        end
+
         if type(entries[1]) == 'string' then
             for i = 1, #entries, 2 do 
                 local slot = entries[i]
@@ -1478,16 +1488,23 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
 
-        if command ~= '' then
+        -- Reset the exclusion list again
+        if context.action then
+            context.action.equipment_exclusion_list = { }
+        end
+
+        if count > 0 then
             writeVerbose('Equipping %s':format(
                 pluralize(count, 'gear item', 'gear items', Colors.verbose)
             ))
 
-            sendActionCommand(
-                command,
-                context,
-                0.0
-            )
+            if command ~= '' then
+                sendActionCommand(
+                    command,
+                    context,
+                    0.0
+                )
+            end
 
             return true
         end
@@ -1642,16 +1659,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.item = nil
 
         if #items > 0 then
+            local flags = { equippable = true, equipped = false }
             local all_items = windower.ffxi.get_items()
             for key, item in ipairs(items) do
                 local item = inventory.find_item(
                     item,
-                    { equippable = true, equipped = false },
-                    all_items
-                )
+                    flags,
+                    all_items,
+                    context.action and context.action.equipment_exclusion_list)
 
                 if item then
-                    if not context.isEquipmentInSlot(item.slot, item, false, all_items) then
+                    if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
                         context.item = item
                         return context.item
                     end
@@ -1668,13 +1686,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.item = nil
 
         if #items > 0 then
+            local flags = { equippable = true, equipped = false }
             local all_items = windower.ffxi.get_items()
             for key, item in ipairs(items) do
-                local item = inventory.find_item(
-                    item,
-                    { equippable = true, equipped = false },
-                    all_items
-                )
+                local item = inventory.find_item(item,
+                    flags,
+                    all_items,
+                    context.action and context.action.equipment_exclusion_list)
 
                 if item then
                     if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
@@ -3497,6 +3515,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         local command = table.concat(commands, ';')
         sendActionCommand(command, context, 10)
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if we're already at the merit point cap
+    context.hasCappedMerits = function()
+        local mpi = actionStateManager:getMeritPointInfo()
+        if 
+            mpi and
+            type(mpi.current) == 'number' and
+            mpi.current == mpi.max
+        then
+            return true
+        end
     end
 
     --------------------------------------------------------------------------------------

@@ -119,10 +119,30 @@ local GEAR_SLOT_IDS_BY_NAME = {
     ['ear2'] = 12,
     ['ring1'] = 13,
     ['ring2'] = 14,
-    ['back'] = 15
+    ['back'] = 15,
+
+    -- Alternate ear slot names
+    ['left_ear'] = 11,
+    ['right_ear'] = 12,
+
+    -- Alternate ring slot names
+    ['left_ring'] = 13,
+    ['right_ring'] = 14
 }
 
+--
+-- Find the id of the gear slot with the specified name
+--
+inventory.get_slot_id_by_name = function(slot)
+    return GEAR_SLOT_IDS_BY_NAME[string.lower(slot)]
+end
 
+--
+-- Find the name of the gear slot with the specified id
+--
+inventory.get_slot_name_by_id = function(id)
+    return GEAR_SLOT_NAMES_BY_ID[id]
+end
 
 --
 -- Find the actual item resource represented by the specified bag location.
@@ -194,7 +214,19 @@ inventory.find_equipment_in_slot = function(slot, items)
         items)
 end
 
-inventory.find_item = function(item, flags, items)
+local function is_item_excluded(exclusion_list, bagId, localId)
+    if type(exclusion_list) ~= 'table' or #exclusion_list < 1 then
+        return
+    end
+
+    for i, entry in ipairs(exclusion_list) do
+        if entry.bagId == bagId and entry.localId == localId then
+            return true
+        end
+    end
+end
+
+inventory.find_item = function(item, flags, items, exclusion_list)
     flags = flags or default_find_item_flags
 
     local only_usable = flags.usable
@@ -248,7 +280,11 @@ inventory.find_item = function(item, flags, items)
             --  19: Linkshell Equipped
             --  25: In Bazaar
 
-            if bagItem and item then
+            if 
+                bagItem and
+                item and
+                not is_item_excluded(exclusion_list, bagId, bagItem.slot)
+            then
                 local ext = extdata.decode(bagItem)
 
                 local chargesRemaining = 1

@@ -21,6 +21,7 @@
     {
       "when": [
         "vars.keep_ammo.ammo and vars.keep_ammo.pouch",
+        "actionType == 'battle' or (not bt or not bt.has_claim)",
         "not canRangedAttack() and findUsableItem(vars.keep_ammo.pouch)"
       ],
       "commands": ["log('Using ammo pouch:', item.name)", "useItem()"],

@@ -1,4 +1,4 @@
-__version = '0.95.5-beta9'
+__version = '0.95.5-beta10'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -344,6 +344,9 @@ end)
 ---------------------------------------------------------------------
 -- Job change
 windower.register_event('job change', function()
+    actionStateManager:setMeritPointInfo(0, 0, 0)
+    actionStateManager:setCapacityPointInfo(0, 0)
+
     reloadSettings()
 end)
 
@@ -917,6 +920,38 @@ local _handle_actionMessageChunk = function(id, data)
     end
 end
 
+local _handle_limitCapacityChunk = function(id, data)
+    local packet = packets.parse('incoming', data)
+
+    if packet['Order'] == 2 then
+        local limitPoints = packet['Limit Points']
+        local numMerits = packet['Merit Points']
+        local maxMerits = packet['Max Merit Points']
+
+        -- writeMessage('Limit Event: MERITS=%d, MAX=%d, LIMITS=%d':format(
+        --     numMerits,
+        --     maxMerits,
+        --     limitPoints
+        -- ))
+
+        actionStateManager:setMeritPointInfo(numMerits, maxMerits, current)
+    elseif packet['Order'] == 5 then
+        local player = windower.ffxi.get_player()
+        if player then
+            local job = player.main_job_full
+            local numCapacityPoints = packet[job..' Capacity Points']
+            local numJobPoints = packet[job..' Job Points']
+
+            -- writeMessage('Capacity Event: CP=%d, JP=%d':format(
+            --    numCapacityPoints,
+            --    numJobPoints
+            -- ))
+
+            actionStateManager:setCapacityPointInfo(numCapacityPoints, numJobPoints)
+        end
+    end
+end
+
 ---------------------------------------------------------------------
 -- Incoming chunks (chunks are individual pieces of a packet)
 windower.register_event('incoming chunk', function (id, data)
@@ -932,5 +967,9 @@ windower.register_event('incoming chunk', function (id, data)
         id == 0x029     -- Action message (tracks expiring effects, etc)
     then
         _handle_actionMessageChunk(id, data)
+    elseif
+        id == 0x063     -- Limit Point and Capacity Point updates
+    then
+        _handle_limitCapacityChunk(id, data)
     end
 end)
