@@ -1,7 +1,11 @@
 --------------------------------------------------------------------------------------
 -- These are mobs that should be ignored when you have an elvorseal
 local ELVORSEAL_BACKGROUND_MOBS = {
-    "Eschan Il'Aern"
+    "Eschan Corse",
+    "Eschan Il'Aern",
+    "Eschan Sorcerer",
+    "Eschan Warrior",
+    "Eschan Yovra",
 }
 
 --------------------------------------------------------------------------------------
@@ -94,8 +98,9 @@ local function shouldAquireNewTarget(player, party, party_by_id)
                     text_number('%.1f':format(currentTarget:runtime())),
                     text_number(currentMob.claim_id)
                 ))
-                windower.ffxi.follow(-1)
+                smartMove:cancelJob()
                 windower.send_command('input /attack off')
+
                 resetCurrentMob(nil)
             else
                 return false
@@ -232,6 +237,26 @@ function processTargeting(player, party)
     player = player or windower.ffxi.get_player()
     party = party or windower.ffxi.get_party()
 
+    if actionStateManager.user_target_id then
+        local id = actionStateManager.user_target_id
+        actionStateManager.user_target_id = nil
+
+        local mob = windower.ffxi.get_mob_by_id(id)
+        if
+            mob and
+            mob.valid_target and
+            mob.hpp > 0 and
+            mob.spawn_type == SPAWN_TYPE_MOB
+        then
+            smartMove:cancelJob()
+            windower.send_command('input /attack off')
+            coroutine.sleep(1)
+            setTargetMob(mob)
+
+            return
+        end
+    end
+
     -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
     local party_by_id = { }
     if party.p0 and party.p0.mob then party_by_id[party.p0.mob.id] = party.p0 end
@@ -312,7 +337,7 @@ function processTargeting(player, party)
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
             and (candidateMob.status == STATUS_ENGAGED or can_initiate)
-            and (not hasElvorseal or not arrayIndexOfStrI(ELVORSEAL_BACKGROUND_MOBS, candidateMob.name))
+            and (not hasElvorseal or not stringStartsWith(candidateMob.name, 'Eschan')) -- not arrayIndexOfStrI(ELVORSEAL_BACKGROUND_MOBS, candidateMob.name))
 
 
         -- This ensures that the 'puller' strategy only tries to get mobs that are at full health,

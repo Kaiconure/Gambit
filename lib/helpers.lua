@@ -118,6 +118,12 @@ function arraysIntersect(a1, a2)
     end
 end
 
+-------------------------------------------------------------------------------
+-- Append an item to an array
+function arrayAppend(array, item)
+    array[#array + 1] = item
+end
+
 --------------------------------------------------------------------------------------
 -- Determine if the two string arrays have a non-empty intersect set, with
 -- a case-insensitive comparison operation
@@ -161,10 +167,12 @@ end
 
 --------------------------------------------------------------------------------------
 -- Find the index of the specified array key, or nil
-function arrayIndexOfStrI(array, search)
+function arrayIndexOfStrI(array, search, start)
     if isArray(array) and search ~= nil then
         search = string.lower(search)
-        for index, value in ipairs(array) do
+        --for index, value in ipairs(array) do
+        for index = (start or 1), #array do
+            local value = array[index]
             if value ~= nil and string.lower(tostring(value)) == search then
                 return index
             end

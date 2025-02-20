@@ -54,7 +54,6 @@
       ],
       "commands": [
         "not following(bt) and follow(bt, vars.frontline_engagement.distance) and log('Unexpected: Initiated melee range following')",
-        "debug('Getting into frontline position with distance =', bt.distance)",
         "wait(1)"
       ],
       "comment": "Ensure that we get into melee range without executing later actions."

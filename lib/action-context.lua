@@ -1451,12 +1451,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         if #entries == 0 then return end
 
-        local command = ''
         local count = 0
+        local commands = {}
 
-        if context.action then
-            context.action.equipment_exclusion_list = { }
-        end
+        context.equipment_exclusion_list = { }      
 
         if type(entries[1]) == 'string' then
             for i = 1, #entries, 2 do 
@@ -1465,8 +1463,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
                 if slot and equipment then
                     if context.findUnequippedItem(equipment) then
-                        command = command .. 
-                            'input /equip %s "%s";':format(slot, equipment)
+                        arrayAppend(commands, 'input /equip %s "%s"':format(slot, equipment))
                         count = count + 1
                     end
                 end
@@ -1479,8 +1476,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
                     if slot and equipment then
                         if context.findUnequippedItem(equipment) then
-                            command = command .. 
-                                'input /equip %s "%s";':format(slot, equipment)
+                            arrayAppend(commands, 'input /equip %s "%s"':format(slot, equipment))
                             count = count + 1
                         end
                     end
@@ -1490,21 +1486,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         -- Reset the exclusion list again
         if context.action then
-            context.action.equipment_exclusion_list = { }
+            context.equipment_exclusion_list = { }
         end
 
         if count > 0 then
-            writeVerbose('Equipping %s':format(
+            writeVerbose('Equipping: %s':format(
                 pluralize(count, 'gear item', 'gear items', Colors.verbose)
             ))
 
-            if command ~= '' then
-                sendActionCommand(
-                    command,
-                    context,
-                    0.0
-                )
-            end
+            sendActionCommand(
+                table.concat(commands, ';'),
+                context,
+                0.0
+            )
 
             return true
         end
@@ -1642,7 +1636,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.item = inventory.find_item(
                     item,
                     { equippable = true },
-                    all_items
+                    all_items,
+                    context.equipment_exclusion_list
                 )
 
                 if context.item then
@@ -1666,7 +1661,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     item,
                     flags,
                     all_items,
-                    context.action and context.action.equipment_exclusion_list)
+                    context.equipment_exclusion_list)
 
                 if item then
                     if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
@@ -1692,7 +1687,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local item = inventory.find_item(item,
                     flags,
                     all_items,
-                    context.action and context.action.equipment_exclusion_list)
+                    context.equipment_exclusion_list)
 
                 if item then
                     if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
@@ -2732,6 +2727,58 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         return count
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Returns all mobs with the given name(s) within the specified distance. If the 
+    -- first argument is a number, it will be treated as the search radius; otherwise,
+    -- a distance value of 50 will be used by default.
+    context.findMobs = function(...)
+        local count = 0
+        local distance = 50
+        local names = varargs({...})
+        local results = { }
+        local start = nil
+
+        if type(names[1]) == 'number' then
+            distance = names[1]
+            start = 2
+        end
+
+        if distance > 0 then
+            local mobs = windower.ffxi.get_mob_array()
+            local distanceSquared = distance * distance
+
+            for key, mob in pairs(mobs) do
+                if 
+                    mob.spawn_type == SPAWN_TYPE_MOB and
+                    mob.valid_target and
+                    mob.hpp > 0 and
+                    mob.distance <= distanceSquared
+                then
+                    if 
+                        names[1] == nil or
+                        arrayIndexOfStrI(names, mob.name, start) 
+                    then
+                        arrayAppend(results, mob)
+                        count = count + 1
+                    end
+                end
+            end
+        end
+
+        return count > 0
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Forces the next battle target to the specified mob (id or object)
+    context.setBattleTarget = function(mob)
+        if type(mob) == 'table' and mob[1] then mob = mob[1] end
+        if type(mob) == 'table' then mob = mob.id end
+        if type(mob) == 'number' then
+            actionStateManager.user_target_id = mob
+            return true
+        end
     end
 
     -------------------------------------------------------------------------------------

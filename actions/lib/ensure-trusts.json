@@ -19,7 +19,8 @@
         "log('Calling trust:', spell.name)",
         "callTrust()",
         "wait(1.5)"
-      ]
+      ],
+      "delay": 0
     },
     {
       "when": [
@@ -33,7 +34,8 @@
         "wait(1)",
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
-      ]
+      ],
+      "delay": 0
     },
     {
       "when": [
@@ -50,7 +52,8 @@
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
       ],
-      "scope": "battle"
+      "scope": "battle",
+      "delay": 0
     },
     {
       "when": [
@@ -69,7 +72,8 @@
         "useSpell(me)",
         "wait(1.0)"
       ],
-      "scope": "battle"
+      "scope": "battle",
+      "delay": 0
     }
   ]
 }

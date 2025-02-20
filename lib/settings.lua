@@ -174,10 +174,26 @@ local function loadVars(original, incoming)
     end
 end
 
+local CURRENT_MACRO_KEY = 1
+local currentMacroKey = function()
+    return tostring(CURRENT_MACRO_KEY)
+end
+local incrementMacroKey = function () 
+    CURRENT_MACRO_KEY = CURRENT_MACRO_KEY + 1
+    return tostring(CURRENT_MACRO_KEY)
+end
+local resetMacroKey = function() 
+    CURRENT_MACRO_KEY = 1
+    return tostring(CURRENT_MACRO_KEY)
+end
+local baseMacroKey = function()
+    return "1"
+end
+
 ----------------------------------------------------------------------------------------
 -- Pulls the next round of imports into the specified actions array. Returns
 -- true if new actions were imported as part of this pass.
-local function _loadActionImportsInternal(playerName, baseActions, actionType)
+local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
     local imported = false
 
     local actions = baseActions and baseActions[actionType]
@@ -214,11 +230,6 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
                         --
                         -- Pull in any variables defined in this import. Existing values are not overwritten.
                         if import.vars then
-                            -- for name, val in pairs(import.vars) do
-                            --     if baseActions.vars[name] == nil then
-                            --         baseActions.vars[name] = val
-                            --     end
-                            -- end
                             loadVars(baseActions.vars, import.vars)
                         end
 
@@ -231,11 +242,20 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
                             import.actions and
                             #import.actions > 0
                         then
+                            local macro_key = nil
+                            if type(import.macros) == 'table' then
+                                macro_key = incrementMacroKey()
+                                baseActions.keyed_macros[macro_key] = import.macros
+                            end
+                            
+                            import.macros = nil
+
                             for j = #import.actions, 1, -1 do
                                 local importedAction = import.actions[j]
                                 if importedAction then
                                     imported = true
                                     importedAction.importedFrom = action.import
+                                    importedAction.macro_key = macro_key
 
                                     table.insert(actions, i, importedAction)
                                 end
@@ -248,12 +268,122 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
                         text_gold(action.import)
                     ))
                 end
+            else
+                if 
+                    not action.import and
+                    pass == 1 and
+                    not action.macro_key 
+                then
+                    action.macro_key = baseMacroKey()
+                end
             end
         end
     end
 
     return imported
 end
+
+local function _expandActionMacrosToArray(macros, array)
+    -- If we have a macro table, iterate through all entries.
+    -- Note: At this point, we're guaranteed that there will be no nested macros; they
+    -- have all been expaned by the settings loader. We just need to insert them.
+    if type(array) == 'table' then
+        for i = #array, 1, -1 do
+            local clause = trimString(array[i])
+            if stringStartsWith(clause, '$macro:') or stringStartsWith(clause, '$macro.') then
+                local key = string.sub(clause, 8)
+                if type(macros[key]) == 'table' then
+                    table.remove(array, i)
+                    for j = #macros[key], 1, -1 do
+                        table.insert(array, i, macros[key][j])
+                    end
+                else
+                    array[i] = clause
+                end
+            end
+        end
+    end
+ end
+
+ local function _expandActionMacros(loadedData, action)
+    local macro_key = action and action.macro_key
+    if type(macro_key) == 'string' then
+        local macros = loadedData.keyed_macros and loadedData.keyed_macros[macro_key]
+        if type(macros) == 'table' then
+            -- Promote string actions and commands to tables to simplify macro insertion
+            if type(action.when) == 'string' then
+                action.when = { action.when }
+            end
+            if type(action.commands) == 'string' then
+                action.commands = { action.commands }
+            end
+            
+            _expandActionMacrosToArray(macros, action.when)
+            _expandActionMacrosToArray(macros, action.commands)
+        end
+    end
+ end
+
+ local function _processMacros(loadedData)
+    local MAX_PASSES = 10
+
+    for
+        -- Iterate over each keyed set in the actions file
+        key, keyed_set in pairs(loadedData.keyed_macros) 
+    do
+        for
+            -- Within the keyed set, iterate over each named set
+            macro_set_name, macro_set in pairs(keyed_set) 
+        do
+            local passes = 0
+            local num_replacements
+
+            while passes <= MAX_PASSES and num_replacements ~= 0 do
+                num_replacements = 0   
+                for i = #macro_set, 1, -1 do
+                    local macro = trimString(macro_set[i])
+
+                    if 
+                        stringStartsWith(macro, '$macro:') or
+                        stringStartsWith(macro, '$macro.')
+                    then
+                        table.remove(macro_set, i)
+                        local replacement_name = string.sub(macro, 8)
+                        local replacement = keyed_set[replacement_name]
+                        if replacement then
+                            for j = #replacement, 1, -1 do
+                                table.insert(macro_set, i, replacement[j])
+                            end
+                        end
+
+                        num_replacements = num_replacements + 1
+                    else
+                        macro_set[i] = macro
+                    end
+                end
+
+                passes = passes + 1
+            end
+
+            if passes > MAX_PASSES then
+                writeMessage('Warning: The maximum number of macro passes (%s) was exceeded.':format(
+                text_number(passes)
+            ))
+            end
+        end
+    end
+
+    -- Now, expand all macros into their respective actions
+    local actionTypes = {'battle', 'pull', 'idle', 'resting', 'dead'}
+    for i, actionType in ipairs(actionTypes) do
+        local actions = loadedData and loadedData[actionType]
+        if type(actions) == 'table' then
+            for i, action in ipairs(actions) do
+                _expandActionMacros(loadedData, action)
+            end
+        end
+    end
+ end
 
 ----------------------------------------------------------------------------------------
 --
@@ -264,13 +394,17 @@ local function loadActionImports(playerName, actions)
         local MAX_PASSES = 10
         local types = {'battle', 'pull', 'idle', 'resting', 'dead', 'imports'}
 
+        actions.keyed_macros = { }
+        actions.keyed_macros[resetMacroKey()] = actions.macros or { }
+        actions.macros = nil
+
         for i = 1, #types do
             local actionType = types[i]
             local passes = 0
 
             -- Prevent runaway, infinite imports. Most likely caused if an include references 
             -- itself. Let's not crash the game because of a mistake or typo.
-            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType) do
+            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType, passes + 1) do
                 passes = passes + 1
             end
 
@@ -281,6 +415,8 @@ local function loadActionImports(playerName, actions)
                 ))
             end
         end
+
+        _processMacros(actions)
     end
 end
 

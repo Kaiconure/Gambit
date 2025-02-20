@@ -257,9 +257,9 @@ function string_trim(s)
     return ''
  end
 
---------------------------------------------------------------------------------------
+ --------------------------------------------------------------------------------------
 -- Recompiles the specified action type
-local function compileActions(actionType, rawActions)
+local function compileActions(actionType, parent, rawActions)
     --writeMessage(string.format('Recompiling [%s] actions...', actionType))
 
     if isArray(rawActions) then
@@ -392,11 +392,11 @@ local function compileAllActions()
 
     local actions = settingsCopy.actions
 
-    compileActions('battle',    actions and actions.battle or {})
-    compileActions('pull',      actions and actions.pull or {})
-    compileActions('idle',      actions and actions.idle or {})
-    compileActions('resting',   actions and actions.resting or {})
-    compileActions('dead',      actions and actions.dead or {})
+    compileActions('battle',    actions, actions and actions.battle or {})
+    compileActions('pull',      actions, actions and actions.pull or {})
+    compileActions('idle',      actions, actions and actions.idle or {})
+    compileActions('resting',   actions, actions and actions.resting or {})
+    compileActions('dead',      actions, actions and actions.dead or {})
 
     actionStateManager.vars = actions and actions.vars or {}
 
@@ -469,6 +469,8 @@ local function getNextBattleAction(context)
                 context.enemy_spell_target      = nil   -- The current mob spell's target
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
+                
+                context.equipment_exclusion_list = nil  -- The list of gear excluded from equipment checks (dynamic by action)
 
                 -- Reload the enumerator data
                 if 

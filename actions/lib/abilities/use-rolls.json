@@ -159,7 +159,7 @@
       "commands": [
         "log('Rolling snake eyes on', latestRoll.name, 'from', latestRoll.count)",
         "use(me, 'Snake Eye')",
-        "wait(0.5)",
+        "wait(1.0)",
         "use(me, 'Double-Up')",
         "wait(1.0)"
       ]
