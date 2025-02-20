@@ -2445,6 +2445,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local furthesti = context.furthestIndex(args)
         if furthesti then
             context.point = args[furthesti]
+            context.furthest_result = context.point
+            context.farthest_result = context.point
             return context.point
         end
     end
@@ -2485,6 +2487,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local nearesti = context.nearestIndex(args)
         if nearesti then
             context.point = args[nearesti]
+            context.nearest_result = context.point
             return context.point
         end
     end
@@ -2767,7 +2770,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
 
-        return count > 0
+        return count > 0 and results or nil
     end
 
     --------------------------------------------------------------------------------------

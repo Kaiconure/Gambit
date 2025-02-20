@@ -195,7 +195,6 @@ end
 -- true if new actions were imported as part of this pass.
 local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
     local imported = false
-
     local actions = baseActions and baseActions[actionType]
     if actions then
         if baseActions.vars == nil then
@@ -236,26 +235,29 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                         -- Remove the import reference from the calling action
                         table.remove(actions, i)
 
-                        -- Now, if the import has its own actions we will insert them in place
-                        -- of the original import reference
+                        -- Pull in the macros
+                        if type(import.macros) == 'table' then
+                            local macros = type(import.macros) == 'table' and import.macros or { }
+
+                            for name, macro in pairs(macros) do
+                                if baseActions.macros[name] == nil then
+                                    baseActions.macros[name] = macro
+                                end
+                            end
+                        end                        
+                        import.macros = nil
+
+                        -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
+                        -- then the originating import action will simply be removed.
                         if 
                             import.actions and
                             #import.actions > 0
                         then
-                            local macro_key = nil
-                            if type(import.macros) == 'table' then
-                                macro_key = incrementMacroKey()
-                                baseActions.keyed_macros[macro_key] = import.macros
-                            end
-                            
-                            import.macros = nil
-
                             for j = #import.actions, 1, -1 do
                                 local importedAction = import.actions[j]
                                 if importedAction then
                                     imported = true
                                     importedAction.importedFrom = action.import
-                                    importedAction.macro_key = macro_key
 
                                     table.insert(actions, i, importedAction)
                                 end
@@ -306,21 +308,18 @@ local function _expandActionMacrosToArray(macros, array)
  end
 
  local function _expandActionMacros(loadedData, action)
-    local macro_key = action and action.macro_key
-    if type(macro_key) == 'string' then
-        local macros = loadedData.keyed_macros and loadedData.keyed_macros[macro_key]
-        if type(macros) == 'table' then
-            -- Promote string actions and commands to tables to simplify macro insertion
-            if type(action.when) == 'string' then
-                action.when = { action.when }
-            end
-            if type(action.commands) == 'string' then
-                action.commands = { action.commands }
-            end
-            
-            _expandActionMacrosToArray(macros, action.when)
-            _expandActionMacrosToArray(macros, action.commands)
+    local macros = loadedData.macros
+    if type(macros) == 'table' then
+        -- Promote string actions and commands to tables to simplify macro insertion
+        if type(action.when) == 'string' then
+            action.when = { action.when }
         end
+        if type(action.commands) == 'string' then
+            action.commands = { action.commands }
+        end
+        
+        _expandActionMacrosToArray(macros, action.when)
+        _expandActionMacrosToArray(macros, action.commands)
     end
  end
 
@@ -328,48 +327,42 @@ local function _expandActionMacrosToArray(macros, array)
     local MAX_PASSES = 10
 
     for
-        -- Iterate over each keyed set in the actions file
-        key, keyed_set in pairs(loadedData.keyed_macros) 
+        macro_set_name, macro_set in pairs(loadedData.macros) 
     do
-        for
-            -- Within the keyed set, iterate over each named set
-            macro_set_name, macro_set in pairs(keyed_set) 
-        do
-            local passes = 0
-            local num_replacements
+        local passes = 0
+        local num_replacements
 
-            while passes <= MAX_PASSES and num_replacements ~= 0 do
-                num_replacements = 0   
-                for i = #macro_set, 1, -1 do
-                    local macro = trimString(macro_set[i])
+        while passes <= MAX_PASSES and num_replacements ~= 0 do
+            num_replacements = 0   
+            for i = #macro_set, 1, -1 do
+                local macro = trimString(macro_set[i])
 
-                    if 
-                        stringStartsWith(macro, '$macro:') or
-                        stringStartsWith(macro, '$macro.')
-                    then
-                        table.remove(macro_set, i)
-                        local replacement_name = string.sub(macro, 8)
-                        local replacement = keyed_set[replacement_name]
-                        if replacement then
-                            for j = #replacement, 1, -1 do
-                                table.insert(macro_set, i, replacement[j])
-                            end
+                if 
+                    stringStartsWith(macro, '$macro:') or
+                    stringStartsWith(macro, '$macro.')
+                then
+                    table.remove(macro_set, i)
+                    local replacement_name = string.sub(macro, 8)
+                    local replacement = loadedData.macros[replacement_name]
+                    if replacement then
+                        for j = #replacement, 1, -1 do
+                            table.insert(macro_set, i, replacement[j])
                         end
-
-                        num_replacements = num_replacements + 1
-                    else
-                        macro_set[i] = macro
                     end
+
+                    num_replacements = num_replacements + 1
+                else
+                    macro_set[i] = macro
                 end
-
-                passes = passes + 1
             end
 
-            if passes > MAX_PASSES then
-                writeMessage('Warning: The maximum number of macro passes (%s) was exceeded.':format(
-                text_number(passes)
-            ))
-            end
+            passes = passes + 1
+        end
+
+        if passes > MAX_PASSES then
+            writeMessage('Warning: The maximum number of macro passes (%s) was exceeded.':format(
+            text_number(passes)
+        ))
         end
     end
 
@@ -394,9 +387,7 @@ local function loadActionImports(playerName, actions)
         local MAX_PASSES = 10
         local types = {'battle', 'pull', 'idle', 'resting', 'dead', 'imports'}
 
-        actions.keyed_macros = { }
-        actions.keyed_macros[resetMacroKey()] = actions.macros or { }
-        actions.macros = nil
+        actions.macros = type(actions.macros) == 'table' and actions.macros or { }
 
         for i = 1, #types do
             local actionType = types[i]

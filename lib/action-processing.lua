@@ -462,6 +462,9 @@ local function getNextBattleAction(context)
                 context.mob                     = nil   -- The result of a mob search iterator
                 context.point                   = nil   -- The result of a position lookup
                 context.result                  = nil   -- The result of the latest arrayiterator operation
+                context.nearest_result          = nil   -- The result of a nearest operation
+                context.farthest_result         = nil   -- The result of a farthest/furthest operation
+                context.furthest_result         = nil   -- The (alternate) result of a farthest/furthest operation
                 context.results                 = { }   -- The results of all current array iterator operations
                 context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
                 context.enemy_ability           = nil   -- The current mob ability
