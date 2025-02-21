@@ -201,6 +201,22 @@ function tableFirst(table, fn)
 end
 
 --------------------------------------------------------------------------------------
+-- Build an array of all elements of table that have a truthful result from fn
+function tableAll(table, fn)
+    local results = { }
+
+    if type(table) == 'table' and type(fn) == 'function' then
+        for key, val in pairs(table) do
+            if fn(val, key) then 
+                arrayAppend(results, val)
+            end
+        end
+    end
+
+    return results
+end
+
+--------------------------------------------------------------------------------------
 -- Trims leading and trailing whitespace from a string
 function trimString(s)
     if type(s) == 'string' then

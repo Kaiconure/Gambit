@@ -29,7 +29,7 @@
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to debuff', effect.name)",
-        "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
+        "vars.ensure_trusts.stationary or member.distance >= 5 or move(member.x, member.y, 5, -1)",
         "releaseTrust(member.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
@@ -46,7 +46,7 @@
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
-        "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
+        "vars.ensure_trusts.stationary or member.distance >= 5 or move(member.x, member.y, 5, -1)",
         "releaseTrust(member.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
@@ -64,7 +64,7 @@
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
-        "vars.ensure_trusts.stationary or move(member.x, member.y, 5, -1)",
+        "vars.ensure_trusts.stationary or member.distance >= 5 or move(member.x, member.y, 5, -1)",
         "wait(2.5)",
         "releaseTrust(member.name)",
         "wait(2.0)",

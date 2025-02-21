@@ -221,9 +221,101 @@ local function is_item_excluded(exclusion_list, bagId, localId)
 
     for i, entry in ipairs(exclusion_list) do
         if entry.bagId == bagId and entry.localId == localId then
+            --writeMessage('Excluding: %s (%d / %d)':format(entry.name, entry.bagId, entry.localId))
             return true
         end
     end
+end
+
+local function inventory_items_match(item1, item2)
+    ---------------------------------------------------------------------------
+    -- This function will determine if two inventory items represent matching,
+    -- equivalent items. For now, this does NOT take into account augments, so
+    -- items of the same name with different augments will show as identical.
+    -- This will change in the future.
+    if item1 ~= nil and item2 ~= nil then
+        if
+            item1.id == item2.id
+        then
+            return true
+        end
+    end
+end
+
+inventory.equip_many = function(pieces, all_items)
+    all_items = all_items or windower.ffxi.get_items()
+
+    local exclusion_list = { }
+    local bags_to_search = INVENTORY_BAGS_BY_ID
+
+    -- Equipment structure:
+    --  - string: equipment | item | gear
+    --  - string: slot
+    --  - (Note: Will add augment filters at some point)
+
+    local flags = { equippable = true, equipped = false }
+    local swaps = { }
+
+    for i, piece in ipairs(pieces) do
+        local name = piece.equipment or piece.item or piece.gear
+        local slot_id = inventory.get_slot_id_by_name(piece.slot)
+
+        if type(name) == 'string' and type(slot_id) == 'number' then
+            local equipped = inventory.find_equipment_in_slot(piece.slot, all_items)
+            local searching = true
+
+            -- Clone the exclusion list
+            local local_exclusion_list = { }
+            for i = 1, #exclusion_list do
+                arrayAppend(local_exclusion_list, exclusion_list[i])
+            end
+
+            while searching do
+                local candidate = inventory.find_item(
+                    name,
+                    flags,
+                    all_items,
+                    local_exclusion_list
+                )
+
+                if candidate then
+                    arrayAppend(local_exclusion_list, candidate)
+
+                    -- We will only perform the swap if there's nothing already equipped
+                    -- in the slot, or if the item that IS equipped doesn't match our
+                    -- current candidate equipment item.
+                    if 
+                        equipped == nil or
+                        not inventory_items_match(equipped, candidate)
+                    then
+                        if 
+                            candidate.raw_slots[slot_id]
+                        then
+                            arrayAppend(exclusion_list, candidate)
+                            arrayAppend(swaps, { slot_id = slot_id, item = candidate })
+
+                            -- We've already found our match, we're done
+                            searching = false
+                        end
+                    end
+                else
+                    -- No matching candidate was found, we're done
+                    searching = false
+                end
+            end
+        end
+    end
+
+    -- Now we will go through all of the processed swaps, and equip the gear
+    for i, swap in ipairs(swaps) do        
+        windower.ffxi.set_equip(
+            swap.item.localId,
+            swap.slot_id,
+            swap.item.bagId
+        )
+    end
+
+    return #swaps
 end
 
 inventory.find_item = function(item, flags, items, exclusion_list)
@@ -239,6 +331,7 @@ inventory.find_item = function(item, flags, items, exclusion_list)
 
     items = items or windower.ffxi.get_items()
 
+    local empty = { }
     local bags_to_search = (flags.bag_id and { INVENTORY_BAGS_BY_ID[flags.bag_id] }) or INVENTORY_BAGS_BY_ID
 
     for bagId, bagInfo in pairs(bags_to_search) do
@@ -250,18 +343,20 @@ inventory.find_item = function(item, flags, items, exclusion_list)
             (bag_is_equippable or not only_equippable)
         then
             local bag = items[bagInfo.field]
-            local bagItem = nil
+            local bagItems = nil
 
             if flags.local_id then
                 -- If a specific local id was specified, use that directly. We'll also
                 -- update the underlying item to match this one.
-                bagItem = bag[flags.local_id]
+                local bagItem = bag[flags.local_id]
                 if bagItem then
                     item = findItem(bagItem.id)
+                    bagItems = { bagItem }
+                else
+                    bagItems = empty
                 end
             else
-                -- Otherwise, find the first item whose ID matches the item provided
-                bagItem = tableFirst(bag, function (_i) 
+                bagItems = tableAll(bag, function (_i) 
                     return type(_i) == 'table' and _i.id == item.id 
                 end)
             end
@@ -269,8 +364,8 @@ inventory.find_item = function(item, flags, items, exclusion_list)
             -- Bag item structure
             -- count: int,
             -- status: int,
-            -- id: int,
-            -- slot: int,
+            -- id: int, [item id]
+            -- slot: int, [local id]
             -- bazaar: int,
             -- extdata: string,
 
@@ -279,106 +374,109 @@ inventory.find_item = function(item, flags, items, exclusion_list)
             --  5: Equipped
             --  19: Linkshell Equipped
             --  25: In Bazaar
+            
+            for _i, bagItem in ipairs(bagItems) do
+                if 
+                    bagItem and
+                    item and
+                    not is_item_excluded(exclusion_list, bagId, bagItem.slot)
+                then
+                    local ext = extdata.decode(bagItem)
 
-            if 
-                bagItem and
-                item and
-                not is_item_excluded(exclusion_list, bagId, bagItem.slot)
-            then
-                local ext = extdata.decode(bagItem)
+                    local chargesRemaining = 1
+                    local secondsUntilReuse = nil
+                    local secondsUntilActivation = nil
 
-                local chargesRemaining = 1
-                local secondsUntilReuse = nil
-                local secondsUntilActivation = nil
-
-                if ext then
-                    if type(ext.charges_remaining) == 'number' then
-                        chargesRemaining = ext.charges_remaining
-                    end
-
-                    -- Countdown to when it can be equipped and used (ex: 15 minutes on Capacity Ring)
-                    if type(ext.next_use_time) == 'number' then
-                        secondsUntilReuse = ext.next_use_time + 18000 - os.time()
-                    end
-                    
-                    -- Countdown to use once it's been equiped (ex: 5 seconds on Capacity Ring).
-                    -- It will be negative if the item is not equipped.
-                    if type(ext.activation_time) == 'number' then
-                        secondsUntilActivation = ext.activation_time + 18000 - os.time()
-                    end
-                end
-                
-                local isUsableItem = 
-                    (item.category == 'Usable' or (ext and (ext.usable or ext.type == 'Enchanted Equipment'))) and
-                    bagInfo.usable and
-                    bag.enabled and
-                    bagItem.status ~= 25 and
-                    (secondsUntilReuse == nil or secondsUntilReuse <= 0) and
-                    chargesRemaining > 0
-
-                local isEquippableItem = 
-                    (item.flags and item.flags.Equippable) and 
-                    bagInfo.equippable and
-                    bagItem.status ~= 25
-
-                local isEquipped = bagItem.status == 5 or bagItem.status == 19
-
-                local slots = {}
-                local slot = nil
-                if type(item.slots) == 'table' then
-                    for slotId, validSlot in pairs(item.slots) do
-                        local slotName = GEAR_SLOT_NAMES_BY_ID[slotId]
-                        if validSlot and slotName then
-                            slots[#slots + 1] = slotName
+                    if ext then
+                        if type(ext.charges_remaining) == 'number' then
+                            chargesRemaining = ext.charges_remaining
                         end
 
-                        if items.equipment then
-                            local slotField = GEAR_SLOT_FIELDS_BY_ID[slotId]
-                            if slotField then
-                                local slotEquipment = items.equipment[slotField]
-                                local slotEquipmentBag = items.equipment[slotField .. '_bag']
+                        -- Countdown to when it can be equipped and used (ex: 15 minutes on Capacity Ring)
+                        if type(ext.next_use_time) == 'number' then
+                            secondsUntilReuse = ext.next_use_time + 18000 - os.time()
+                        end
+                        
+                        -- Countdown to use once it's been equiped (ex: 5 seconds on Capacity Ring).
+                        -- It will be negative if the item is not equipped.
+                        if type(ext.activation_time) == 'number' then
+                            secondsUntilActivation = ext.activation_time + 18000 - os.time()
+                        end
+                    end
+                    
+                    local isUsableItem = 
+                        (item.category == 'Usable' or (ext and (ext.usable or ext.type == 'Enchanted Equipment'))) and
+                        bagInfo.usable and
+                        bag.enabled and
+                        bagItem.status ~= 25 and
+                        (secondsUntilReuse == nil or secondsUntilReuse <= 0) and
+                        chargesRemaining > 0
 
-                                if 
-                                    slotEquipment == bagItem.slot and
-                                    slotEquipmentBag == bagId
-                                then
-                                    slot = slotName
+                    local isEquippableItem = 
+                        (item.flags and item.flags.Equippable) and 
+                        bagInfo.equippable and
+                        bagItem.status ~= 25
+
+                    local isEquipped = bagItem.status == 5 or bagItem.status == 19
+
+                    local slots = {}
+                    local slot = nil
+                    if type(item.slots) == 'table' then
+                        for slotId, validSlot in pairs(item.slots) do
+                            local slotName = GEAR_SLOT_NAMES_BY_ID[slotId]
+                            if validSlot and slotName then
+                                slots[#slots + 1] = slotName
+                            end
+
+                            if items.equipment then
+                                local slotField = GEAR_SLOT_FIELDS_BY_ID[slotId]
+                                if slotField then
+                                    local slotEquipment = items.equipment[slotField]
+                                    local slotEquipmentBag = items.equipment[slotField .. '_bag']
+
+                                    if 
+                                        slotEquipment == bagItem.slot and
+                                        slotEquipmentBag == bagId
+                                    then
+                                        slot = slotName
+                                    end
                                 end
                             end
                         end
                     end
-                end
 
-                if 
-                    (isUsableItem or not flags.usable) and          -- Usable flag
-                    (isEquippableItem or not flags.equippable) and  -- Equippable flag
-                    (
-                        flags.equipped == nil or                    -- Equipped flag
-                        (flags.equipped ~= false and isEquipped) or
-                        (flags.equipped == false and not isEquipped)
-                    )
-                then
-                    return {
-                        bagId = bagId,
-                        bagName = bagInfo.field,
-                        localId = bagItem.slot,
-                        id = bagItem.id,
-                        item = item,
-                        name = item.name,
-                        count = bagItem.count,
-                        status = bagItem.status,
-                        extdata = ext,
-                        item_type = item.type,
-                        ext_type = ext and ext.type,
-                        is_equipped = isEquipped,
-                        is_bazaar = bagItem.status == 25,
-                        charges_remaining = charges,
-                        seconds_until_reuse = secondsUntilReuse,
-                        seconds_until_activation = secondsUntilActivation,
-                        can_use = isUsableItem,
-                        slot = slot or (slots and slots[1]), -- Save the current slot, or first valid slot, for easy access (equipment only)
-                        slots = slots -- Save all slots (equipment only)
-                    }
+                    if 
+                        (isUsableItem or not flags.usable) and          -- Usable flag
+                        (isEquippableItem or not flags.equippable) and  -- Equippable flag
+                        (
+                            flags.equipped == nil or                    -- Equipped flag
+                            (flags.equipped and isEquipped) or
+                            (not flags.equipped and not isEquipped)
+                        )
+                    then
+                        return {
+                            bagId = bagId,
+                            bagName = bagInfo.field,
+                            localId = bagItem.slot,
+                            id = item.id,
+                            item = item,
+                            name = item.name,
+                            count = bagItem.count,
+                            status = bagItem.status,
+                            extdata = ext,
+                            item_type = item.type,
+                            ext_type = ext and ext.type,
+                            is_equipped = isEquipped,
+                            is_bazaar = bagItem.status == 25,
+                            charges_remaining = charges,
+                            seconds_until_reuse = secondsUntilReuse,
+                            seconds_until_activation = secondsUntilActivation,
+                            can_use = isUsableItem,
+                            slot = slot or (slots and slots[1]), -- Save the current slot, or first valid slot, for easy access (equipment only)
+                            slots = slots, -- Save all slots (equipment only)
+                            raw_slots = item.slots or {}
+                        }
+                    end
                 end
             end
         end

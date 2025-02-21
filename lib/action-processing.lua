@@ -473,8 +473,6 @@ local function getNextBattleAction(context)
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
                 
-                context.equipment_exclusion_list = nil  -- The list of gear excluded from equipment checks (dynamic by action)
-
                 -- Reload the enumerator data
                 if 
                     action.enumerators and

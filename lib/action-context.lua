@@ -1451,10 +1451,36 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         if #entries == 0 then return end
 
+        if type(entries[1]) == 'string' then
+            local _entries = {}
+            for i = 1, #entries, 2 do 
+                local slot = entries[i]
+                local equipment = entries[i + 1]
+
+                if slot and equipment then
+                    arrayAppend(_entries, {equipment = equipment, slot = slot })
+                end
+            end
+            entries = _entries
+        end
+        
+        if type(entries[1]) == 'table' then
+            local count = inventory.equip_many(entries)
+            if count > 0 then
+                writeVerbose('Equipped: %s':format(
+                    pluralize(count, 'gear item', 'gear items', Colors.verbose)
+                ))
+            end
+        end
+    end
+
+    context.equipMany_OLD = function(...)
+        local entries = varargs({...})
+
+        if #entries == 0 then return end
+
         local count = 0
         local commands = {}
-
-        context.equipment_exclusion_list = { }      
 
         if type(entries[1]) == 'string' then
             for i = 1, #entries, 2 do 
@@ -1482,11 +1508,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     end
                 end
             end
-        end
-
-        -- Reset the exclusion list again
-        if context.action then
-            context.equipment_exclusion_list = { }
         end
 
         if count > 0 then
@@ -1636,8 +1657,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.item = inventory.find_item(
                     item,
                     { equippable = true },
-                    all_items,
-                    context.equipment_exclusion_list
+                    all_items
                 )
 
                 if context.item then
@@ -1660,8 +1680,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local item = inventory.find_item(
                     item,
                     flags,
-                    all_items,
-                    context.equipment_exclusion_list)
+                    all_items)
 
                 if item then
                     if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
@@ -1686,8 +1705,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             for key, item in ipairs(items) do
                 local item = inventory.find_item(item,
                     flags,
-                    all_items,
-                    context.equipment_exclusion_list)
+                    all_items)
 
                 if item then
                     if not context.isEquipmentInSlot(item.slot, item, true, all_items) then

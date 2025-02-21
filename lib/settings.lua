@@ -226,14 +226,14 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                     import = json.parse(file:read())
 
                     if import then
+                        -- Remove the import reference from the calling action
+                        table.remove(actions, i)
+
                         --
                         -- Pull in any variables defined in this import. Existing values are not overwritten.
                         if import.vars then
                             loadVars(baseActions.vars, import.vars)
                         end
-
-                        -- Remove the import reference from the calling action
-                        table.remove(actions, i)
 
                         -- Pull in the macros
                         if type(import.macros) == 'table' then
@@ -293,15 +293,22 @@ local function _expandActionMacrosToArray(macros, array)
         for i = #array, 1, -1 do
             local clause = trimString(array[i])
             if stringStartsWith(clause, '$macro:') or stringStartsWith(clause, '$macro.') then
-                local key = string.sub(clause, 8)
-                if type(macros[key]) == 'table' then
-                    table.remove(array, i)
-                    for j = #macros[key], 1, -1 do
-                        table.insert(array, i, macros[key][j])
+                -- First, we will remove this entry. If it is a macro reference, it will be
+                -- removed regardless of what happens next
+                table.remove(array, i)
+
+                -- Obtain the macro key itself
+                local key = trimString(string.sub(clause, 8))                
+                if key ~= '' and type(macros[key]) == 'table' then
+                    if type(macros[key]) == 'table' then
+                        for j = #macros[key], 1, -1 do
+                            table.insert(array, i, macros[key][j])
+                        end
                     end
-                else
-                    array[i] = clause
                 end
+            else
+                -- Store the trimmed version of the original string
+                array[i] = clause
             end
         end
     end
