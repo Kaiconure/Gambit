@@ -260,24 +260,22 @@ directionality.walkTo = function(x, y, maxDuration, continueFn)
             
                 local direction = directionality.faceTarget(target, true)
                 windower.ffxi.run(direction)            
-            -- if not started then
-            --     started = true
-                writeDebug('Initiating walk on heading %03d degrees.':format(directionality.radToDeg(direction)))
             end
 
             coroutine.sleep(0.25)
         end
-        writeDebug('d=%.2f, nd=%.2f':format(distance ~= nil and distance or '-1337', newDistance))
         distance = newDistance
     end
 
     windower.ffxi.run(false)
 
-    writeDebug('Walk to (%.1f, %.1f) is exiting after %.2fs with d=%.2f':format(
-        x, y,
-        (os.clock() - startTime),
-        distance
-    ))
+    if settings.verbosity >= VERBOSITY_DEBUG then
+        writeDebug('Walk to (%.1f, %.1f) is exiting after %.2fs with d=%.2f':format(
+            x, y,
+            (os.clock() - startTime),
+            distance
+        ))
+    end
 
     -- Success will be gauged on whether we got close enough to the target
     return distance < tolerance

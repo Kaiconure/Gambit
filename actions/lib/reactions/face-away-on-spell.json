@@ -9,22 +9,27 @@
   "vars": {
     "face_away_on_spell": {
       "spells": null,
-      "mobs": null,
-      "triggered": false
+      "mobs": null
     }
   },
   "actions": [
     {
-      "commands": ["setVar('vars.face_away_on_spell.triggered', false)"],
+      "commands": [
+        "setVar('vars.face_away_on_spell.triggered', false)",
+        "setVar('vars.face_away_on_spell._spells', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].spells or vars.face_away_on_spell.spells)",
+        "setVar('vars.face_away_on_spell._wait', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].wait or vars.face_away_on_spell.wait or 3)"
+      ],
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
-      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_on_spell.triggered flag is initially cleared."
+      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_on_spell.triggered flag cleared and that the right set is loaded."
     },
     {
       "when": ["vars.face_away_on_spell.triggered", "not enemyCastingSpell()"],
       "commands": [
         "setVar('vars.face_away_on_spell.triggered', false)",
+        "wait(vars.face_away_on_spell._wait)",
+        "resumeBlackMagic()",
         "log('====== END SPELL FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
@@ -32,31 +37,23 @@
     {
       "when": [
         "not vars.face_away_on_spell.triggered",
-        "enemyCastingSpell(vars.face_away_on_spell.spells)",
-        "arrayLength(vars.face_away_on_spell.mobs) == 0 or any(bt.name, vars.face_away_on_spell.mobs)"
+        "arrayLength(vars.face_away_on_spell._spells) >= 0 and enemyCastingSpell(vars.face_away_on_spell._spells)"
       ],
       "commands": [
         "faceAway(bt)",
         "setVar('vars.face_away_on_spell.triggered', true)",
+        "suppressBlackMagic()",
         "log('====== BEGIN SPELL FACE-AWAY SEQUENCE ====== ')",
-        "wait(1)"
-      ],
-      "delay": 0
-    },
-    {
-      "when": ["vars.face_away_on_spell.triggered", "not bt"],
-      "commands": [
-        "setVar('vars.face_away_on_spell.triggered', false)",
-        "log('====== END SPELL FACE-AWAY SEQUENCE [NO BT] ====== ')"
+        "wait(2)"
       ],
       "delay": 0
     },
     {
       "when": "vars.face_away_on_spell.triggered",
       "commands": [
-        "log('Continuing spell face away...')",
+        "log('Continuing spell face-away...')",
         "faceAway(bt)",
-        "wait(1)"
+        "wait(2)"
       ],
       "delay": 0
     }

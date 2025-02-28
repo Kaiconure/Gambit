@@ -9,49 +9,56 @@
   },
   "vars": {
     "face_away_bracketed": {
-      "initiators": ["Primordial Surge"],
-      "terminators": ["Waning Vigor", "Expunge"],
-      "mobs": [],
-      "triggered": false
+      "initiators": null,
+      "terminators": null
     }
   },
   "actions": [
     {
-      "commands": ["setVar('vars.face_away_bracketed.triggered', false)"],
+      "commands": [
+        "setVar('vars.face_away_bracketed.triggered', false)",
+        "setVar('vars.face_away_bracketed._initiators', vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].initiators or vars.face_away_bracketed.initiators)",
+        "setVar('vars.face_away_bracketed._terminators', vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].terminators or vars.face_away_bracketed.terminators)",
+        "setVar('vars.face_away_bracketed._wait', vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].wait or vars.face_away_bracketed.wait or 3)"
+      ],
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
-      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_bracketed.triggered flag is cleared."
+      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_bracketed.triggered flag is cleared and that the right set is loaded."
     },
     {
       "when": [
         "vars.face_away_bracketed.triggered",
-        "enemyUsedAbility(vars.face_away_bracketed.terminators)"
+        "arrayLength(vars.face_away_bracketed._terminators) > 0 and enemyUsedAbility(vars.face_away_bracketed._terminators)"
       ],
       "commands": [
         "setVar('vars.face_away_bracketed.triggered', false)",
+        "wait(vars.face_away_bracketed._wait)",
+        "resumeBlackMagic()",
         "log('====== END BRACKETED FACE-AWAY SEQUENCE ====== ')"
       ]
     },
     {
       "when": [
+        "bt",
         "not vars.face_away_bracketed.triggered",
-        "enemyUsedAbility(vars.face_away_bracketed.initiators)",
-        "arrayLength(vars.face_away_bracketed.mobs) == 0 or any(bt.name, vars.face_away_bracketed.mobs)"
+        "arrayLength(vars.face_away_bracketed._initiators) > 0 and enemyUsedAbility(vars.face_away_bracketed._initiators)"
       ],
       "commands": [
         "faceAway(bt)",
         "setVar('vars.face_away_bracketed.triggered', true)",
-        "log('====== BEGIN BRACKETED FACE-AWAY SEQUENCE ====== ')"
+        "suppressBlackMagic()",
+        "log('====== BEGIN BRACKETED FACE-AWAY SEQUENCE ====== ')",
+        "wait(2)"
       ],
       "delay": 0
     },
     {
       "when": "vars.face_away_bracketed.triggered",
       "commands": [
-        "log('Continuing bracketed face away...')",
+        "log('Continuing bracketed face-away...')",
         "faceAway(bt)",
-        "wait(1)"
+        "wait(2)"
       ],
       "delay": 0
     }

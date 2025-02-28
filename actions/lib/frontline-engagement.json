@@ -11,6 +11,14 @@
   },
   "actions": [
     {
+      "when": "bt and not facingEnemy()",
+      "commands": "faceEnemy()",
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "comment": "Ensure we face the enemy immediately."
+    },
+    {
       "when": [
         "vars.frontline_engagement.angle ~= nil",
         "actionType == 'battle'",

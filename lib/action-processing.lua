@@ -66,7 +66,9 @@ function sendActionCommand(
 
     local movementJob = pauseFollow and smartMove:cancelJob()
     if command and command ~= '' then
-        writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
+        end
         windower.send_command(command)
     end
 
@@ -239,12 +241,14 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
         context.action.incomplete = false
     end
 
-    -- In debug mode, let's log that we've finished our work here
-    writeTrace('%s: Cast time %s / Observer time %s':format(
-        text_spell(spell.name, Colors.trace),
-        pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
-        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)        
-    ))
+    -- In trace mode, let's log that we've finished our work here
+    if settings.verbosity >= VERBOSITY_TRACE then
+        writeTrace('%s: Cast time %s / Observer time %s':format(
+            text_spell(spell.name, Colors.trace),
+            pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
+            pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)        
+        ))
+    end
 
     return complete
 end
@@ -271,17 +275,44 @@ local function compileActions(actionType, parent, rawActions)
             -- If the "when" clause was broken into an array, we'll combine it all into
             -- a single parenthesised AND'ed expression here.
             if type(action.when) == 'table' then
-                local count = 0
+                local and_count = 0
                 local combined = ''
+                local expression = ''
+                local expression_count = 0
+                local has_multiline = false
                 for i, _when in ipairs(action.when) do
                     if type(_when) == 'string' then
                         _when = trimString(_when)
                         if _when ~= '' then
-                            combined = combined .. (count > 0 and ' and ' or '') .. '(' .. _when .. ')'
-                            count = count + 1
+                            local len = #_when
+                            if _when[len] == '\\' then
+                                expression = expression .. (expression_count > 0 and ' ' or '') .. string.sub(_when, 1, len - 1) 
+                                expression_count = expression_count + 1
+                                has_multiline = true                                
+                            else
+                                combined = combined .. 
+                                    (and_count > 0 and ' and ' or '') .. 
+                                    '(' .. ((expression_count > 0 and (expression .. ' ') or '') .. _when) .. ')'
+
+                                and_count = and_count + 1
+                                expression = ''
+                                expression_count = 0
+                            end
                         end
                     end
                 end
+
+                if expression ~= '' then
+                    if combined == '' then
+                        combined = '(' .. expression .. ')'
+                    else
+                        combined = combined .. ' and (' .. expression .. ')'
+                    end
+                end
+
+                -- if has_multiline then
+                --     writeMessage('multiline: ' .. combined)
+                -- end
 
                 action.when = combined
             end
@@ -410,7 +441,9 @@ local function getNextBattleAction(context)
     if actionStateManager:isActionSnoozing() then
         --return nil
         -- TODO: Nothing for now, let's just log
-        writeTrace('WARNING: actionStateManager:isActionSnoozing() returned true (NO-OP for now)')
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('WARNING: actionStateManager:isActionSnoozing() returned true (NO-OP for now)')
+        end
     end
 
     actionStateManager:setActionType(context.actionType)
@@ -496,6 +529,8 @@ local function getNextBattleAction(context)
                 setfenv(action._whenFn, context)
 
                 if action._whenFn() then
+                    --writeMessage('action scope: %s, context scope: %s':format(action.lastBattleScope or 'n/a', context.battleScope or 'n/a'))
+
                     -- If this action will get run, we'll need to schedule the next run time. We'll actually
                     -- update this later, after the actions are executed, based on the time they complete.
                     action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
@@ -503,12 +538,13 @@ local function getNextBattleAction(context)
                     -- Save the scope that was present when this action was triggered.
                     action.lastBattleScope = context.battleScope
 
-                    writeDebug('Condition met %s %s [scope: %s]':format(
-                        text_action(context.actionType .. '.' .. i, Colors.debug),
-                        --action.when
-                        text_green(action.when, Colors.debug),
-                        text_gray(tostring(action.lastBattleScope), Colors.debug)
-                    ))
+                    if settings.verbosity >= VERBOSITY_DEBUG then
+                        writeDebug('Condition met %s %s [scope: %s]':format(
+                            text_action(context.actionType .. '.' .. i, Colors.debug),
+                            text_green(action.when, Colors.debug),
+                            text_gray(tostring(action.lastBattleScope), Colors.debug)
+                        ))
+                    end
 
                     --print(action.when)
 
@@ -672,21 +708,22 @@ local function doNextActionCycle(time, player, party)
             if hasPullableMob and not isBattle then
                 local command = ''
                 local commandDelay = 0
+                local hasCommand = false
 
                 -- Lock on if necessary
                 if player.target_index ~= mob.index then
                     command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
-                    commandDelay = commandDelay + 0.5
+                    hasCommand = true
                 end
 
                 -- Engage if necessary
                 if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
                     command = command .. string.format('input /attack <t>; ')
-                    commandDelay = commandDelay + 1
+                    hasCommand = true
                 end
 
-                if commandDelay > 0 then
-                    sendActionCommand(command, nil, commandDelay)
+                if hasCommand then
+                    sendActionCommand(command, nil, 0.25)
                 end
 
                 -- Give some time for us to establish and engage with a new target before jumping straight to the pull

@@ -181,6 +181,13 @@ function resetCurrentMob(mob, force)
 
     -- Only do an update if the new mob is different from the old, or if we're doing a forced update
     if allowReset then
+
+        local context = actionStateManager:getContext()
+        if context and context.vars then
+            context.vars.__suppress_black_magic = false
+            context.vars.__suppress_weapon_skills = false
+        end
+        
         -- Cancel any pending follow jobs
         smartMove:cancelJob()
 

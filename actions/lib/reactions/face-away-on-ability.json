@@ -9,17 +9,20 @@
   "vars": {
     "face_away_on_ability": {
       "abilities": null,
-      "mobs": null,
-      "triggered": false
+      "mobs": null
     }
   },
   "actions": [
     {
-      "commands": ["setVar('vars.face_away_on_ability.triggered', false)"],
+      "commands": [
+        "setVar('vars.face_away_on_ability.triggered', false)",
+        "setVar('vars.face_away_on_ability._abilities', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].abilities or vars.face_away_on_ability.abilities)",
+        "setVar('vars.face_away_on_ability._wait', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].wait or vars.face_away_on_ability.wait or 3)"
+      ],
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
-      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_on_ability.triggered flag is initially cleared."
+      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_on_ability.triggered flag cleared and that the right set is loaded."
     },
     {
       "when": [
@@ -28,6 +31,8 @@
       ],
       "commands": [
         "setVar('vars.face_away_on_ability.triggered', false)",
+        "wait(vars.face_away_on_ability._wait)",
+        "resumeBlackMagic()",
         "log('====== END ABILITY FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
@@ -35,31 +40,23 @@
     {
       "when": [
         "not vars.face_away_on_ability.triggered",
-        "enemyUsingAbility(vars.face_away_on_ability.abilities)",
-        "arrayLength(vars.face_away_on_ability.mobs) == 0 or any(bt.name, vars.face_away_on_ability.mobs)"
+        "arrayLength(vars.face_away_on_ability._abilities) > 0 and enemyUsingAbility(vars.face_away_on_ability._abilities)"
       ],
       "commands": [
         "faceAway(bt)",
         "setVar('vars.face_away_on_ability.triggered', true)",
+        "suppressBlackMagic()",
         "log('====== BEGIN ABILITY FACE-AWAY SEQUENCE ====== ')",
-        "wait(1)"
-      ],
-      "delay": 0
-    },
-    {
-      "when": ["vars.face_away_on_ability.triggered", "not bt"],
-      "commands": [
-        "setVar('vars.face_away_on_spell.triggered', false)",
-        "log('====== END ABILITY FACE-AWAY SEQUENCE [NO BT] ====== ')"
+        "wait(2)"
       ],
       "delay": 0
     },
     {
       "when": "vars.face_away_on_ability.triggered",
       "commands": [
-        "log('Continuing ability face away...')",
+        "log('Continuing ability face-away...')",
         "faceAway(bt)",
-        "wait(1)"
+        "wait(2)"
       ],
       "delay": 0
     }

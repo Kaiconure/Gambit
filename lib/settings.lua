@@ -290,6 +290,9 @@ local function _expandActionMacrosToArray(macros, array)
     -- Note: At this point, we're guaranteed that there will be no nested macros; they
     -- have all been expaned by the settings loader. We just need to insert them.
     if type(array) == 'table' then
+
+        -- Do array replacement macros. With $macro:<name> or $macro.<name>, we'll replace an
+        -- array element with all elements from the macro.
         for i = #array, 1, -1 do
             local clause = trimString(array[i])
             if stringStartsWith(clause, '$macro:') or stringStartsWith(clause, '$macro.') then
@@ -310,6 +313,52 @@ local function _expandActionMacrosToArray(macros, array)
                 -- Store the trimmed version of the original string
                 array[i] = clause
             end
+        end
+
+        local str_macro_types = {'$macro('}
+
+        -- Do string-replacement macros. With $macro(<macro-name>), we'll replace directly inside of a string.
+        for i = #array, 1, -1 do
+            local clause = trimString(array[i])
+
+            for j, marker in ipairs(str_macro_types) do
+                local search = 1
+
+                while search and search < #clause do
+                    local start_index = string.find(clause, marker, search, true)
+                    if start_index then
+                        local end_index = string.find(clause, ')', start_index, true)
+                        if end_index then
+                            local key = trimString(string.sub(clause, start_index + #marker, end_index - 1))
+
+                            local replacement = ''
+                            if macros[key] then
+                                replacement = table.concat(macros[key], ' ')
+                            end
+
+                            local newValue = 
+                                string.sub(clause, 1, start_index - 1) ..
+                                replacement ..
+                                string.sub(clause, end_index + 1)
+
+                            -- Store the new clause value
+                            clause = newValue
+
+                            -- We'll continue searching from exactly where we left off, because the string has been replaced.
+                            -- We may have expanded a new macro reference.
+                            search = start_index
+                        else
+                            -- No closing was found, this means there are no valid macros left
+                            search = nil
+                        end
+                    else
+                        -- No string-replacement macros were found
+                        search = nil
+                    end
+                end
+            end
+
+            array[i] = clause
         end
     end
  end

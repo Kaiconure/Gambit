@@ -970,6 +970,10 @@ function smartMove:followIndex(follow_index, distance)
         math.max(tonumber(distance) or 0, 0)
     --job.autolock = true             -- Automatically lock onto the target on completion
 
+    job.lost_mob_time = nil
+    job.lost_mob_pos = nil
+    job.last_mob = nil
+
     -- Reschedule the job
     job.reschedule = function (self)
         return smartMove:followIndex(follow_index, distance)
@@ -977,17 +981,73 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Determine if the job is still valid
     job.is_valid = function(self)
+        if 
+            self.lost_mob_time and
+            self.lost_mob_pos and
+            (os.clock() < self.lost_mob_time + 5)
+        then
+            local player = windower.ffxi.get_mob_by_target('me')
+            if 
+                    player and
+                    player.heading and
+                    player.x and
+                    player.y
+            then
+                local vToTarget = self.lost_mob_pos:subtract(V{player.x, player.y})
+                if vToTarget:length() > 0.5 then
+                    return true
+                end
+            end
+        end
+
         return self.mob and self.mob.valid_target and self.mob.hpp > 0
     end
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
         self.mob = windower.ffxi.get_mob_by_index(self.follow_index)
+
+        if 
+            self.mob == nil or
+            self.mob.x == nil or
+            self.mob.y == nil or
+            not self.mob.valid_target
+        then
+            if self.lost_mob_time == nil then
+                if 
+                    self.last_mob and
+                    self.last_mob.spawn_type == SPAWN_TYPE_PLAYER and
+                    self.last_mob.x and
+                    self.last_mob.y and
+                    self.last_mob.heading
+                then
+                    self.mob = nil
+                    self.lost_mob_time = os.clock()
+
+                    local vMob = V({self.last_mob.x, self.last_mob.y})
+                    local vMobForward = vector.from_radian(self.last_mob.heading)
+
+                    self.lost_mob_pos = vMob:add(vMobForward:scale(2))
+                end
+            end
+        else
+            self.lost_mob_time = nil
+            self.lost_mob_pos = nil
+            self.last_mob = self.mob
+        end
+
         return self:is_valid()
     end
 
+
     -- Positioning is based on the mob and any offsets
     job.pos = function (self)
+        if 
+            self.lost_mob_pos
+        then
+            return self.lost_mob_pos
+        end
+
         -- If we're doing a follow distance, we'll need to run the position calculation
         if job.follow_distance > 0 then
             local player = windower.ffxi.get_mob_by_target('me')

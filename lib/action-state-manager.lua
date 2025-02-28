@@ -172,7 +172,9 @@ state_manager.setActionType = function (self, newType)
             self.skillchain = { time = 0 }
             self.mobAbilities = { }
 
-            self.actionTransitionCounter = self.actionTransitionCounter + 1
+            if mode ~= 'init' then
+                self.actionTransitionCounter = self.actionTransitionCounter + 1
+            end
         end
 
         self.actionType = newType

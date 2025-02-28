@@ -165,9 +165,105 @@ end
 
 -----------------------------------------------------------------------------------------
 --
+local function context_array_merge(...)
+    local arrays = {...}
+    local result = { }
+
+    if #arrays > 0 then
+        result = { unpack(arrays[1]) }
+    end
+
+    for i = 2, #arrays do
+        local current = arrays[i]
+        if type(current) == 'table' and current[1] then
+            -- For arrays, each element will be appended individually
+            for j = 1, #current do
+                local value = current[j]
+                if value ~= nil then
+                    arrayAppend(result, value)
+                end
+            end
+        else
+            -- For non-arrays, append the element directly (unless nil)
+            if current ~= nil then
+                arrayAppend(result, current)
+            end
+        end
+    end
+
+    return result
+end
+
+-----------------------------------------------------------------------------------------
+--
 local function context_is_array(array)
     return context_array_length(array) > 0
 end
+
+-----------------------------------------------------------------------------------------
+-- Determine if an array contains all elements of another array
+--  - array:    The array to check.
+--  - all:      An second array, of all elements that must be in the first one.
+local function context_array_contains_all(array, all)
+    if 
+        type(array) == 'table' and
+        type(all) == 'table' and
+        array[1] and
+        all[1]
+    then
+        for i, val in ipairs(array) do
+            if not arrayIndexOf(all, val) then
+                return false
+            end
+        end
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if all fields in a table are represented in an array.
+--  - array:    The table  to check.
+--  - all:      An array of all field names that must be in the first table.
+local function context_table_contains_all(array, all)
+    if 
+        type(array) == 'table' and
+        type(all) == 'table'
+    then
+        for key, val in pairs(array) do
+            if not arrayIndexOf(all, key) then
+                return false
+            end
+        end
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if a table contains field names for all elements in an array.
+local function context_table_has_all_field_names(table, array)
+    if 
+        type(table) == 'table' and
+        type(array) == 'table' and
+        array[1]
+    then
+        for i, val in ipairs(array) do
+            if table[val] == nil then
+                return false
+            end
+        end
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if a value is within a min/max range (min inclusive, max exclusive)
+local function context_in_range(value, min, max)
+    return value >= min and value < max
+end
+
 
 
 -----------------------------------------------------------------------------------------
@@ -222,7 +318,7 @@ end
 -----------------------------------------------------------------------------------------
 -- Gets an action context variable by name, allowing for dot ('.') syntax. The leading
 -- 'vars' name is implicit, and can be either provided or omitted with the same result.
-local function context_get_var(name, value)
+local function context_get_var(name)
     local levels = get_action_variable_path(name)
 
     -- If only one level is necessary, we'll just set it now and be done
@@ -247,6 +343,64 @@ local function context_get_var(name, value)
 
     -- Return the final level
     return ref[levels[#levels]]
+end
+
+-----------------------------------------------------------------------------------------
+-- Creates or updates a field under the specified variable name.
+local function context_set_var_field(name, field, value)
+    if 
+        type(name) == 'string' and
+        type(field) == 'string'
+    then
+        local val = context_get_var(name)
+        if val == nil then
+            val = context_set_var(name, {})
+        elseif type(val) ~= 'table' then
+            return
+        end
+
+        val[field] = value
+        return val[field]
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets a field under the specified variable name.
+local function context_get_var_field(name, field)
+    if 
+        type(name) == 'string' and
+        type(field) == 'string' 
+    then
+        local val = context_get_var(name)
+        if type(val) == 'table' then
+            return val[field]
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Increments a numeric variable value by a specified amount, or 1 if no amount is provided.
+-- Defaults to 1 if the variable does not exist yet.
+local function context_var_increment(name, amount, default)
+    local value = context_get_var(name)
+    if value == nil then
+        value = tonumber(default) or 1
+    elseif type(value) == 'number' then
+        value = value + (tonumber(amount) or 1)
+    else
+        return
+    end
+    return context_set_var(name, value)
+end
+
+-----------------------------------------------------------------------------------------
+-- Decrements a numeric variable value by a specified amount, or 1 if no amount is provided.
+-- Defaults to 0 if the variable does not exist yet.
+local function context_var_decrement(name, amount, default)
+    return context_var_increment(
+        name,
+        -1 * (tonumber(amount) or 1),
+        0)
 end
 
 -----------------------------------------------------------------------------------------
@@ -440,6 +594,7 @@ local function enumerateContextByExpression(context, keys, expression, ...)
             
             if field then
                 local fenv = field
+                fenv.vars = context.vars
 
                 -- Add all fields for this party member to the context
                 -- for field, value in pairs(field) do
@@ -449,9 +604,12 @@ local function enumerateContextByExpression(context, keys, expression, ...)
                 -- end
 
                 -- Apply the env to the function, and execute it. Return this member if it evaluates successfully.
-                --writeDebug('Evaluating: %s':format(expression))
                 setfenv(fn, fenv)
-                if fn() then
+
+                local result = fn()
+                fenv.vars = nil
+
+                if result then
                     --writeDebug('Evaluation passed!')
                     retVal[#retVal + 1] = fenv
                 end
@@ -685,7 +843,7 @@ local function setArrayEnumerators(context)
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
-            context.is_new_result      = true
+            context.is_new_result   = true
 
             context.action.enumerators.array_name = name
 
@@ -1321,6 +1479,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local context = {
         actionType = actionType,
         time = time,
+        game_info = windower.ffxi.get_info(),
         strategy = settings.strategy,
         mobTime = mobEngagedTime or 0,
         battleScope = battleScope,
@@ -1332,6 +1491,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.target = target
     context.player = windower.ffxi.get_player()
     context.party = party or windower.ffxi.get_party() or {}
+
+    context.game_time = { hour = 0, minute = 0, day = 0 }
+    if context.game_info and context.game_info.time then
+        -- game_info.time is the number of game minutes since Vanadiel midnight
+        context.game_time.hour = math.floor(context.game_info.time / 60)
+        context.game_time.minute = context.game_info.time % 60
+
+        -- game_info.day is the id of the current day, from 0-7:
+        --  Firesday, Earthsday, Watersday, Windsday, Iceday, Lightningday, Lightsday, Darksday
+        local day = resources.days[context.game_info.day]
+        context.game_time.day = day.id
+        context.game_time.day_name = day.name
+        context.game_time.day_element = day.element
+        context.game_time.yesterday = (day.id - 1) % 8
+        context.game_time.tomorrow = (day.id + 1) % 8
+    end
 
     -- Store a mapping of id->member and index->member for the party
     context.party1_by_id = {}
@@ -1407,6 +1582,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.equip = function(slot, name)
+        if type(slot) == 'table' then
+            name = slot.name
+            slot = slot.slot
+        end
+
         -- Get the item name
         if name == nil then
             if context.item == nil then return end            
@@ -1529,30 +1709,73 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --
     context.canUseWeaponSkill = function (...)
         local weaponSkills = varargs({...})
-        for key, _weaponSkill in ipairs(weaponSkills) do
-            weaponSkill = findWeaponSkill(_weaponSkill)
-            if weaponSkill then
-                local target = weaponSkill.targets.Self and context.me or context.bt
-                local targetOutOfRange = target and
-                    target.distance and
-                    target.distance > math.max(weaponSkill.range, 6)
+        local abilities = windower.ffxi.get_abilities()
 
-                if not targetOutOfRange then
-                    if canUseWeaponSkill(
-                        context.player,
-                        weaponSkill) 
-                    then
-                        context.weapon_skill = weaponSkill
-                        return key
+        if
+            not context.vars or
+            not context.vars.__suppress_weapon_skills
+        then
+            for key, _weaponSkill in ipairs(weaponSkills) do
+                weaponSkill = findWeaponSkill(_weaponSkill)
+                if weaponSkill then
+                    local target = weaponSkill.targets.Self and context.me or context.bt
+                    local targetOutOfRange = target and
+                        target.distance and
+                        target.distance > math.max(weaponSkill.range, 6)
+
+                    if not targetOutOfRange then
+                        if canUseWeaponSkill(
+                            context.player,
+                            weaponSkill,
+                            abilities) 
+                        then
+                            context.weapon_skill = weaponSkill
+                            return key
+                        end
                     end
-                else
-                    -- writeDebug('Target %s is not in range of weapon skill %s':format(
-                    --     text_mob(target.name),
-                    --     text_weapon_skill(weaponSkill.name)
-                    -- ))
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Given a list of spells, find the usable subset
+    context.usableSpells = function (...)
+        local spells = varargs({...})
+        local results = {}
+
+        local known_spells = windower.ffxi.get_spells()
+        local recasts = windower.ffxi.get_spell_recasts()
+        local player = windower.ffxi.get_player()
+
+        for key, _spell in ipairs(spells) do
+            spell = findSpell(_spell)
+            if canUseSpell(player, spell, recasts, known_spells) ~= nil then
+                arrayAppend(results, spell.name)
+            end
+        end
+
+        return results
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Given a list of weapon skills, find the usable subset
+    context.usableWeaponSkills = function (...)
+        local weaponSkills = varargs({...})
+        local abilities = windower.ffxi.get_abilities()
+        local results = {}
+
+        for key, _weaponSkill in ipairs(weaponSkills) do
+            weaponSkill = findWeaponSkill(_weaponSkill)
+            if isUsableWeaponSkill(
+                weaponSkill,
+                abilities) 
+            then
+                arrayAppend(results, weaponSkill.name)
+            end
+        end
+
+        return results
     end
 
     --------------------------------------------------------------------------------------
@@ -2067,13 +2290,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if type(spell) ~= 'nil' then
                     spell = findSpell(spell)
                     if spell then
-                        local canUse, recast = canUseSpell(player, spell, recasts)
+                        if 
+                            spell.type ~= 'BlackMagic' or
+                            not context.vars or
+                            not context.vars.__suppress_black_magic
+                        then
+                            local canUse, recast = canUseSpell(player, spell, recasts)
 
-                        context.spell = spell
-                        context.spell_recast = recast
-                        
-                        if canUse then
-                            return key
+                            context.spell = spell
+                            context.spell_recast = recast
+                            
+                            if canUse then
+                                return key
+                            end
                         end
                     end
                 end
@@ -2244,7 +2473,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             windower.send_command('input /lockon')
         end
 
-        directionality.faceAwayFromTarget(target.mob)
+        writeMessage()
+
+        directionality.faceAwayFromTarget(target)
         context.wait(0.5)
     end
 
@@ -2342,7 +2573,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 duration = math.max(tonumber(duration) or 3, 1)
                 failureDelay = math.max(tonumber(failureDelay) or 5, 1)
 
-                writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+                if settings.verbosity >= VERBOSITY_TRACE then
+                    writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+                end
 
                 local jobId = smartMove:moveBehindIndex(context.bt.index, duration)
                 if jobId then
@@ -2350,7 +2583,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         coroutine.sleep(0.5)
                         local job = smartMove:getJobInfo()
                         if job == nil or job.jobId ~= jobId then
-                            writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
+                            if settings.verbosity >= VERBOSITY_TRACE then
+                                writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
+                            end
                             local success = context.alignedRear()
                             if not success then
                                 context.postpone(failureDelay)
@@ -2698,11 +2933,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- Store any managed buffs
                 nearest.buffs = actionStateManager:getBuffsForMob(nearest.id)
 
-                writeDebug('Nearest mob match: %s (%s) (distance: %s)':format(
-                    text_mob(nearest.name, Colors.debug),
-                    text_number('%03X':format(nearest.index), Colors.debug),
-                    text_number('%.1f':format(nearest.distance), Colors.debug)
-                ))
+                if settings.verbosity >= VERBOSITY_DEBUG then
+                    writeDebug('Nearest mob match: %s (%s) (distance: %s)':format(
+                        text_mob(nearest.name, Colors.debug),
+                        text_number('%03X':format(nearest.index), Colors.debug),
+                        text_number('%.1f':format(nearest.distance), Colors.debug)
+                    ))
+                end
 
                 context.mob = nearest
                 return nearest
@@ -3178,6 +3415,38 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Suppresses black magic spells via canUseSpell (and canUse)
+    context.suppressBlackMagic = function()
+        if context and context.vars then
+            context.vars.__suppress_black_magic = true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Cancells suppression of black magic spells via canUseSpell (and canUse)
+    context.resumeBlackMagic = function()
+        if context and context.vars then
+            context.vars.__suppress_black_magic = false
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Suppresses weapon skills via canUseWeaponSkill
+    context.suppressWeaponSkills = function()
+        if context and context.vars then
+            context.vars.__suppress_weapon_skills = true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Cancells suppression of weapon skills spells via canUseWeaponSkill
+    context.resumeBlackMagic = function()
+        if context and context.vars then
+            context.vars.__suppress_weapon_skills = false
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Trigger if our enemy is in the process of casting a spell
     context.enemyCastingSpell = function (...)
         if context.bt then
@@ -3187,6 +3456,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- We'll match if either no filters were provided, or if the current spell is in the filter list
                 if 
                     spells[1] == nil or
+                    arrayIndexOf(spells, "*") or
                     arrayIndexOfStrI(spells, info.spell.name) 
                 then
                     context.enemy_spell = info.spell
@@ -3215,6 +3485,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- We'll match if either no filters were provided, or if the current ability is in the filter list
                 if 
                     skills[1] == nil or
+                    arrayIndexOf(skills, "*") or
                     arrayIndexOfStrI(skills, info.ability.name) 
                 then
                     -- Clear the mob ability. It will still be available for what we're calling 'windowed' detection via
@@ -3488,7 +3759,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.wake = function ()
         if actionStateManager:isIdleSnoozing() then
             actionStateManager.idleWakeTime = 0
-            writeTrace('Waking from idle!')
         end
     end
 
@@ -3629,10 +3899,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.isLocus = context_is_locus
     context.isApexTier = context_is_apex_tier
     context.isArray = context_is_array
-    context.arrayLength = context_array_length    
+    context.arrayLength = context_array_length
+    context.arrayCount = context.arrayLength
+    context.arrayMerge = context_array_merge
+    context.arrayAll = context_array_contains_all
+    context.tableAll = context_table_contains_all
+    context.hasAllFieldNames = context_table_has_all_field_names
+    context.inRange = context_in_range
     context.wait = context_wait
     context.setVar = context_set_var
     context.getVar = context_get_var
+    context.setVarField = context_set_var_field
+    context.getVarField = context_get_var_field
+    context.varIncrement = context_var_increment
+    context.varDecrement = context_var_decrement
 
     -- Final setup
     setEnumerators(context)

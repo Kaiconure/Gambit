@@ -14,7 +14,8 @@
         "equipMany(vars.black_magic_burst.gear.casting)",
         "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
         "useSpell()",
-        "equipMany(vars.black_magic_burst.gear.battle)"
+        "equipMany(vars.black_magic_burst.gear.battle)",
+        "vars.black_magic_burst.frequency > 0 and postpone(vars.black_magic_burst.frequency)"
       ],
       "comment": [
         "Burst with single-target black magic spells. Customize by defining variables: max_tier, min_mpp",
@@ -27,6 +28,7 @@
       "max_tier": "III",
       "min_mpp": 25,
       "abilities": ["Elemental Seal", "Manawell"],
+      "frequency": 0,
       "gear": {
         "casting": [],
         "battle": []

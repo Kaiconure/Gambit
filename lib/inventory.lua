@@ -258,7 +258,8 @@ inventory.equip_many = function(pieces, all_items)
 
     for i, piece in ipairs(pieces) do
         local name = piece.equipment or piece.item or piece.gear
-        local slot_id = inventory.get_slot_id_by_name(piece.slot)
+        local slot_id = type(name) == 'string' and type(piece.slot) == 'string'
+            and inventory.get_slot_id_by_name(piece.slot)
 
         if type(name) == 'string' and type(slot_id) == 'number' then
             local equipped = inventory.find_equipment_in_slot(piece.slot, all_items)
@@ -438,7 +439,9 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                                         slotEquipment == bagItem.slot and
                                         slotEquipmentBag == bagId
                                     then
-                                        slot = slotName
+                                        if not slot then
+                                            slot = slotName
+                                        end
                                     end
                                 end
                             end
@@ -454,6 +457,11 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                             (not flags.equipped and not isEquipped)
                         )
                     then
+                        if slots then
+                            if slots[1] == 'main' or slots[2] == 'main' then
+                                slot = 'main'
+                            end
+                        end
                         return {
                             bagId = bagId,
                             bagName = bagInfo.field,

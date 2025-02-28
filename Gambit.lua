@@ -1,4 +1,4 @@
-__version = '0.95.5-beta11'
+__version = '0.95.5-beta12'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -910,11 +910,13 @@ local _handle_actionMessageChunk = function(id, data)
             if buff then
                 actionStateManager:setMobBuff(target, buffId, false)
 
-                writeDebug('%s\'s %s effect wore off.':format(
-                    text_mob(target.name, Colors.debug),
-                    text_spell(buff.name, Colors.debug),
-                    text_number(buff.id, Colors.debug)
-                ))
+                if settings.verbosity >= VERBOSITY_DEBUG then
+                    writeDebug('%s\'s %s effect wore off.':format(
+                        text_mob(target.name, Colors.debug),
+                        text_spell(buff.name, Colors.debug),
+                        text_number(buff.id, Colors.debug)
+                    ))
+                end
             end
         end
     end

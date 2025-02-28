@@ -16,7 +16,8 @@
         "equipMany(vars.black_magic_nuke.gear.battle)",
         "postpone(vars.black_magic_nuke.frequency)"
       ],
-      "delay": 6,
+      "delay": 3,
+      "scope": "battle",
       "comment": "Nukes with normal, single-target black magic. Customize by defining variables: max_tier, frequency, min_mpp."
     }
   ],
