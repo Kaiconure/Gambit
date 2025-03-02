@@ -2507,7 +2507,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    context.align = function(target, angle, distance, duration)
+    context.align = function(target, angle, distance, duration, noFace)
         -- Nothing to do if we're already aligned
         if context.aligned(target, angle, distance) then
             return
@@ -2525,7 +2525,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             position[2],
             math.max(tonumber(duration or 3), 1))
         
-        directionality.faceTarget(target)
+        if noFace then
+            directionality.faceTarget(target)
+        end
         if not success then
             -- TODO: Make this configurable? Parameterized?
             context.postpone(2)
@@ -2542,6 +2544,198 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if target then
             if smartMove:atMobRear(target.index) then
                 return true
+            end
+        end
+    end
+
+    context.getMatchingBracketedFaceAwayStart = function(faceaways, abilityName, mobName)
+        -- writeMessage('Entering getMatchingBracketedFaceAwayStart with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     abilityName and abilityName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert ability objects to their name. Then validate that we have something.
+        if type(abilityName) == 'table' then abilityName = abilityName.name end
+        if type(abilityName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.initiators) == 'table' then
+            local rules = entry.initiators[abilityName] or entry.initiators["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.ability_face_away_start = rules
+                return context.ability_face_away_start
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.initiators) == 'table' then
+            local rules = entry.initiators[abilityName] or entry.initiators["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.ability_face_away_start = rules
+                return context.ability_face_away_start
+            end
+        end
+    end
+
+    context.getMatchingBracketedFaceAwayEnd = function(faceaways, abilityName, mobName)
+        -- writeMessage('Entering getMatchingBracketedFaceAwayEnd with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     abilityName and abilityName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert ability objects to their name. Then validate that we have something.
+        if type(abilityName) == 'table' then abilityName = abilityName.name end
+        if type(abilityName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.terminators) == 'table' then
+            local rules = entry.terminators[abilityName] or entry.terminators["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.ability_face_away_end = rules
+                return context.ability_face_away_end
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.terminators) == 'table' then
+            local rules = entry.terminators[abilityName] or entry.terminators["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.ability_face_away_end = rules
+                return context.ability_face_away_end
+            end
+        end
+    end
+
+    context.getMatchingAbilityFaceAway = function(faceaways, abilityName, mobName)
+        -- writeMessage('Entering getMatchingAbilityFaceAway with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     abilityName and abilityName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert ability objects to their name. Then validate that we have something.
+        if type(abilityName) == 'table' then abilityName = abilityName.name end
+        if type(abilityName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.abilities) == 'table' then
+            local rules = entry.abilities[abilityName] or entry.abilities["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.ability_face_away = rules
+                return context.ability_face_away
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.abilities) == 'table' then
+            local rules = entry.abilities[abilityName] or entry.abilities["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.ability_face_away = rules
+                return context.ability_face_away
+            end
+        end
+    end
+
+    context.getMatchingSpellFaceAway = function(faceaways, spellName, mobName)
+        -- writeMessage('Entering getMatchingSpellFaceAway with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     spellName and spellName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+        
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert spell objects to their name. Then validate that we have something.
+        if type(spellName) == 'table' then spellName = spellName.name end
+        if type(spellName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.spells) == 'table' then
+            local rules = entry.spells[spellName] or entry.spells["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.spell_face_away = rules
+                return context.spell_face_away
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.spells) == 'table' then
+            local rules = entry.spells[spellName] or entry.spells["*"]
+            if rules then
+                if type(rules) == 'boolean' then
+                    rules = {}
+                end
+
+                context.spell_face_away = rules
+                return context.spell_face_away
             end
         end
     end
@@ -3432,7 +3626,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Suppresses offensive magic spells via canUseSpell (and canUse)
     context.suppressOffensiveMagic = function()
         if context and context.vars then
-            context.vars.__suppress_offensive_magic = true
+            if type(context.vars.__suppress_offensive_magic) == 'number' then
+                context.vars.__suppress_offensive_magic = context.vars.__suppress_offensive_magic + 1
+            else
+                context.vars.__suppress_offensive_magic = 1
+            end
         end
     end
 
@@ -3440,7 +3638,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Cancells suppression of offensive magic spells via canUseSpell (and canUse)
     context.resumeOffensiveMagic = function()
         if context and context.vars then
-            context.vars.__suppress_offensive_magic = false
+            if type(context.vars.__suppress_offensive_magic) == 'number' then
+                context.vars.__suppress_offensive_magic = context.vars.__suppress_offensive_magic - 1
+            end
+
+            if (tonumber(context.vars.__suppress_offensive_magic) or 0) < 1 then
+                context.vars.__suppress_offensive_magic = false
+            end
         end
     end
 
@@ -3448,7 +3652,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Suppresses weapon skills via canUseWeaponSkill
     context.suppressWeaponSkills = function()
         if context and context.vars then
-            context.vars.__suppress_weapon_skills = true
+            if type(context.vars.__suppress_weapon_skills) == 'number' then
+                context.vars.__suppress_weapon_skills = context.vars.__suppress_weapon_skills + 1
+            else
+                context.vars.__suppress_weapon_skills = 1
+            end
         end
     end
 
@@ -3456,7 +3664,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Cancells suppression of weapon skills spells via canUseWeaponSkill
     context.resumeWeaponSkills = function()
         if context and context.vars then
-            context.vars.__suppress_weapon_skills = false
+            if type(context.vars.__suppress_weapon_skills) == 'number' then
+                context.vars.__suppress_weapon_skills = context.vars.__suppress_weapon_skills - 1
+            end
+
+            if (tonumber(context.vars.__suppress_offensive_magic) or 0) < 1 then
+                context.vars.__suppress_weapon_skills = false
+            end
         end
     end
 

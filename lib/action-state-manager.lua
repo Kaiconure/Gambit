@@ -379,6 +379,7 @@ state_manager.clearMobAbility = function(self, mob, finalize)
             self.mobAbilities[mob.id] = nil
         else
             self.mobAbilities[mob.id].cleared = true
+            self.mobAbilities[mob.id].cleared_time = os.clock()
         end
     end
 end
@@ -389,8 +390,13 @@ state_manager.getMobAbilityInfo = function(self, mob, windowed)
     if self.mobAbilities then
         local info = self.mobAbilities[mob.id]
         if info then
+            local now = os.clock()
+
             -- If the maximum time has ellapsed, then we'll clear the ability
-            if os.clock() - info.time > MAX_MOB_ABILITY_TIME then
+            if 
+                (now - info.time > 30) or
+                (type(info.cleared_time) == 'number' and (now - info.cleared_time) > MAX_MOB_ABILITY_TIME)
+            then
                 self.mobAbilities[mob.id] = nil
                 info = nil
             end

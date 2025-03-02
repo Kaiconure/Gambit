@@ -8,59 +8,80 @@
   },
   "vars": {
     "face_away_on_ability": {
-      "abilities": null,
-      "mobs": null
+      "Assailer Chariot": {
+        "abilities": {
+          "Discoid": { "distance": 12 }
+        }
+      },
+      "Glavoid": {
+        "abilities": {
+          "*": {
+            "wait": 4,
+            "allow_offensive_magic": true,
+            "comment": "Only physical damage is absorted when Glavoid is using a TP move, so we'll allow offensive magic."
+          }
+        }
+      },
+      "Raja": {
+        "abilities": {
+          "Royal Decree": { "distance": 20 }
+        }
+      },
+      "Rani": {
+        "abilities": {
+          "*": true
+        }
+      },
+      "*": {
+        "abilities": {
+          "Baleful Gaze": true,
+          "Blaster": true,
+          "Grim Glower": true,
+          "Mortal Blast": true,
+          "Mortal Ray": true,
+          "Oppressive Glare": true
+        }
+      }
     }
   },
   "actions": [
     {
-      "commands": [
-        "setVar('vars.face_away_on_ability.triggered', false)",
-        "setVar('vars.face_away_on_ability._abilities', arrayMerge(vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].abilities, vars.face_away_on_ability.abilities))",
-        "setVar('vars.face_away_on_ability._distance', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].distance)",
-        "setVar('vars.face_away_on_ability._wait', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].wait or vars.face_away_on_ability.wait or 3)"
-      ],
+      "commands": ["setVar('vars.face_away_on_ability.trigger', nil)"],
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
-      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_on_ability.triggered flag cleared and that the right set is loaded."
+      "comment": "This will run exactly once at the start of any battle, and ensure that the trigger is cleared."
     },
     {
-      "when": [
-        "vars.face_away_on_ability.triggered",
-        "not enemyUsingAbility()"
-      ],
+      "when": ["vars.face_away_on_ability.trigger", "not enemyUsingAbility()"],
       "commands": [
-        "setVar('vars.face_away_on_ability.triggered', false)",
-        "resumeOffensiveMagic()",
-        "wait(vars.face_away_on_ability._wait)",
+        "wait(vars.face_away_on_ability.trigger.wait or 2)",
+        "not vars.face_away_on_ability.trigger.allow_offensive_magic and resumeOffensiveMagic()",
+        "setVar('vars.face_away_on_ability.trigger', nil)",
         "log('====== END ABILITY FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
     },
     {
       "when": [
-        "not vars.face_away_on_ability.triggered",
-        "arrayLength(vars.face_away_on_ability._abilities) > 0 and enemyUsingAbility(vars.face_away_on_ability._abilities)"
+        "not vars.face_away_on_ability.trigger",
+        "enemyUsingAbility()",
+        "getMatchingAbilityFaceAway(vars.face_away_on_ability, enemy_ability, bt)"
       ],
       "commands": [
         "faceAway(bt)",
-        "setVar('vars.face_away_on_ability.triggered', true)",
-        "suppressOffensiveMagic()",
-        "vars.face_away_on_ability._distance and align(bt, nil, vars.face_away_on_ability._distance, 8, true)",
-        "faceAway(bt)",
-        "log('====== BEGIN ABILITY FACE-AWAY SEQUENCE ====== ')",
+        "setVar('vars.face_away_on_ability.trigger', ability_face_away)",
+        "not vars.face_away_on_ability.trigger.allow_offensive_magic and suppressOffensiveMagic()",
+        "log(enemy_ability.name, 'detected: BEGIN ABILITY FACE-AWAY SEQUENCE ====== ')",
+        "ability_face_away.distance and align(bt, nil, ability_face_away.distance, 8, true)",
+        "ability_face_away.distance and faceAway(bt)",
         "wait(2)"
       ],
       "delay": 0
     },
     {
-      "when": "vars.face_away_on_ability.triggered",
-      "commands": [
-        "log('Continuing ability face-away...')",
-        "faceAway(bt)",
-        "wait(2)"
-      ],
+      "when": "vars.face_away_on_ability.trigger",
+      "commands": ["faceAway(bt)", "wait(2)"],
       "delay": 0
     }
   ]

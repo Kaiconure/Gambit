@@ -16,6 +16,9 @@
   ],
   "battle": [
     {
+      "import": "reactions/face-away"
+    },
+    {
       "import": "frontline-engagement"
     }
   ],

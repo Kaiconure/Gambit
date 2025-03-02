@@ -488,6 +488,10 @@ local function getNextBattleAction(context)
                 context.spell_recast            = nil   -- Recast (in seconds) of the current spell
                 context.ability                 = nil   -- Current ability
                 context.ability_recast          = nil   -- Recast (in seconds) of the current ability
+                context.ability_face_away       = nil   -- The currently triggered ability face away
+                context.spell_face_away         = nil   -- The currently triggered spell face away
+                context.ability_face_away_start = nil   -- The currently triggered bracketed ability face away starter
+                context.ability_face_away_end   = nil   -- The currently triggered bracketed ability face away closer
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.ranged                  = nil   -- Current ranged attack equipment and ammo info
                 context.effect                  = nil   -- Current buff/effect

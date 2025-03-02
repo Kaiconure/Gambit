@@ -182,6 +182,7 @@ function resetCurrentMob(mob, force)
     -- Only do an update if the new mob is different from the old, or if we're doing a forced update
     if allowReset then
 
+        -- Reset certain battle-specific built-in context variables
         local context = actionStateManager:getContext()
         if context and context.vars then
             context.vars.__suppress_offensive_magic = false

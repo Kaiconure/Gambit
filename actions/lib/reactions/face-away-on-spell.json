@@ -8,51 +8,48 @@
   },
   "vars": {
     "face_away_on_spell": {
-      "spells": null,
-      "mobs": null
+      "Glavoid": {
+        "spells": { "*": { "wait": 4 } }
+      }
     }
   },
   "actions": [
     {
-      "commands": [
-        "setVar('vars.face_away_on_spell.triggered', false)",
-        "setVar('vars.face_away_on_spell._spells', arrayMerge(vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].spells, vars.face_away_on_spell.spells))",
-        "setVar('vars.face_away_on_spell._distance', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].distance)",
-        "setVar('vars.face_away_on_spell._wait', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].wait or vars.face_away_on_spell.wait or 3)"
-      ],
+      "commands": ["setVar('vars.face_away_on_spell.trigger', nil)"],
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
-      "comment": "This will run exactly once at the start of any battle, and ensure that the face_away_on_spell.triggered flag cleared and that the right set is loaded."
+      "comment": "This will run exactly once at the start of any battle, and ensure that the trigger is cleared."
     },
     {
-      "when": ["vars.face_away_on_spell.triggered", "not enemyCastingSpell()"],
+      "when": ["vars.face_away_on_spell.trigger", "not enemyCastingSpell()"],
       "commands": [
-        "setVar('vars.face_away_on_spell.triggered', false)",
-        "resumeOffensiveMagic()",
-        "wait(vars.face_away_on_spell._wait)",
+        "wait(vars.face_away_on_spell.trigger.wait or 2)",
+        "not vars.face_away_on_spell.trigger.allow_offensive_magic and resumeOffensiveMagic()",
+        "setVar('vars.face_away_on_spell.trigger', nil)",
         "log('====== END SPELL FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
     },
     {
       "when": [
-        "not vars.face_away_on_spell.triggered",
-        "arrayLength(vars.face_away_on_spell._spells) >= 0 and enemyCastingSpell(vars.face_away_on_spell._spells)"
+        "not vars.face_away_on_spell.trigger",
+        "enemyCastingSpell()",
+        "getMatchingSpellFaceAway(vars.face_away_on_spell, enemy_spell, bt)"
       ],
       "commands": [
         "faceAway(bt)",
-        "setVar('vars.face_away_on_spell.triggered', true)",
-        "suppressOffensiveMagic()",
-        "vars.face_away_on_spell._distance and align(bt, nil, vars.face_away_on_spell._distance, 8, true)",
-        "faceAway(bt)",
-        "log('====== BEGIN SPELL FACE-AWAY SEQUENCE ====== ')",
+        "setVar('vars.face_away_on_spell.trigger', spell_face_away)",
+        "not vars.face_away_on_spell.trigger.allow_offensive_magic and suppressOffensiveMagic()",
+        "log(enemy_spell.name, 'detected: BEGIN SPELL FACE-AWAY SEQUENCE ====== ')",
+        "spell_face_away.distance and align(bt, nil, spell_face_away.distance, 8, true)",
+        "spell_face_away.distance and faceAway(bt)",
         "wait(2)"
       ],
       "delay": 0
     },
     {
-      "when": "vars.face_away_on_spell.triggered",
+      "when": "vars.face_away_on_spell.trigger",
       "commands": [
         "log('Continuing spell face-away...')",
         "faceAway(bt)",
