@@ -47,7 +47,8 @@
         "faceAway(bt)",
         "setVar('vars.face_away_on_ability.triggered', true)",
         "suppressOffensiveMagic()",
-        "vars.face_away_on_ability._distance and align(bt, nil, vars.face_away_on_ability._distance, 8)",
+        "vars.face_away_on_ability._distance and align(bt, nil, vars.face_away_on_ability._distance, 8, true)",
+        "faceAway(bt)",
         "log('====== BEGIN ABILITY FACE-AWAY SEQUENCE ====== ')",
         "wait(2)"
       ],
