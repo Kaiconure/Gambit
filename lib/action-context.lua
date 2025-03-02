@@ -169,7 +169,7 @@ local function context_array_merge(...)
     local arrays = {...}
     local result = { }
 
-    if #arrays > 0 then
+    if #arrays > 0 and arrays[1] then
         result = { unpack(arrays[1]) }
     end
 
@@ -248,7 +248,7 @@ local function context_table_has_all_field_names(table, array)
         type(array) == 'table' and
         array[1]
     then
-        for i, val in ipairs(array) do
+        for i, val in pairs(array) do
             if table[val] == nil then
                 return false
             end
@@ -360,7 +360,7 @@ local function context_set_var_field(name, field, value)
         end
 
         val[field] = value
-        return val[field]
+        return value
     end
 end
 
@@ -1711,14 +1711,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local weaponSkills = varargs({...})
         local abilities = windower.ffxi.get_abilities()
 
-        if
-            not context.vars or
-            not context.vars.__suppress_weapon_skills
-        then
-            for key, _weaponSkill in ipairs(weaponSkills) do
-                weaponSkill = findWeaponSkill(_weaponSkill)
-                if weaponSkill then
-                    local target = weaponSkill.targets.Self and context.me or context.bt
+        for key, _weaponSkill in ipairs(weaponSkills) do
+            weaponSkill = findWeaponSkill(_weaponSkill)
+            if weaponSkill then
+                local target    = weaponSkill.targets.Self and context.me or context.bt
+                local suppress  = context.vars.__suppress_weapon_skills and target == context.bt
+
+                if not suppress then
                     local targetOutOfRange = target and
                         target.distance and
                         target.distance > math.max(weaponSkill.range, 6)
@@ -2290,11 +2289,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if type(spell) ~= 'nil' then
                     spell = findSpell(spell)
                     if spell then
-                        if 
-                            spell.type ~= 'BlackMagic' or
-                            not context.vars or
-                            not context.vars.__suppress_black_magic
-                        then
+                        -- We will identify offensive spells as those that can target an enemy but not a player.
+                        -- There's a bit of a gray area here, mainly around curative spells cast on undead, but
+                        -- this logic should be correct in 99% of cases or more.
+                        local suppress = context.vars.__suppress_offensive_magic and
+                            spell.targets.Enemy and 
+                            not spell.targets.Self and
+                            not spell.targets.Party and
+                            not spell.targets.Ally
+
+                        if not suppress then
                             local canUse, recast = canUseSpell(player, spell, recasts)
 
                             context.spell = spell
@@ -2466,17 +2470,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.faceAway = function (target)
         target = target or context.bt
         if type(target) == 'string' then target = context[target] end
-        if type(target) ~= 'table' or target.mob == nil then return end
+        if type(target) ~= 'table' or target.id == nil then return end
 
+        -- Cancel any follow job in progress so it doesn't interfere with our facing action
+        local job = smartMove:getJobInfo()
+        if job ~= nil then
+            smartMove:cancelJob()
+        end
+
+        -- Unlock from the target so we can face away
         local player = windower.ffxi.get_player()
         if player.target_locked then
             windower.send_command('input /lockon')
+            context.wait(0.25)
         end
 
-        writeMessage()
-
-        directionality.faceAwayFromTarget(target)
-        context.wait(0.5)
+        if directionality.faceAwayFromTarget(target) then
+            --context.wait(0.125)
+            return true
+        else
+            writeMessage('WARNING: Unable to face away from target!')
+        end
     end
 
     --------------------------------------------------------------------------------------
@@ -2514,7 +2528,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         directionality.faceTarget(target)
         if not success then
             -- TODO: Make this configurable? Parameterized?
-            context.postpone(5)
+            context.postpone(2)
             return false
         end
 
@@ -3415,18 +3429,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Suppresses black magic spells via canUseSpell (and canUse)
-    context.suppressBlackMagic = function()
+    -- Suppresses offensive magic spells via canUseSpell (and canUse)
+    context.suppressOffensiveMagic = function()
         if context and context.vars then
-            context.vars.__suppress_black_magic = true
+            context.vars.__suppress_offensive_magic = true
         end
     end
 
     --------------------------------------------------------------------------------------
-    -- Cancells suppression of black magic spells via canUseSpell (and canUse)
-    context.resumeBlackMagic = function()
+    -- Cancells suppression of offensive magic spells via canUseSpell (and canUse)
+    context.resumeOffensiveMagic = function()
         if context and context.vars then
-            context.vars.__suppress_black_magic = false
+            context.vars.__suppress_offensive_magic = false
         end
     end
 
@@ -3440,7 +3454,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Cancells suppression of weapon skills spells via canUseWeaponSkill
-    context.resumeBlackMagic = function()
+    context.resumeWeaponSkills = function()
         if context and context.vars then
             context.vars.__suppress_weapon_skills = false
         end

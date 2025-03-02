@@ -2,6 +2,16 @@
   "vars": {
     "abyssea": {
       "yellow_proc": {
+        "day_order": [
+          "Firesday",
+          "Earthsday",
+          "Watersday",
+          "Windsday",
+          "Iceday",
+          "Lightningday",
+          "Lightsday",
+          "Darksday"
+        ],
         "day_spells": [
           [
             "Fire III",
@@ -108,6 +118,7 @@
         "hasAllFieldNames(vars.abyssea.yellow_proc.used_spells, vars.abyssea.yellow_proc.usable_spells)"
       ],
       "commands": ["log('All applicable YELLOW PROC spells have been used!')"],
+      "delay": 5,
       "frequency": "infinity",
       "scope": "battle"
     },

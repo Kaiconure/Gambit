@@ -184,7 +184,7 @@ function resetCurrentMob(mob, force)
 
         local context = actionStateManager:getContext()
         if context and context.vars then
-            context.vars.__suppress_black_magic = false
+            context.vars.__suppress_offensive_magic = false
             context.vars.__suppress_weapon_skills = false
         end
         

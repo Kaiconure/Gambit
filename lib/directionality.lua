@@ -52,8 +52,12 @@ end
 -------------------------------------------------------------------------------------
 -- Face the specified direction (semantic or actual radian value)
 directionality.faceDirection = function (direction)
+    if type(direction) == 'number' then
+        return windower.ffxi.turn(direction)
+    end
+
     direction = directionality.directionToRadians(direction)
-    if direction ~= nil then
+    if type(direction) == 'number' then
         windower.ffxi.turn(direction)
         return direction
     end
@@ -139,7 +143,6 @@ directionality.faceAwayFromTarget = function (target, calculationOnly)
             local fromTarget = vector.normalize(V({
                 (me.x - target.x),
                 (me.y - target.y)
-                
             }))
 
             local heading = -directionality.vectorAngle(forward, fromTarget)

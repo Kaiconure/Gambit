@@ -16,7 +16,8 @@
     {
       "commands": [
         "setVar('vars.face_away_on_ability.triggered', false)",
-        "setVar('vars.face_away_on_ability._abilities', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].abilities or vars.face_away_on_ability.abilities)",
+        "setVar('vars.face_away_on_ability._abilities', arrayMerge(vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].abilities, vars.face_away_on_ability.abilities))",
+        "setVar('vars.face_away_on_ability._distance', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].distance)",
         "setVar('vars.face_away_on_ability._wait', vars.face_away_on_ability[bt.name] and vars.face_away_on_ability[bt.name].wait or vars.face_away_on_ability.wait or 3)"
       ],
       "delay": 0,
@@ -31,8 +32,8 @@
       ],
       "commands": [
         "setVar('vars.face_away_on_ability.triggered', false)",
+        "resumeOffensiveMagic()",
         "wait(vars.face_away_on_ability._wait)",
-        "resumeBlackMagic()",
         "log('====== END ABILITY FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
@@ -45,7 +46,8 @@
       "commands": [
         "faceAway(bt)",
         "setVar('vars.face_away_on_ability.triggered', true)",
-        "suppressBlackMagic()",
+        "suppressOffensiveMagic()",
+        "vars.face_away_on_ability._distance and align(bt, nil, vars.face_away_on_ability._distance, 8)",
         "log('====== BEGIN ABILITY FACE-AWAY SEQUENCE ====== ')",
         "wait(2)"
       ],

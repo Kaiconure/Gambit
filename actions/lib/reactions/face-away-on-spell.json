@@ -16,7 +16,8 @@
     {
       "commands": [
         "setVar('vars.face_away_on_spell.triggered', false)",
-        "setVar('vars.face_away_on_spell._spells', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].spells or vars.face_away_on_spell.spells)",
+        "setVar('vars.face_away_on_spell._spells', arrayMerge(vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].spells, vars.face_away_on_spell.spells))",
+        "setVar('vars.face_away_on_spell._distance', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].distance)",
         "setVar('vars.face_away_on_spell._wait', vars.face_away_on_spell[bt.name] and vars.face_away_on_spell[bt.name].wait or vars.face_away_on_spell.wait or 3)"
       ],
       "delay": 0,
@@ -28,8 +29,8 @@
       "when": ["vars.face_away_on_spell.triggered", "not enemyCastingSpell()"],
       "commands": [
         "setVar('vars.face_away_on_spell.triggered', false)",
+        "resumeOffensiveMagic()",
         "wait(vars.face_away_on_spell._wait)",
-        "resumeBlackMagic()",
         "log('====== END SPELL FACE-AWAY SEQUENCE ====== ')"
       ],
       "delay": 0
@@ -42,7 +43,8 @@
       "commands": [
         "faceAway(bt)",
         "setVar('vars.face_away_on_spell.triggered', true)",
-        "suppressBlackMagic()",
+        "suppressOffensiveMagic()",
+        "vars.face_away_on_spell._distance and align(bt, nil, vars.face_away_on_spell._distance, 8)",
         "log('====== BEGIN SPELL FACE-AWAY SEQUENCE ====== ')",
         "wait(2)"
       ],

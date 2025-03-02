@@ -17,8 +17,8 @@
     {
       "commands": [
         "setVar('vars.face_away_bracketed.triggered', false)",
-        "setVar('vars.face_away_bracketed._initiators', vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].initiators or vars.face_away_bracketed.initiators)",
-        "setVar('vars.face_away_bracketed._terminators', vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].terminators or vars.face_away_bracketed.terminators)",
+        "setVar('vars.face_away_bracketed._initiators', arrayMerge(vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].initiators, vars.face_away_bracketed.initiators))",
+        "setVar('vars.face_away_bracketed._terminators', arrayMerge(vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].terminators, vars.face_away_bracketed.terminators))",
         "setVar('vars.face_away_bracketed._wait', vars.face_away_bracketed[bt.name] and vars.face_away_bracketed[bt.name].wait or vars.face_away_bracketed.wait or 3)"
       ],
       "delay": 0,
@@ -33,8 +33,8 @@
       ],
       "commands": [
         "setVar('vars.face_away_bracketed.triggered', false)",
+        "resumeOffensiveMagic()",
         "wait(vars.face_away_bracketed._wait)",
-        "resumeBlackMagic()",
         "log('====== END BRACKETED FACE-AWAY SEQUENCE ====== ')"
       ]
     },
@@ -47,7 +47,7 @@
       "commands": [
         "faceAway(bt)",
         "setVar('vars.face_away_bracketed.triggered', true)",
-        "suppressBlackMagic()",
+        "suppressOffensiveMagic()",
         "log('====== BEGIN BRACKETED FACE-AWAY SEQUENCE ====== ')",
         "wait(2)"
       ],

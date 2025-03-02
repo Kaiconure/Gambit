@@ -1,6 +1,7 @@
 {
   "vars": {
     "abyssea": {
+      "weapons": null,
       "red_proc": {
         "weapons": null,
         "all_ws": [
@@ -27,7 +28,8 @@
         "setVar('vars.abyssea.red_proc.used_ws', {})",
         "setVar('vars.abyssea.red_proc.used_count', 0)",
         "setVar('vars.abyssea.red_proc.usable_ws', {})",
-        "setVar('vars.abyssea.red_proc.reset', true)"
+        "setVar('vars.abyssea.red_proc.reset', true)",
+        "setVar('vars.abyssea.red_proc._weapons', arrayLength(vars.abyssea.red_proc.weapons) > 0 and vars.abyssea.red_proc.weapons or vars.abyssea.weapons)"
       ],
       "delay": 0,
       "frequency": "infinity",
@@ -52,7 +54,7 @@
       "when": [
         "hasAllFieldNames(vars.abyssea.red_proc.used_ws, vars.abyssea.red_proc.usable_ws) or \\",
         "  arrayLength(vars.abyssea.red_proc.usable_ws) == 0",
-        "vars.abyssea.red_proc.weapons and iterate(vars.abyssea.red_proc.weapons)",
+        "arrayLength(vars.abyssea.red_proc._weapons) > 0 and iterate(vars.abyssea.red_proc._weapons)",
         "findUnequippedItem(result)"
       ],
       "commands": [
@@ -61,11 +63,12 @@
         "setVar('vars.abyssea.red_proc.reset', true)",
         "wait(2)"
       ],
-      "frequency": 1
+      "frequency": 1,
+      "scoped_enumerators": true
     },
     {
       "when": [
-        "arrayLength(vars.abyssea.red_proc.weapons) == 0",
+        "arrayLength(vars.abyssea.red_proc._weapons) == 0",
         "hasAllFieldNames(vars.abyssea.red_proc.used_ws, vars.abyssea.red_proc.usable_ws)"
       ],
       "commands": [
