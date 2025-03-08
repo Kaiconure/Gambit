@@ -31,35 +31,52 @@
     {
       "when": [
         "vars.face_away_bracketed.trigger",
-        "enemyUsedAbility()",
+        "enemyUsedAbilityNC()",
         "getMatchingBracketedFaceAwayEnd(vars.face_away_bracketed, enemy_ability, bt)"
       ],
       "commands": [
         "wait(vars.face_away_bracketed.trigger.wait or 2)",
         "not vars.face_away_bracketed.trigger.allow_offensive_magic and resumeOffensiveMagic()",
+        "not vars.face_away_bracketed.trigger.allow_weapon_skills and resumeWeaponSkills()",
         "setVar('vars.face_away_bracketed.trigger', nil)",
+        "enemyUsedAbility(enemy_ability.name)",
         "log(enemy_ability.name, 'detected: END BRACKETED FACE-AWAY SEQUENCE')"
-      ]
+      ],
+      "comment": "Refer to the comment in the next gambit for notes on enemyUsedAbilityNC/enemyUsedAbility."
     },
     {
       "when": [
         "bt",
         "not vars.face_away_bracketed.trigger",
-        "enemyUsedAbility()",
+        "enemyUsedAbilityNC()",
         "getMatchingBracketedFaceAwayStart(vars.face_away_bracketed, enemy_ability, bt)"
       ],
       "commands": [
-        "faceAway(bt)",
+        "ability_face_away_start.no_turn and faceEnemy() or faceAway(bt)",
         "setVar('vars.face_away_bracketed.trigger', ability_face_away_start)",
+        "enemyUsedAbility(enemy_ability.name)",
         "not vars.face_away_bracketed.trigger.allow_offensive_magic and suppressOffensiveMagic()",
+        "not vars.face_away_bracketed.trigger.allow_weapon_skills and suppressWeaponSkills()",
         "log(enemy_ability.name, 'detected: BEGIN BRACKETED FACE-AWAY SEQUENCE ====== ')",
+        "vars.face_away_bracketed.trigger.distance and align(bt, nil, vars.face_away_bracketed.trigger.distance, 8, true)",
+        "vars.face_away_bracketed.trigger.distance and (vars.face_away_bracketed.trigger.no_turn and faceEnemy() or faceAway(bt))",
         "wait(2)"
       ],
-      "delay": 0
+      "delay": 0,
+      "comment": [
+        "The enemyUsedAbilityNC function does [N]ot [C]lear the ability it detects. This allows us",
+        "us further check the ability against the bracketed set while still allowing other gambits",
+        "to detect the ability if we don't have rules for it.",
+        "By calling enemyUsedAbility with the specific matching ability name in the commands",
+        "section, we ensure that it is only cleared once we've actually done something with it."
+      ]
     },
     {
       "when": ["vars.face_away_bracketed.trigger"],
-      "commands": ["faceAway(bt)", "wait(1)"],
+      "commands": [
+        "vars.face_away_bracketed.trigger.no_turn and faceEnemy() or faceAway(bt)",
+        "wait(1)"
+      ],
       "delay": 0
     }
   ]

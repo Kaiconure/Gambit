@@ -559,7 +559,8 @@ function canUseWeaponSkill(player, weaponSkill, abilities)
         hasBuff(player, BUFF_SLEEP2) or
         hasBuff(player, BUFF_STUN) or
         hasBuff(player, BUFF_PETRIFIED) or
-        hasBuff(player, BUFF_AMNESIA)
+        hasBuff(player, BUFF_AMNESIA) or
+        hasBuff(player, BUFF_TERROR)
     then
         return false
     end

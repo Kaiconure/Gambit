@@ -8,7 +8,16 @@
         "Frayed Sack (Fer)",
         "Frayed Sack (Tau)"
       ],
-      "unm_items": ["Bakunawa's Coffer", "Vedrfolnir's Coffer"]
+      "unm_items": ["Bakunawa's Coffer", "Vedrfolnir's Coffer"],
+      "woe_items": [
+        "Frayed Sack (D)",
+        "Frayed Sack (L)",
+        "Frayed Pouch (A)",
+        "Frayed Pouch (B)",
+        "Frayed Pouch (D)",
+        "Frayed Pouch (G)",
+        "Frayed Pouch (R)"
+      ]
     }
   },
   "actions": [
@@ -21,6 +30,11 @@
       "when": "canUseItem(vars.common_consumables.unm_items)",
       "commands": ["useItem(me)"],
       "comment": "UNM Items"
+    },
+    {
+      "when": "canUseItem(vars.common_consumables.woe_items)",
+      "commands": ["useItem(me)"],
+      "comment": "Walk of Echoes Items"
     }
   ]
 }

@@ -132,6 +132,7 @@ ActionPacket.open_listener(function (act)
     then
         local actorId = actionPacket:get_id()
         local actor = windower.ffxi.get_mob_by_id(actorId)
+        local my_target = windower.ffxi.get_mob_by_target('t')
 
         if actor and actor.valid_target and actor.in_alliance then
             local targetInfo = actionPacket:get_targets()()

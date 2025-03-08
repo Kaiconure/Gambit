@@ -4,12 +4,12 @@
   },
   "actions": [
     {
-      "when": "me.hpp <= 0",
+      "when": ["me.hpp <= 0 and not hasBuff('Battlefield')"],
       "commands": "log('Death has occurred. Disable automation within 20 seconds to avoid automatically returning to your homepoint.')",
       "frequency": 60
     },
     {
-      "when": "me.hpp <= 0",
+      "when": ["me.hpp <= 0 and not hasBuff('Battlefield')"],
       "commands": "deathWarp()",
       "comment": "This action can only be used if you're dead. Put it into the [dead] actions section if you want to return to homepoint on death.",
       "delay": 20

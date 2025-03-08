@@ -161,6 +161,8 @@ local function sm_movement_exp(self, job)
         coroutine.sleep(0.25)
     end
 
+    local originalStatus = player.status
+
     -- Stop any prior movement
     windower.ffxi.follow(-1)
     windower.ffxi.run(false)
@@ -225,6 +227,7 @@ local function sm_movement_exp(self, job)
             if 
                 JITTER_ENABLED and
                 job.canJitter and
+                originalStatus == 1 and -- Only allow jittering during battle???
                 #speeds >= MIN_AVERAGING
             then
                 local avg = arrayAverage(speeds)

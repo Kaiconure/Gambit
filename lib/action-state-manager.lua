@@ -372,14 +372,40 @@ state_manager.setMobAbility = function(self, mob, ability, targets)
 end
 
 -----------------------------------------------------------------------------------------
+-- This ensures we don't have an ever-increasing list of mob abilities. It should
+-- be called periodically to purge stale abilities.
+state_manager.purgeStaleMobAbilities = function(self)
+    if self.mobAbilities then
+        for id, info in pairs(self.mobAbilities) do
+            local now = os.clock()
+            if 
+                (info.cleared_time and (now - info.cleared_time) > MAX_MOB_ABILITY_TIME) or
+                (now - info.time) > 120 or
+                not windower.ffxi.get_mob_by_id(id)
+            then
+                self.mobAbilities[id] = nil
+            end
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
 --
 state_manager.clearMobAbility = function(self, mob, finalize)
     if self.mobAbilities and self.mobAbilities[mob.id] then
-        if finalize then
+        local info = self.mobAbilities[mob.id]
+        if 
+            finalize or
+            (info.cleared_time and (os.clock() - info.cleared_time) > MAX_MOB_ABILITY_TIME)
+        then
+            -- We'll actually remove tracking of this ability if finalization has been requested,
+            -- or if it was cleared long enough ago that the ability tracking time has elapsed.
             self.mobAbilities[mob.id] = nil
         else
-            self.mobAbilities[mob.id].cleared = true
-            self.mobAbilities[mob.id].cleared_time = os.clock()
+            info.cleared = true
+            if not info.cleared_time then
+                info.cleared_time = os.clock()
+            end
         end
     end
 end

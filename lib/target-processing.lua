@@ -80,31 +80,35 @@ local function shouldAquireNewTarget(player, party, party_by_id)
     if currentMob then
         checkEngagement = false
 
+        -- Certain environments are set up to allow any number of parties to engage with the same mobs
+        local allowMultiPartyMobs = 
+            hasBuff(player, BUFF_ELVORSEAL) or
+            hasBuff(player, BUFF_BATTLEFIELD)
+
         -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
-        if not hasBuff(player, BUFF_ELVORSEAL) then
-            local mobClaimed = currentMob.claim_id > 0
-            local mobClaimedByParty = party_by_id[currentMob.claim_id]
+        local mobClaimed = currentMob.claim_id > 0
+        local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
-            local claimStolen = 
-                mobClaimed and
-                not mobClaimedByParty and
-                (player.status ~= STATUS_ENGAGED or settings.strategy == TargetStrategy.puller)
-            local claimTimedOut = 
-                not mobClaimed and
-                currentTarget:runtime() >= settings.maxChaseTime
+        local claimStolen = 
+            not allowMultiPartyMobs and
+            mobClaimed and
+            not mobClaimedByParty and
+            (player.status ~= STATUS_ENGAGED or settings.strategy == TargetStrategy.puller)
+        local claimTimedOut = 
+            not mobClaimed and
+            currentTarget:runtime() >= settings.maxChaseTime
 
-            if claimStolen or claimTimedOut then
-                writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
-                    text_number('%.1f':format(currentTarget:runtime())),
-                    text_number(currentMob.claim_id)
-                ))
-                smartMove:cancelJob()
-                windower.send_command('input /attack off')
+        if claimStolen or claimTimedOut then
+            writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
+                text_number('%.1f':format(currentTarget:runtime())),
+                text_number(currentMob.claim_id)
+            ))
+            smartMove:cancelJob()
+            windower.send_command('input /attack off')
 
-                resetCurrentMob(nil)
-            else
-                return false
-            end
+            resetCurrentMob(nil)
+        else
+            return false
         end
     end
 
@@ -329,7 +333,7 @@ function processTargeting(player, party)
     local nearestAggroingMob = nil
 
     local can_initiate = strategy == TargetStrategy.aggressor or strategy == TargetStrategy.puller
-    local hasElvorseal = hasBuff(player, BUFF_ELVORSEAL)
+    local hasElvorseal = hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD)
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 

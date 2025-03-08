@@ -509,6 +509,7 @@ local function getNextBattleAction(context)
                 context.enemy_spell_target      = nil   -- The current mob spell's target
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
+                context.player_result           = nil   -- The result of a player search, i.e. findPlayer('Bauldur')
                 
                 -- Reload the enumerator data
                 if 
@@ -684,7 +685,7 @@ local function doNextActionCycle(time, player, party)
                 local isMobEngaged = 
                     mob and 
                     mob.status == STATUS_ENGAGED and
-                    (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or isPartyId(mob.claim_id)))
+                    (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD) or isPartyId(mob.claim_id)))
 
                 -- If the target mob is already engaged, it's not pullable (no need to pull)
                 hasPullableMob = not isMobEngaged
@@ -767,16 +768,21 @@ function cr_actionProcessor()
         local now = os.clock()
         local time = now - startTime
         local party = windower.ffxi.get_party()
+        local player = windower.ffxi.get_player()
 
-        -- Perform background garbage collection operations
+        -- Perform background garbage collection operations. These will only occur when we are
+        -- not in combat, to ensure that there's no interference with time-sensitive gambits.
         local garbageCollectionAge = now - latestGarbageCollection
-        if garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL then
+        if 
+            garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL and
+            (player == nil or player.in_combat)
+        then
             actionStateManager:clearOthersSpells(true)
+            actionStateManager:purgeStaleMobAbilities()
             latestGarbageCollection = os.clock()
         end
 
         if globals.enabled then
-            local player = windower.ffxi.get_player()
             local me = windower.ffxi.get_mob_by_target('me')
 
             if 

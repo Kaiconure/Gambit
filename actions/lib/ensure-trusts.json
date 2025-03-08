@@ -14,7 +14,11 @@
   },
   "actions": [
     {
-      "when": ["me.is_party_leader", "needsTrust(vars.ensure_trusts.spells)"],
+      "when": [
+        "me.is_party_leader",
+        "needsTrust(vars.ensure_trusts.spells)",
+        "not any(zone_id, 182) or hasBuff('Battlefield')"
+      ],
       "commands": [
         "log('Calling trust:', spell.name)",
         "callTrust()",

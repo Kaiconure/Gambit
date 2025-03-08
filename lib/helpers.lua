@@ -26,6 +26,7 @@ BUFF_SABER_DANCE    = 410
 BUFF_FAN_DANCE      = 411
 BUFF_FOOD           = 251
 BUFF_ELVORSEAL      = 603
+BUFF_BATTLEFIELD    = 254
 
 -------------------------------------------------------------------------------
 -- Known statuses

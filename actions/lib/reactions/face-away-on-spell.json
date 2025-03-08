@@ -9,7 +9,17 @@
   "vars": {
     "face_away_on_spell": {
       "Glavoid": {
-        "spells": { "*": { "wait": 4 } }
+        "spells": {
+          "*": {
+            "wait": 4,
+            "no_turn": true,
+            "comment": [
+              "Glavoid absorbs magic damage (including those from weapon skills) while casting spells.",
+              "The no_turn flag means we won't actually face away, which may seem counter to the point; however",
+              "we will benefit from the cesation of weapon skills and offensive magic, which would heal Glavoid."
+            ]
+          }
+        }
       }
     }
   },
@@ -26,6 +36,7 @@
       "commands": [
         "wait(vars.face_away_on_spell.trigger.wait or 2)",
         "not vars.face_away_on_spell.trigger.allow_offensive_magic and resumeOffensiveMagic()",
+        "not vars.face_away_on_spell.trigger.allow_weapon_skills and resumeWeaponSkills()",
         "setVar('vars.face_away_on_spell.trigger', nil)",
         "log('====== END SPELL FACE-AWAY SEQUENCE ====== ')"
       ],
@@ -38,12 +49,13 @@
         "getMatchingSpellFaceAway(vars.face_away_on_spell, enemy_spell, bt)"
       ],
       "commands": [
-        "faceAway(bt)",
+        "spell_face_away.no_turn and faceEnemy() or faceAway(bt)",
         "setVar('vars.face_away_on_spell.trigger', spell_face_away)",
         "not vars.face_away_on_spell.trigger.allow_offensive_magic and suppressOffensiveMagic()",
+        "not vars.face_away_on_spell.trigger.allow_weapon_skills and suppressWeaponSkills()",
         "log(enemy_spell.name, 'detected: BEGIN SPELL FACE-AWAY SEQUENCE ====== ')",
-        "spell_face_away.distance and align(bt, nil, spell_face_away.distance, 8, true)",
-        "spell_face_away.distance and faceAway(bt)",
+        "vars.face_away_on_spell.distance and align(bt, nil, vars.face_away_on_spell.distance, 8, true)",
+        "vars.face_away_on_spell.distance and (vars.face_away_on_spell.no_turn and faceEnemy() or faceAway(bt))",
         "wait(2)"
       ],
       "delay": 0
@@ -51,8 +63,7 @@
     {
       "when": "vars.face_away_on_spell.trigger",
       "commands": [
-        "log('Continuing spell face-away...')",
-        "faceAway(bt)",
+        "vars.face_away_on_spell.trigger.no_turn and faceEnemy() or faceAway(bt)",
         "wait(2)"
       ],
       "delay": 0

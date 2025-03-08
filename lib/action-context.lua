@@ -1506,6 +1506,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.game_time.day_element = day.element
         context.game_time.yesterday = (day.id - 1) % 8
         context.game_time.tomorrow = (day.id + 1) % 8
+
+        context.zone_id = context.game_info.zone
+
+        --context.zone = resources.zones[context.game_info.zone] or nil
     end
 
     -- Store a mapping of id->member and index->member for the party
@@ -2458,10 +2462,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             smartMove:cancelJob()
         end
 
-        writeVerbose('Facing toward %s target: %s':format(
-            text_action(context.actionType, Colors.verbose),
-            text_mob(context.bt.name, Colors.verbose)
-        ))
+        -- writeVerbose('Facing toward %s target: %s':format(
+        --     text_action(context.actionType, Colors.verbose),
+        --     text_mob(context.bt.name, Colors.verbose)
+        -- ))
         return directionality.faceTarget(context.bt.mob) ~= nil
     end
 
@@ -2571,9 +2575,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local entry = faceaways[mobName]
         if type(entry) == 'table' and type(entry.initiators) == 'table' then
             local rules = entry.initiators[abilityName] or entry.initiators["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.ability_face_away_start = rules
@@ -2585,9 +2593,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         entry = faceaways["*"]
         if type(entry) == 'table' and type(entry.initiators) == 'table' then
             local rules = entry.initiators[abilityName] or entry.initiators["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.ability_face_away_start = rules
@@ -2619,9 +2631,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local entry = faceaways[mobName]
         if type(entry) == 'table' and type(entry.terminators) == 'table' then
             local rules = entry.terminators[abilityName] or entry.terminators["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.ability_face_away_end = rules
@@ -2633,9 +2649,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         entry = faceaways["*"]
         if type(entry) == 'table' and type(entry.terminators) == 'table' then
             local rules = entry.terminators[abilityName] or entry.terminators["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.ability_face_away_end = rules
@@ -2667,9 +2687,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local entry = faceaways[mobName]
         if type(entry) == 'table' and type(entry.abilities) == 'table' then
             local rules = entry.abilities[abilityName] or entry.abilities["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.ability_face_away = rules
@@ -2681,9 +2705,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         entry = faceaways["*"]
         if type(entry) == 'table' and type(entry.abilities) == 'table' then
             local rules = entry.abilities[abilityName] or entry.abilities["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.ability_face_away = rules
@@ -2715,9 +2743,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local entry = faceaways[mobName]
         if type(entry) == 'table' and type(entry.spells) == 'table' then
             local rules = entry.spells[spellName] or entry.spells["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.spell_face_away = rules
@@ -2729,9 +2761,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         entry = faceaways["*"]
         if type(entry) == 'table' and type(entry.spells) == 'table' then
             local rules = entry.spells[spellName] or entry.spells["*"]
-            if rules then
+            if rules ~= nil then
                 if type(rules) == 'boolean' then
-                    rules = {}
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
                 end
 
                 context.spell_face_away = rules
@@ -3095,6 +3131,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find a player by name
+    context.findPlayer = function(name)
+        -- NOTE: The mob array does not contain players. Need to figure out a generalized way to do this.
+        return
     end
 
     context.findMob = function(identifier, distance, withAggro)
@@ -3728,7 +3771,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Trigger if our enemy used a TP move recently.
+    -- Trigger if our enemy used a TP move recently. The ability will be cleared, so
+    -- it will NOT be detectable on subsequent calls.
     context.enemyUsedAbility = function (...)
         if context.bt then
             local skills = varargs({...})
@@ -3741,6 +3785,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 then
                     -- Clear the mob ability for good. When the second argument is true, it will no longer be tracked.
                     actionStateManager:clearMobAbility(context.bt, true)
+
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy used a TP move recently. The ability will NOT be cleared, so
+    -- it will be detectable on subsequent calls.
+    context.enemyUsedAbilityNC = function (...)
+        if context.bt then
+            local skills = varargs({...})
+            local info = actionStateManager:getMobAbilityInfo(context.bt, true)
+            if info then
+                -- We'll match if either no filters were provided, or if the current  ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- Clear the mob ability for good. When the second argument is false, it will continue to be tracked.
+                    actionStateManager:clearMobAbility(context.bt, false)
 
                     context.enemy_ability = info.ability
                     return info.ability
