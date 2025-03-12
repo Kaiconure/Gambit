@@ -3133,11 +3133,39 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
+    context.findFieldItem = function(name)
+        -- Note:
+        --  Emblazoned Reliquary (Blue)
+        --      - "spawn_type": 2, "models": [965]
+        --  Emblazoned Reliquary (Brown)
+        --      - "spawn_type": 2, "models": [966]
+        --  Emblazoned Reliquary (Gold)
+        --      - "spawn_type": 2, "models": [967]
+        return
+    end
+
     --------------------------------------------------------------------------------------
     -- Find a player by name
     context.findPlayer = function(name)
-        -- NOTE: The mob array does not contain players. Need to figure out a generalized way to do this.
-        return
+        context.player_result = nil
+
+        if type(name) == 'string' then
+            local mobs = windower.ffxi.get_mob_array()
+            if mobs then
+                name = string.lower(name)
+                for key, mob in pairs(mobs) do
+                    if mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == 1 then
+                        if string.lower(mob.name) == name then
+                            local p = { symbol = mob.name, mob = mob }
+                            initContextTargetSymbol(context, p)
+
+                            context.player_result = p
+                            return context.player_result
+                        end
+                    end
+                end
+            end
+        end
     end
 
     context.findMob = function(identifier, distance, withAggro)

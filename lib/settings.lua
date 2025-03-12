@@ -598,8 +598,8 @@ function loadSettings(actionsName, settingsOnly)
     -- is unreachable. This prevents you from getting into infinite wall-running ruts.
     tempSettings.maxChaseTime = tonumber(tempSettings.maxChaseTime)
     if tempSettings.maxChaseTime and tempSettings.maxChaseTime > 0 then
-        -- Clamp the give up period to between 5-30 seconds
-        tempSettings.maxChaseTime = math.clamp(tempSettings.maxChaseTime, 5, 30)
+        -- Clamp the give up period to between 5-60 seconds
+        tempSettings.maxChaseTime = math.clamp(tempSettings.maxChaseTime, 5, 60)
     else
         tempSettings.maxChaseTime = 17
     end

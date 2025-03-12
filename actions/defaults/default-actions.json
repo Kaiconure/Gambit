@@ -24,6 +24,9 @@
   ],
   "idle": [
     {
+      "import": "configuration"
+    },
+    {
       "import": "follow-leader",
       "comment": "Follows the party leader when idle. Does nothing if you are the party leader."
     },

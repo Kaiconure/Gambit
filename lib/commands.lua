@@ -310,7 +310,7 @@ handlers['config'] = function(args)
     if ct > 0 then
         ct = tonumber(args[ct + 1])
         if ct and ct > 0 then
-            ct = math.clamp(ct, 5.0, 30.0)
+            ct = math.clamp(ct, 5.0, 60.0)
             settings.maxChaseTime = ct
             hasChanges = true
         end
