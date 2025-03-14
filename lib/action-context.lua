@@ -21,6 +21,15 @@ local SPECIAL_NEXT_ATTACK_JOB_ABILITIES = {
     "Assassin's Charge"
 }
 
+---------------------------------------------------------------------
+-- Job abilities that we want to have complete faster than the
+-- standard ability time
+local FAST_JOB_ABILITIES = {
+    'Provoke',
+    'Animated Flourish',
+    'Chi Blast'
+}
+
 -----------------------------------------------------------------------------------------
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
@@ -1483,8 +1492,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         strategy = settings.strategy,
         mobTime = mobEngagedTime or 0,
         battleScope = battleScope,
-        skillchain = actionStateManager:getSkillchain(),
-        party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(),
+        skillchain = actionStateManager:getSkillchain(target),
+        party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
         vars = actionStateManager.vars,
     }
 
@@ -2220,6 +2229,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 SPECIAL_NEXT_ATTACK_JOB_ABILITIES[ability.name] 
             then
                 waitTime = 2.0
+                stopWalk = false
+            elseif 
+                FAST_JOB_ABILITIES[ability.name]
+            then
+                waitTime = 0.5
                 stopWalk = false
             end
 
@@ -3671,11 +3685,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.skillchaining = function (...)
         local names = varargs({...})
 
-        local sc = context.skillchain
-        if sc.name ~= nil and 
-            (names[1] == nil or arrayIndexOfStrI(names, sc.name))
+        local skillchain = context.skillchain
+        if
+            skillchain and
+            skillchain.name ~= nil and 
+            (names[1] == nil or arrayIndexOfStrI(names, skillchain.name))
         then
-            context.skillchain_trigger_time = sc.time
+            context.skillchain_trigger_time = skillchain.time
             return true
         end
     end

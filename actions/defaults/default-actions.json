@@ -47,5 +47,10 @@
     {
       "import": "homepoint-on-death"
     }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
   ]
 }

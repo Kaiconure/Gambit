@@ -80,6 +80,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
     if currentMob then
         checkEngagement = false
 
+        local runtime = currentTarget:runtime()
+
         -- Certain environments are set up to allow any number of parties to engage with the same mobs
         local allowMultiPartyMobs = 
             hasBuff(player, BUFF_ELVORSEAL) or
@@ -92,22 +94,47 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         local claimStolen = 
             not allowMultiPartyMobs and
             mobClaimed and
-            not mobClaimedByParty and
-            (player.status ~= STATUS_ENGAGED or settings.strategy == TargetStrategy.puller)
+            not mobClaimedByParty
         local claimTimedOut = 
             not mobClaimed and
-            currentTarget:runtime() >= settings.maxChaseTime
+            runtime >= settings.maxChaseTime
+
+        -- if claimStolen or claimTimedOut then
+        --     writeMessage('claimStolen: %s, claimTimedOut: %s':format(
+        --         text_number(claimStolen and 'yes' or 'no'),
+        --         text_number(claimTimedOut and 'yes' or 'no')
+        --     ))
+        -- end
 
         if claimStolen or claimTimedOut then
-            writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
-                text_number('%.1f':format(currentTarget:runtime())),
-                text_number(currentMob.claim_id)
+            writeMessage('%s / %s: Stolen=%s, TimedOut=%s (%s). Looking for another...':format(
+                text_mob(currentMob.name),
+                text_number(currentMob.id),
+                text_number(claimStolen and 'yes' or 'no'),
+                text_number(claimTimedOut and 'yes' or 'no'),
+                text_number('%.1fs':format(runtime))
             ))
+            -- writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
+            --     text_number('%.1f':format(currentTarget:runtime())),
+            --     text_number(currentMob.claim_id)
+            -- ))
             smartMove:cancelJob()
             windower.send_command('input /attack off')
 
             resetCurrentMob(nil)
         else
+            if player.status ~= STATUS_ENGAGED then
+                local t = windower.ffxi.get_mob_by_target('t')
+                if t == nil or t.id ~= currentMob.id then
+                    writeMessage('WARNING: Forcibly targeting id=%s (current id=%s)...':format(
+                        text_number(currentMob.id),
+                        text_number(t and t.id or 'n/a')
+                    ))
+                    lockTarget(player, currentMob)
+                    coroutine.sleep(1.0)
+                end
+            end
+
             return false
         end
     end
@@ -167,6 +194,7 @@ function lockTarget(player, mob)
                 ['Target'] = mob.id,
                 ['Player Index'] = player.index,
             }))
+            --writeMessage('target packet injected')
         end
     end
 end

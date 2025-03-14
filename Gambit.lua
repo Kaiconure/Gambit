@@ -1,4 +1,4 @@
-__version = '0.95.5-beta14'
+__version = '0.95.5-beta15'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -131,8 +131,15 @@ windower.register_event('zone change', function(zone_id)
     -- Clear tracking info
     actionStateManager:clearOthersSpells()
 
-    -- Disable all the things
-    sendSelfCommand('disable -quiet')
+    local player = windower.ffxi and windower.ffxi.get_player()
+    if
+        player == nil or
+        player.status == nil or
+        not (player.status == 85 or player.status == 5)
+    then
+        -- Disable all the things unless we're mounted
+        sendSelfCommand('disable -quiet')
+    end
     resetCurrentMob(nil, true)
 end)
 

@@ -21,8 +21,8 @@ function recompileActions()
     actionStateManager.needsRecompile = true
 end
 
-function setSkillchain(name)
-    actionStateManager:setSkillchain(name)
+function setSkillchain(name, mob)
+    actionStateManager:setSkillchain(name, mob)
 end
 
 function markMobAbilityStart(mob, ability, targets)
@@ -428,6 +428,7 @@ local function compileAllActions()
     compileActions('idle',      actions, actions and actions.idle or {})
     compileActions('resting',   actions, actions and actions.resting or {})
     compileActions('dead',      actions, actions and actions.dead or {})
+    compileActions('mounted',   actions, actions and actions.mounted or {})
 
     actionStateManager.vars = actions and actions.vars or {}
 
@@ -638,7 +639,14 @@ local function doNextActionCycle(time, player, party)
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
         local context = ActionContext.create('resting', time, mob, mobTime, battleScope, party)
-        local action = processNextAction(context);
+        local action = processNextAction(context)
+        return
+    end
+
+    local isMounted = playerStatus == 85 or playerStatus == 5
+    if isMounted then
+        local context = ActionContext.create('mounted', time, mob, mobTime, battleScope, party)
+        local action = processNextAction(context)
         return
     end
 
@@ -780,6 +788,8 @@ function cr_actionProcessor()
         then
             actionStateManager:clearOthersSpells(true)
             actionStateManager:purgeStaleMobAbilities()
+            actionStateManager:purgeWeaponSkills()
+            actionStateManager:purgeSkillchains()
             latestGarbageCollection = os.clock()
         end
 
@@ -795,9 +805,7 @@ function cr_actionProcessor()
                 local isResting = (playerStatus == STATUS_RESTING)              -- Resting
                 local isDead = player.vitals.hp <= 0                            -- Dead
 
-                if
-                    not isMounted
-                then
+                if 1 == 1 then
                     actionStateManager:tick(time)
 
                     -- As long as we're not dead or resting, we can process targeting info

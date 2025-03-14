@@ -132,105 +132,115 @@ ActionPacket.open_listener(function (act)
     then
         local actorId = actionPacket:get_id()
         local actor = windower.ffxi.get_mob_by_id(actorId)
-        local my_target = windower.ffxi.get_mob_by_target('t')
+        local my_target = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('t')
         local is_actor_allied = actor.in_party or actor.in_alliance
 
-        if actor and actor.id and my_target and my_target.id then
+        if
+            actor and actor.id -- Require an actor
+        then
             local targetInfo = actionPacket:get_targets()()
-            if targetInfo and targetInfo.id and targetInfo.id == my_target.id then
+            if
+                targetInfo and targetInfo.id -- Require a target
+            then
                 local target = windower.ffxi.get_mob_by_id(targetInfo.id)
-                local action = targetInfo:get_actions()()
+                if target and target.id then
+                    local action = targetInfo:get_actions()()
 
-                local id = actionPacket.raw.param
+                    local id = actionPacket.raw.param
 
-                local action_message = action and action.message and resources.action_messages[action.message]
-                local message = action_message and action_message.en or ''
-                local fields = fieldsearch(message)
+                    local action_message = action and action.message and resources.action_messages[action.message]
+                    local message = action_message and action_message.en or ''
+                    local fields = fieldsearch(message)
 
-                local ability = nil
-                local is_ws = false
-                if 
-                    fields.ability
-                then
-                    -- This is an ability. Test things like Wild Flourish, etc. Refer to Gambit.lua/_handle_actionChunk for cross-reference.
-                    ability = resources.job_abilities[id]
-                    if ability then
-                        if 
-                            ability.id ~= 209 and   -- Wild Flourish
-                            ability.id ~= 320       -- Konzen-ittai
-                        then
-                            ability = nil
-                        end
-                    end
-                elseif
-                    fields.spell
-                then
-                    -- This is a spell. TODO: Test things like chain affinity for BLU, etc.
-                    ability = resources.spells[id]
-                else
-                    -- fields.weapon_skill
-                    if id < 256 then
-                        ability = resources.weapon_skills[id]
-                        is_ws = true
-                    else
-                        ability = resources.monster_abilities[id]
-                    end
-                end
-
-                if ability then
-                    local damage = (action and type(action.param) == 'number' and action.param) or nil
-                    local damage_text = (damage == nil and text_red('??', Colors.verbose)) or
-                        (damage > 0 and
-                            'for %s':format(text_number(damage, Colors.verbose)) or
-                            text_red('(miss)', Colors.verbose))
-
-                    if
-                        not is_ws or 
-                        (ability.skillchain_a or '') ~= '' or
-                        (ability.skillchain_b or '') ~= '' or
-                        (ability.skillchain_c or '') ~= ''
+                    local ability = nil
+                    local is_ws = false
+                    if 
+                        fields.ability
                     then
-                        if damage > 0 then
-                            setPartyWeaponSkill(actor, ability, target)
+                        -- This is an ability. Test things like Wild Flourish, etc. Refer to Gambit.lua/_handle_actionChunk for cross-reference.
+                        ability = resources.job_abilities[id]
+                        if ability then
+                            if 
+                                ability.id ~= 209 and   -- Wild Flourish
+                                ability.id ~= 320       -- Konzen-ittai
+                            then
+                                ability = nil
+                            end
                         end
+                    elseif
+                        fields.spell
+                    then
+                        -- This is a spell. TODO: Test things like chain affinity for BLU, etc.
+                        ability = resources.spells[id]
                     else
-                        writeComment('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.comment)))
+                        -- fields.weapon_skill
+                        if id < 256 then
+                            ability = resources.weapon_skills[id]
+                            is_ws = true
+                        else
+                            ability = resources.monster_abilities[id]
+                        end
                     end
-                    
-                    writeVerbose('%s: %s %s %s %s':format(
-                        text_player(actor.name, Colors.verbose),
-                        text_weapon_skill(ability.name, Colors.verbose),
-                        CHAR_RIGHT_ARROW,
-                        text_mob(target.name, Colors.verbose),
-                        damage_text
-                    ))
+
+                    if ability then
+                        local damage = (action and type(action.param) == 'number' and action.param) or nil
+                        local damage_text = (damage == nil and text_red('??', Colors.verbose)) or
+                            (damage > 0 and
+                                'for %s':format(text_number(damage, Colors.verbose)) or
+                                text_red('(miss)', Colors.verbose))
+
+                        if
+                            not is_ws or 
+                            (ability.skillchain_a or '') ~= '' or
+                            (ability.skillchain_b or '') ~= '' or
+                            (ability.skillchain_c or '') ~= ''
+                        then
+                            if damage > 0 then
+                                setPartyWeaponSkill(actor, ability, target)
+                            end
+                        else
+                            writeComment('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.comment)))
+                        end
+
+                        -- We'll still only output if it is our current battle target
+                        if my_target and my_target.id == target.id then                    
+                            writeVerbose('%s: %s %s %s %s':format(
+                                text_player(actor.name, Colors.verbose),
+                                text_weapon_skill(ability.name, Colors.verbose),
+                                CHAR_RIGHT_ARROW,
+                                text_mob(target.name, Colors.verbose),
+                                damage_text
+                            ))
+                        end
+                    end
                 end
             end
         end
     end
 
     -------------------------------------------------------------------------------------
-    -- Skill chaining
+    -- Skillchaining
     if sc_categories:contains(category) and actionPacket.param ~= 0 then
         local target = actionPacket:get_targets()()
-        if target then
-            if isMyBattleTarget(target.id) then
-                local action = target:get_actions()()
-                local add_effect = action:get_add_effect()
-                if add_effect and skillchain_ids:contains(add_effect.message_id) then
-                    local skillchain = add_effect.animation:ucfirst()
-                    local name = skillchain
+        if target and target.id then
+            local action = target:get_actions()()
+            local add_effect = action:get_add_effect()
+            if add_effect and skillchain_ids:contains(add_effect.message_id) then
+                local skillchain = add_effect.animation:ucfirst()
+                local name = skillchain
 
-                    if name then
-                        setSkillchain(name)
+                if name then
+                    setSkillchain(name, target)
 
-                        -- NOTE: action.param is the closing WS damage; action.add_effect_param is the SC damage.
-                        local damage = (action and type(action.add_effect_param) == 'number' and action.add_effect_param) or nil
-                        local multiplier = 0
-                        if type(action.param) == 'number' and action.param > 0 then
-                            multiplier = action.add_effect_param / action.param
-                        end
+                    -- NOTE: action.param is the closing WS damage; action.add_effect_param is the SC damage.
+                    local damage = (action and type(action.add_effect_param) == 'number' and action.add_effect_param) or nil
+                    local multiplier = 0
+                    if type(action.param) == 'number' and action.param > 0 then
+                        multiplier = action.add_effect_param / action.param
+                    end
 
+                    -- We'll still only output if it is our current battle target
+                    if isMyBattleTarget(target.id) then
                         local damage_text = (damage == nil and text_red('??', Colors.verbose)) or
                             (damage > 0 and
                                 'for %s (%s)':format(
@@ -238,7 +248,7 @@ ActionPacket.open_listener(function (act)
                                     text_number('%.2fx':format(multiplier), Colors.verbose)
                                 ) or
                                 text_red('(miss)', Colors.verbose))
-
+                    
                         writeVerbose('Skillchain detected: %s %s':format(text_weapon_skill(name), damage_text))
                     end
                 end

@@ -23,6 +23,7 @@ local state_manager = {
     skillchain = {
         time = 0
     },
+    skillchains = {},
 
     currentSpell = {
         time = 0,
@@ -134,23 +135,27 @@ state_manager.setActionType = function (self, newType)
         local isDead = self.actionType == 'dead'
         local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull')
         local isBattle = (self.actionType == 'battle')
+        local isMounted = (self.actionType == 'mounted')
 
         --local isIdlePullTarget = (newType == 'idle' or newType == 'pull' or self.actionType == 'resting')
         local isNewTypeResting = newType == 'resting'
         local isNewTypeDead = newType == 'dead'
         local isNewTypeIdlePull = newType == 'idle' or newType == 'pull'
         local isNewTypeBattle = newType == 'battle'
+        local isNewTypeMounted = newType == 'mounted'
 
         local mode = (isInit and 'init')
             or (isResting and 'resting')
             or (isDead and 'dead')
             or (isIdlePull and 'idle/pull')
             or (isBattle and 'battle')
+            or (isMounted and 'mounted')
 
         local newMode = (isNewTypeResting and 'resting')
             or (isNewTypeDead and 'dead')
             or (isNewTypeIdlePull and 'idle/pull')
             or (isNewTypeBattle and 'battle')
+            or (isNewTypeMounted and 'mounted')
 
         -- Only reset time if we're transitioning between idle/pull and battle
         --if mode ~= newMode then
@@ -306,55 +311,78 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.setSkillchain = function(self, name)
-    self.skillchain = {
-        name = name,
-        time = os.clock()
-    }
+state_manager.setSkillchain = function(self, name, mob)
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        self.skillchains[mobId] = {
+            name = name,
+            mob = mob,
+            time = os.clock()
+        }
+    end
 end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.getSkillchain = function(self)
-    if self.skillchain.time > 0 and (os.clock() - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
-        self:setSkillchain(nil)
-    end
+state_manager.getSkillchain = function(self, mob)
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        local skillchain = self.skillchains[mobId]
+        if skillchain then
+            if skillchain.time > 0 and (os.clock() - skillchain.time) > MAX_SKILLCHAIN_TIME then
+                self.skillchains[mobId] = nil
+                return
+            end
 
-    return self.skillchain
+            return skillchain
+        end
+    end
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
-    if actor and skill and mob then
-        local skillchains = {}
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        if actor and skill then
+            
+            local skillchains = {}
+            if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
+            if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
+            if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
 
-        -- if skill.skillchain_a and skill.skillchain_a ~= '' then skillchains[#skillchains + 1] = skill.skillchain_a end
-        -- if skill.skillchain_b and skill.skillchain_b ~= '' then skillchains[#skillchains + 1] = skill.skillchain_b end
-        -- if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
-
-        self.weaponSkill = {
-            time = os.clock(),
-            skill = skill,
-            name = skill.name,
-            actor = actor,
-            mob = mob,
-            skillchains = skillchains
-        }
-    else
-        self.weaponSkill = { time = 0 }
+            self.weaponSkills[mobId] = {
+                time = os.clock(),
+                skill = skill,
+                name = skill.name,
+                actor = actor,
+                mob = mob,
+                skillchains = skillchains
+            }
+        else
+            self.weaponSkills[mobId] = nil
+        end
     end
 end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.getPartyWeaponSkillInfo = function(self)
-    -- Keep alive for at most 6 seconds
-    if self.weaponSkill.time > 0 and (os.clock() - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
-        self:setPartyWeaponSkill()
-    end
+state_manager.getPartyWeaponSkillInfo = function(self, mob)
+    if mob then
+        local mobId = tonumber(type(mob) == 'table' and mob.id)
+        if mobId then
+            local weaponSkill = self.weaponSkills[mobId]
 
-    return self.weaponSkill
+            if weaponSkill then
+                if weaponSkill.time > 0 and (os.clock() - weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
+                    self.weaponSkills[mobId] = nil
+                    weaponSkill = nil
+                end
+            end
+
+            return weaponSkill
+        end
+    end
 end
 
 -----------------------------------------------------------------------------------------
@@ -384,6 +412,28 @@ state_manager.purgeStaleMobAbilities = function(self)
                 not windower.ffxi.get_mob_by_id(id)
             then
                 self.mobAbilities[id] = nil
+            end
+        end
+    end
+end
+
+state_manager.purgeWeaponSkills = function(self)
+    if self.weaponSkills then
+        local now = os.clock()
+        for id, info in pairs(self.weaponSkills) do
+            if type(info.time) ~= 'number' or (now - info.time) > 60 then
+                self.weaponSkills[id] = nil
+            end
+        end
+    end
+end
+
+state_manager.purgeSkillchains = function(self)
+    if self.skillchains then
+        local now = os.clock()
+        for id, info in pairs(self.skillchains) do
+            if type(info.time) ~= 'number' or (now - info.time) > 60 then
+                self.skillchains[id] = nil
             end
         end
     end
@@ -829,8 +879,10 @@ state_manager.reset = function (self)
     self.actionWakeTime = 0
     self.actionType = nil
     self.skillchain = { time = 0 }
+    self.skillchains = {}
     self.mobAbilities = {}
     self.weaponSkill = { time = 0 }
+    self.weaponSkills = { }
     self.currentSpell = { time = 0 }
     self.othersSpells = { }
     self.timedAbilities = { }
