@@ -40,10 +40,16 @@
           "Afflicting Gaze": true,
           "Baleful Gaze": true,
           "Blaster": true,
+          "Deathly Glare": { "wait": 4 },
           "Grim Glower": true,
           "Mortal Blast": true,
           "Mortal Ray": true,
-          "Oppressive Glare": true
+          "Oppressive Glare": true,
+          "Shah Mat": {
+            "wait": 6,
+            "allow_offensive_magic": true,
+            "comment": "AOE gaze with terror and doom effect. Seems to last for a while after use."
+          }
         }
       }
     }

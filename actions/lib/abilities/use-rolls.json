@@ -122,6 +122,16 @@
             "summary": "Grants a \"Regain\" effect to party members within area of effect."
           }
         },
+        "Warlock's Roll": {
+          "snake_eye": [3, 8, 10],
+          "double_up": [1, 2, 3, 5],
+          "data": {
+            "lucky": 4,
+            "unlucky": 8,
+            "sub": "RDM",
+            "summary": "Enhances magic accuracy for party members within area of effect."
+          }
+        },
         "Wizard's Roll": {
           "snake_eye": [4, 9, 10],
           "double_up": [1, 2, 3, 4],

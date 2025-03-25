@@ -518,7 +518,7 @@ handlers['target'] = function(args)
 
     if mob then
         local player = windower.ffxi.get_player()
-        lockTarget(player, mob)
+        lockTarget(player, mob, true)
     end
 end
 

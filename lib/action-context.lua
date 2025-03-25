@@ -1502,23 +1502,39 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.party = party or windower.ffxi.get_party() or {}
 
     context.game_time = { hour = 0, minute = 0, day = 0 }
-    if context.game_info and context.game_info.time then
-        -- game_info.time is the number of game minutes since Vanadiel midnight
-        context.game_time.hour = math.floor(context.game_info.time / 60)
-        context.game_time.minute = context.game_info.time % 60
+    if context.game_info then
+        ------------------------------------
+        -- Time info
+        if context.game_info.time then
+            -- game_info.time is the number of game minutes since Vanadiel midnight
+            context.game_time.hour = math.floor(context.game_info.time / 60)
+            context.game_time.minute = context.game_info.time % 60
 
-        -- game_info.day is the id of the current day, from 0-7:
-        --  Firesday, Earthsday, Watersday, Windsday, Iceday, Lightningday, Lightsday, Darksday
-        local day = resources.days[context.game_info.day]
-        context.game_time.day = day.id
-        context.game_time.day_name = day.name
-        context.game_time.day_element = day.element
-        context.game_time.yesterday = (day.id - 1) % 8
-        context.game_time.tomorrow = (day.id + 1) % 8
+            -- game_info.day is the id of the current day, from 0-7:
+            --  Firesday, Earthsday, Watersday, Windsday, Iceday, Lightningday, Lightsday, Darksday
+            local day = resources.days[context.game_info.day]
+            context.game_time.day = day.id
+            context.game_time.day_name = day.name
+            context.game_time.day_element = day.element
+            context.game_time.yesterday = (day.id - 1) % 8
+            context.game_time.tomorrow = (day.id + 1) % 8
+        end
 
+        ------------------------------------
+        -- Zone info
         context.zone_id = context.game_info.zone
+        context.zone = context.zone_id and resources.zones[context.zone_id] or nil
 
-        --context.zone = resources.zones[context.game_info.zone] or nil
+        ------------------------------------
+        -- Weather info
+        context.weather_id = context.game_info.weather
+        context.weather = context.weather_id and resources.weather[context.weather_id]
+        context.weather_element = context.weather and context.weather.element and resources.elements[context.weather.element]
+
+        ------------------------------------
+        -- Moon info
+        context.moon_phase_id = context.game_info.moon_phase
+        context.moon_phase = context.moon_phase_id and resources.moon_phases[context.moon_phase_id]
     end
 
     -- Store a mapping of id->member and index->member for the party
@@ -2436,12 +2452,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         -- If a spell was set, use that
-        if context.spell then
+        if context.spell and context.canUseSpell(context.spell) then
             return context.useSpell(target)
         end
 
         -- If an ability was set, use that
-        if context.ability then
+        if context.ability and context.canUseAbility(context.ability) then
             return context.useAbility(target)
         end
 
@@ -2543,7 +2559,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             position[2],
             math.max(tonumber(duration or 3), 1))
         
-        if noFace then
+        if not noFace then
             directionality.faceTarget(target)
         end
         if not success then
@@ -3692,6 +3708,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             (names[1] == nil or arrayIndexOfStrI(names, skillchain.name))
         then
             context.skillchain_trigger_time = skillchain.time
+            context.skillchain_age = os.clock() - skillchain.time
             return true
         end
     end

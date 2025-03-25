@@ -67,7 +67,10 @@ local function setTargetMob(mob)
         text_number("%03Xh":format(mob.index))
     ))
 
-    lockTarget(player, mob)
+    -- Cancel any active movement job now that we have a target
+    smartMove:cancelJob()
+
+    lockTarget(player, mob, true)
     resetCurrentMob(mob)
 end
 
@@ -91,6 +94,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         local mobClaimed = currentMob.claim_id > 0
         local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
+        local maxDistanceSquared = settings.maxDistance * settings.maxDistance
+
         local claimStolen = 
             not allowMultiPartyMobs and
             mobClaimed and
@@ -98,26 +103,24 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         local claimTimedOut = 
             not mobClaimed and
             runtime >= settings.maxChaseTime
+        local claimOutOfRange = 
+            not mobClaimed and
+            currentMob.distance > maxDistanceSquared
 
-        -- if claimStolen or claimTimedOut then
-        --     writeMessage('claimStolen: %s, claimTimedOut: %s':format(
-        --         text_number(claimStolen and 'yes' or 'no'),
-        --         text_number(claimTimedOut and 'yes' or 'no')
-        --     ))
-        -- end
-
-        if claimStolen or claimTimedOut then
-            writeMessage('%s / %s: Stolen=%s, TimedOut=%s (%s). Looking for another...':format(
+        if 
+            claimStolen or
+            claimTimedOut or
+            claimOutOfRange
+        then
+            writeMessage('%s / %s: Stolen=%s, TimedOut=%s (%s), TooFar=%s. Looking for another...':format(
                 text_mob(currentMob.name),
                 text_number(currentMob.id),
                 text_number(claimStolen and 'yes' or 'no'),
                 text_number(claimTimedOut and 'yes' or 'no'),
-                text_number('%.1fs':format(runtime))
+                text_number('%.1fs':format(runtime)),
+                text_number(claimOutOfRange and 'yes' or 'no')
             ))
-            -- writeMessage('Cannot engage current target after %ss, will find another (claim=%s)...':format(
-            --     text_number('%.1f':format(currentTarget:runtime())),
-            --     text_number(currentMob.claim_id)
-            -- ))
+
             smartMove:cancelJob()
             windower.send_command('input /attack off')
 
@@ -130,8 +133,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
                         text_number(currentMob.id),
                         text_number(t and t.id or 'n/a')
                     ))
-                    lockTarget(player, currentMob)
-                    coroutine.sleep(1.0)
+                    lockTarget(player, currentMob, false)
+                    coroutine.sleep(0.5)
                 end
             end
 
@@ -183,7 +186,7 @@ end
 
 --------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
-function lockTarget(player, mob)
+function lockTarget(player, mob, verify)
     if player and mob then
         if 
             mob.valid_target and
@@ -194,7 +197,35 @@ function lockTarget(player, mob)
                 ['Target'] = mob.id,
                 ['Player Index'] = player.index,
             }))
-            --writeMessage('target packet injected')
+
+            -- In laggy situations, it can take a while for the target to be acquired. This gives us 
+            -- some time to try and ensure we can get the target.
+            if verify then
+                local start = os.clock()
+
+                for i = 1, 5 do                
+                    mob = windower.ffxi.get_mob_by_id(mob.id)
+                    if mob and mob.valid_target then
+                        local t = windower.ffxi.get_mob_by_target('t')
+                        if t ~= nil and t.id == mob.id then
+                            local waitTime = os.clock() - start
+                            if waitTime > 2 then
+                                writeMessage('Exiting target acquisition after %s':format(
+                                    text_number('%.1fs':format(waitTime))
+                                ))
+                            end
+
+                            return true
+                        end
+                    end
+
+                    coroutine.sleep(math.max(i * 0.5, 1))
+                end
+
+                writeMessage('Warning: Target could not be verified after %s!':format(
+                    text_number('%.1fs':format(os.clock() - start))
+                ))
+            end
         end
     end
 end

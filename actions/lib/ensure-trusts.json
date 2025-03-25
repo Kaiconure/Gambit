@@ -29,7 +29,8 @@
     {
       "when": [
         "me.is_party_leader and actionType == 'idle'",
-        "partyAny('is_trust') and hasEffect(member, vars.ensure_trusts.recall_on_effects)"
+        "partyAny('is_trust') and hasEffect(member, vars.ensure_trusts.recall_on_effects)",
+        "canUseSpell(trustSpellName(member.name))"
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to debuff', effect.name)",

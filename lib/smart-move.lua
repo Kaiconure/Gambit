@@ -1055,24 +1055,26 @@ function smartMove:followIndex(follow_index, distance)
         if job.follow_distance > 0 then
             local player = windower.ffxi.get_mob_by_target('me')
 
-            local vPlayer = V({player.x, player.y})
-            local vMob = V({self.mob.x, self.mob.y})
+            if player then
+                local vPlayer = V({player.x, player.y})
+                local vMob = V({self.mob.x, self.mob.y})
 
-            local toTarget = vMob:subtract(vPlayer)
-            local distance = toTarget:length()
-            
-            local pos = vPlayer
-            local scale = 0
-            if distance > 0 then
-                scale = (distance - job.follow_distance) / distance
-                if scale < 0 then
-                    scale = 0.01
+                local toTarget = vMob:subtract(vPlayer)
+                local distance = toTarget:length()
+                
+                local pos = vPlayer
+                local scale = 0
+                if distance > 0 then
+                    scale = (distance - job.follow_distance) / distance
+                    if scale < 0 then
+                        scale = 0.01
+                    end
                 end
+
+                pos = pos:add(toTarget:scale(scale))
+
+                return pos
             end
-
-            pos = pos:add(toTarget:scale(scale))
-
-            return pos
         end
 
         -- Otherwise, just head straight to the mob

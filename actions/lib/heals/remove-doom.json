@@ -1,0 +1,19 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": [
+        "hasBuff('Doom') and (canUseSpell('Cursna') or canUseItem('Holy Water'))"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 0.25
+    },
+    {
+      "when": "partyHasBuff('Doom') and canUse('Cursna')",
+      "commands": "removeEffect(member)",
+      "frequency": 0.25
+    }
+  ]
+}

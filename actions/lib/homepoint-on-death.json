@@ -2,14 +2,20 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "macros": {
+    "can_death_warp": [
+      "not hasBuff('Battlefield', 'Voidwatcher')",
+      "not any(zone_id, 183, 287)"
+    ]
+  },
   "actions": [
     {
-      "when": ["me.hpp <= 0 and not hasBuff('Battlefield')"],
+      "when": ["me.hpp <= 0", "$macro:can_death_warp"],
       "commands": "log('Death has occurred. Disable automation within 20 seconds to avoid automatically returning to your homepoint.')",
       "frequency": 60
     },
     {
-      "when": ["me.hpp <= 0 and not hasBuff('Battlefield')"],
+      "when": ["me.hpp <= 0", "$macro:can_death_warp"],
       "commands": "deathWarp()",
       "comment": "This action can only be used if you're dead. Put it into the [dead] actions section if you want to return to homepoint on death.",
       "delay": 20

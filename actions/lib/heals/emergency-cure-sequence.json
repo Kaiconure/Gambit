@@ -9,6 +9,9 @@
   },
   "actions": [
     {
+      "import": "heals/remove-doom"
+    },
+    {
       "when": [
         "canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
         "partyCount('hpp < 50 and distance <= 10') >= 3"
