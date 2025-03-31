@@ -262,6 +262,8 @@ handlers['config'] = function(args)
     local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
     local ct = tonumber(arrayIndexOfStrI(args, '-chasetime') or arrayIndexOfStrI(args, '-ct') or 0)
     local scd = tonumber(arrayIndexOfStrI(args, '-skillchaindelay') or arrayIndexOfStrI(args, '-scdelay') or arrayIndexOfStrI(args, '-scd') or 0)
+    local tabs = tonumber(arrayIndexOfStrI(args, '-tabs') or 0)
+    local targetingDuration = tonumber(arrayIndexOfStrI(args, '-targetingduration') or arrayIndexOfStrI(args, '-td') or 0)
     local hasChanges = false
 
     if distance > 0 then
@@ -330,6 +332,32 @@ handlers['config'] = function(args)
 
         writeMessage('Skillchain delay: %s':format(
             pluralize('%.1f':format(settings.skillchainDelay), 'second', 'seconds')
+        ))
+    end
+
+    if tabs > 0 then
+        tabs = tonumber(args[tabs + 1])
+        if tabs and tabs > 0 then
+            tabs = math.floor(math.clamp(tabs, 0.0, 20))
+            settings.maxTabs = tabs
+            hasChanges = true
+        end
+
+        writeMessage('Targeting tab presses: %s':format(
+            text_number(settings.maxTabs)
+        ))
+    end
+
+    if targetingDuration > 0 then
+        targetingDuration = tonumber(args[targetingDuration + 1])
+        if targetingDuration and targetingDuration > 0 then
+            targetingDuration = math.clamp(targetingDuration, 1, 20)
+            settings.targetingDuration = targetingDuration
+            hasChanges = true
+        end
+
+        writeMessage('Max targeting duration: %s':format(
+            pluralize('%.1f':format(settings.targetingDuration), 'second', 'seconds')
         ))
     end
 
@@ -505,20 +533,25 @@ end
 handlers['target'] = function(args)
     local id = arrayIndexOfStrI(args, '-id')
     local index = arrayIndexOfStrI(args, '-index')
+    local name = arrayIndexOfStrI(args, '-name')
 
     id = id and tonumber(args[id + 1]) or 0
     index = index and tonumber(args[index + 1]) or 0
+    name = name and args[name + 1] and tostring(args[name + 1])
 
     local _mob = nil
     if id > 0 then
         mob = windower.ffxi.get_mob_by_id(id)
     elseif index > 0 then
         mob = windower.ffxi.get_mob_by_index(index)
+    elseif name then
+        local context = actionStateManger and actionStateManager:getContext()
+        mob = context and context.findByName(name)
     end
 
     if mob then
         local player = windower.ffxi.get_player()
-        lockTarget(player, mob, true)
+        lockTarget(player, mob)
     end
 end
 
@@ -636,8 +669,11 @@ handlers['mobbuffs'] = function(args)
                 data.mob
             then
                 local mob = data.mob
-                local mobcol = mob.spawn_type == SPAWN_TYPE_TRUST and text_green or text_magenta
-                local type = (mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust' or 'Mob'
+                local mobcol = mob.spawn_type == SPAWN_TYPE_MOB and text_magenta or text_green
+                local type = 
+                    ((mob.spawn_type == SPAWN_TYPE_PLAYER) and 'Player') or
+                    ((mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust')
+                    or 'Mob'
 
                 -- Mob header
                 message = message .. 

@@ -1,5 +1,5 @@
-MAX_SKILLCHAIN_TIME     = 7.5   -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
-MAX_WEAPON_SKILL_TIME   = 7.5   -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_SKILLCHAIN_TIME     = 8.25  -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_WEAPON_SKILL_TIME   = 8.25  -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 MAX_MOB_ABILITY_TIME    = 5     -- The maximum amount of time we'll allow ourselves to respond to a mob ability event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
@@ -344,8 +344,7 @@ end
 state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
     local mobId = tonumber(type(mob) == 'table' and mob.id)
     if mobId then
-        if actor and skill then
-            
+        if actor and skill then            
             local skillchains = {}
             if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
             if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
@@ -646,7 +645,7 @@ state_manager.validateBuffsForMob = function (self, id)
             mob == nil or
             not mob.valid_target or
             mob.hpp == 0 or
-            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB) or            
+            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB and (mob.spawn_type ~= SPAWN_TYPE_PLAYER or mob.in_alliance)) or
             mob.index ~= value.index or
             mob.name ~= value.name
         then

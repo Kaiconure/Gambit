@@ -1,4 +1,4 @@
-__version = '0.95.5-beta16'
+__version = '0.95.5-beta22'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -299,6 +299,45 @@ windower.register_event('action', function(action)
                         globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
                         text_red('been interrupted')
                     ))
+                else
+                    if globals.spellTarget and globals.currentSpell then
+                        local first_action = action.targets and
+                            action.targets[1] and
+                            action.targets[1].actions and
+                            action.targets[1].actions[1]
+                        local damage = first_action and first_action.param
+                        local message_id = first_action and first_action.message
+                        local message = message_id and resources.action_messages[message_id] and resources.action_messages[message_id].en
+                        local fields = fieldsearch(message)
+
+                        local damage_text = nil
+                        if damage then                            
+                            if fields.status then
+                                local status = resources.buffs[damage]
+                                if status then
+                                    damage_text = '(' .. text_buff(status.name) .. ')'
+                                end
+                            elseif string.find(message or '', 'resists the spell') then
+                                damage_text = ''
+                            else
+                                if damage > 0 then
+                                    damage_text = 'for %s%s':format(
+                                        text_number(compress_number(damage), Colors.verbose),
+                                        string.find(message or '', 'Magic Burst!') and text_green(' Magic Burst!') or ''
+                                    )
+                                end
+                            end
+                        end
+
+                        --writeJsonToFile('data/spells/%d_%s_on_%s.json':format(os.clock(), globals.currentSpell.name, globals.spellTarget.name), action)
+
+                        writeVerbose('  Completed! %s %s %s %s':format(
+                                text_spell(globals.currentSpell.name, Colors.verbose),
+                                CHAR_RIGHT_ARROW,
+                                text_target(globals.spellTarget.name, Colors.verbose),
+                                damage_text or ''
+                            ))
+                    end
                 end
                 
                 globals.isSpellCasting = false
@@ -518,7 +557,7 @@ local function reaction_statusRemoval(action, actor, target, reaction, param)
     end
 end
 
-local function reaction_statusAddition(action, actor, target, reaction, param, buffId)
+local function reaction_statusAddition(action, actor, target, reaction, param, buffId, rawPacket)
     -- Successful:  Reaction = 0, Param = <buff-id>
     -- No effect:   Reaction = 1, Param = 0
     -- Resisted:    Reaction = 1, Param = <buff-id>
@@ -544,10 +583,11 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
                         actor
                     )
 
-                    writeVerbose('%s\'s %s on %s had no effect!':format(
+                    writeVerbose('%s\'s %s on %s had %s!':format(
                         text_mob(actor.name, Colors.verbose),
                         text_spell(action.name, Colors.verbose),
-                        text_mob(target.name, Colors.verbose)
+                        text_mob(target.name, Colors.verbose),
+                        text_red('no effect', Colors.verbose)
                     ))
                 end
             end
@@ -561,8 +601,9 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
             if buff then
                 actionStateManager:setMobBuff(target, buff.id, false)
 
-                writeVerbose('%s resisted %s\'s %s!':format(
+                writeVerbose('%s %s %s\'s %s!':format(
                     text_mob(target.name, Colors.verbose),
+                    text_red('resisted', Colors.verbose),
                     text_mob(actor.name, Colors.verbose),
                     text_spell(action.name, Colors.verbose)
                 ))
@@ -581,8 +622,16 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
             actor
         )
 
-        writeComment('%s received %s from %s\'s %s!':format(
+        -- writeJsonToFile('data/add-status/%d_%s_%s_on_%s.json':format(
+        --     os.clock(),
+        --     actor.name,
+        --     buff.name,
+        --     target.name
+        -- ), rawPacket)
+
+        writeComment('%s %s %s from %s\'s %s!':format(
             text_mob(target.name, Colors.comment),
+            text_green('received', Colors.comment),
             text_spell(buff.name, Colors.comment),
             text_mob(actor.name, Colors.comment),
             text_spell(action.name, Colors.comment)
@@ -818,7 +867,7 @@ local _handle_actionChunk = function(id, data)
                     end
 
                     if buffId and buffId > 0 then
-                        reaction_statusAddition(action, actor, target, reaction, param, buffId)
+                        reaction_statusAddition(action, actor, target, reaction, param, buffId, packet)
                     end
                 end
             end

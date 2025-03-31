@@ -501,6 +501,7 @@ local function getNextBattleAction(context)
                 context.point                   = nil   -- The result of a position lookup
                 context.result                  = nil   -- The result of the latest arrayiterator operation
                 context.player_result           = nil   -- The result of the latest find player operation
+                context.find_result             = nil   -- The result of a general find by name operation
                 context.nearest_result          = nil   -- The result of a nearest operation
                 context.farthest_result         = nil   -- The result of a farthest/furthest operation
                 context.furthest_result         = nil   -- The (alternate) result of a farthest/furthest operation
@@ -512,7 +513,6 @@ local function getNextBattleAction(context)
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
                 context.skillchain_age          = math.huge -- The time at which the latest skillchain occurred
-                context.player_result           = nil   -- The result of a player search, i.e. findPlayer('Bauldur')
                 
                 -- Reload the enumerator data
                 if 

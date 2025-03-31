@@ -301,6 +301,8 @@ end
 -- Searches an action message for field names
 function fieldsearch(message)
     local fieldarr = {}
-    string.gsub(message,'{(.-)}', function(a) fieldarr[a] = true end)
+    if message then
+        string.gsub(message,'{(.-)}', function(a) fieldarr[a] = true end)
+    end
     return fieldarr
 end

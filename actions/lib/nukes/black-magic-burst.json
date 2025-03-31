@@ -2,23 +2,44 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "macros": {
+    "check_magic_burst": [
+      "bt and bt.distance < 20",
+      "not hasBuff('Immanence')",
+      "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp"
+    ],
+    "exec_magic_burst": [
+      "log('Magic bursting', skillchain.name, 'with', spell.name)",
+      "equipMany(vars.black_magic_burst.gear.casting)",
+      "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
+      "useSpell()",
+      "equipMany(vars.black_magic_burst.gear.battle)",
+      "vars.black_magic_burst.frequency and vars.black_magic_burst.frequency > 0 and postpone(vars.black_magic_burst.frequency)"
+    ]
+  },
   "actions": [
     {
       "when": [
-        "bt and bt.distance < 20",
-        "not hasBuff('Immanence')",
-        "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp",
-        "not vars.black_magic_burst.max_age or vars.black_magic_burst.max_age < 0 or skillchain_age <= vars.black_magic_burst.max_age",
-        "canUseSpell(withMaxTier(vars.black_magic_burst.max_tier, vars.black_magic_burst[skillchain.name]))"
+        "$macro:check_magic_burst",
+        "vars.black_magic_burst.low_hpp_max_tier",
+        "vars.black_magic_burst.low_hpp and bt.hpp <= vars.black_magic_burst.low_hpp",
+        "canUseSpell(withMaxTier(vars.black_magic_burst.low_hpp_max_tier, vars.black_magic_burst[skillchain.name]))",
+        "skillchain_age <= (vars.black_magic_burst.max_age_by_tier[spellTierFromName(spell)] or 4)"
       ],
-      "commands": [
-        "log('Magic bursting', skillchain.name, 'with', spell.name)",
-        "equipMany(vars.black_magic_burst.gear.casting)",
-        "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
-        "useSpell()",
-        "equipMany(vars.black_magic_burst.gear.battle)",
-        "vars.black_magic_burst.frequency and vars.black_magic_burst.frequency > 0 and postpone(vars.black_magic_burst.frequency)"
+      "commands": ["$macro:exec_magic_burst"],
+      "comment": [
+        "Burst with single-target black magic spells. Customize by defining variables: low_hpp_max_tier, min_mpp",
+        "Note: Immanence is a SCH ability that turns single-target black magic spells into pseudo weapon skills."
+      ]
+    },
+    {
+      "when": [
+        "$macro:check_magic_burst",
+        "not vars.black_magic_burst.low_hpp or bt.hpp > vars.black_magic_burst.low_hpp",
+        "canUseSpell(withMaxTier(vars.black_magic_burst.max_tier, vars.black_magic_burst[skillchain.name]))",
+        "skillchain_age <= (vars.black_magic_burst.max_age_by_tier[spellTierFromName(spell)] or 4)"
       ],
+      "commands": ["$macro:exec_magic_burst"],
       "comment": [
         "Burst with single-target black magic spells. Customize by defining variables: max_tier, min_mpp",
         "Note: Immanence is a SCH ability that turns single-target black magic spells into pseudo weapon skills."
@@ -27,6 +48,14 @@
   ],
   "vars": {
     "black_magic_burst": {
+      "max_age_by_tier": {
+        "1": 6,
+        "2": 6,
+        "3": 5,
+        "4": 4,
+        "5": 4,
+        "6": 3
+      },
       "max_tier": "III",
       "min_mpp": 25,
       "abilities": ["Elemental Seal", "Manawell"],

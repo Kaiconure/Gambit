@@ -70,7 +70,6 @@ function colorize(color, message, returnColor)
     return string.char(0x1E, tonumber(color)) 
         .. (message or '')
         .. string.char(0x1E, returnColor)
-        --.. ((returnColor and string.char(0x1E, returnColor)) or '')
 end
 
 --------------------------------------------------------------------------------------
@@ -254,6 +253,38 @@ function pluralize(count, ifOne, ifOther, returnColor)
     local word = (tonumber(count) == 1 and ifOne or ifOther)
     --return text_number(count, returnColor) .. ' ' .. colorize(returnColor, word, returnColor)
     return text_number(count .. ' ' .. word, returnColor)
+end
+
+local ONE_BILLION   = 1000000000
+local ONE_MILLION   = 1000000
+local ONE_THOUSAND  = 1000
+
+--------------------------------------------------------------------------------------
+-- Turn a number into a smaller version of itself (1,123 -> 1.1k)
+function compress_number(number)
+    number = tonumber(number) or 0
+
+    local magnitude = math.abs(number)
+    local suffix = ''
+    local format = '%.1f'
+    if magnitude > ONE_BILLION then
+        number = number / ONE_BILLION
+        suffix = 'B'
+    elseif magnitude > ONE_MILLION then
+        number = number / ONE_MILLION
+        suffix = 'M'
+    elseif number > ONE_THOUSAND then
+        number = number / ONE_THOUSAND
+        suffix = 'k'
+    end
+
+    magnitude = math.abs(number)
+    local fraction = math.fmod(magnitude, 1)
+    if fraction >= 0.1 and magnitude < 100 then
+        return '%.1f%s':format(number, suffix)
+    else
+        return '%d%s':format(number, suffix)
+    end
 end
 
 --------------------------------------------------------------------------------------

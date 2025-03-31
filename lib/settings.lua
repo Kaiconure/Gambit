@@ -174,22 +174,6 @@ local function loadVars(original, incoming)
     end
 end
 
-local CURRENT_MACRO_KEY = 1
-local currentMacroKey = function()
-    return tostring(CURRENT_MACRO_KEY)
-end
-local incrementMacroKey = function () 
-    CURRENT_MACRO_KEY = CURRENT_MACRO_KEY + 1
-    return tostring(CURRENT_MACRO_KEY)
-end
-local resetMacroKey = function() 
-    CURRENT_MACRO_KEY = 1
-    return tostring(CURRENT_MACRO_KEY)
-end
-local baseMacroKey = function()
-    return "1"
-end
-
 ----------------------------------------------------------------------------------------
 -- Pulls the next round of imports into the specified actions array. Returns
 -- true if new actions were imported as part of this pass.
@@ -200,6 +184,10 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
         if baseActions.vars == nil then
             baseActions.vars = {}
         end
+
+        -- if baseActions.importedImports == nil then
+        --     baseActions.importedImports = {}
+        -- end
 
         for i = #actions, 1, -1 do
             local action = actions[i]
@@ -226,6 +214,15 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                     import = json.parse(file:read())
 
                     if import then
+                        -- if type(import.imports) == 'table' and import.imports[1] then
+                        --     for ii_index, ii_ref in ipairs(import.imports) do
+                        --         local 
+                        --         if not baseActions.importedImports[string.lower(ii_ref.import)] then
+                        --             baseActions.importedImports[string.lower(ii_ref.import)] = { import = string.lower(ii_ref.import) }
+                        --         end
+                        --     end
+                        -- end
+
                         -- Remove the import reference from the calling action
                         table.remove(actions, i)
 
@@ -269,14 +266,6 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                         text_action(actionType),
                         text_gold(action.import)
                     ))
-                end
-            else
-                if 
-                    not action.import and
-                    pass == 1 and
-                    not action.macro_key 
-                then
-                    action.macro_key = baseMacroKey()
                 end
             end
         end
@@ -511,9 +500,29 @@ local function loadActionsFromFile(playerName, fileName)
         loadActionImports(playerName, actions)
         --writeJsonToFile('.\\settings\\%s\\.output\\processed-actions.json':format(playerName), actions)
 
-        if type(actions.vars) == 'table' then
+        -- if type(actions.importedImports) then
+        --     local imported = true
 
-        end
+        --     actions['imported-imports'] = {}
+
+        --     while imported do
+        --         imported = false
+        --         for entry_key, entry in pairs(actions.importedImports) do
+        --             if not entry.imported then
+        --                 arrayAppend(actions['imported-imports'], {
+        --                     import = entry_key,
+        --                     imported = false
+        --                 })
+        --                 imported = true
+        --                 entry.imported = true
+        --             end
+        --         end
+
+        --         if imported then
+        --             --local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
+        --         end
+        --     end
+        -- end
     end
 
     return actions
@@ -610,6 +619,12 @@ function loadSettings(actionsName, settingsOnly)
         tonumber(tempSettings.skillchainDelay) or SKILLCHAIN_DELAY,
         0,
         MAX_SKILLCHAIN_TIME)
+
+    -- The maximum number of tabs to press when having trouble acquiring targets
+    tempSettings.maxTabs = math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 0, 0, 20))
+
+    -- The maximum length of targeting attempts
+    tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 1, 20)
 
     local jobActionsName = nil
     local actions = nil

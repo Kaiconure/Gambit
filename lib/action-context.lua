@@ -164,6 +164,15 @@ end
 
 -----------------------------------------------------------------------------------------
 --
+local function context_key_tap(key, wait)
+    if type(key) == 'string' then
+        windower.send_command('setkey %s down;  wait 0.1; setkey %s up;':format(key, key))
+        coroutine.sleep(tonumber(wait) or 0.2)
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
 local function context_array_length(array)
     if type(array) == 'table' and array[1] then
         return #array
@@ -456,7 +465,13 @@ local function context_noop()
 end
 
 -----------------------------------------------------------------------------------------
---
+-- Generate a random number.
+function context_rand(...)
+    return math.random(...)
+end
+
+-----------------------------------------------------------------------------------------
+-- Randomize the order of elements in an array.
 function context_randomize(...)
     local args = varargs({...})
     local count = args and #args or 0
@@ -1529,7 +1544,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- Weather info
         context.weather_id = context.game_info.weather
         context.weather = context.weather_id and resources.weather[context.weather_id]
-        context.weather_element = context.weather and context.weather.element and resources.elements[context.weather.element]
+        context.weather_element = context.weather and context.weather.element and resources.elements[context.weather.element] and resources.elements[context.weather.element].name
 
         ------------------------------------
         -- Moon info
@@ -1858,6 +1873,43 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- 
+    context.freeInventorySlots = function()
+        -- safe: {
+        --     1: {
+        --         count: int,
+        --         status: int,
+        --         id: int,
+        --         slot: int,
+        --         bazaar: int,
+        --         extdata: string,
+        --     },
+        --     2: {...},
+        --     ...
+        -- }
+        -- locker: {...}
+        -- sack: {...}
+        -- case: {...}
+        -- satchel: {...}
+        -- inventory: {...}
+        -- storage: {...}
+        -- temporary: {...}
+        -- wardrobe: {...}
+        -- treasure: {...}
+        -- gil: int
+
+        local bag_info = windower.ffxi.get_bag_info()
+        --writeJsonToFile('./data/get_bag_info.json', bag_info)
+
+        if bag_info and bag_info.inventory then
+            return bag_info.inventory.max - bag_info.inventory.count
+        end
+
+        return 0
+        
+    end
+
+    --------------------------------------------------------------------------------------
     -- Determine if an item is in the specified slot. Optionally require a strict
     -- match, which looks at the specific item instance. Strict matches are only
     -- available when a context item was set with all the appropriate metadata.
@@ -2077,6 +2129,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             waitTime,
             true
         )
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get the spell tier from a roman numeral-based spell name
+    context.spellTierFromName = function(spell)
+        if type(spell) == 'table' then
+            spell = spell.name
+        end
+
+        if type(spell) ~= 'string' then
+            return 1
+        end
+
+        return romanNumeralTier(spell)
     end
 
     --------------------------------------------------------------------------------------
@@ -3186,11 +3252,39 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 for key, mob in pairs(mobs) do
                     if mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == 1 then
                         if string.lower(mob.name) == name then
-                            local p = { symbol = mob.name, mob = mob }
-                            initContextTargetSymbol(context, p)
+                            local _mob = windower.ffxi.get_mob_by_id(mob.id)
+                            if _mob and _mob.valid_target then
+                                local p = { symbol = _mob.name, mob = _mob }
+                                initContextTargetSymbol(context, p)
 
-                            context.player_result = p
-                            return context.player_result
+                                context.player_result = p
+                                return context.player_result
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find a player by name
+    context.findByName = function(name)
+        context.find_result = nil
+
+        if type(name) == 'string' then
+            local mobs = windower.ffxi.get_mob_array()
+            if mobs then
+                name = string.lower(name)
+                for key, mob in pairs(mobs) do
+                    if string.lower(mob.name) == name then
+                        local _mob = windower.ffxi.get_mob_by_id(mob.id)
+                        if _mob and _mob.valid_target then
+                            local f = { symbol = _mob.name, mob = _mob }
+                            initContextTargetSymbol(context, f)
+
+                            context.find_result = f
+                            return context.find_result
                         end
                     end
                 end
@@ -3720,7 +3814,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local result = context.skillchaining(...)
         if result then
             local t = os.clock()
-            if t - context.skillchain_trigger_time >= 4 then
+            if t - context.skillchain_trigger_time >= settings.skillchainDelay - 1 then
                 return result
             end
         end
@@ -3909,7 +4003,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local result = context.partyUsingWeaponSkill(...)
         if result then
             local t = os.clock()
-            if t - context.skillchain_trigger_time >= 4 then
+            if t - context.skillchain_trigger_time >= settings.skillchainDelay - 1 then
+                --writeVerbose('partyUsingWeaponSkill2: %s':format(result and text_green('true') or text_red('false')))
                 return result
             end
         end
@@ -4225,6 +4320,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Try to set the target cursor to the specified mob
+    context.setTargetCursor = function(mob)
+        local id = type(mob) == 'table' and mob.id or mob
+        if type(id) == 'number' then
+            mob = windower.ffxi.get_mob_by_id(id)
+            if mob and mob.valid_target then
+                return lockTarget(context.player, mob)
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- "Static" context properties
     context.constants = context_constants
     context.const = context.constants
@@ -4247,10 +4354,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.recastTime = context_recastTime
     context.recastReady = context_recastReady
     context.noop = context_noop
+    context.rand = context_rand
     context.randomize = context_randomize
     context.sendCommand = context_send_command
     context.sendCommands = context_send_commands
     context.sendText = context_send_text
+    context.keyTap = context_key_tap
     context.isApex = context_is_apex
     context.isLocus = context_is_locus
     context.isApexTier = context_is_apex_tier
