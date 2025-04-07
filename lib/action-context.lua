@@ -471,6 +471,12 @@ function context_rand(...)
 end
 
 -----------------------------------------------------------------------------------------
+-- Return the absolute value of a number
+function context_abs(n)
+    return math.abs(tonumber(n) or 0)
+end
+
+-----------------------------------------------------------------------------------------
 -- Randomize the order of elements in an array.
 function context_randomize(...)
     local args = varargs({...})
@@ -1511,6 +1517,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
         vars = actionStateManager.vars,
     }
+
+    context.skillchain_trigger_time = 
+        (context.skillchain and context.skillchain.time) or 
+        (context.party_weapon_skill and context.party_weapon_skill.time) or
+        0
 
     context.target = target
     context.player = windower.ffxi.get_player()
@@ -3309,21 +3320,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if isName then identifier = string.lower(identifier) end
 
             for key, mob in pairs(mobs) do
-                if
-                    mob.spawn_type == SPAWN_TYPE_MOB and
-                    mob.valid_target and
-                    mob.hpp > 0 and
-                    mob.distance <= distanceSquared
-                then
+
+                
+                if mob.distance <= distanceSquared then
                     if
-                        (isIndex and identifier == mob.index) or
-                        (isName and identifier == string.lower(mob.name))
+                        mob.spawn_type == SPAWN_TYPE_MOB and
+                        mob.valid_target and
+                        mob.hpp > 0
                     then
                         if
-                            (not withAggro or mob.status == STATUS_ENGAGED) and
-                            (nearest == nil or nearest.distance > mob.distance)
+                            (isIndex and identifier == mob.index) or
+                            (isName and identifier == string.lower(mob.name))
                         then
-                            nearest = mob
+                            if
+                                (not withAggro or mob.status == STATUS_ENGAGED) and
+                                (nearest == nil or nearest.distance > mob.distance)
+                            then
+                                nearest = mob
+                            end
                         end
                     end
                 end
@@ -3813,8 +3827,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.skillchaining2 = function(...)
         local result = context.skillchaining(...)
         if result then
-            local t = os.clock()
-            if t - context.skillchain_trigger_time >= settings.skillchainDelay - 1 then
+            local age = os.clock() - context.skillchain_trigger_time
+            if age >= settings.skillchainDelay - 1 then
                 return result
             end
         end
@@ -4002,8 +4016,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.partyUsingWeaponSkill2 = function(...)
         local result = context.partyUsingWeaponSkill(...)
         if result then
-            local t = os.clock()
-            if t - context.skillchain_trigger_time >= settings.skillchainDelay - 1 then
+            local age = os.clock() - context.skillchain_trigger_time
+            if
+                --(not context.skillchain and age >= SKILLCHAIN_START_DELAY) or
+                (age >= settings.skillchainDelay - 1)
+            then
                 --writeVerbose('partyUsingWeaponSkill2: %s':format(result and text_green('true') or text_red('false')))
                 return result
             end
@@ -4020,7 +4037,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             seconds = math.max(
                 tonumber(seconds) or tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY,
                 0)
-            
+
+             -- If there's no skillchain active, we don't need to space things out too far
+             if not context.skillchain then
+                --writeVerbose('shrinking sc time now with seconds=%.1f, age=%.1f':format(seconds, os.clock() - context.skillchain_trigger_time))
+                seconds = math.min(seconds, SKILLCHAIN_START_DELAY)
+            end
+
             -- Calculate the age of our weapon skill, and the corresponding sleep time needed
             -- to ensure we have a chance at creating a skillchain effect. Note that we will
             -- subtract a small amount of time to account for the general execution delay, 
@@ -4355,6 +4378,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.recastReady = context_recastReady
     context.noop = context_noop
     context.rand = context_rand
+    context.abs = context_abs
     context.randomize = context_randomize
     context.sendCommand = context_send_command
     context.sendCommands = context_send_commands

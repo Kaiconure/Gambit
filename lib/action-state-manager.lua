@@ -3,6 +3,7 @@ MAX_WEAPON_SKILL_TIME   = 8.25  -- The maximum amount of time we'll allow oursel
 MAX_MOB_ABILITY_TIME    = 5     -- The maximum amount of time we'll allow ourselves to respond to a mob ability event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
+SKILLCHAIN_START_DELAY  = 3     -- The delay used between weapon skills if there isn't already a skillchain in progress
 SKILLCHAIN_DELAY        = 5     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 

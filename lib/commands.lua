@@ -674,11 +674,13 @@ handlers['mobbuffs'] = function(args)
                     ((mob.spawn_type == SPAWN_TYPE_PLAYER) and 'Player') or
                     ((mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust')
                     or 'Mob'
+                local t = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('t')
 
                 -- Mob header
                 message = message .. 
-                    '  %s / %s (%s)\n':format(
+                    '  %s%s / %s (%s)\n':format(
                         mobcol(mob.name),
+                        (t and t.id == mob.id) and '**' or '',
                         text_number('%03X':format(mob.index)),
                         type
                     )

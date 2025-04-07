@@ -11,6 +11,7 @@
     "exec_magic_burst": [
       "log('Magic bursting', skillchain.name, 'with', spell.name)",
       "equipMany(vars.black_magic_burst.gear.casting)",
+      "vars.black_magic_burst.gear[skillchain.name] and equipMany(vars.black_magic_burst.gear[skillchain.name])",
       "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
       "useSpell()",
       "equipMany(vars.black_magic_burst.gear.battle)",

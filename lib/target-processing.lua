@@ -218,12 +218,16 @@ function lockTarget(player, mob, battleTarget)
                 local looping = true
                 local tried_bt = false
 
-                while looping do
+                while looping and (not battleTarget or globals.enabled) do
                     local sleep_duration = 0.25
 
                     -- We're done if the target was acquired
                     local target = windower.ffxi.get_mob_by_target('t')
-                    if target and target.id == mob.id then
+                    if 
+                        target and 
+                        target.id == mob.id and
+                        target.index == mob.index
+                    then
                         if duration >= 2 then
                             writeVerbose('Target acquisition of %s was %s after %s':format(
                                 text_mob(mob.name, Colors.verbose),
@@ -234,7 +238,8 @@ function lockTarget(player, mob, battleTarget)
 
                         -- Pull out of first person view if we tabbed
                         if has_tabbed then
-                            windower.send_command('setkey numpad5 down; wait 0.1; setkey numpad5 up; wait 0.1;')
+                            windower.send_command('setkey numpad5 down; wait 0.2; setkey numpad5 up; wait 0.3;')
+                            coroutine.sleep(0.5)
                         end
 
                         --writeMessage('Exiting lockTarget ' .. id)
@@ -249,7 +254,8 @@ function lockTarget(player, mob, battleTarget)
                     if duration > 1.5 or max_tabs > 0 then
                         local bt = battleTarget and windower.ffxi.get_mob_by_target('bt')
                         local just_tried_bt = false
-                        if bt then
+                        if bt and bt.valid_target and bt.hpp > 0 then
+                            
                             if tabs_remaining <= 0 and mob.spawn_type == SPAWN_TYPE_MOB then
                                 -- If the current battle target id matches that of our intended target, we will try
                                 -- try exactly once to use that for direct client-side targeting.
@@ -265,9 +271,9 @@ function lockTarget(player, mob, battleTarget)
                                     sleep_duration = 0.5
                                 end                            
                             end
-                        end
-                        
-                        if not just_tried_bt and settings.maxTabs > 0 and not just_tried_bt then
+                        elseif
+                            not just_tried_bt and max_tabs > 0 
+                        then
                             directionality.faceTarget(mob)
 
                             if tabs_remaining > 0 then
@@ -283,16 +289,15 @@ function lockTarget(player, mob, battleTarget)
                                     local targeting_key = mob.spawn_type == SPAWN_TYPE_PLAYER and 'f9' or 'f8'
 
                                     command = command .. 
-                                        'setkey numpad5 down; wait 0.1; setkey numpad5 up; wait 0.3;' ..
+                                        'setkey numpad5 down; wait 0.2; setkey numpad5 up; wait 0.3;' ..
                                         'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
                                         'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
                                         'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
                                         'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
                                         'setkey escape down;  wait 0.1; setkey escape up;  wait 0.2;' ..
-                                        'setkey %s down; wait 0.1; setkey %s up; wait 0.2;':format(targeting_key, targeting_key) ..
-                                        'setkey numpad5 down; wait 0.1; setkey numpad5 up; wait 0.3;'
+                                        'setkey %s down; wait 0.1; setkey %s up; wait 0.2;':format(targeting_key, targeting_key)
                                         
-                                    sleep_duration = sleep_duration + 2.0
+                                    sleep_duration = sleep_duration + 2.2
                                     has_tabbed = true
                                 else
                                     -- Construct and send the tab press command
@@ -325,7 +330,8 @@ function lockTarget(player, mob, battleTarget)
 
                 -- Pull out of first person view if we tabbed
                 if has_tabbed then
-                    windower.send_command('setkey numpad5 down; wait 0.1; setkey numpad5 up; wait 0.1;')
+                    windower.send_command('setkey numpad5 down; wait 0.2; setkey numpad5 up; wait 0.1;')
+                    coroutine.sleep(0.5)
                 end
             end
         end
@@ -495,7 +501,13 @@ function processTargeting(player, party)
                 coroutine.sleep(0.5)
 
                 local t = windower.ffxi.get_mob_by_target('t')
-                if t and t.spawn_type == SPAWN_TYPE_MOB and t.valid_target then
+                if 
+                    t and
+                    t.spawn_type == SPAWN_TYPE_MOB and
+                    t.valid_target and 
+                    t.id == target.id and
+                    t.index == target.index
+                then
                     setTargetMob(t)
                 end
             end
@@ -538,6 +550,11 @@ function processTargeting(player, party)
                 candidateMob.hpp == 100 or
                 party_by_id[candidateMob.claim_id or 0]
         end
+
+        -- Weird bug with tomb worms; mobs can be engaged and not claimed.
+        -- if candidateMob.status == STATUS_ENGAGED and candidateMob.name == 'Locus Tomb Worm' and (candidateMob.claim_id or 0) == 0 then
+        --     isValidCandidate = false
+        -- end
 
         local shouldIgnore = false
         if isValidCandidate then
