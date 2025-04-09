@@ -1,0 +1,53 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "use_provoke": {
+      "except_members": ["Valaineral"],
+      "min_hpp": 25,
+      "allow_flourish": true,
+      "allow_flash": true,
+      "min_finishing_moves": 1
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt.distance <= 15 and bt.hpp >= vars.use_provoke.min_hpp",
+        "canUse('Provoke')",
+        "arrayLength(vars.use_provoke.except_members) == 0 or not partyByName(vars.use_provoke.except_members)"
+      ],
+      "commands": [
+        "log('Pulling hate from', bt.name, 'with', ability.name)",
+        "use(bt)"
+      ],
+      "delay": 0
+    },
+    {
+      "when": [
+        "vars.use_provoke.allow_flourish",
+        "bt.distance <= 15 and bt.hpp >= vars.use_provoke.min_hpp",
+        "not canUse('Provoke') and not ability_recast",
+        "finishingMoves() > 1 and canUse('Animated Flourish')",
+        "arrayLength(vars.use_provoke.except_members) == 0 or not partyByName(vars.use_provoke.except_members)"
+      ],
+      "commands": [
+        "log('Pulling hate from', bt.name, 'with', ability.name)",
+        "use(bt)"
+      ],
+      "delay": 0
+    },
+    {
+      "when": [
+        "vars.use_provoke.allow_flash",
+        "bt.distance <= 20 and bt.hpp >= vars.use_provoke.min_hpp",
+        "not partyUsingWeaponSkill()",
+        "canUseSpell('Flash')"
+      ],
+      "commands": ["useSpell(bt)"],
+      "frequency": 10,
+      "scope": "battle"
+    }
+  ]
+}

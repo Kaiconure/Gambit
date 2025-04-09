@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Lightning Crystal",
+      "name": "Cornstarch",
+      "ingredients": ["Millioncorn", 2]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

@@ -119,10 +119,14 @@ local function context_send_command(command, ...)
         command = command:format(...)
 
         if settings.verbosity >= VERBOSITY_TRACE then
-            writeTrace('Sending command: ' .. text_magenta(command))
+            writeTrace('Sending command: %s':format(
+                text_magenta(command, Colors.trace)
+            ))
         end
         
         windower.send_command(command)
+
+        return true
     end
 end
 
@@ -141,8 +145,16 @@ local function context_send_commands(...)
     end
 
     if count > 0 then
-        writeMessage('Sending %s to Windower!':format(pluralize(count, 'command', 'commands')))
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('Sending %s: %s':format(
+                pluralize(count, 'command', 'commands', Colors.trace),
+                text_magenta(result, Colors.trace)
+            ))
+        end
+        
         windower.send_command(result)
+
+        return true
     else
         writeMessage('No valid commands were provided.')
     end
@@ -155,10 +167,14 @@ local function context_send_text(command, ...)
         command = ('input ' .. command):format(...)
 
         if settings.verbosity >= VERBOSITY_TRACE then
-            writeTrace('Sending text: ' .. text_magenta(command))
+            writeTrace('Sending command: %s':format(
+                text_magenta(command, Colors.trace)
+            ))
         end
         
         windower.send_command(command)
+
+        return true
     end
 end
 
@@ -167,7 +183,7 @@ end
 local function context_key_tap(key, wait)
     if type(key) == 'string' then
         windower.send_command('setkey %s down;  wait 0.1; setkey %s up;':format(key, key))
-        coroutine.sleep(tonumber(wait) or 0.2)
+        coroutine.sleep((tonumber(wait) or 0.2) + 0.1)
     end
 end
 
@@ -455,7 +471,7 @@ end
 -----------------------------------------------------------------------------------------
 -- Determine if the specified recast time value represents a "ready" status.
 local function context_recastReady(value)
-    return context_recastTime(value) == 0
+    return context_recastTime(value) <= 0
 end
 
 -----------------------------------------------------------------------------------------
@@ -516,15 +532,17 @@ function context_wait(s, ...)
         followJob = smartMove:cancelJob()
     end
 
-    local s = math.max(tonumber(s) or 1, 0)
-    writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
+    s = math.max(tonumber(s) or 1, 0)
+    if settings.verbosity >= VERBOSITY_DEBUG then
+        writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
+    end
     coroutine.sleep(s)
 
     if followJob then
         smartMove:reschedule(followJob)
     end
 
-    return true
+    return s
 end
 
 -----------------------------------------------------------------------------------------
@@ -1325,6 +1343,7 @@ local function initContextTargetSymbol(context, symbol)
     if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
     if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
     if symbol.status == STATUS_IDLE then symbol.is_idle = true end
+    if symbol.status == 44 then symbol.is_crafting = true end
 
     if symbol.is_mob then
         -- Set the has_claim flag when someone in the party has claimed the mob
@@ -1364,10 +1383,15 @@ local function initContextTargetSymbol(context, symbol)
     -----------------------------------------------------------------
     -- Perform a name match on the specified value
     symbol.isNameMatch = function(test)
-        test = string.lower(test or '!!invalid')
-        return test == string.lower(symbol.name or '') or
-            test == string.lower(symbol.symbol or '') or
-            test == string.lower(symbol.symbol2 or '')
+        if type(test) == 'string' then
+            test = string.lower(test or '')
+            return 
+                test ~= '' and (
+                test == string.lower(symbol.name or '') or
+                test == string.lower(symbol.symbol or '') or
+                test == string.lower(symbol.symbol2 or '')
+            )
+        end
     end
 
     -----------------------------------------------------------------
@@ -1878,9 +1902,75 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return context.item
     end
 
+    -- Find the item equipped in the specified slot
     context.findEquipmentInSlot = function(slot)
         context.item = inventory.find_equipment_in_slot(slot)
         return context.item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if all of the specified items are in the inventory. The argument list
+    -- is the names of all items to check, with each item optionally followed by
+    -- a number representing how many are required. If no number is specified, the
+    -- count is assumed to be one (1).
+    context.findItemsInInventory = function (...)
+        local args = varargs({...})
+        local num_missed = 0
+        local num_hit = 0
+
+        local flags = {
+            usable = true,
+            inventory = true
+        }
+
+        local items = windower.ffxi.get_items()
+
+        local i = 1
+        local count = #args
+        local verbose = not arrayIndexOfStrI(args, '-silent')
+        local last_result = nil
+
+        while i <= count do
+            local item = args[i]
+
+            if item == '-silent' then
+                verbose = false  -- This should already be set
+            else
+                if type(item) == 'string' then
+                    -- If we actually got a count, skip past it the next time
+                    local count = tonumber(args[i + 1])
+                    if count then
+                        i = i + 1
+                    else
+                        count = 1
+                    end
+
+                    local result = inventory.find_item(item, flags, items)
+                    if result and result.count >= count then
+                        num_hit = num_hit + 1
+                        last_result = result
+                    else
+                        if verbose then
+                            context.log('Item was not found in inventory: %s%s':format(
+                                text_item(item, Colors.cornsilk),
+                                count > 1 and text_number(' x%d':format(count), Colors.cornsilk) or ''
+                            ))
+                        end
+                        num_missed = num_missed + 1
+                    end
+                else
+                    num_missed = num_missed + 1
+                end
+            end
+
+            i = i + 1
+        end
+
+        context.item = last_result
+
+        -- writeMessage('num_hit: %d, num_missed: %d':format(num_hit, num_missed))
+
+        return num_hit > 0 and num_missed == 0
     end
 
     --------------------------------------------------------------------------------------
@@ -2264,6 +2354,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local player = windower.ffxi.get_player()
             local recasts = windower.ffxi.get_ability_recasts()
 
+            context.ability = nil
+            context.ability_recast = nil
+
             for key, _ability in ipairs(abilities) do
                 local ability = _ability
                 if type(ability) ~= 'nil' then
@@ -2394,6 +2487,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if type(spells) == 'table' and #spells > 0 then
             local player = windower.ffxi.get_player()
             local recasts = windower.ffxi.get_spell_recasts()
+
+            context.spell = nil
+            context.spell_recast = nil
 
             for key, _spell in ipairs(spells) do
                 local spell = _spell
@@ -3916,11 +4012,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Trigger if our enemy is in the process of using a TP move.
+    -- Trigger if our enemy is in the process of using a TP move. The ability WILL be
+    -- cleared in windowed, so it will be detectable on certain subsequent calls.
     context.enemyUsingAbility = function (...)
         if context.bt then
             local skills = varargs({...})
-            local info = actionStateManager:getMobAbilityInfo(context.bt)
+
+            -- We do NOT want to use Windowed mode (second param) for any "using" function; the "using"
+            -- functions are looking for things that are happening right now, and Windowed mode
+            -- is all about detecting when something happened recently (even if it's already done).
+            local info = actionStateManager:getMobAbilityInfo(context.bt, false)
             if info then
                 -- We'll match if either no filters were provided, or if the current ability is in the filter list
                 if 
@@ -3931,6 +4032,35 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     -- Clear the mob ability. It will still be available for what we're calling 'windowed' detection via
                     -- context.enemyUsedAbility. That is, the ability will be detectable for a certain window of time.
                     actionStateManager:clearMobAbility(context.bt)
+
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy is in the process of using a TP move. The ability will NOT be
+    -- cleared, so it will be detectable on subsequent calls.
+    context.enemyUsingAbilityNC = function (...)
+        if context.bt then
+            local skills = varargs({...})
+
+            -- We do NOT want to use Windowed mode (second param) for any "using" function; the "using"
+            -- functions are looking for things that are happening right now, and Windowed mode
+            -- is all about detecting when something happened recently (even if it's already done).
+            local info = actionStateManager:getMobAbilityInfo(context.bt, false)
+            if info then
+                -- We'll match if either no filters were provided, or if the current ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOf(skills, "*") or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- We do NOT clear the ability at all here. It will still be available for subsequent
+                    -- calls, until the ability ends. A call to enemyUsingAbility(enemy_ability) from
+                    -- a gambit can force the actual clear to happen.
 
                     context.enemy_ability = info.ability
                     return info.ability
@@ -4185,10 +4315,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Ensure that the current action does not execute again for at least
     -- the given number of seconds
     context.postpone = function(s)
-        s = math.max(0, tonumber(s) or 0)
-        if s > 0 then
-            writeDebug('Postponing next action execution by %.1fs':format(s))
-            context.action.availableAt = math.max(context.action.availableAt, os.clock() + s)
+        if type(s) == 'number' then
+            if s > 0 then
+                if settings.verbosity >= VERBOSITY_DEBUG then
+                    writeDebug('Postponing next action execution by %s':format(
+                        text_number('%.1fs':format(s), Colors.debug)
+                    ))
+                end
+                context.action.availableAt = math.max(context.action.availableAt, os.clock() + s)
+            end
         end
     end
 
@@ -4339,6 +4474,31 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             mpi.current == mpi.max
         then
             return true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Performs a "tap" on a mob, which is to target it and hit enter and escape
+    context.tap = function(name, max_distance)
+        local mob = name
+        if type(name) == 'string' then
+            mob = context.findByName(name)
+        end
+
+        if type(mob) == 'table' then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        if mob then
+            max_distance = math.max(tonumber(max_distance) or 5, 0)
+            if mob.distance <= (max_distance * max_distance) then
+                local player = windower.ffxi.get_player()
+                if lockTarget(player, mob) then
+                    context.keyTap('enter', 0.25)
+                    context.keyTap('escape', 0.25)
+                    context.keyTap('escape', 0.5)
+                end
+            end
         end
     end
 

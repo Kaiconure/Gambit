@@ -2,13 +2,28 @@
   "about": {
     "author": "@Kaiconure"
   },
+  "vars": {
+    "homepoint_on_death": {
+      "block_on_buffs": ["Battlefield", "Voidwatcher"],
+      "block_on_zones": [183, 287]
+    }
+  },
   "macros": {
     "can_death_warp": [
-      "not hasBuff('Battlefield', 'Voidwatcher')",
-      "not any(zone_id, 183, 287)"
+      "not hasBuff(vars.homepoint_on_death.block_on_buffs) and not any(zone_id, vars.homepoint_on_death.block_on_zones)"
+    ],
+    "cannot_death_warp": [
+      "hasBuff('Battlefield', 'Voidwatcher') or any(zone_id, vars.homepoint_on_death.block_on_zones)"
     ]
   },
   "actions": [
+    {
+      "when": ["me.hpp <= 0", "$macro:cannot_death_warp"],
+      "commands": [
+        "log('Death warp will not occur due to current conditions. Disabling Gambits.')",
+        "sendCommand('gbt disable')"
+      ]
+    },
     {
       "when": ["me.hpp <= 0", "$macro:can_death_warp"],
       "commands": "log('Death has occurred. Disable automation within 20 seconds to avoid automatically returning to your homepoint.')",
@@ -17,8 +32,8 @@
     {
       "when": ["me.hpp <= 0", "$macro:can_death_warp"],
       "commands": "deathWarp()",
-      "comment": "This action can only be used if you're dead. Put it into the [dead] actions section if you want to return to homepoint on death.",
-      "delay": 20
+      "delay": 20,
+      "comment": "This action can only be used if you're dead. Import this gambit into the [dead] actions section if you want to return to homepoint on death."
     }
   ]
 }

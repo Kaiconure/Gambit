@@ -13,6 +13,7 @@
       "targets": {
         "Air Elemental": true,
         "Apex Crab": true,
+        "Asb": true,
         "Darkness Elemental": true,
         "Earth Elemental": true,
         "Fire Elemental": true,
@@ -21,8 +22,14 @@
         "Locus Armet Beetle": true,
         "Locus Tomb Worm": true,
         "Mukasura": true,
+        "Pil": true,
+        "Rukh": true,
+        "Sarbaz": true,
+        "Shah": true,
+        "Sprinkler": true,
         "Thunder Elemental": true,
-        "Water Elemental": true
+        "Water Elemental": true,
+        "Wazir": true
       }
     }
   },

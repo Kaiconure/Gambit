@@ -545,13 +545,27 @@ handlers['target'] = function(args)
     elseif index > 0 then
         mob = windower.ffxi.get_mob_by_index(index)
     elseif name then
-        local context = actionStateManger and actionStateManager:getContext()
+        local context = actionStateManager and actionStateManager:getContext()
         mob = context and context.findByName(name)
     end
 
     if mob then
         local player = windower.ffxi.get_player()
         lockTarget(player, mob)
+    end
+end
+
+handlers['tap'] = function(args)
+    local name = arrayIndexOfStrI(args, '-name')
+    if type(name) == 'number' then
+        name = args[name + 1]
+        if type(name) == 'string' then
+            local context = actionStateManager and actionStateManager:getContext()
+            
+            if context then
+                context.tap(name)
+            end
+        end
     end
 end
 

@@ -324,16 +324,22 @@ inventory.find_item = function(item, flags, items, exclusion_list)
 
     local only_usable = flags.usable
     local only_equippable = flags.equippable
+    local only_inventory = flags.inventory
 
     if not flags.local_id then
         item = findItem(item)    
         if item == nil then return end
     end
 
-    items = items or windower.ffxi.get_items()
-
     local empty = { }
     local bags_to_search = (flags.bag_id and { INVENTORY_BAGS_BY_ID[flags.bag_id] }) or INVENTORY_BAGS_BY_ID
+
+    -- Limit to inventory, if requested
+    if only_inventory then
+        bags_to_search = { INVENTORY_BAGS_BY_ID[INVENTORY_ID_BY_NAME['inventory']] }
+    end
+
+    items = items or windower.ffxi.get_items()    
 
     for bagId, bagInfo in pairs(bags_to_search) do
         local bag_is_usable = bagInfo.usable
@@ -406,7 +412,10 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                     end
                     
                     local isUsableItem = 
-                        (item.category == 'Usable' or (ext and (ext.usable or ext.type == 'Enchanted Equipment'))) and
+                        -- Note: Temporarily skipping the usable item check; let's assume people know
+                        -- what they're asking for at that level.
+                        --(item.category == 'Usable' or (ext and (ext.usable or ext.type == 'Enchanted Equipment'))) and
+
                         bagInfo.usable and
                         bag.enabled and
                         bagItem.status ~= 25 and

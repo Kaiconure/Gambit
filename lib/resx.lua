@@ -75,9 +75,13 @@ end
 --
 local function matchResourceByNameEN(resource, enNameLowerCase)
     local lower = string.lower(resource.en)
+    local lowerl = type(resource.enl) == 'string' and string.lower(resource.enl) or nil
+
     return resource and (
-        lower == enNameLowerCase or
-        "\"%s\"":format(lower) == enNameLowerCase
+        (lower == enNameLowerCase or
+            "\"%s\"":format(lower) == enNameLowerCase) or
+        (lowerl and 
+            (lowerl == enNameLowerCase or "\"%s\"":format(lowerl) == enNameLowerCase))
     )
 end
 

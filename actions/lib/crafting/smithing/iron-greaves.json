@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Earth Crystal",
+      "name": "Iron Greaves",
+      "ingredients": ["Iron Scales", 2, "Cotton Thread", "Leather Highboots"]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}
