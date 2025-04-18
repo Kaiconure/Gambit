@@ -197,8 +197,14 @@ handlers['reload'] = function (args)
     -- the current action state.
     local bypassActions = arrayIndexOfStrI(args, '-settings-only') or arrayIndexOfStrI(args, '-so')
     local actionsName = arrayIndexOfStrI(args, '-actions') or arrayIndexOfStrI(args, '-a')
+    local reload = arrayIndexOfStrI(args, '-reload') or arrayIndexOfStrI(args, '-r')
 
-    actionsName = actionsName and (args[actionsName + 1]) or nil
+    if reload and settings.actionInfo and type(settings.actionInfo.name) == 'string' then
+        writeMessage('Attempting to reload: %s':format(text_action(settings.actionInfo.name)))
+        actionsName = settings.actionInfo.name
+    else
+        actionsName = actionsName and (args[actionsName + 1]) or nil
+    end
 
     reloadSettings(actionsName, bypassActions ~= nil)
 end

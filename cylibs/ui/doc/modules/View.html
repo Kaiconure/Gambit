@@ -1,0 +1,552 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>Reference</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>Cylibs-UI</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+
+
+<h2>Functions</h2>
+<ul class="nowrap">
+    <li><a href="#new">new (frame)</a></li>
+    <li><a href="#destroy">destroy ()</a></li>
+    <li><a href="#getPosition">getPosition ()</a></li>
+    <li><a href="#getAbsolutePosition">getAbsolutePosition ()</a></li>
+    <li><a href="#setPosition">setPosition (x, y)</a></li>
+    <li><a href="#getSize">getSize ()</a></li>
+    <li><a href="#setSize">setSize (width, height)</a></li>
+    <li><a href="#isVisible">isVisible ()</a></li>
+    <li><a href="#setVisible">setVisible (visible)</a></li>
+    <li><a href="#isUserInteractionEnabled">isUserInteractionEnabled ()</a></li>
+    <li><a href="#setUserInteractionEnabled">setUserInteractionEnabled (userInteractionEnabled)</a></li>
+    <li><a href="#setBackgroundColor">setBackgroundColor (color)</a></li>
+    <li><a href="#addSubview">addSubview (view)</a></li>
+    <li><a href="#removeSubview">removeSubview (view)</a></li>
+    <li><a href="#removeAllSubviews">removeAllSubviews (destroy)</a></li>
+    <li><a href="#removeFromSuperview">removeFromSuperview ()</a></li>
+    <li><a href="#setNeedsLayout">setNeedsLayout ()</a></li>
+    <li><a href="#layoutIfNeeded">layoutIfNeeded ()</a></li>
+    <li><a href="#hitTest">hitTest (x, y)</a></li>
+    <li><a href="#getDisposeBag">getDisposeBag ()</a></li>
+    <li><a href="#getUUID">getUUID ()</a></li>
+    <li><a href="#__eq">__eq (otherItem)</a></li>
+</ul>
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><a href="../modules/ListViewItemStyle.html">ListViewItemStyle</a></li>
+  <li><strong>View</strong></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>View</code></h1>
+<p>A generic view class for creating and managing graphical views.</p>
+<p>
+
+</p>
+
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "new"></a>
+    <strong>new (frame)</strong>
+    </dt>
+    <dd>
+    Creates a new View instance.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">frame</span>
+
+
+
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">View</span></span>
+        The newly created View instance.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "destroy"></a>
+    <strong>destroy ()</strong>
+    </dt>
+    <dd>
+    Destroys the view, cleaning up its resources.
+
+
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getPosition"></a>
+    <strong>getPosition ()</strong>
+    </dt>
+    <dd>
+    Gets the position of the view.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        A table with 'x' and 'y' representing the coordinates.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getAbsolutePosition"></a>
+    <strong>getAbsolutePosition ()</strong>
+    </dt>
+    <dd>
+    Gets the position of the view in absolute coordinates.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        A table with 'x' and 'y' representing the coordinates.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "setPosition"></a>
+    <strong>setPosition (x, y)</strong>
+    </dt>
+    <dd>
+    Sets the position of the view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">x</span>
+            <span class="types"><span class="type">number</span></span>
+         The x-coordinate to set.
+        </li>
+        <li><span class="parameter">y</span>
+            <span class="types"><span class="type">number</span></span>
+         The y-coordinate to set.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getSize"></a>
+    <strong>getSize ()</strong>
+    </dt>
+    <dd>
+    Gets the size of the view.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        A table with 'width' and 'height' representing the dimensions.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "setSize"></a>
+    <strong>setSize (width, height)</strong>
+    </dt>
+    <dd>
+    Sets the size of the view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">width</span>
+            <span class="types"><span class="type">number</span></span>
+         The width to set.
+        </li>
+        <li><span class="parameter">height</span>
+            <span class="types"><span class="type">number</span></span>
+         The height to set.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "isVisible"></a>
+    <strong>isVisible ()</strong>
+    </dt>
+    <dd>
+    Checks if the view is currently visible.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        True if the view is visible, false otherwise.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "setVisible"></a>
+    <strong>setVisible (visible)</strong>
+    </dt>
+    <dd>
+    Sets the visibility of the view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">visible</span>
+            <span class="types"><span class="type">boolean</span></span>
+         True to make the view visible, false to hide it.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "isUserInteractionEnabled"></a>
+    <strong>isUserInteractionEnabled ()</strong>
+    </dt>
+    <dd>
+    Checks if user interaction is enabled for the view.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        True if user interaction is enabled, false otherwise.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "setUserInteractionEnabled"></a>
+    <strong>setUserInteractionEnabled (userInteractionEnabled)</strong>
+    </dt>
+    <dd>
+    Sets whether user interaction is enabled for the view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">userInteractionEnabled</span>
+            <span class="types"><span class="type">boolean</span></span>
+         True to enable user interaction, false otherwise.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "setBackgroundColor"></a>
+    <strong>setBackgroundColor (color)</strong>
+    </dt>
+    <dd>
+    Sets the background color of the view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">color</span>
+            <span class="types"><span class="type">Color</span></span>
+         The color to set as the background.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "addSubview"></a>
+    <strong>addSubview (view)</strong>
+    </dt>
+    <dd>
+    Adds a subview to the current view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">view</span>
+            <span class="types"><span class="type">View</span></span>
+         The view to be added as a subview.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "removeSubview"></a>
+    <strong>removeSubview (view)</strong>
+    </dt>
+    <dd>
+    Removes a subview from the current view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">view</span>
+            <span class="types"><span class="type">View</span></span>
+         The view to be removed from the subviews.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "removeAllSubviews"></a>
+    <strong>removeAllSubviews (destroy)</strong>
+    </dt>
+    <dd>
+    Removes all subviews from the current view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">destroy</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Optionally call destroy() on subviews.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "removeFromSuperview"></a>
+    <strong>removeFromSuperview ()</strong>
+    </dt>
+    <dd>
+    Removes the view from its superview.
+
+
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "setNeedsLayout"></a>
+    <strong>setNeedsLayout ()</strong>
+    </dt>
+    <dd>
+    Flags the view for a layout update.
+
+
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "layoutIfNeeded"></a>
+    <strong>layoutIfNeeded ()</strong>
+    </dt>
+    <dd>
+    Checks if layout updates are needed and triggers layout if necessary.
+ This function is typically called before rendering to ensure that the View's layout is up to date.
+
+
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "hitTest"></a>
+    <strong>hitTest (x, y)</strong>
+    </dt>
+    <dd>
+    Checks if the specified coordinates are within the bounds of the view.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">x</span>
+            <span class="types"><span class="type">number</span></span>
+         The x-coordinate to test.
+        </li>
+        <li><span class="parameter">y</span>
+            <span class="types"><span class="type">number</span></span>
+         The y-coordinate to test.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">bool</span></span>
+        True if the coordinates are within the view's bounds, otherwise false.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getDisposeBag"></a>
+    <strong>getDisposeBag ()</strong>
+    </dt>
+    <dd>
+    Returns the DisposeBag associated with this view.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">DisposeBag</span></span>
+        The associated DisposeBag.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getUUID"></a>
+    <strong>getUUID ()</strong>
+    </dt>
+    <dd>
+    Gets the unique identifier of the view.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.4">string</a></span>
+        The unique identifier of the view.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "__eq"></a>
+    <strong>__eq (otherItem)</strong>
+    </dt>
+    <dd>
+    Compares two View instances for equality based on their UUIDs.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">otherItem</span>
+            <span class="types"><span class="type">View</span></span>
+         The other View to compare.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">bool</span></span>
+        True if the Views have the same UUID, false otherwise.
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
+<i style="float:right;">Last updated 2023-09-11 05:57:40 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

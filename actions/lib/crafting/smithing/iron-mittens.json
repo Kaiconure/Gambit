@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Earth Crystal",
+      "name": "Iron Mittens",
+      "ingredients": ["Iron Sheet", "Lizard Skin"]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

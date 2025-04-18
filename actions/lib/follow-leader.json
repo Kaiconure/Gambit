@@ -8,10 +8,11 @@
     {
       "when": [
         "vars.follow_leader.target or (not me.is_party_leader and party_leader)",
-        "partyByName(vars.follow_leader.target or party_leader.name)",
-        "not following(member)"
+        "pinfo[vars.follow_leader.target or party_leader.name]"
       ],
-      "commands": ["follow(member, vars.follow_leader.distance)"],
+      "commands": [
+        "following(pinfo[vars.follow_leader.target or party_leader.name]) or follow(pinfo[vars.follow_leader.target or party_leader.name], vars.follow_leader.distance)"
+      ],
       "frequency": 1,
       "comment": "A distance value of null will result in the configured follow command distance (set or viewed with: //gbt config -fd)."
     }

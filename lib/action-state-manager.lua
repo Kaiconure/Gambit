@@ -315,11 +315,16 @@ end
 state_manager.setSkillchain = function(self, name, mob)
     local mobId = tonumber(type(mob) == 'table' and mob.id)
     if mobId then
-        self.skillchains[mobId] = {
-            name = name,
-            mob = mob,
-            time = os.clock()
-        }
+        if name then
+            self.skillchains[mobId] = {
+                name = name,
+                mob = mob,
+                time = os.clock()
+            }
+        else
+            -- If no name is provided, clear the skillchain on the specified mob
+            self.skillchains[mobId] = nil
+        end
     end
 end
 
@@ -336,6 +341,20 @@ state_manager.getSkillchain = function(self, mob)
             end
 
             return skillchain
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Clear weapon skills for the party
+state_manager.clearPartyWeaponSkills = function(self)
+    if self.weaponSkill then
+        for id, ws in pairs(self.weaponSkills) do
+            if ws and ws.actor then
+                if ws.actor.in_party or ws.actor.in_alliance then
+                    self.weaponSkills[id] = nil
+                end
+            end
         end
     end
 end

@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Fire Crystal",
+      "name": "Brass Ingot",
+      "ingredients": ["Copper Ore", 3, "Zinc Ore"]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

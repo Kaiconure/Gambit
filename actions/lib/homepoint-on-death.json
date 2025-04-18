@@ -31,7 +31,11 @@
     },
     {
       "when": ["me.hpp <= 0", "$macro:can_death_warp"],
-      "commands": "deathWarp()",
+      "commands": [
+        "log('Disabling all gambits and death warping...')",
+        "sendCommand('gbt disable')",
+        "deathWarp()"
+      ],
       "delay": 20,
       "comment": "This action can only be used if you're dead. Import this gambit into the [dead] actions section if you want to return to homepoint on death."
     }

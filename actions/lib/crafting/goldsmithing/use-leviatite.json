@@ -1,0 +1,11 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Wind Crystal",
+      "craft_key": "Aquamarine 2",
+      "name": "Aquamarine",
+      "ingredients": ["Leviatite"]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

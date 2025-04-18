@@ -20,7 +20,6 @@
     },
     {
       "when": [
-        "vars.frontline_engagement.angle ~= nil",
         "actionType == 'battle'",
         "bt and bt.distance <= vars.frontline_engagement.distance + 2",
         "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance)"

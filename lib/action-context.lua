@@ -3048,7 +3048,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -------------------------------------------------------------------------------------
     -- Check if the specified target is being followed
-    context.following = function(target)
+    context.following0 = function(target)
         target = target or context.member or context.bt
         
         if type(target) == 'string' then
@@ -3072,9 +3072,48 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Get the mob we're following, or nil if there is no follow
+    context.following = function (target)
+        -- if context.player and context.player.follow_index then
+        --     local mob = windower.ffxi.get_mob_by_index(context.player.follow_index)
+        --     if mob and mob.valid_target then
+        --         return mob
+        --     end
+        -- end
+
+        if type(target) == 'string' then
+            target = windower.ffxi.get_mob_by_target(target)
+        end
+
+        if type(target) ~= 'table' or not target.id or not target.index then
+            return
+        end
+
+        local jobInfo = smartMove:getJobInfo()
+        if context.player and jobInfo then
+            if jobInfo.follow_index then
+                if target.index == jobInfo.follow_index and target.valid_target then
+                    return target, jobInfo.jobId
+                end
+                -- local mob = windower.ffxi.get_mob_by_index(jobInfo.follow_index)
+                -- if mob and mob.valid_target then
+                --     if target == nil or (target.id == mob.id and target.index == mob.index) then
+                --         return mob, jobInfo.jobId
+                --     end
+                -- end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- 
     context.follow = function (target, distance)
         target = target or context.member or context.bt
+
+        local _mob, _job_id = context.following(target)
+        if _mob and _job_id then
+            return _job_id
+        end
 
         -- Allow string targets
         if type(target) == 'string' then
@@ -3313,27 +3352,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- local command = makeSelfCommand('follow')
         -- sendActionCommand(command, context, 0.5)
         smartMove:cancelJob()
-    end
-
-    --------------------------------------------------------------------------------------
-    -- Get the mob we're following, or nil if there is no follow
-    context.following = function ()
-        -- if context.player and context.player.follow_index then
-        --     local mob = windower.ffxi.get_mob_by_index(context.player.follow_index)
-        --     if mob and mob.valid_target then
-        --         return mob
-        --     end
-        -- end
-
-        local jobInfo = smartMove:getJobInfo()
-        if context.player and jobInfo then
-            if jobInfo.follow_index then
-                local mob = windower.ffxi.get_mob_by_index(jobInfo.follow_index)
-                if mob and mob.valid_target then
-                    return mob
-                end
-            end
-        end
     end
 
     context.findFieldItem = function(name)
@@ -3898,6 +3916,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         return context.latestRoll
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Clears tracking of the current weapon skill and skillchain info (if any)
+    context.resetSkillchain = function()
+        actionStateManager:setSkillchain(nil, context.bt)
+        actionStateManager:clearPartyWeaponSkills()
+
+        context.skillchain = nil
+        context.party_weapon_skill = nil
     end
 
     --------------------------------------------------------------------------------------
@@ -4494,8 +4522,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if mob.distance <= (max_distance * max_distance) then
                 local player = windower.ffxi.get_player()
                 if lockTarget(player, mob) then
-                    context.keyTap('enter', 0.25)
-                    context.keyTap('escape', 0.25)
+                    context.keyTap('enter', 0.5)
+                    context.keyTap('escape', 0.5)
                     context.keyTap('escape', 0.5)
                 end
             end

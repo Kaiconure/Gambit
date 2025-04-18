@@ -4,11 +4,13 @@
       "food": null,
       "crystal": null,
       "name": null,
+      "craft_key": null,
       "ingredients": null,
       "disable_on_ingredients": true,
       "disable_on_inventory": false,
       "sell_npc": null,
       "sell_frequency": 120,
+      "require_imagery": null,
       "crystal_clusters": {
         "Fire Crystal": "Fire Cluster",
         "Ice Crystal": "Ice Cluster",
@@ -96,7 +98,7 @@
       ],
       "commands": [
         "vars.crafting.food and not hasBuff('Food') and canUseItem(vars.crafting.food) and use(me) and wait(2)",
-        "sendCommand('craft clear; wait 0.25; craft make \"%s\"', vars.crafting.name)"
+        "sendCommand('craft clear; wait 0.25; craft make \"%s\"', vars.crafting.craft_key or vars.crafting.name)"
       ],
       "frequency": 10
     },

@@ -1,4 +1,4 @@
-__version = '0.95.5-beta26'
+__version = '0.95.5-beta29'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -133,9 +133,14 @@ windower.register_event('zone change', function(zone_id)
 
     local player = windower.ffxi and windower.ffxi.get_player()
     if
-        player == nil or
-        player.status == nil or
-        not (player.status == 85 or player.status == 5)
+        player and
+        (player.status == 2 or player.status == 3)  -- 2 is DEAD, 3 is ENGAGED DEAD (don't ask me what the difference is)
+
+        -- NOTE: No longer disable on zone change unless dead
+
+        -- player == nil or
+        -- player.status == nil or
+        -- not (player.status == 85 or player.status == 5)
     then
         -- Disable all the things unless we're mounted
         sendSelfCommand('disable -quiet')

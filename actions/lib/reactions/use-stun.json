@@ -3,11 +3,13 @@
     "use_stun": {
       "abilities": {
         "Aqua Ball": true,
+        "Bomb Toss": true,
         "Crystal Bolide": true,
         "Geist Wall": true,
+        "Goblin Rush": true,
         "Healing Breeze": true,
-        "MP Absorption": true,
-        "Oblivion's Mantle": true
+        "Oblivion's Mantle": true,
+        "Self-Destruct": true
       },
       "spells": { "Meteor": true },
       "with_spells": ["Stun"],
