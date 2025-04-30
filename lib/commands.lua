@@ -561,16 +561,88 @@ handlers['target'] = function(args)
     end
 end
 
+handlers['touch'] = function(args)
+    local name = arrayIndexOfStrI(args, '-name')
+    local id = arrayIndexOfStrI(args, '-id')
+    local t = arrayIndexOfStrI(args, '-t')
+    local all = arrayIndexOfStrI(args, '-all')
+
+    local context = actionStateManager and actionStateManager:getContext()
+    local mob = nil
+
+    -- Using current target
+    if mob == nil and type(t) == 'number' then
+        mob = windower.ffxi.get_mob_by_target('t')
+    end
+
+    -- Using mob id
+    if mob == nil and type(id) == 'number' then
+        id = args[id + 1]
+        mob = windower.ffxi.get_mob_by_id(id)
+    end
+
+    -- Using mob name
+    if mob == nil and type(name) == 'number' and context then
+        name = args[name + 1]
+        if name then
+            mob = context.findByName(name)
+        end
+    end
+
+    if mob then
+        --print('all=' .. (all and 'yes' or 'no') .. ' / mob: id=' .. mob.id .. ', name=' .. mob.name)
+        if type(all) == 'number' then
+            local command = 'send @all //gbt touch -id %d':format(mob.id)
+            windower.send_command(command)
+        else
+            writeMessage('Attempting to %s target: %s':format(
+                text_green('touch'),
+                text_mob(mob.name)
+            ))
+            context.touch(mob)
+        end
+    end
+end
+
 handlers['tap'] = function(args)
     local name = arrayIndexOfStrI(args, '-name')
-    if type(name) == 'number' then
+    local id = arrayIndexOfStrI(args, '-id')
+    local t = arrayIndexOfStrI(args, '-t')
+    local all = arrayIndexOfStrI(args, '-all')
+
+    local context = actionStateManager and actionStateManager:getContext()
+    local mob = nil
+
+    -- Using current target
+    if mob == nil and type(t) == 'number' then
+        mob = windower.ffxi.get_mob_by_target('t')
+    end
+
+    -- Using mob id
+    if mob == nil and type(id) == 'number' then
+        id = args[id + 1]
+        mob = windower.ffxi.get_mob_by_id(id)
+    end
+
+    -- Using mob name
+    if mob == nil and type(name) == 'number' and context then
         name = args[name + 1]
-        if type(name) == 'string' then
-            local context = actionStateManager and actionStateManager:getContext()
-            
-            if context then
-                context.tap(name)
-            end
+        if name then
+            mob = context.findByName(name)
+        end
+    end
+
+    if mob then
+        --print('all=' .. (all and 'yes' or 'no') .. ' / mob: id=' .. mob.id .. ', name=' .. mob.name)
+        if type(all) == 'number' then
+            local command = 'send @all //gbt tap -id %d':format(mob.id)
+            windower.send_command(command)
+        else
+            writeMessage('Attempting to %s target: %s':format(
+                text_green('tap'),
+                text_mob(mob.name)
+            ))
+            context.tap(mob)
         end
     end
 end

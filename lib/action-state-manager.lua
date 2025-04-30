@@ -330,6 +330,18 @@ end
 
 -----------------------------------------------------------------------------------------
 --
+state_manager.clearSkillchain = function(self, mob)
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        -- writeVerbose('Clearing SC tracking on %s!':format(
+        --     text_mob(mob.name, Colors.verbose)
+        -- ))
+        self.skillchains[mobId] = nil
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
 state_manager.getSkillchain = function(self, mob)
     local mobId = tonumber(type(mob) == 'table' and mob.id)
     if mobId then
@@ -348,11 +360,16 @@ end
 -----------------------------------------------------------------------------------------
 -- Clear weapon skills for the party
 state_manager.clearPartyWeaponSkills = function(self)
-    if self.weaponSkill then
-        for id, ws in pairs(self.weaponSkills) do
+    if self.weaponSkills then
+        for mobId, ws in pairs(self.weaponSkills) do
             if ws and ws.actor then
                 if ws.actor.in_party or ws.actor.in_alliance then
-                    self.weaponSkills[id] = nil
+                    -- writeVerbose('Clearing WS tracking of %s\'s %s on %s!':format(
+                    --     text_mob(ws.actor.name, Colors.verbose),
+                    --     text_weapon_skill(ws.skill.name, Colors.verbose),
+                    --     text_mob(ws.mob.name, Colors.verbose)
+                    -- ))
+                    self.weaponSkills[mobId] = nil
                 end
             end
         end
@@ -369,6 +386,10 @@ state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
             if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
             if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
             if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
+
+            -- Clear SC on this mob if we're using a new WS. The SC created by this WS (if any) will
+            -- come as a subsequent event message.
+            self:clearSkillchain(mob)
 
             self.weaponSkills[mobId] = {
                 time = os.clock(),

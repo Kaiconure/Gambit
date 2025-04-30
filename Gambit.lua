@@ -1,4 +1,4 @@
-__version = '0.95.5-beta29'
+__version = '0.95.5-beta30'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -161,14 +161,22 @@ windower.register_event('load', function()
 
     smartMove:setLogger(writeDebug, writeTrace)
 
-    local bind_toggle = 'bind !~g ' .. makeSelfCommand('toggle')
-    local bind_follow = 'bind %^f ' .. makeSelfCommand('follow -toggle')
+    local bind_toggle       = 'bind !~g ' .. makeSelfCommand('toggle')          -- Shift+Alt+G
+    local bind_follow       = 'bind %^f ' .. makeSelfCommand('follow -toggle')  -- Ctrl+F
+    local bind_touch_all    = 'bind %~t ' .. makeSelfCommand('touch -t -all')   -- Shift+T
+    local bind_touch        = 'bind %!t ' .. makeSelfCommand('touch -t')        -- Alt+T
+    local bind_tap_all      = 'bind %~p ' .. makeSelfCommand('tap -t -all')     -- Shift+P
+    local bind_tap          = 'bind %!p ' .. makeSelfCommand('tap -t')          -- Alt+P
 
     -- writeMessage('bind_toggle: ' .. text_green(bind_toggle))
     -- writeMessage('bind_follow: ' .. text_green(bind_follow))
 
-    windower.send_command(bind_toggle)  -- Use Shift+Alt+G to toggle automation
-    windower.send_command(bind_follow)  -- Use Ctrl+F to toggle follow automation
+    windower.send_command(bind_toggle)      -- Toggle automation
+    windower.send_command(bind_follow)      -- Toggle follow automation
+    windower.send_command(bind_touch_all)   -- Have all active characters touch your current target
+    windower.send_command(bind_touch)       -- Touch your current target
+    windower.send_command(bind_tap_all)     -- Have all active characters tap your current target
+    windower.send_command(bind_tap)         -- Tap your current target
 
     -- Store the current zone
     local info = windower.ffxi.get_info()

@@ -1341,9 +1341,12 @@ local function initContextTargetSymbol(context, symbol)
 
     if symbol.status == STATUS_RESTING then symbol.is_resting = true end
     if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
+    if symbol.status == 4 then symbol.is_cutscene = true end
     if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
+    if symbol.status == 85 or symbol.status == 5 then symbol.is_mounted = true end
     if symbol.status == STATUS_IDLE then symbol.is_idle = true end
     if symbol.status == 44 then symbol.is_crafting = true end
+    if symbol.is_idle or symbol.is_engaged or symbol.is_mounted or symbol.is_resting then symbol.can_follow = true end
 
     if symbol.is_mob then
         -- Set the has_claim flag when someone in the party has claimed the mob
@@ -1876,6 +1879,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 weaponSkill.name,
                 weaponSkill.targets.Self and 'me' or 't'
             )
+
+            local target = weaponSkill.targets.Self and context.me or context.bt
+            if type(weaponSkill.range) == 'number' and type(target.model_size) == 'number' then
+                if target and target.distance > ((2 * weaponSkill.range) + target.model_size) then
+                    writeVerbose('WARNING: Target is out of weapon skill range. Continuing, but consider skipping.')
+                    -- return
+                end
+            end
 
             --writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
 
@@ -3921,7 +3932,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Clears tracking of the current weapon skill and skillchain info (if any)
     context.resetSkillchain = function()
-        actionStateManager:setSkillchain(nil, context.bt)
+        actionStateManager:clearSkillchain(context.bt)
+        --actionStateManager:setSkillchain(nil, context.bt)
         actionStateManager:clearPartyWeaponSkills()
 
         context.skillchain = nil
@@ -4506,11 +4518,43 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Performs a "touch" on a mob, which is to target it and hit enter
+    context.touch = function(identifier, max_distance)
+        local mob = identifier
+
+        if type(identifier) == 'number' then
+            mob = {}
+            mob.id = identifier
+        elseif type(identifier) == 'string' then
+            mob = context.findByName(identifier)
+        end
+
+        if type(mob) == 'table' then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        if type(mob) == 'table' then
+            max_distance = math.max(tonumber(max_distance) or 10, 0)
+            if mob.distance <= (max_distance * max_distance) then
+                local player = windower.ffxi.get_player()
+                if lockTarget(player, mob) then
+                    coroutine.sleep(0.5)
+                    context.keyTap('enter', 0.5)
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Performs a "tap" on a mob, which is to target it and hit enter and escape
-    context.tap = function(name, max_distance)
-        local mob = name
-        if type(name) == 'string' then
-            mob = context.findByName(name)
+    context.tap = function(identifier, max_distance)
+        local mob = identifier
+
+        if type(identifier) == 'number' then
+            mob = {}
+            mob.id = identifier
+        elseif type(identifier) == 'string' then
+            mob = context.findByName(identifier)
         end
 
         if type(mob) == 'table' then
@@ -4522,8 +4566,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if mob.distance <= (max_distance * max_distance) then
                 local player = windower.ffxi.get_player()
                 if lockTarget(player, mob) then
+                    coroutine.sleep(0.5)
                     context.keyTap('enter', 0.5)
-                    context.keyTap('escape', 0.5)
                     context.keyTap('escape', 0.5)
                 end
             end

@@ -2,7 +2,8 @@
   "vars": {
     "ws": {
       "terminal_reset": {
-        "disabled": null
+        "disabled": null,
+        "wait": 0
       }
     }
   },
@@ -12,13 +13,12 @@
         "not vars.ws.terminal_reset.disabled",
         "party_weapon_skill and skillchain",
         "any(skillchain.name, 'Light', 'Darkness') and any(skillchain.name, party_weapon_skill.skillchains)",
-        "skillchain_age > 1.5"
+        "skillchain_age >= vars.ws.terminal_reset.wait"
       ],
       "commands": [
         "log(' === Resetting Skillchain Tracking === ')",
         "resetSkillchain()"
-      ],
-      "frequency": 3
+      ]
     }
   ]
 }

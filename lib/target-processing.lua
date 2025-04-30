@@ -149,7 +149,7 @@ local function shouldAquireNewTarget(player, party, party_by_id)
                 -- next target. This could be mob status latency, or an actual in-game auto-target that we
                 -- aren't properly facing.
                 if timeWithTarget >= settings.retargetDelay then
-                    writeDebug('Engaged without a valid target, forcing new target search.')
+                    writeVerbose('Engaged without a valid target, forcing new target search.')
                     return true
                 end
             end
@@ -481,7 +481,8 @@ function processTargeting(player, party)
             leaderMob and
             type(leaderMob.target_index) == 'number' and
             leaderMob.target_index > 0 and
-            leaderMob.status == STATUS_ENGAGED
+            leaderMob.status == STATUS_ENGAGED and
+            player.status == STATUS_IDLE
         then
             local target = windower.ffxi.get_mob_by_index(leaderMob.target_index)
             if 
