@@ -270,6 +270,7 @@ handlers['config'] = function(args)
     local scd = tonumber(arrayIndexOfStrI(args, '-skillchaindelay') or arrayIndexOfStrI(args, '-scdelay') or arrayIndexOfStrI(args, '-scd') or 0)
     local tabs = tonumber(arrayIndexOfStrI(args, '-tabs') or 0)
     local targetingDuration = tonumber(arrayIndexOfStrI(args, '-targetingduration') or arrayIndexOfStrI(args, '-td') or 0)
+    local debugging = tonumber(arrayIndexOfStrI(args, '-debugging') or 0)
     local hasChanges = false
 
     if distance > 0 then
@@ -354,6 +355,21 @@ handlers['config'] = function(args)
         ))
     end
 
+    if debugging > 0 then
+        debugging = args[debugging + 1]
+        if debugging == 'on' then
+            settings.debugging = true
+            hasChanges = true
+        elseif debugging == 'off' then
+            settings.debugging = false
+            hasChanges = true
+        end
+
+        writeMessage('Additional debugging details: %s':format(
+            settings.debugging and text_green('on') or text_red('off')
+        ))
+    end
+
     if targetingDuration > 0 then
         targetingDuration = tonumber(args[targetingDuration + 1])
         if targetingDuration and targetingDuration > 0 then
@@ -371,6 +387,83 @@ handlers['config'] = function(args)
         saveSettings()
     end
 end
+
+handlers['function'] = function(args)
+    local name = tonumber(arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n'))
+    local list = tonumber(arrayIndexOfStrI(args, '-list') or arrayIndexOfStrI(args, '-l'))
+
+    if list or not name then
+        local count = 0
+        writeMessage('Registered function list:')
+        for key, val in pairs(actionStateManager.functions) do
+            count = count + 1
+            writeMessage('%s':format(text_green(key)))
+            if type(val.description) == 'string' then
+                writeMessage('%s':format(text_gray(val.description)))
+            end
+        end
+
+        writeMessage('You have %s configured!':format(pluralize(count, 'function', 'functions')))
+
+        return
+    end
+
+    if name then
+        name = args[name + 1]
+    end
+
+    if not name then
+        writeMessage('A function name must be specified.')
+        return
+    end
+
+    local action = actionStateManager.functions[name]
+    if action then
+        if not action._running then
+            writeMessage('  %s: Beginning execution.':format(text_green(action.name)))
+
+            action._running = true
+            action._fn_exiting = false
+
+            local done = false
+            while not done do
+                local context = actionStateManager:getContext()
+                if context then
+                    context.action = action
+                    context.actionType = action.type
+
+                    setfenv(action._whenFn, context)
+                    if not action._fn_exiting and action._whenFn() then
+                        for i, command in ipairs(action.commands) do
+                            setfenv(command._commandFn, context)
+                            command._commandFn()
+                        end
+                    else
+                        writeMessage('  %s: No further conditions have been met, exiting.':format(text_green(action.name)))
+                        done = true
+                    end
+                else
+                    writeMessage('  %s: Context is unavailable, exiting.':format(text_green(action.name)))
+                    done = true
+                end
+
+                if not done then
+                    coroutine.sleep(0.5)
+                end
+            end
+
+            action._running = false
+            action._fn_exiting = false
+        else
+            writeMessage('  %s: The function is already running.':format(text_green(action.name)))
+        end
+    else
+        writeMessage('  %s: No valid function was found.':format(text_green(name)))
+    end
+end
+
+handlers['func'] = handlers['function']
+handlers['fn'] = handlers['function']
 
 -------------------------------------------------------------------------------
 -- targetinfo
@@ -595,11 +688,25 @@ handlers['touch'] = function(args)
             local command = 'send @all //gbt touch -id %d':format(mob.id)
             windower.send_command(command)
         else
+            local enabled = globals.enabled
+            globals.enabled = false
+
             writeMessage('Attempting to %s target: %s':format(
                 text_green('touch'),
                 text_mob(mob.name)
             ))
+
+            local followJob = smartMove:cancelJob()
+
             context.touch(mob)
+
+            if followJob then
+                smartMove:reschedule(followJob)
+            end
+
+            if enabled then
+                globals.enabled = true
+            end
         end
     end
 end
@@ -638,11 +745,25 @@ handlers['tap'] = function(args)
             local command = 'send @all //gbt tap -id %d':format(mob.id)
             windower.send_command(command)
         else
+            local enabled = globals.enabled
+            globals.enabled = false
+
             writeMessage('Attempting to %s target: %s':format(
                 text_green('tap'),
                 text_mob(mob.name)
             ))
+
+            local followJob = smartMove:cancelJob()
+
             context.tap(mob)
+
+            if followJob then
+                smartMove:reschedule(followJob)
+            end
+
+            if enabled then
+                globals.enabled = true
+            end
         end
     end
 end
@@ -748,8 +869,47 @@ handlers['walkmode'] = function (args)
     end
 end
 
+handlers['buffs'] = function(args)
+    local player = windower.ffxi.get_player()
+    local buffs = player and player.buffs
+
+    if type(buffs) == 'table' and #buffs > 0 then
+        local message = '\n' .. text_cornsilk('\nMy Active Buffs\n')
+
+        for i, id in ipairs(buffs) do
+            local buff = resources.buffs[id]
+            if buff then
+                message = message .. ' %s (%s)\n':format(
+                    text_buff(buff.name),
+                    text_number(id)
+                )
+            end
+
+            if message:len() > 450 then
+                writeMessage(message)
+                message = '\n'
+            end
+        end
+
+        if message:len() > 1 then
+            writeMessage(message)
+        end
+    else
+        writeMessage('No active buffs were found.')
+    end
+
+end
+
 handlers['mobbuffs'] = function(args)
     local mobs = actionStateManager:getBuffedMobs()
+    local limit = arrayIndexOfStrI(args, '-limit') or arrayIndexOfStrI(args, '-l')
+    if limit then
+        limit = args[limit + 1]
+        if type(limit) == 'string' then
+            limit = string.lower(limit)
+        end
+    end
+
     if #mobs > 0 then
         local message = '\n' .. text_cornsilk('\nTracked Mob Buffs\n')
 
@@ -767,43 +927,54 @@ handlers['mobbuffs'] = function(args)
                     ((mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust')
                     or 'Mob'
                 local t = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('t')
+                local is_my_bt = t and t.id == mob.id
 
-                -- Mob header
-                message = message .. 
-                    '  %s%s / %s (%s)\n':format(
-                        mobcol(mob.name),
-                        (t and t.id == mob.id) and '**' or '',
-                        text_number('%03X':format(mob.index)),
-                        type
+                if
+                    not limit or (
+                        (is_my_bt or limit ~= 'bt') and
+                        (mob.spawn_type == SPAWN_TYPE_TRUST or limit ~= 'trust') and
+                        (mob.spawn_type == SPAWN_TYPE_MOB or limit ~= 'mob')
                     )
+                then
 
-                -- Mob buffs list
-                for buffId, info in pairs(data.details) do
-                    local buff = resources.buffs[buffId]
-                    local actor = info.actor
-                    local actorcol = (actor and (actor.spawn_type == SPAWN_TYPE_PLAYER or actor.spawn_type == SPAWN_TYPE_TRUST)) and text_green or text_magenta
-                    local actortype = '???'
-                    if info.byMe then
-                        actortype = 'Me'
-                    elseif actor then
-                        if actor.spawn_type == SPAWN_TYPE_PLAYER then actortype = 'Player'
-                        elseif actor.spawn_type == SPAWN_TYPE_TRUST then actortype = 'Trust'
-                        elseif actor.spawn_type == SPAWN_TYPE_MOB then actortype = 'Mob'
+                    -- Mob header
+                    message = message .. 
+                        '  %s%s / %s (%s)\n':format(
+                            mobcol(mob.name),
+                            is_my_bt and '**' or '',
+                            text_number('%03X':format(mob.index)),
+                            type
+                        )
+
+                    -- Mob buffs list
+                    for buffId, info in pairs(data.details) do
+                        local buff = resources.buffs[buffId]
+                        local actor = info.actor
+                        local actorcol = (actor and (actor.spawn_type == SPAWN_TYPE_PLAYER or actor.spawn_type == SPAWN_TYPE_TRUST or actor.spawn_type == SPAWN_TYPE_PET)) and text_green or text_magenta
+                        local actortype = '???'
+                        if info.byMe then
+                            actortype = 'Me'
+                        elseif actor then
+                            if actor.spawn_type == SPAWN_TYPE_PLAYER then actortype = 'Player'
+                            elseif actor.spawn_type == SPAWN_TYPE_PET then actortype = 'Pet'
+                            elseif actor.spawn_type == SPAWN_TYPE_TRUST then actortype = 'Trust'
+                            elseif actor.spawn_type == SPAWN_TYPE_MOB then actortype = 'Mob'
+                            end
                         end
+
+                        message = message ..
+                            '    %s applied by %s (%s): %s\n':format(
+                                text_buff(buff.name),
+                                actorcol(actor and actor.name or '???'),
+                                actortype,
+                                info.timer and info.timer > 0 and pluralize('%d':format(info.timer), 'second', 'seconds') or text_cornsilk('--')
+                            )
                     end
 
-                    message = message ..
-                        '    %s applied by %s (%s): %s\n':format(
-                            text_buff(buff.name),
-                            actorcol(actor and actor.name or '???'),
-                            actortype,
-                            info.timer and info.timer > 0 and pluralize('%d':format(info.timer), 'second', 'seconds') or text_cornsilk('--')
-                        )
-                end
-
-                if message:len() > 450 then
-                    writeMessage(message)
-                    message = '\n'
+                    if message:len() > 450 then
+                        writeMessage(message)
+                        message = '\n'
+                    end
                 end
             end
         end

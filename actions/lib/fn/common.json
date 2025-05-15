@@ -1,0 +1,37 @@
+{
+  "actions": [
+    {
+      "name": "warp_all",
+      "when": [
+        "(partyAll('is_player and not is_me and distance < 15') and hasSpell('Warp II')) or \\",
+        "  (not partyAny('is_player and not is_me and distance < 15') and hasSpell('Warp'))"
+      ],
+      "commands": [
+        "canUseSpell() and useSpell(member) and wait(6)",
+        "not member and stopFunc()"
+      ]
+    },
+    {
+      "name": "sneak_all",
+      "when": [
+        "not bt",
+        "hasSpell('Sneak')",
+        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")') or (me and not hasBuff('Sneak'))"
+      ],
+      "commands": [
+        "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
+      ]
+    },
+    {
+      "name": "invis_all",
+      "when": [
+        "not bt",
+        "hasSpell('Invisible')",
+        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")') or (me and not hasBuff('Invisible'))"
+      ],
+      "commands": [
+        "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
+      ]
+    }
+  ]
+}

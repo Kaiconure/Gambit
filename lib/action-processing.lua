@@ -392,6 +392,13 @@ local function compileActions(actionType, parent, rawActions)
 
             if shouldAdd then
                 _temp[#_temp + 1] = action
+
+                if actionType == 'functions' or type(action.name) == 'string' then
+                    if type(action.name) == 'string' then
+                        --writeMessage(text_gray('  Adding action function: %s'):format(text_green(action.name, Colors.gray)))
+                        actionStateManager.functions[action.name] = action
+                    end
+                end
             end
         end
 
@@ -422,6 +429,7 @@ local function compileAllActions()
     actionStateManager:reset()
 
     local actions = settingsCopy.actions
+    actionStateManager.functions = {}
 
     compileActions('battle',    actions, actions and actions.battle or {})
     compileActions('pull',      actions, actions and actions.pull or {})
@@ -429,6 +437,7 @@ local function compileAllActions()
     compileActions('resting',   actions, actions and actions.resting or {})
     compileActions('dead',      actions, actions and actions.dead or {})
     compileActions('mounted',   actions, actions and actions.mounted or {})
+    compileActions('functions', actions, actions and actions.functions or {})
 
     actionStateManager.vars = actions and actions.vars or {}
 
@@ -727,8 +736,9 @@ local function doNextActionCycle(time, player, party)
 
                 -- Lock on if necessary
                 if player.target_index ~= mob.index then
-                    command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
-                    hasCommand = true
+                    lockTarget(player, mob, true)
+                    --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
+                    --hasCommand = true
                 end
 
                 -- Engage if necessary
@@ -779,6 +789,7 @@ function cr_actionProcessor()
         local time = now - startTime
         local party = windower.ffxi.get_party()
         local player = windower.ffxi.get_player()
+        local zoneTime = os.clock() - (globals.zoneEntryTime or 0)
 
         -- Perform background garbage collection operations. These will only occur when we are
         -- not in combat, to ensure that there's no interference with time-sensitive gambits.
@@ -794,7 +805,12 @@ function cr_actionProcessor()
             latestGarbageCollection = os.clock()
         end
 
-        if globals.enabled then
+        if 
+            globals.enabled and
+            player and
+            player.status ~= STATUS_EVENT and
+            zoneTime >= 5
+        then
             local me = windower.ffxi.get_mob_by_target('me')
 
             if 
@@ -815,6 +831,9 @@ function cr_actionProcessor()
                     then
                         processTargeting(player, party)
                     end
+
+                    -- Refresh the player
+                    player = windower.ffxi.get_player()
 
                     doNextActionCycle(time, player, party)
                 else

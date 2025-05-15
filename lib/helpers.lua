@@ -1,5 +1,6 @@
 -------------------------------------------------------------------------------
 -- Known spawn types
+SPAWN_TYPE_PET      = 2
 SPAWN_TYPE_PLAYER   = 13
 SPAWN_TYPE_TRUST    = 14
 SPAWN_TYPE_MOB      = 16
@@ -33,6 +34,7 @@ BUFF_BATTLEFIELD    = 254
 STATUS_IDLE           = 0
 STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
+STATUS_EVENT          = 4
 STATUS_RESTING        = 33
 
 -------------------------------------------------------------------------------

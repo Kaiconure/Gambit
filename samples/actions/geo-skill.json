@@ -1,0 +1,39 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "comment": "Allows you to level up your geomancy skill automatically."
+  },
+  "idle": [
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "when": "me.mpp < 10",
+      "commands": "rest()"
+    },
+    {
+      "when": ["not hasEffect('Food') and canUseItem('B.E.W. Pitaru')"],
+      "commands": ["use(me)"]
+    },
+    {
+      "when": [
+        "canUse('Indi-Poison', 'Indi-Precision', 'Indi-Voidance', 'Indi-Focus')",
+        "not hasEffectOf(spell)"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 1
+    }
+  ],
+  "resting": [
+    {
+      "when": "bt or me.mpp >= 100",
+      "commands": ["cancelRest()"]
+    }
+  ]
+}

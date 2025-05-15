@@ -24,6 +24,18 @@
       }
     }
   },
+  "macros": {
+    "craft_has_ingredients": [
+      "(arrayLength(vars.crafting.ingredients) > 0 and findItemsInInventory(vars.crafting.ingredients))"
+    ],
+    "craft_has_crystal": [
+      "(vars.crafting.crystal and findItemsInInventory(vars.crafting.crystal))"
+    ],
+    "craft_has_all": [
+      "$macro(craft_has_ingredients)",
+      "$macro(craft_has_crystal)"
+    ]
+  },
   "actions": [
     {
       "commands": [
@@ -67,8 +79,8 @@
       "when": [
         "me.is_idle",
         "vars.crafting.name",
-        "vars.crafting.crystal",
-        "not findItemsInInventory(vars.crafting.crystal) and findItemsInInventory(vars.crafting.crystal_clusters[vars.crafting.crystal])",
+        "not $macro(craft_has_crystal)",
+        "findItemsInInventory(vars.crafting.crystal_clusters[vars.crafting.crystal])",
         "freeInventorySlots() > 0"
       ],
       "commands": ["useItem(me)", "wait(1)"],
@@ -91,9 +103,7 @@
       "when": [
         "me.is_idle",
         "vars.crafting.name",
-        "arrayLength(vars.crafting.ingredients) > 0",
-        "findItemsInInventory(vars.crafting.crystal)",
-        "findItemsInInventory(vars.crafting.ingredients)",
+        "$macro:craft_has_all",
         "freeInventorySlots() > 0"
       ],
       "commands": [

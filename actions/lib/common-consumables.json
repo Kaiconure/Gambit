@@ -8,7 +8,11 @@
         "Frayed Sack (Fer)",
         "Frayed Sack (Tau)"
       ],
-      "unm_items": ["Bakunawa's Coffer", "Vedrfolnir's Coffer"],
+      "unm_items": [
+        "Bakunawa's Coffer",
+        "Vedrfolnir's Coffer",
+        "Clawberry's Coffer"
+      ],
       "woe_items": [
         "Frayed Sack (D)",
         "Frayed Sack (L)",

@@ -36,6 +36,7 @@
         "sendCommand('gbt disable')",
         "deathWarp()"
       ],
+      "name": "death_warp",
       "delay": 20,
       "comment": "This action can only be used if you're dead. Import this gambit into the [dead] actions section if you want to return to homepoint on death."
     }

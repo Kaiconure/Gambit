@@ -3,6 +3,7 @@
     "use_aspir": {
       "frequency": 10,
       "max_mpp": 80,
+      "max_ws_mpp": 30,
       "spells": ["Aspir III", "Aspir II", "Aspir"],
       "gear": {
         "casting": [],
@@ -16,6 +17,7 @@
         "Apex Helm Elytra": true,
         "Apex Idle Drifter": true,
         "Asb": true,
+        "Azure-toothed Clawberry": true,
         "Darkness Elemental": true,
         "Earth Elemental": true,
         "Fire Elemental": true,
@@ -62,7 +64,7 @@
         "bt and vars.use_aspir.targets[bt.name]",
         "bt.distance <= 20",
         "me.mpp <= vars.use_aspir.max_mpp",
-        "not partyUsingWeaponSkill()",
+        "(me.mpp <= vars.use_aspir.max_ws_mpp and not skillchaining('Light', 'Darkness')) or not partyUsingWeaponSkill()",
         "canUse(vars.use_aspir.spells)"
       ],
       "commands": [

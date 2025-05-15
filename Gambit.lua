@@ -1,4 +1,4 @@
-__version = '0.95.5-beta30'
+__version = '0.95.5-beta35'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -54,6 +54,7 @@ globals = {
     isSpellCasting  = false,
     target          = nil,
     currentZone = nil,
+    zoneEntryTime = 0,
     selfName = __name,
     selfShortName = __shortName,
     selfCommand = __commands[1],
@@ -105,6 +106,7 @@ windower.register_event('status change', function(new_id, previous_id)
     
     if
         --new_id == STATUS_IDLE
+        new_id and
         new_id ~= STATUS_ENGAGED
     then
         resetCurrentMob(nil, true)
@@ -125,8 +127,13 @@ end)
 ---------------------------------------------------------------------
 -- Zoned
 windower.register_event('zone change', function(zone_id)
+    if not zone_id then
+        return
+    end
+
     -- Store the new zone
     globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil
+    globals.zoneEntryTime = os.clock()
 
     -- Clear tracking info
     actionStateManager:clearOthersSpells()
@@ -151,6 +158,12 @@ end)
 ---------------------------------------------------------------------
 -- Addon loaded
 windower.register_event('load', function()
+    if 
+        not windower or
+        not windower.ffxi
+    then
+        return
+    end
 
     writeMessage('')
     writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
@@ -178,10 +191,14 @@ windower.register_event('load', function()
     windower.send_command(bind_tap_all)     -- Have all active characters tap your current target
     windower.send_command(bind_tap)         -- Tap your current target
 
+    windower.send_command('alias gbtfn gbt func -n')
+
     -- Store the current zone
     local info = windower.ffxi.get_info()
-    globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
-    globals.language = info.language
+    if info then
+        globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
+        globals.language = info.language
+    end
 
     -- Store self info
     local me = windower.ffxi.get_mob_by_target('me')
@@ -201,6 +218,13 @@ end)
 ---------------------------------------------------------------------
 -- Login
 windower.register_event('login', function ()
+    if 
+        not windower or
+        not windower.ffxi
+    then
+        return
+    end
+
     -- Store the current zone
     local info = windower.ffxi.get_info()
     globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
@@ -240,6 +264,13 @@ local PARAM_INTERRUPTED             = 28787 -- Interrupted before completion
 ---------------------------------------------------------------------
 -- Handle actions
 windower.register_event('action', function(action)
+    if 
+        not windower or
+        not windower.ffxi
+    then
+        return
+    end
+
     if
         action == nil or
         action.actor_id == nil or
@@ -403,6 +434,13 @@ end)
 ---------------------------------------------------------------------
 -- Job change
 windower.register_event('job change', function()
+    if 
+        not windower or
+        not windower.ffxi
+    then
+        return
+    end
+
     actionStateManager:setMeritPointInfo(0, 0, 0)
     actionStateManager:setCapacityPointInfo(0, 0)
 
@@ -412,6 +450,13 @@ end)
 ---------------------------------------------------------------------
 -- Addon command
 windower.register_event('addon command', function (command, ...)
+    if 
+        not windower or
+        not windower.ffxi
+    then
+        return
+    end
+
     local args = {...}
     
     for i, arg in ipairs(args) do
@@ -851,7 +896,7 @@ local _handle_actionChunk = function(id, data)
                 targetCount = targetCount + 1
 
                 if
-                    (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB)
+                    (target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_PET)
                 then
                     local message = tonumber(packet['Target %d Action 1 Message':format(i)]) or 0
                     local reaction = tonumber(packet['Target %d Action 1 Reaction':format(i)]) or 0
@@ -962,7 +1007,7 @@ local _handle_actionMessageChunk = function(id, data)
     if 
         target and
         target.valid_target and
-        (target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST) and
+        (target.spawn_type == SPAWN_TYPE_MOB or target.spawn_type == SPAWN_TYPE_TRUST or target.spawn_type == SPAWN_TYPE_PET) and
         (
             message == 206 or   -- These are the message codes for effects wearing off or being removed.
             message == 204 or   --  Refer to: https://github.com/Windower/Lua/wiki/Message-IDs

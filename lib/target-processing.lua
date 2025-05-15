@@ -179,8 +179,6 @@ function lockTarget(player, mob, battleTarget)
     local id = lock_target_id
     lock_target_id = lock_target_id + 1
 
-    --writeMessage('Entering lockTarget ' .. id)
-
     if player and mob then
         if 
             mob.valid_target and
@@ -188,12 +186,17 @@ function lockTarget(player, mob, battleTarget)
         then
             local max_tabs = settings.maxTabs
             local tabs_remaining = 0
+            local forced_tabbing = false
             
             if
                 mob.spawn_type == SPAWN_TYPE_TRUST or
                 mob.spawn_type == SPAWN_TYPE_MOB or
                 mob.spawn_type == SPAWN_TYPE_PLAYER
             then
+                if settings.debugging then
+                    writeMessage('DBG: lockTarget called from ' .. debug.traceback())
+                end
+
                 packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
                     ['Player'] = player.id,
                     ['Target'] = mob.id,
@@ -205,6 +208,7 @@ function lockTarget(player, mob, battleTarget)
             else
                 max_tabs = 10
                 tabs_remaining = max_tabs
+                forced_tabbing = true
             end
 
             -- In laggy situations, it can take a while for the target to be acquired. This gives us 
@@ -242,7 +246,10 @@ function lockTarget(player, mob, battleTarget)
                             coroutine.sleep(0.5)
                         end
 
-                        --writeMessage('Exiting lockTarget ' .. id)
+                        -- if settings.debugging then
+                        --     writeMessage('DBG: lockTarget exiting with %s':format(text_green('success')))
+                        -- end
+                        
                         return true
                     end                    
 
@@ -284,7 +291,9 @@ function lockTarget(player, mob, battleTarget)
 
                                 -- If we haven't tabbed yet, we'll send a few escapes to close out menus and chat
                                 if not has_tabbed then
-                                    writeVerbose('Falling back to tab-basted targeting...')
+                                    if not forced_tabbing then
+                                        writeVerbose('Falling back to tab-basted targeting...')
+                                    end
 
                                     local targeting_key = mob.spawn_type == SPAWN_TYPE_PLAYER and 'f9' or 'f8'
 
@@ -337,7 +346,9 @@ function lockTarget(player, mob, battleTarget)
         end
     end
 
-    --writeMessage('Exiting lockTarget ' .. id)
+    -- if settings.debugging then
+    --     writeMessage('DBG: lockTarget exiting with %s':format(text_red('failure')))
+    -- end
 end
 
 

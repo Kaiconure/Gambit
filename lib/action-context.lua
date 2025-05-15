@@ -182,8 +182,8 @@ end
 --
 local function context_key_tap(key, wait)
     if type(key) == 'string' then
-        windower.send_command('setkey %s down;  wait 0.1; setkey %s up;':format(key, key))
-        coroutine.sleep((tonumber(wait) or 0.2) + 0.1)
+        windower.send_command('setkey %s down;  wait 0.2; setkey %s up;':format(key, key))
+        coroutine.sleep((tonumber(wait) or 0.2) + 0.2)
     end
 end
 
@@ -793,7 +793,7 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- 
     context.partyAll = function(expression, ...)
-        return getNextMemberEnumerator(context) or context.partyAny(expression)
+        return getNextMemberEnumerator(context, ...) or context.partyAny(expression, ...)
     end
 
     -----------------------------------------------------------------------------------------
@@ -821,7 +821,7 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- 
     context.allyAll = function(expression, ...)
-        return getNextMemberEnumerator(context) or context.allyAny(expression, ...)
+        return getNextMemberEnumerator(context, ...) or context.allyAny(expression, ...)
     end
 
     -----------------------------------------------------------------------------------------
@@ -1330,6 +1330,7 @@ local function initContextTargetSymbol(context, symbol)
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
     symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
     symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
+    symbol.is_me = (symbol.id == context.player.id)
     symbol.is_mob = (symbol.mob.spawn_type == SPAWN_TYPE_MOB)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
@@ -1786,6 +1787,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return true
         end
     end
+
+    context.stopFunction = function()
+        if context.action and context.action._running then
+            context.action._fn_exiting = true
+            return true
+        end
+    end
+    context.stopFunc = context.stopFunction
 
     --------------------------------------------------------------------------------------
     --
@@ -2559,26 +2568,42 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             if target ~= nil then
-                if not hasAnyFlagMatch(target.targets, spell.targets) then
-                     target = context.me
-                     if not hasAnyFlagMatch(target.targets, spell.targets) then
-                        -- At this point, if we still don't have a target then we're out of targeting options
-                        writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
-                        return
+                if 
+                    (
+                        target.in_party or
+                        (target.targets and target.targets.Party) or
+                        (target.mob and target.mob.in_party)
+                    ) and
+                    spell.targets.Self and
+                    context.hasBuff('Entrust')
+                then
+                    writeMessage(
+                        'Promoting %s to party due to %s!':format(
+                            text_spell(spell.name), 
+                            text_ability('Entrust')
+                    ))
+                else
+                    if not hasAnyFlagMatch(target.targets, spell.targets) then
+                        target = context.me
+                        if not hasAnyFlagMatch(target.targets, spell.targets) then
+                            -- At this point, if we still don't have a target then we're out of targeting options
+                            writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
+                            return
+                        end
                     end
                 end
 
-                -- NOTE: Spell usage is handled generally via the 'action' event handler
-                --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
+               -- NOTE: Spell usage is handled generally via the 'action' event handler
+               --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
 
-                -- This is the newer spell casting implementation. As ooposed to the normal
-                -- sendActionCommand function, this one performs a sleeping loop that will
-                -- detect when spell casting has completed (for any reason) and will exit
-                -- sooner. This allows us to spend a little time as possible waiting for
-                -- spells to complete (fast cast, interruption, and so on can impact this).
+               -- This is the newer spell casting implementation. As ooposed to the normal
+               -- sendActionCommand function, this one performs a sleeping loop that will
+               -- detect when spell casting has completed (for any reason) and will exit
+               -- sooner. This allows us to spend a little time as possible waiting for
+               -- spells to complete (fast cast, interruption, and so on can impact this).
 
-                -- Returns a flag indicating whether the action completed successfully
-                return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+               -- Returns a flag indicating whether the action completed successfully
+               return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
             end
         end
     end
@@ -3759,6 +3784,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             start_index = 1
         end
 
+        -- local buffs = target.buffs
+        -- if target.id == context.me.id then
+        --     local player = windower.ffxi.get_player()
+        --     buffs = player.buffs
+        -- end
+
         for i = start_index, #names do
             local name = names[i]
             local buff = hasBuffInArray(target.buffs, name, strict)
@@ -4537,9 +4568,36 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             max_distance = math.max(tonumber(max_distance) or 10, 0)
             if mob.distance <= (max_distance * max_distance) then
                 local player = windower.ffxi.get_player()
-                if lockTarget(player, mob) then
-                    coroutine.sleep(0.5)
+
+                local lt = lockTarget(player, mob)
+                local t = windower.ffxi.get_mob_by_target('t')
+                if t == nil or t.id ~= mob.id then
+                    coroutine.sleep(0.1)
+                    lt = lockTarget(player, mob)
+                    t = windower.ffxi.get_mob_by_target('t')
+                    if t == nil or t.id ~= mob.id then
+                        t = nil
+                    end
+                end
+
+                -- if settings.debugging then
+                --     writeMessage('DBG: touch targeting ended with lt=%s, t=%s':format(
+                --         lt and text_green('true') or text_red('false'),
+                --         t and text_number(t.id) or text_red('nil')
+                --     ))
+                -- end
+
+                if t ~= nil then
+                    -- if settings.debugging then
+                    --     writeMessage('DBG: touch sending enter key press...')
+                    -- end
+
+                    coroutine.sleep(1)
+
+                    -- Activate the target
                     context.keyTap('enter', 0.5)
+                else
+                    writeMessage(text_red('Warning: Targeting failed!'))
                 end
             end
         end
@@ -4566,9 +4624,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if mob.distance <= (max_distance * max_distance) then
                 local player = windower.ffxi.get_player()
                 if lockTarget(player, mob) then
-                    coroutine.sleep(0.5)
+                    coroutine.sleep(1)
+                    
+                    -- Activate the target
                     context.keyTap('enter', 0.5)
+                    
+                    -- We'll double-escape: Once to exit dialog (if any), and again to clear the target.
                     context.keyTap('escape', 0.5)
+                    context.keyTap('escape', 0.5)
+                else
+                    writeMessage(text_red('Warning: Targeting failed!'))
                 end
             end
         end

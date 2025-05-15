@@ -412,7 +412,7 @@ local function _expandActionMacrosToArray(macros, array)
     end
 
     -- Now, expand all macros into their respective actions
-    local actionTypes = {'battle', 'pull', 'idle', 'resting', 'dead', 'mounted'}
+    local actionTypes = {'battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'functions'}
     for i, actionType in ipairs(actionTypes) do
         local actions = loadedData and loadedData[actionType]
         if type(actions) == 'table' then
@@ -430,7 +430,7 @@ local function loadActionImports(playerName, actions)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'imports'}
+        local types = {'battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'imports', 'functions'}
 
         actions.macros = type(actions.macros) == 'table' and actions.macros or { }
 

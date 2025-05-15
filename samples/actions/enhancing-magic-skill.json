@@ -21,6 +21,10 @@
       "commands": "rest()"
     },
     {
+      "when": ["not hasEffect('Food') and canUseItem('B.E.W. Pitaru')"],
+      "commands": ["use(me)"]
+    },
+    {
       "when": "canUse('Protect III', 'Protect II', 'Protect')",
       "commands": ["use(me)", "wait(1)", "cancelBuff('Protect')"],
       "frequency": 1
