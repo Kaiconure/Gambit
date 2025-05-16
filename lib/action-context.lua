@@ -80,6 +80,20 @@ local function get_action_variable_path(s)
 end
 
 -----------------------------------------------------------------------------------------
+-- Determine if the specified symbol string is something we can handle for
+-- direct targeting.
+local function is_known_targeting_symbol(symbol)
+    return 
+        symbol == 't' or
+        symbol == 'bt' or
+        symbol == 'st' or
+        symbol == 'lastst' or
+        symbol == 'pet' or
+        symbol == 'ft' or
+        symbol == 'scan'
+end
+
+-----------------------------------------------------------------------------------------
 --
 function __context_compare(a, b) return a == b end
 function __context_compare_strings(a, b) return string.lower(a) == string.lower(tostring(b or '')) end
@@ -1339,6 +1353,7 @@ local function initContextTargetSymbol(context, symbol)
     symbol.valid_target = symbol.mob.valid_target
     symbol.spawn_type = symbol.mob.spawn_type
     symbol.status = symbol.mob.status
+    symbol.target_index = symbol.mob.target_index
 
     if symbol.status == STATUS_RESTING then symbol.is_resting = true end
     if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
@@ -1528,6 +1543,26 @@ local function loadContextTargetSymbols(context, target)
         context.party_leader = context.p0
         context.p0.is_party_leader = true
         context.me.is_party_leader = true
+    end
+
+    -- Set up an easy way to identify the party leader's target and battle target
+    local leader = context.party_leader
+    if leader and leader.valid_target and leader.target_index and leader.target_index > 0 then
+        --print('leader2: %s':format(leader and leader.name or 'nil'))
+        local leader_t = windower.ffxi.get_mob_by_index(leader.target_index)
+        context.party_leader_t = leader_t
+        if leader_t and leader_t.valid_target then
+            leader_t.distance = math.sqrt(leader_t.distance)
+            leader_t.buffs = 
+                leader_t.spawn_type == SPAWN_TYPE_PLAYER and
+                    actionStateManager:getMemberBuffsFor(leader_t) or
+                    actionStateManager:getBuffsForMob(leader_t)
+            if leader.is_engaged then            
+                if leader_t.claim_id and leader_t.claim_id > 0 and context.party1_by_id[leader_t.claim_id] then
+                    context.party_leader_bt = leader_t
+                end
+            end
+        end
     end
 end
 
@@ -2181,6 +2216,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.useItem = function (target, itemName)
+        local bypass_target_check = false
+        if is_known_targeting_symbol(target) then 
+            local t = windower.ffxi.get_mob_by_target(target)
+            if t == nil then
+                return
+            end
+
+            t.symbol = target
+            target = t
+            bypass_target_check = true
+        end
+        
         local item = nil
         local secondsUntilActivation = 0    -- TODO: Figure out how to make this work
 
@@ -2220,11 +2267,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         -- Validate the target
-        if not hasAnyFlagMatch(target.targets, item.targets) then
-            target = context.bt
+        if not bypass_target_check then
             if not hasAnyFlagMatch(target.targets, item.targets) then
-                writeDebug(string.format(' **A valid target for [%s] could not be identified.', item.name))
-                return
+                target = context.bt
+                if not hasAnyFlagMatch(target.targets, item.targets) then
+                    writeDebug(string.format(' **A valid target for [%s] could not be identified.', item.name))
+                    return
+                end
             end
         end
 
@@ -2400,6 +2449,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.useAbility = function (target, ability)
+        local bypass_target_check = false
+        if is_known_targeting_symbol(target) then 
+            local t = windower.ffxi.get_mob_by_target(target)
+            if t == nil then
+                return
+            end
+
+            t.symbol = target
+            target = t
+            bypass_target_check = true
+        end
+
         if ability == nil then
             ability = context.ability
         end
@@ -2421,11 +2482,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 target = context.bt
             end
 
-            if target == nil or not hasAnyFlagMatch(target.targets, ability.targets) then
-                target = context.me
-                if not hasAnyFlagMatch(target.targets, ability.targets) then
-                    writeDebug(' **A valid target for [%s] could not be identified.':format(text_ability(ability.name, Colors.debug)))
-                    return
+            if not bypass_target_check then
+                if target == nil or not hasAnyFlagMatch(target.targets, ability.targets) then
+                    target = context.me
+                    if not hasAnyFlagMatch(target.targets, ability.targets) then
+                        writeDebug(' **A valid target for [%s] could not be identified.':format(text_ability(ability.name, Colors.debug)))
+                        return
+                    end
                 end
             end
 
@@ -2544,6 +2607,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Uses the specified spell on the specified target
     context.useSpell = function (target, spell, ignoreIncomplete)
+        local bypass_target_check = false
+        if is_known_targeting_symbol(target) then 
+            local t = windower.ffxi.get_mob_by_target(target)
+            if t == nil then
+                return
+            end
+
+            t.symbol = target
+            target = t
+            bypass_target_check = true
+        end
+
+
         if spell == nil then spell = context.spell end
         if type(spell) == 'string' then spell = findSpell(spell) end
         
@@ -2568,27 +2644,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             if target ~= nil then
-                if 
-                    (
-                        target.in_party or
-                        (target.targets and target.targets.Party) or
-                        (target.mob and target.mob.in_party)
-                    ) and
-                    spell.targets.Self and
-                    context.hasBuff('Entrust')
-                then
-                    writeMessage(
-                        'Promoting %s to party due to %s!':format(
-                            text_spell(spell.name), 
-                            text_ability('Entrust')
-                    ))
-                else
-                    if not hasAnyFlagMatch(target.targets, spell.targets) then
-                        target = context.me
+                if not bypass_target_check then
+                    if 
+                        (
+                            target.in_party or
+                            (target.targets and target.targets.Party) or
+                            (target.mob and target.mob.in_party)
+                        ) and
+                        spell.targets.Self and
+                        context.hasBuff('Entrust')
+                    then
+                        writeMessage(
+                            'Promoting %s to party due to %s!':format(
+                                text_spell(spell.name), 
+                                text_ability('Entrust')
+                        ))
+                    else
                         if not hasAnyFlagMatch(target.targets, spell.targets) then
-                            -- At this point, if we still don't have a target then we're out of targeting options
-                            writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
-                            return
+                            target = context.me
+                            if not hasAnyFlagMatch(target.targets, spell.targets) then
+                                -- At this point, if we still don't have a target then we're out of targeting options
+                                writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
+                                return
+                            end
                         end
                     end
                 end
@@ -3585,6 +3663,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         names[1] == nil or
                         arrayIndexOfStrI(names, mob.name, start) 
                     then
+                        mob.buffs = actionStateManager:getBuffsForMob(mob)
                         arrayAppend(results, mob)
                         count = count + 1
                     end
@@ -4646,7 +4725,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if type(id) == 'number' then
             mob = windower.ffxi.get_mob_by_id(id)
             if mob and mob.valid_target then
-                return lockTarget(context.player, mob)
+                if context.me and context.me.target_index ~= mob.index then
+                    return lockTarget(context.player, mob)
+                end
             end
         end
     end

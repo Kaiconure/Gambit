@@ -344,7 +344,7 @@ handlers['config'] = function(args)
 
     if tabs > 0 then
         tabs = tonumber(args[tabs + 1])
-        if tabs and tabs > 0 then
+        if tabs and tabs >= 0 then
             tabs = math.floor(math.clamp(tabs, 0.0, 20))
             settings.maxTabs = tabs
             hasChanges = true
