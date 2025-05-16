@@ -2645,6 +2645,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             if target ~= nil then
                 if not bypass_target_check then
+                    local original_effect = context.effect
                     if 
                         (
                             target.in_party or
@@ -2652,12 +2653,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             (target.mob and target.mob.in_party)
                         ) and
                         spell.targets.Self and
-                        context.hasBuff('Entrust')
+                        (
+                            (context.hasBuff('Entrust') and spell.type == 'Geomancy') or
+                            (context.hasBuff('Pianissimo') and spell.type == 'BardSong')
+                        )
                     then
-                        writeMessage(
-                            'Promoting %s to party due to %s!':format(
-                                text_spell(spell.name), 
-                                text_ability('Entrust')
+                        writeMessage('%s detected! %s can be cast on party members.':format(
+                            text_buff(effect.name),
+                            text_spell(spell.name)
                         ))
                     else
                         if not hasAnyFlagMatch(target.targets, spell.targets) then
@@ -2669,6 +2672,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             end
                         end
                     end
+
+                    -- We need to restore the original effect, because the hasBuff call 
+                    -- above would have overwritten it
+                    context.effect = original_effect
                 end
 
                -- NOTE: Spell usage is handled generally via the 'action' event handler
