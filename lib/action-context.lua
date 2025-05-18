@@ -2214,6 +2214,33 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Engage with your current target, if idle
+    context.engage = function ()
+        local player = windower.ffxi.get_player()
+        if player and player.status == STATUS_IDLE then
+            local t = context.getMobByTarget('t')
+            if t and t.spawn_type == SPAWN_TYPE_MOB then
+                context.sendCommand('input /attack <t>')
+                context.wait(1)
+
+                return true
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Disengage from your current battle target, if engaged
+    context.disengage = function ()
+        local player = windower.ffxi.get_player()
+        if player and player.status == STATUS_ENGAGED then
+            context.sendCommand('input /attack')
+            context.wait(1)
+
+            return true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     --
     context.useItem = function (target, itemName)
         local bypass_target_check = false
@@ -2226,6 +2253,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             t.symbol = target
             target = t
             bypass_target_check = true
+        end
+
+        -- If we're passed a "raw" mob, we'll just use <t>
+        if type(target) == 'table' and not target.symbol then
+            bypass_target_check = true
+            target.symbol = 't'
         end
         
         local item = nil
@@ -2266,8 +2299,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             target = context.me
         end
 
+        if not target or not target.symbol then
+            return
+        end
+
         -- Validate the target
-        if not bypass_target_check then
+        if not bypass_target_check and target.targets then
             if not hasAnyFlagMatch(target.targets, item.targets) then
                 target = context.bt
                 if not hasAnyFlagMatch(target.targets, item.targets) then
@@ -2461,6 +2498,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             bypass_target_check = true
         end
 
+        -- If we're passed a "raw" mob, we'll just use <t>
+        if type(target) == 'table' and not target.symbol then
+            bypass_target_check = true
+            target.symbol = 't'
+        end
+
         if ability == nil then
             ability = context.ability
         end
@@ -2482,7 +2525,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 target = context.bt
             end
 
-            if not bypass_target_check then
+            if not target or not target.symbol then
+                return
+            end
+
+            if not bypass_target_check and target.targets then
                 if target == nil or not hasAnyFlagMatch(target.targets, ability.targets) then
                     target = context.me
                     if not hasAnyFlagMatch(target.targets, ability.targets) then
@@ -2608,6 +2655,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Uses the specified spell on the specified target
     context.useSpell = function (target, spell, ignoreIncomplete)
         local bypass_target_check = false
+
+        -- If we're passed a known targeting string, use it
         if is_known_targeting_symbol(target) then 
             local t = windower.ffxi.get_mob_by_target(target)
             if t == nil then
@@ -2617,6 +2666,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             t.symbol = target
             target = t
             bypass_target_check = true
+        end
+
+        -- If we're passed a "raw" mob, we'll just use <t>
+        if type(target) == 'table' and not target.symbol then
+            bypass_target_check = true
+            target.symbol = 't'
         end
 
 
@@ -2643,9 +2698,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 target = context.me
             end
 
-            if target ~= nil then
-                if not bypass_target_check then
+            if target ~= nil and target.symbol then
+                if not bypass_target_check and target.targets then
                     local original_effect = context.effect
+                    local original_effect_count = context.effect_count
+
                     if 
                         (
                             target.in_party or
@@ -2659,7 +2716,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         )
                     then
                         writeMessage('%s detected! %s can be cast on party members.':format(
-                            text_buff(effect.name),
+                            text_buff(context.effect.name),
                             text_spell(spell.name)
                         ))
                     else
@@ -2673,9 +2730,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         end
                     end
 
-                    -- We need to restore the original effect, because the hasBuff call 
+                    -- We need to restore the original effect info, because the hasBuff call 
                     -- above would have overwritten it
-                    context.effect = original_effect
+                    context.effect          = original_effect
+                    context.effect_count    = original_effect_count
                 end
 
                -- NOTE: Spell usage is handled generally via the 'action' event handler
@@ -3555,8 +3613,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if isName then identifier = string.lower(identifier) end
 
             for key, mob in pairs(mobs) do
-
-                
                 if mob.distance <= distanceSquared then
                     if
                         mob.spawn_type == SPAWN_TYPE_MOB and
@@ -3882,9 +3938,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             if buff then
                 context.effect = buff
-                if target.spawn_type ~= SPAWN_TYPE_MOB then
-                    context.member = target
-                end
+                context.effect_count = arrayCountOccurences(target.buffs, buff.id)
+
+                -- if target.spawn_type ~= SPAWN_TYPE_MOB then
+                --     context.member = target
+                -- end
                 return buff
             end
         end
@@ -3984,6 +4042,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local buff = hasBuffInArray(target.buffs, buffId, strict)
                 if buff then
                     context.effect = buff    
+                    context.effect_count = arrayCountOccurences(target.buffs, buff.id)
                     return buff
                 end
             end
@@ -4722,6 +4781,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     writeMessage(text_red('Warning: Targeting failed!'))
                 end
             end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Gets a mob by its target name. Uses 't' by default, but can be overridden.
+    context.getMobByTarget = function(target)
+        target = tostring(target) or 't'
+        local mob = windower.ffxi.get_mob_by_target(target)
+        if mob and mob.valid_target then
+            mob.distance = math.sqrt(mob.distance)
+            
+            if mob.spawn_tpe == SPAWN_TYPE_PLAYER then
+                mob.buffs   = actionStateManager:getMemberBuffsFor(mob.id)
+                mob.symbol  = mob.name
+                mob.symbol2 = target
+            else
+                mob.buffs   = actionStateManager.getBuffsForMob(mob.id)
+                mob.symbol  = target
+            end
+
+            return mob
         end
     end
 

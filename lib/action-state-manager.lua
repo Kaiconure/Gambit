@@ -1,5 +1,5 @@
-MAX_SKILLCHAIN_TIME     = 8.25  -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
-MAX_WEAPON_SKILL_TIME   = 8.25  -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_SKILLCHAIN_TIME     = 7.75  -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_WEAPON_SKILL_TIME   = 7.75  -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
 MAX_MOB_ABILITY_TIME    = 5     -- The maximum amount of time we'll allow ourselves to respond to a mob ability event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
@@ -134,14 +134,14 @@ state_manager.setActionType = function (self, newType)
         local isInit = self.actionType == nil
         local isResting = self.actionType == 'resting'
         local isDead = self.actionType == 'dead'
-        local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull')
+        local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull' or self.actionType == 'idle_battle')
         local isBattle = (self.actionType == 'battle')
         local isMounted = (self.actionType == 'mounted')
 
         --local isIdlePullTarget = (newType == 'idle' or newType == 'pull' or self.actionType == 'resting')
         local isNewTypeResting = newType == 'resting'
         local isNewTypeDead = newType == 'dead'
-        local isNewTypeIdlePull = newType == 'idle' or newType == 'pull'
+        local isNewTypeIdlePull = newType == 'idle' or newType == 'pull' or newType == 'idle_battle'
         local isNewTypeBattle = newType == 'battle'
         local isNewTypeMounted = newType == 'mounted'
 

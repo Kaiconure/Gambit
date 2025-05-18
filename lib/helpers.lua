@@ -184,6 +184,21 @@ function arrayIndexOfStrI(array, search, start)
 end
 
 --------------------------------------------------------------------------------------
+-- Count the number of occurences of [search] within the specified array
+function arrayCountOccurences(array, search, start)
+    local count = 0
+    if isArray(array) then
+        for index = (start or 1), #array do
+            if array[index] == search then
+                count = count + 1
+            end
+        end
+    end
+
+    return count
+end
+
+--------------------------------------------------------------------------------------
 -- Find the first element of an array
 function arrayFirst(array, fn)
     if array == nil or #array == 0 then return end

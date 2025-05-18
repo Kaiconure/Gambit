@@ -349,7 +349,7 @@ local function compileActions(actionType, parent, rawActions)
                     end
 
                     -- Certain action types will have a built in default delay
-                    if actionType == 'battle' then
+                    if actionType == 'battle' or actionType == 'idle_battle' then
                         -- Battle actions will default to a delay of 2 unless otherwise specified
                         if tonumber(action.delay) == nil then
                             action.delay = 2
@@ -431,13 +431,14 @@ local function compileAllActions()
     local actions = settingsCopy.actions
     actionStateManager.functions = {}
 
-    compileActions('battle',    actions, actions and actions.battle or {})
-    compileActions('pull',      actions, actions and actions.pull or {})
-    compileActions('idle',      actions, actions and actions.idle or {})
-    compileActions('resting',   actions, actions and actions.resting or {})
-    compileActions('dead',      actions, actions and actions.dead or {})
-    compileActions('mounted',   actions, actions and actions.mounted or {})
-    compileActions('functions', actions, actions and actions.functions or {})
+    compileActions('battle',        actions, actions and actions.battle or {})
+    compileActions('idle_battle',    actions, actions and actions.idle_battle or {})
+    compileActions('pull',          actions, actions and actions.pull or {})
+    compileActions('idle',          actions, actions and actions.idle or {})
+    compileActions('resting',       actions, actions and actions.resting or {})
+    compileActions('dead',          actions, actions and actions.dead or {})
+    compileActions('mounted',       actions, actions and actions.mounted or {})
+    compileActions('functions',     actions, actions and actions.functions or {})
 
     actionStateManager.vars = actions and actions.vars or {}
 
@@ -505,6 +506,7 @@ local function getNextBattleAction(context)
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.ranged                  = nil   -- Current ranged attack equipment and ammo info
                 context.effect                  = nil   -- Current buff/effect
+                context.effect_count            = 0     -- Current buff/effect count (e.g. you could have multiple Ballad effects at once)
                 context.member                  = nil   -- The result of a targeting enumerator
                 context.mob                     = nil   -- The result of a mob search iterator
                 context.point                   = nil   -- The result of a position lookup
@@ -631,6 +633,7 @@ local function doNextActionCycle(time, player, party)
     local actionsExecuted = false
     local restingActionsExecuted = false
     local idleActionsExecuted = false
+    local idleBattleActionsExecuted = false
     local battleActionsExecuted = false
     local pullActionsExecuted = false
 
@@ -640,6 +643,9 @@ local function doNextActionCycle(time, player, party)
     -- We''l start by assuming that we're idle if there's no mob, or the mob isn't engaged.
     -- Note that if mobs are aggroing, we'll always get those back first.
     local isIdle = player.status ~= STATUS_ENGAGED and (mob == nil or mob.status ~= STATUS_ENGAGED)
+
+    -- Determine if we're in an idle battle mode
+    local isIdleBattle = false
     
     -- Determine if we're in an idling state (forced idle until a given time unless aggro'd). See the above
     -- initialization of isIdle to see the situations that would force us out of idling.
@@ -672,98 +678,116 @@ local function doNextActionCycle(time, player, party)
     ----------------------------------------------------------------------------------------------------
     -- Executed when we are disengaged and no mobs are aggroing us
     if isIdle then        
-        local context = ActionContext.create('idle', time, mob, mobTime, battleScope, party)
+        local idleContext = ActionContext.create('idle', time, mob, mobTime, battleScope, party)        
 
-        -- We'll ensure that we're facing the target mob at this point
-        -- if mob and not context.facingEnemy() then
-        --     context.faceEnemy()
-        -- end
+        -- Idle battle actions will always execute alongside idle actions. In a given cycle,
+        -- the idle battle actions will always execute first.
+        if 
+            settings.strategy == 'manual' and
+            not idleContext.me.is_party_leader and
+            idleContext.party_leader_bt
+        then
+            isIdleBattle = true
 
-        local action = processNextAction(context);
+            local idleBattleContext = ActionContext.create('idle_battle', time, idleContext.party_leader_bt, actionStateManager:elapsedTimeInType(), battleScope, party)
+           
+            if idleBattleContext then
+                local action = processNextAction(idleBattleContext);
 
-        actionsExecuted = action ~= nil
-        idleActionsExecuted = actionsExecuted
+                actionsExecuted = action ~= nil
+                idleBattleActionsExecuted = actionsExecuted
+            end
+        end
+
+        if idleContext and not idleBattleActionsExecuted then
+            local action = processNextAction(idleContext);
+
+            actionsExecuted = action ~= nil
+            idleActionsExecuted = actionsExecuted
+        end
 
         -- writeDebug('Is timed idle? ' .. (isTimedIdling and 'true' or 'false')
         --     .. ' Actions executed? ' .. (actionsExecuted and 'true' or 'false'))
     end
 
-    -- Battle
-    ----------------------------------------------------------------------------------------------------
-    -- Executed when:
-    --  1. We have a target AND
-    --  2. We are engaged AND
-    --  3. The mob is engaged
-    local isBattle = false
-    if not isTimedIdling then
-        if not actionsExecuted then
-            if playerStatus == STATUS_ENGAGED and hasPullableMob then
-                --local mob = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('bt')
-
-                -- Determine if the target mob is engaged
-                local isMobEngaged = 
-                    mob and 
-                    mob.status == STATUS_ENGAGED and
-                    (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD) or isPartyId(mob.claim_id)))
-
-                -- If the target mob is already engaged, it's not pullable (no need to pull)
-                hasPullableMob = not isMobEngaged
-
-                -- TODO: Multi-party mobs switch between idle/pull and battle because of the party claim check. Think about this.
-
-                if isMobEngaged then
-                    local context = ActionContext.create('battle', time, mob, mobTime, battleScope, party)
-                    local action = processNextAction(context);
-
-                    isBattle = true
-                    actionsExecuted = action ~= nil
-                    battleActionsExecuted = actionsExecuted
-                end
-            end
-        end
-
-        -- Pull
+    if not isIdleBattle then
+        -- Battle
         ----------------------------------------------------------------------------------------------------
         -- Executed when:
-        --  1. We have a target that's not yet engaged AND
-        --  2. There are no idle actions remaining to run.
-        --  3. We're not in a forced/timed idle state.
-        if not actionsExecuted and not isTimedIdling then
-            if hasPullableMob and not isBattle then
-                local command = ''
-                local commandDelay = 0
-                local hasCommand = false
+        --  1. We have a target AND
+        --  2. We are engaged AND
+        --  3. The mob is engaged
+        local isBattle = false
+        if not isTimedIdling then
+            if not actionsExecuted then
+                if playerStatus == STATUS_ENGAGED and hasPullableMob then
+                    --local mob = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('bt')
 
-                -- Lock on if necessary
-                if player.target_index ~= mob.index then
-                    lockTarget(player, mob, true)
-                    --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
-                    --hasCommand = true
+                    -- Determine if the target mob is engaged
+                    local isMobEngaged = 
+                        mob and 
+                        mob.status == STATUS_ENGAGED and
+                        (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD) or isPartyId(mob.claim_id)))
+
+                    -- If the target mob is already engaged, it's not pullable (no need to pull)
+                    hasPullableMob = not isMobEngaged
+
+                    -- TODO: Multi-party mobs switch between idle/pull and battle because of the party claim check. Think about this.
+
+                    if isMobEngaged then
+                        local context = ActionContext.create('battle', time, mob, mobTime, battleScope, party)
+                        local action = processNextAction(context);
+
+                        isBattle = true
+                        actionsExecuted = action ~= nil
+                        battleActionsExecuted = actionsExecuted
+                    end
                 end
+            end
 
-                -- Engage if necessary
-                if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
-                    command = command .. string.format('input /attack <t>; ')
-                    hasCommand = true
-                end
+            -- Pull
+            ----------------------------------------------------------------------------------------------------
+            -- Executed when:
+            --  1. We have a target that's not yet engaged AND
+            --  2. There are no idle actions remaining to run.
+            --  3. We're not in a forced/timed idle state.
+            if not actionsExecuted and not isTimedIdling then
+                if hasPullableMob and not isBattle then
+                    local command = ''
+                    local commandDelay = 0
+                    local hasCommand = false
 
-                if hasCommand then
-                    sendActionCommand(command, nil, 0.25)
-                end
+                    -- Lock on if necessary
+                    if player.target_index ~= mob.index then
+                        lockTarget(player, mob, true)
+                        --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
+                        --hasCommand = true
+                    end
 
-                -- Give some time for us to establish and engage with a new target before jumping straight to the pull
-                if mobTime > 1 then
-                    local context = ActionContext.create('pull', time, mob, mobTime, battleScope, party)
+                    -- Engage if necessary
+                    if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
+                        command = command .. string.format('input /attack <t>; ')
+                        hasCommand = true
+                    end
 
-                    -- We'll ensure that we're facing the target mob at this point
-                    -- if not context.facingEnemy() then
-                    --     context.faceEnemy()
-                    -- end
+                    if hasCommand then
+                        sendActionCommand(command, nil, 0.25)
+                    end
 
-                    local action = processNextAction(context)
+                    -- Give some time for us to establish and engage with a new target before jumping straight to the pull
+                    if mobTime > 1 then
+                        local context = ActionContext.create('pull', time, mob, mobTime, battleScope, party)
 
-                    actionsExecuted = action ~= nil
-                    pullActionsExecuted = actionsExecuted
+                        -- We'll ensure that we're facing the target mob at this point
+                        -- if not context.facingEnemy() then
+                        --     context.faceEnemy()
+                        -- end
+
+                        local action = processNextAction(context)
+
+                        actionsExecuted = action ~= nil
+                        pullActionsExecuted = actionsExecuted
+                    end
                 end
             end
         end
