@@ -1,0 +1,48 @@
+{
+  "vars": {
+    "use_stun": {
+      "abilities": {
+        "Aqua Ball": true,
+        "Bomb Toss": true,
+        "Crystal Bolide": true,
+        "Geist Wall": true,
+        "Goblin Rush": true,
+        "Healing Breeze": true,
+        "Oblivion's Mantle": true,
+        "Self-Destruct": true
+      },
+      "spells": { "Meteor": true },
+      "with_spells": ["Stun"],
+      "with_abilities": ["Shield Bash", "Weapon Bash"],
+      "delay": 0,
+      "frequency": 1
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt and bt.mob_time >= vars.use_stun.delay",
+        "(bt.distance <= 20 and arrayCount(vars.use_stun.with_spells) > 0 and canUseSpell(vars.use_stun.with_spells)) or \\",
+        "  (bt.distance <= 5 and arrayCount(vars.use_stun.with_abilities) > 0 and canUseAbility(vars.use_stun.with_abilities))",
+        "enemyUsingAbilityNC() and (vars.use_stun.abilities['*'] or vars.use_stun.abilities[enemy_ability.name])"
+      ],
+      "commands": [
+        "use(bt, recastReady(spell_recast) and spell or ability)",
+        "postpone(vars.use_stun.frequency)"
+      ],
+      "frequency": 1
+    },
+    {
+      "when": [
+        "bt and bt.mob_time >= vars.use_stun.delay",
+        "(bt.distance <= 20 and arrayCount(vars.use_stun.with_spells) > 0 and canUseSpell(vars.use_stun.with_spells)) or \\",
+        "  (bt.distance <= 5 and arrayCount(vars.use_stun.with_abilities) > 0 and canUseAbility(vars.use_stun.with_abilities))",
+        "enemyCastingSpell() and (vars.use_stun.spells['*'] or vars.use_stun.spells[enemy_spell.name])"
+      ],
+      "commands": [
+        "use(bt, recastReady(spell_recast) and spell or ability)",
+        "postpone(vars.use_stun.frequency)"
+      ]
+    }
+  ]
+}

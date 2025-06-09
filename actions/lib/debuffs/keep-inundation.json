@@ -1,0 +1,24 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "keep_inundation": {
+      "spells": ["Inundation"]
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt and bt.distance <= constants.spell_distance",
+        "hasSpell(vars.keep_inundation.spells) and canUse(spell)",
+        "not hasEffectOf(bt, spell)"
+      ],
+      "commands": [
+        "useSpell()",
+        "postpone((spellRecast(spell.name) or 0) + 5)"
+      ],
+      "frequency": 1
+    }
+  ]
+}

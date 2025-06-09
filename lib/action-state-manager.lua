@@ -1,8 +1,10 @@
-MAX_SKILLCHAIN_TIME     = 6     -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
-MAX_WEAPON_SKILL_TIME   = 6     -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_SKILLCHAIN_TIME     = 7.75  -- The maximum amount of time we'll allow ourselves to respond to a skillchain event
+MAX_WEAPON_SKILL_TIME   = 7.75  -- The maximum amount of time we'll allow ourselves to respond to a weapon skill event
+MAX_MOB_ABILITY_TIME    = 5     -- The maximum amount of time we'll allow ourselves to respond to a mob ability event
 RANGED_ATTACK_DELAY     = 15    -- The maximum amount of time we'll allow ourselves to finish a ranged attack
 
-SKILLCHAIN_DELAY        = 4     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
+SKILLCHAIN_START_DELAY  = 3     -- The delay used between weapon skills if there isn't already a skillchain in progress
+SKILLCHAIN_DELAY        = 5     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 
 local state_manager = {
@@ -22,12 +24,20 @@ local state_manager = {
     skillchain = {
         time = 0
     },
+    skillchains = {},
 
     currentSpell = {
         time = 0,
         castTime = 0,
         spell = nil
     },
+
+    meritPointInfo = { current = 0, max = 30, limits = 0 },
+    capacityPointInfo = { capacityPoints = 0, jobPoints = 0 },
+
+    othersSpells = { },
+
+    timedAbilities = { },
 
     memberBuffs = {        
     },
@@ -38,7 +48,9 @@ local state_manager = {
     rolls = {
     },
     latestRoll = {
-    }
+    },
+
+    context = nil
 }
 
 -----------------------------------------------------------------------------------------
@@ -70,6 +82,41 @@ state_manager.isActionSnoozing = function(self)
     return self.currentTime < self.actionWakeTime
 end
 
+-----------------------------------------------------------------------------------------
+-- Set the most recently created context
+state_manager.setContext = function(self, context)
+    self.context = context
+end
+-----------------------------------------------------------------------------------------
+-- Set the most recently created context
+state_manager.getContext = function(self)
+    return self.context
+end
+
+-----------------------------------------------------------------------------------------
+-- Set/get merit/limit point info
+state_manager.setMeritPointInfo = function(self, current, max, limits)
+    self.meritPointInfo = {
+        current = current,
+        max = max > 0 and max or 30,
+        limits = limits
+    }
+end
+state_manager.getMeritPointInfo = function(self)
+    return self.meritPointInfo
+end
+
+-----------------------------------------------------------------------------------------
+-- Set/get capacity/job point info
+state_manager.setCapacityPointInfo = function(self, capacityPoints, jobPoints)
+    self.capacityPointInfo = {
+        capacityPoints = capacityPoints,
+        jobPoints = jobPoints
+    }
+end
+state_manager.getCapacityPointInfo = function(self)
+    return self.capacityPointInfo
+end
 
 -----------------------------------------------------------------------------------------
 -- Sets the action type being executed, used to track how long we're in a type
@@ -87,28 +134,30 @@ state_manager.setActionType = function (self, newType)
         local isInit = self.actionType == nil
         local isResting = self.actionType == 'resting'
         local isDead = self.actionType == 'dead'
-        local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull')
+        local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull' or self.actionType == 'idle_battle')
         local isBattle = (self.actionType == 'battle')
+        local isMounted = (self.actionType == 'mounted')
 
-        --local isIdlePullTarget = (newType == 'idle' or newType == 'pull' or self.actionType == 'resting')
         local isNewTypeResting = newType == 'resting'
         local isNewTypeDead = newType == 'dead'
-        local isNewTypeIdlePull = newType == 'idle' or newType == 'pull'
+        local isNewTypeIdlePull = newType == 'idle' or newType == 'pull' or newType == 'idle_battle'
         local isNewTypeBattle = newType == 'battle'
+        local isNewTypeMounted = newType == 'mounted'
 
         local mode = (isInit and 'init')
             or (isResting and 'resting')
             or (isDead and 'dead')
             or (isIdlePull and 'idle/pull')
             or (isBattle and 'battle')
+            or (isMounted and 'mounted')
 
         local newMode = (isNewTypeResting and 'resting')
             or (isNewTypeDead and 'dead')
             or (isNewTypeIdlePull and 'idle/pull')
             or (isNewTypeBattle and 'battle')
+            or (isNewTypeMounted and 'mounted')
 
-        -- Only reset time if we're transitioning between idle/pull and battle
-        --if mode ~= newMode then
+        -- Only reset time if we're changing state
         if mode ~= newMode then
             writeVerbose(string.format(
                 'Transitioning from %s to %s after %s',
@@ -127,7 +176,9 @@ state_manager.setActionType = function (self, newType)
             self.skillchain = { time = 0 }
             self.mobAbilities = { }
 
-            self.actionTransitionCounter = self.actionTransitionCounter + 1
+            if mode ~= 'init' then
+                self.actionTransitionCounter = self.actionTransitionCounter + 1
+            end
         end
 
         self.actionType = newType
@@ -259,55 +310,117 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.setSkillchain = function(self, name)
-    self.skillchain = {
-        name = name,
-        time = os.clock()
-    }
+state_manager.setSkillchain = function(self, name, mob)
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        if name then
+            self.skillchains[mobId] = {
+                name = name,
+                mob = mob,
+                time = os.clock()
+            }
+        else
+            -- If no name is provided, clear the skillchain on the specified mob
+            self.skillchains[mobId] = nil
+        end
+    end
 end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.getSkillchain = function(self)
-    if self.skillchain.time > 0 and (os.clock() - self.skillchain.time) > MAX_SKILLCHAIN_TIME then
-        self:setSkillchain(nil)
+state_manager.clearSkillchain = function(self, mob)
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        -- writeVerbose('Clearing SC tracking on %s!':format(
+        --     text_mob(mob.name, Colors.verbose)
+        -- ))
+        self.skillchains[mobId] = nil
     end
+end
 
-    return self.skillchain
+-----------------------------------------------------------------------------------------
+--
+state_manager.getSkillchain = function(self, mob)
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        local skillchain = self.skillchains[mobId]
+        if skillchain then
+            if skillchain.time > 0 and (os.clock() - skillchain.time) > MAX_SKILLCHAIN_TIME then
+                self.skillchains[mobId] = nil
+                return
+            end
+
+            return skillchain
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Clear weapon skills for the party
+state_manager.clearPartyWeaponSkills = function(self)
+    if self.weaponSkills then
+        for mobId, ws in pairs(self.weaponSkills) do
+            if ws and ws.actor then
+                if ws.actor.in_party or ws.actor.in_alliance then
+                    -- writeVerbose('Clearing WS tracking of %s\'s %s on %s!':format(
+                    --     text_mob(ws.actor.name, Colors.verbose),
+                    --     text_weapon_skill(ws.skill.name, Colors.verbose),
+                    --     text_mob(ws.mob.name, Colors.verbose)
+                    -- ))
+                    self.weaponSkills[mobId] = nil
+                end
+            end
+        end
+    end
 end
 
 -----------------------------------------------------------------------------------------
 --
 state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
-    if actor and skill and mob then
-        local skillchains = {}
+    local mobId = tonumber(type(mob) == 'table' and mob.id)
+    if mobId then
+        if actor and skill then            
+            local skillchains = {}
+            if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
+            if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
+            if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
 
-        if skill.skillchain_a and skill.skillchain_a ~= '' then skillchains[#skillchains + 1] = skill.skillchain_a end
-        if skill.skillchain_b and skill.skillchain_b ~= '' then skillchains[#skillchains + 1] = skill.skillchain_b end
-        if skill.skillchain_c and skill.skillchain_c ~= '' then skillchains[#skillchains + 1] = skill.skillchain_c end
+            -- Clear SC on this mob if we're using a new WS. The SC created by this WS (if any) will
+            -- come as a subsequent event message.
+            self:clearSkillchain(mob)
 
-        self.weaponSkill = {
-            time = os.clock(),
-            skill = skill,
-            name = skill.name,
-            actor = actor,
-            mob = mob,
-            skillchains = skillchains
-        }
-    else
-        self.weaponSkill = { time = 0 }
+            self.weaponSkills[mobId] = {
+                time = os.clock(),
+                skill = skill,
+                name = skill.name,
+                actor = actor,
+                mob = mob,
+                skillchains = skillchains
+            }
+        else
+            self.weaponSkills[mobId] = nil
+        end
     end
 end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.getPartyWeaponSkillInfo = function(self)
-    -- Keep alive for at most 6 seconds
-    if self.weaponSkill.time > 0 and (os.clock() - self.weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
-        self:setPartyWeaponSkill()
-    end
+state_manager.getPartyWeaponSkillInfo = function(self, mob)
+    if mob then
+        local mobId = tonumber(type(mob) == 'table' and mob.id)
+        if mobId then
+            local weaponSkill = self.weaponSkills[mobId]
 
-    return self.weaponSkill
+            if weaponSkill then
+                if weaponSkill.time > 0 and (os.clock() - weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
+                    self.weaponSkills[mobId] = nil
+                    weaponSkill = nil
+                end
+            end
+
+            return weaponSkill
+        end
+    end
 end
 
 -----------------------------------------------------------------------------------------
@@ -325,27 +438,89 @@ state_manager.setMobAbility = function(self, mob, ability, targets)
 end
 
 -----------------------------------------------------------------------------------------
---
-state_manager.clearMobAbility = function(self, mob)
+-- This ensures we don't have an ever-increasing list of mob abilities. It should
+-- be called periodically to purge stale abilities.
+state_manager.purgeStaleMobAbilities = function(self)
     if self.mobAbilities then
-        self.mobAbilities[mob.id] = nil
+        for id, info in pairs(self.mobAbilities) do
+            local now = os.clock()
+            if 
+                (info.cleared_time and (now - info.cleared_time) > MAX_MOB_ABILITY_TIME) or
+                (now - info.time) > 120 or
+                not windower.ffxi.get_mob_by_id(id)
+            then
+                self.mobAbilities[id] = nil
+            end
+        end
+    end
+end
+
+state_manager.purgeWeaponSkills = function(self)
+    if self.weaponSkills then
+        local now = os.clock()
+        for id, info in pairs(self.weaponSkills) do
+            if type(info.time) ~= 'number' or (now - info.time) > 60 then
+                self.weaponSkills[id] = nil
+            end
+        end
+    end
+end
+
+state_manager.purgeSkillchains = function(self)
+    if self.skillchains then
+        local now = os.clock()
+        for id, info in pairs(self.skillchains) do
+            if type(info.time) ~= 'number' or (now - info.time) > 60 then
+                self.skillchains[id] = nil
+            end
+        end
     end
 end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.getMobAbilityInfo = function(self, mob)
+state_manager.clearMobAbility = function(self, mob, finalize)
+    if self.mobAbilities and self.mobAbilities[mob.id] then
+        local info = self.mobAbilities[mob.id]
+        if 
+            finalize or
+            (info.cleared_time and (os.clock() - info.cleared_time) > MAX_MOB_ABILITY_TIME)
+        then
+            -- We'll actually remove tracking of this ability if finalization has been requested,
+            -- or if it was cleared long enough ago that the ability tracking time has elapsed.
+            self.mobAbilities[mob.id] = nil
+        else
+            info.cleared = true
+            if not info.cleared_time then
+                info.cleared_time = os.clock()
+            end
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
+state_manager.getMobAbilityInfo = function(self, mob, windowed)
     if self.mobAbilities then
         local info = self.mobAbilities[mob.id]
         if info then
-            -- We'll set a maximum time that we'll allow a mob ability to remaing active
-            if os.clock() - info.time > 10 then
+            local now = os.clock()
+
+            -- If the maximum time has ellapsed, then we'll clear the ability
+            if 
+                (now - info.time > 30) or
+                (type(info.cleared_time) == 'number' and (now - info.cleared_time) > MAX_MOB_ABILITY_TIME)
+            then
                 self.mobAbilities[mob.id] = nil
                 info = nil
-            end            
-        end
+            end
 
-        return info
+            -- If we have a tracked ability and we're either windowed or haven't been cleared yet,
+            -- we can return the info we have at this point.
+            if info and (windowed or not info.cleared) then
+                return info
+            end
+        end
     end
 end
 
@@ -412,6 +587,66 @@ state_manager.setSpellCompleted = function(self, interrupted)
     }
 end
 
+state_manager.setOthersSpellStart = function(self, spell, actor, target)
+    if spell and actor then
+        local now = os.clock()
+        self.othersSpells[actor.id] = {
+            actorId = actor.id,
+            time = now,
+            expires = now + (spell.cast_time * 2) + 10,
+            spell = spell,
+            interrupted = false,
+            targetId = target and target.id
+        }
+    end
+end
+
+state_manager.setOthersSpellCompleted = function(self, mob, interrupted)
+    if type(mob) == 'table' and type(mob.id) == 'number' then
+        self.othersSpells[mob.id] = nil
+    end
+end
+
+state_manager.getOthersSpellInfo = function(self, mob)
+    if type(mob) == 'table' and type(mob.id) == 'number' then
+        local info = self.othersSpells[mob.id]
+        if 
+            info and
+            info.expires > os.clock() 
+        then
+            return info
+        end
+    end
+end
+
+state_manager.clearOthersSpells = function(self, expiredOnly)
+    if expiredOnly then
+        local now = os.clock()
+        for actorId, info in pairs(self.othersSpells) do
+            if
+                info and
+                info.expires < now
+            then
+                self.othersSpells[actorId] = nil
+            end
+        end
+    else
+        self.othersSpells = { }
+    end
+end
+
+state_manager.markTimedAbility = function(self, ability, target)
+    self.timedAbilities[ability.id] = {
+        ability = ability,
+        time = os.clock(),
+        target = target
+    }
+end
+
+state_manager.getTimedAbilityInfo = function(self, abilityId)
+    return self.timedAbilities[abilityId]
+end
+
 -----------------------------------------------------------------------------------------
 -- 
 state_manager.setMemberBuffs = function(self, buffs)
@@ -449,7 +684,7 @@ state_manager.validateBuffsForMob = function (self, id)
             mob == nil or
             not mob.valid_target or
             mob.hpp == 0 or
-            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB) or            
+            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB and (mob.spawn_type ~= SPAWN_TYPE_PLAYER or mob.in_alliance)) or
             mob.index ~= value.index or
             mob.name ~= value.name
         then
@@ -682,13 +917,19 @@ state_manager.reset = function (self)
     self.actionWakeTime = 0
     self.actionType = nil
     self.skillchain = { time = 0 }
+    self.skillchains = {}
     self.mobAbilities = {}
     self.weaponSkill = { time = 0 }
+    self.weaponSkills = { }
     self.currentSpell = { time = 0 }
-    self.rangedAttack = { time = 0}
+    self.othersSpells = { }
+    self.timedAbilities = { }
+    self.rangedAttack = { time = 0 }
     self.actionTypeStartTime = os.clock()
     self.actions = { }
     self.vars = { }
+    self.meritPointInfo = { current = 0, max = 30, limits = 0 }
+    self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0 }
     -- self.memberBuffs = { }   -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
     -- self.mobBuffs = { }    -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
 end

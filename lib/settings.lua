@@ -121,7 +121,13 @@ local function getSettingsFileName(playerName)
 end
 
 local function getActionsFileName(playerName, actionsName)
+    if actionsName == nil then print('no actionsName provided') end
     return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
+end
+
+local function getActionsAlternateFileName(playerName, actionsName)
+    if actionsName == nil then print('no actionsName provided') end
+    return string.format('./settings/actions/%s.json', actionsName)
 end
 
 local function getActionsJobFileName(player)
@@ -171,14 +177,17 @@ end
 ----------------------------------------------------------------------------------------
 -- Pulls the next round of imports into the specified actions array. Returns
 -- true if new actions were imported as part of this pass.
-local function _loadActionImportsInternal(playerName, baseActions, actionType)
+local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
     local imported = false
-
     local actions = baseActions and baseActions[actionType]
     if actions then
         if baseActions.vars == nil then
             baseActions.vars = {}
         end
+
+        -- if baseActions.importedImports == nil then
+        --     baseActions.importedImports = {}
+        -- end
 
         for i = #actions, 1, -1 do
             local action = actions[i]
@@ -205,22 +214,38 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
                     import = json.parse(file:read())
 
                     if import then
-                        --
-                        -- Pull in any variables defined in this import. Existing values are not overwritten.
-                        if import.vars then
-                            -- for name, val in pairs(import.vars) do
-                            --     if baseActions.vars[name] == nil then
-                            --         baseActions.vars[name] = val
-                            --     end
-                            -- end
-                            loadVars(baseActions.vars, import.vars)
-                        end
+                        -- if type(import.imports) == 'table' and import.imports[1] then
+                        --     for ii_index, ii_ref in ipairs(import.imports) do
+                        --         local 
+                        --         if not baseActions.importedImports[string.lower(ii_ref.import)] then
+                        --             baseActions.importedImports[string.lower(ii_ref.import)] = { import = string.lower(ii_ref.import) }
+                        --         end
+                        --     end
+                        -- end
 
                         -- Remove the import reference from the calling action
                         table.remove(actions, i)
 
-                        -- Now, if the import has its own actions we will insert them in place
-                        -- of the original import reference
+                        --
+                        -- Pull in any variables defined in this import. Existing values are not overwritten.
+                        if import.vars then
+                            loadVars(baseActions.vars, import.vars)
+                        end
+
+                        -- Pull in the macros
+                        if type(import.macros) == 'table' then
+                            local macros = type(import.macros) == 'table' and import.macros or { }
+
+                            for name, macro in pairs(macros) do
+                                if baseActions.macros[name] == nil then
+                                    baseActions.macros[name] = macro
+                                end
+                            end
+                        end                        
+                        import.macros = nil
+
+                        -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
+                        -- then the originating import action will simply be removed.
                         if 
                             import.actions and
                             #import.actions > 0
@@ -249,6 +274,155 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType)
     return imported
 end
 
+local function _expandActionMacrosToArray(macros, array)
+    -- If we have a macro table, iterate through all entries.
+    -- Note: At this point, we're guaranteed that there will be no nested macros; they
+    -- have all been expaned by the settings loader. We just need to insert them.
+    if type(array) == 'table' then
+
+        -- Do array replacement macros. With $macro:<name> or $macro.<name>, we'll replace an
+        -- array element with all elements from the macro.
+        for i = #array, 1, -1 do
+            local clause = trimString(array[i])
+            if stringStartsWith(clause, '$macro:') or stringStartsWith(clause, '$macro.') then
+                -- First, we will remove this entry. If it is a macro reference, it will be
+                -- removed regardless of what happens next
+                table.remove(array, i)
+
+                -- Obtain the macro key itself
+                local key = trimString(string.sub(clause, 8))                
+                if key ~= '' and type(macros[key]) == 'table' then
+                    if type(macros[key]) == 'table' then
+                        for j = #macros[key], 1, -1 do
+                            table.insert(array, i, macros[key][j])
+                        end
+                    end
+                end
+            else
+                -- Store the trimmed version of the original string
+                array[i] = clause
+            end
+        end
+
+        local str_macro_types = {'$macro('}
+
+        -- Do string-replacement macros. With $macro(<macro-name>), we'll replace directly inside of a string.
+        for i = #array, 1, -1 do
+            local clause = trimString(array[i])
+
+            for j, marker in ipairs(str_macro_types) do
+                local search = 1
+
+                while search and search < #clause do
+                    local start_index = string.find(clause, marker, search, true)
+                    if start_index then
+                        local end_index = string.find(clause, ')', start_index, true)
+                        if end_index then
+                            local key = trimString(string.sub(clause, start_index + #marker, end_index - 1))
+
+                            local replacement = ''
+                            if macros[key] then
+                                replacement = table.concat(macros[key], ' ')
+                            end
+
+                            local newValue = 
+                                string.sub(clause, 1, start_index - 1) ..
+                                replacement ..
+                                string.sub(clause, end_index + 1)
+
+                            -- Store the new clause value
+                            clause = newValue
+
+                            -- We'll continue searching from exactly where we left off, because the string has been replaced.
+                            -- We may have expanded a new macro reference.
+                            search = start_index
+                        else
+                            -- No closing was found, this means there are no valid macros left
+                            search = nil
+                        end
+                    else
+                        -- No string-replacement macros were found
+                        search = nil
+                    end
+                end
+            end
+
+            array[i] = clause
+        end
+    end
+ end
+
+ local function _expandActionMacros(loadedData, action)
+    local macros = loadedData.macros
+    if type(macros) == 'table' then
+        -- Promote string actions and commands to tables to simplify macro insertion
+        if type(action.when) == 'string' then
+            action.when = { action.when }
+        end
+        if type(action.commands) == 'string' then
+            action.commands = { action.commands }
+        end
+        
+        _expandActionMacrosToArray(macros, action.when)
+        _expandActionMacrosToArray(macros, action.commands)
+    end
+ end
+
+ local function _processMacros(loadedData)
+    local MAX_PASSES = 10
+
+    for
+        macro_set_name, macro_set in pairs(loadedData.macros) 
+    do
+        local passes = 0
+        local num_replacements
+
+        while passes <= MAX_PASSES and num_replacements ~= 0 do
+            num_replacements = 0   
+            for i = #macro_set, 1, -1 do
+                local macro = trimString(macro_set[i])
+
+                if 
+                    stringStartsWith(macro, '$macro:') or
+                    stringStartsWith(macro, '$macro.')
+                then
+                    table.remove(macro_set, i)
+                    local replacement_name = string.sub(macro, 8)
+                    local replacement = loadedData.macros[replacement_name]
+                    if replacement then
+                        for j = #replacement, 1, -1 do
+                            table.insert(macro_set, i, replacement[j])
+                        end
+                    end
+
+                    num_replacements = num_replacements + 1
+                else
+                    macro_set[i] = macro
+                end
+            end
+
+            passes = passes + 1
+        end
+
+        if passes > MAX_PASSES then
+            writeMessage('Warning: The maximum number of macro passes (%s) was exceeded.':format(
+            text_number(passes)
+        ))
+        end
+    end
+
+    -- Now, expand all macros into their respective actions
+    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'functions'}
+    for i, actionType in ipairs(actionTypes) do
+        local actions = loadedData and loadedData[actionType]
+        if type(actions) == 'table' then
+            for i, action in ipairs(actions) do
+                _expandActionMacros(loadedData, action)
+            end
+        end
+    end
+ end
+
 ----------------------------------------------------------------------------------------
 --
 local function loadActionImports(playerName, actions)
@@ -256,7 +430,9 @@ local function loadActionImports(playerName, actions)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'pull', 'idle', 'resting', 'dead', 'imports'}
+        local types = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'imports', 'functions'}
+
+        actions.macros = type(actions.macros) == 'table' and actions.macros or { }
 
         for i = 1, #types do
             local actionType = types[i]
@@ -264,7 +440,7 @@ local function loadActionImports(playerName, actions)
 
             -- Prevent runaway, infinite imports. Most likely caused if an include references 
             -- itself. Let's not crash the game because of a mistake or typo.
-            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType) do
+            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType, passes + 1) do
                 passes = passes + 1
             end
 
@@ -275,6 +451,8 @@ local function loadActionImports(playerName, actions)
                 ))
             end
         end
+
+        _processMacros(actions)
     end
 end
 
@@ -322,9 +500,29 @@ local function loadActionsFromFile(playerName, fileName)
         loadActionImports(playerName, actions)
         --writeJsonToFile('.\\settings\\%s\\.output\\processed-actions.json':format(playerName), actions)
 
-        if type(actions.vars) == 'table' then
+        -- if type(actions.importedImports) then
+        --     local imported = true
 
-        end
+        --     actions['imported-imports'] = {}
+
+        --     while imported do
+        --         imported = false
+        --         for entry_key, entry in pairs(actions.importedImports) do
+        --             if not entry.imported then
+        --                 arrayAppend(actions['imported-imports'], {
+        --                     import = entry_key,
+        --                     imported = false
+        --                 })
+        --                 imported = true
+        --                 entry.imported = true
+        --             end
+        --         end
+
+        --         if imported then
+        --             --local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
+        --         end
+        --     end
+        -- end
     end
 
     return actions
@@ -409,8 +607,8 @@ function loadSettings(actionsName, settingsOnly)
     -- is unreachable. This prevents you from getting into infinite wall-running ruts.
     tempSettings.maxChaseTime = tonumber(tempSettings.maxChaseTime)
     if tempSettings.maxChaseTime and tempSettings.maxChaseTime > 0 then
-        -- Clamp the give up period to between 5-30 seconds
-        tempSettings.maxChaseTime = math.clamp(tempSettings.maxChaseTime, 5, 30)
+        -- Clamp the give up period to between 5-60 seconds
+        tempSettings.maxChaseTime = math.clamp(tempSettings.maxChaseTime, 5, 60)
     else
         tempSettings.maxChaseTime = 17
     end
@@ -421,6 +619,12 @@ function loadSettings(actionsName, settingsOnly)
         tonumber(tempSettings.skillchainDelay) or SKILLCHAIN_DELAY,
         0,
         MAX_SKILLCHAIN_TIME)
+
+    -- The maximum number of tabs to press when having trouble acquiring targets
+    tempSettings.maxTabs = math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 0, 0, 20))
+
+    -- The maximum length of targeting attempts
+    tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 1, 20)
 
     local jobActionsName = nil
     local actions = nil
@@ -514,7 +718,13 @@ end
 -- Load actions by player and action set name
 function loadActions(playerName, actionsName)
     local fileName = getActionsFileName(playerName, actionsName)
-    return loadActionsFromFile(playerName, fileName)
+    local actions = loadActionsFromFile(playerName, fileName)
+    if actions == nil then
+        fileName = getActionsAlternateFileName(playerName, actionsName)
+        actions = loadActionsFromFile(playerName, fileName)
+    end
+
+    return actions
 end
 
 ----------------------------------------------------------------------------------------

@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Wind Crystal",
+      "name": "Painite",
+      "ingredients": ["Fenrite"]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

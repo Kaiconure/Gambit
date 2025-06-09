@@ -75,9 +75,13 @@ end
 --
 local function matchResourceByNameEN(resource, enNameLowerCase)
     local lower = string.lower(resource.en)
+    local lowerl = type(resource.enl) == 'string' and string.lower(resource.enl) or nil
+
     return resource and (
-        lower == enNameLowerCase or
-        "\"%s\"":format(lower) == enNameLowerCase
+        (lower == enNameLowerCase or
+            "\"%s\"":format(lower) == enNameLowerCase) or
+        (lowerl and 
+            (lowerl == enNameLowerCase or "\"%s\"":format(lowerl) == enNameLowerCase))
     )
 end
 
@@ -368,7 +372,7 @@ end
 
 --------------------------------------------------------------------------------------
 --
-function canUseSpell(player, spell, recasts)
+function canUseSpell(player, spell, recasts, spellsLearned)
     player = player or windower.ffxi.get_player()
 
     spell = getSpellResource(spell)
@@ -379,7 +383,7 @@ function canUseSpell(player, spell, recasts)
 
     -- Bail if we don't have enough MP
     if spell.mp_cost and player.vitals.mp < spell.mp_cost then
-        return false
+        return
     end
     
     -- Bail if we're silenced or asleep
@@ -391,23 +395,26 @@ function canUseSpell(player, spell, recasts)
         hasBuff(player, BUFF_PETRIFIED) or
         hasBuff(player, BUFF_TERROR)
     then
-        return false
+        return
     end
 
     -- Bail if we haven't learned this spell at all
-    local spellsLearned = windower.ffxi.get_spells()
-    if not spellsLearned[spell.id] then
-        return false
+    spellsLearned = spellsLearned or windower.ffxi.get_spells()
+    if 
+        not spellsLearned or
+        not spellsLearned[spell.id] 
+    then
+        return
     end
 
     -- Bail if our current main/sub job cannot use the spell
     if not canJobUseSpell(player, spell) then
-        return false
+        return
     end
 
     -- Bail if it's a blue magic spell and it is not assigned
     if spell.type == 'BlueMagic' and not hasBluSpellAssigned(player, spell) then
-        return false
+        return
     end
 
     -- Don't allow trusts in non-trust zones
@@ -417,7 +424,7 @@ function canUseSpell(player, spell, recasts)
                 globals.currentZone.can_pet ~= true or
                 globals.currentZone.id == 80 -- South San d'Oria [S] seems to be inappropriately tagged
             then
-                return false
+                return
             end
         end
     end
@@ -433,10 +440,10 @@ function canUseSpell(player, spell, recasts)
     --
 
     recasts = recasts or windower.ffxi.get_spell_recasts()
-    if not recasts then return false end
+    if not recasts then return end
 
     local recast = recasts[spell.recast_id or spell.id]
-    if not recast then return false end
+    if not recast then return end
 
     -- Recast will be a number in ticks, which is seconds * 60
     return recast <= 0, (recast / 60)
@@ -456,6 +463,14 @@ function canUseAbility(player, ability, recasts)
     if 
         ability.tp_cost and 
         player.vitals.tp < ability.tp_cost 
+    then
+        return false
+    end
+
+    -- Bail if the ability is a Corsair double-up, without the double-up buff active
+    if
+        ability.id == 123 and       -- Double-up
+        not hasBuff(player, 308)    -- Double-up chance
     then
         return false
     end
@@ -492,6 +507,17 @@ function canUseAbility(player, ability, recasts)
         ability and
         ability.recast_id
     then
+        recasts = recasts or windower.ffxi.get_ability_recasts()
+
+        if 
+            ability.recast_id == 231 and    -- Strategems
+            getMaxStratagems(player) > 0
+        then
+            if getAvailableStratagems(player, recasts) > 0 then
+                return 0
+            end
+        end
+
         local abilities = windower.ffxi.get_abilities()
         local jobAbilities = abilities and abilities.job_abilities or {}
         local petCommands = abilities and abilities.pet_commands or {}
@@ -504,8 +530,6 @@ function canUseAbility(player, ability, recasts)
             foundJobAbility or
             (foundPetCommand and windower.ffxi.get_mob_by_target('pet')) 
         then
-            recasts = recasts or windower.ffxi.get_ability_recasts()
-
             local recast = recasts and recasts[ability.recast_id]
             if type(recast) == 'number' then
                 -- Recast will be a number in ticks, which is seconds * 60
@@ -520,7 +544,7 @@ end
 
 --------------------------------------------------------------------------------------
 --
-function canUseWeaponSkill(player, weaponSkill)
+function canUseWeaponSkill(player, weaponSkill, abilities)
     player = player or windower.ffxi.get_player()
 
     weaponSkill = getWeaponSkillResource(weaponSkill)
@@ -539,12 +563,13 @@ function canUseWeaponSkill(player, weaponSkill)
         hasBuff(player, BUFF_SLEEP2) or
         hasBuff(player, BUFF_STUN) or
         hasBuff(player, BUFF_PETRIFIED) or
-        hasBuff(player, BUFF_AMNESIA)
+        hasBuff(player, BUFF_AMNESIA) or
+        hasBuff(player, BUFF_TERROR)
     then
         return false
     end
 
-    local abilities = windower.ffxi.get_abilities() or {}
+    abilities = abilities or windower.ffxi.get_abilities() or {}
     local knownWeaponSkills = abilities.weapon_skills or {}
 
     -- Only return true if the weapon skill we're checking is in the collection of available weapon skills
@@ -555,6 +580,24 @@ function canUseWeaponSkill(player, weaponSkill)
     end
 
     return false
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if a weapon skill is usable
+function isUsableWeaponSkill(weaponSkill, abilities)
+    weaponSkill = getWeaponSkillResource(weaponSkill)
+    if weaponSkill == nil then
+        return false
+    end
+
+    abilities = abilities or windower.ffxi.get_abilities() or {}
+    local knownWeaponSkills = abilities.weapon_skills or {}
+
+    for i, knownWeaponSkillId in pairs(knownWeaponSkills) do
+        if knownWeaponSkillId == weaponSkill.id then
+            return true
+        end
+    end
 end
 
 local FINISHING_MOVES_COUNT = 
@@ -577,6 +620,41 @@ function getFinishingMoves(player)
     end
 
     return 0
+end
+
+
+local stratagem_charge_time = {
+    [1] = 240,
+    [2] = 120,
+    [3] = 80,
+    [4] = 60,
+    [5] = 48
+}
+function getMaxStratagems(player)
+    --
+    -- The following was obtained from the StrategemCounter addon:
+    --  https://github.com/lorand-ffxi/addons/blob/master/StratagemCounter/StratagemCounter.lua
+    --
+    player = player or windower.ffxi.get_player()
+	if S{player.main_job, player.sub_job}:contains('SCH') then
+		local lvl = (player.main_job == 'SCH') and player.main_job_level or player.sub_job_level
+		return math.floor(((lvl  - 10) / 20) + 1)
+	else
+		return 0
+	end
+end
+function getAvailableStratagems(player, recasts)
+    --
+    -- The following was obtained from the StrategemCounter addon:
+    --  https://github.com/lorand-ffxi/addons/blob/master/StratagemCounter/StratagemCounter.lua
+    --
+    player = player or windower.ffxi.get_player()
+
+	local recastTime = (recasts or windower.ffxi.get_ability_recasts())[231] or 0
+	local maxStrats = getMaxStratagems()
+	if (maxStrats == 0) then return 0 end
+	local stratsUsed = (recastTime / stratagem_charge_time[maxStrats]):ceil()
+	return maxStrats - stratsUsed
 end
 
 -------------------------------------------------------------------------------

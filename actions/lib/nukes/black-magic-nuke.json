@@ -5,16 +5,41 @@
   "actions": [
     {
       "when": [
+        "arrayCount(vars.black_magic_nuke.gear.casting) == 0 and vars.black_magic_nuke.gear.inherit_casting_from"
+      ],
+      "commands": [
+        "false and log('Inheriting pre-Black Magic nuke casting gear from:', vars.black_magic_nuke.gear.inherit_casting_from)",
+        "setVar('vars.black_magic_nuke.gear.casting', getVar(vars.black_magic_nuke.gear.inherit_casting_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "arrayCount(vars.black_magic_nuke.gear.battle) == 0 and vars.black_magic_nuke.gear.inherit_battle_from"
+      ],
+      "commands": [
+        "false and log('Inheriting post-Black Magic nuke battle gear from:', vars.black_magic_nuke.gear.inherit_battle_from)",
+        "setVar('vars.black_magic_nuke.gear.battle', getVar(vars.black_magic_nuke.gear.inherit_battle_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
         "bt and bt.distance < 20",
         "me.mpp >= vars.black_magic_nuke.min_mpp",
+        "bt.hpp <= vars.black_magic_nuke.max_hpp and bt.hpp >= vars.black_magic_nuke.min_hpp",
+        "not partyUsingWeaponSkill()",
         "canUseSpell(randomize(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, vars.black_magic_nuke.spells)))"
       ],
       "commands": [
         "log('Black magic nuking with', spell.name)",
+        "equipMany(vars.black_magic_nuke.gear.casting)",
         "useSpell(bt)",
+        "equipMany(vars.black_magic_nuke.gear.battle)",
         "postpone(vars.black_magic_nuke.frequency)"
       ],
-      "delay": 6,
+      "delay": 3,
+      "scope": "battle",
       "comment": "Nukes with normal, single-target black magic. Customize by defining variables: max_tier, frequency, min_mpp."
     }
   ],
@@ -24,6 +49,14 @@
       "min_tier": "I",
       "frequency": 20,
       "min_mpp": 30,
+      "max_hpp": 100,
+      "min_hpp": 0,
+      "gear": {
+        "casting": [],
+        "battle": [],
+        "inherit_casting_from": "vars.black_magic_burst.gear.casting",
+        "inherit_battle_from": "vars.black_magic_burst.gear.battle"
+      },
       "spells": [
         "Thunder VI",
         "Blizzard VI",

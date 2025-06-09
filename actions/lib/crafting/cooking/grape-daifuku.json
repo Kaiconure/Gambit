@@ -1,0 +1,18 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Fire Crystal",
+      "name": "Grape Daifuku",
+      "ingredients": [
+        "Maple Sugar",
+        "Sticky Rice",
+        "Cornstarch",
+        "Distilled Water",
+        "Azuki Bean",
+        "Royal Grape",
+        2
+      ]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

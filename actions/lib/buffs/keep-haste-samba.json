@@ -13,6 +13,7 @@
     {
       "when": [
         "hasAbility('Haste Samba') and canUse(ability)",
+        "not partyUsingWeaponSkill()",
         "(me.tp >= vars.keep_haste_samba.min_tp and not hasEffectOf(ability)) or (me.tp >= vars.keep_haste_samba.reapply_when_tp and ability_recast <= vars.keep_haste_samba.reapply_when_recast)"
       ],
       "commands": ["use(me)"],

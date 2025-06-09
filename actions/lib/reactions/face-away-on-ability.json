@@ -1,0 +1,113 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": [
+      "Place this at the very top of your battle section, or at least above any gambit that will turn or move toward the mob.",
+      "This will cause you to turn and face away from the mob when certain abilities are being used, and then turn when usage completes."
+    ]
+  },
+  "vars": {
+    "face_away_on_ability": {
+      "hotkeys_battle_set": null,
+      "Assailer Chariot": {
+        "abilities": {
+          "Discoid": { "distance": 12 }
+        }
+      },
+      "Glavoid": {
+        "abilities": {
+          "*": {
+            "wait": 4,
+            "allow_offensive_magic": true,
+            "comment": [
+              "Only physical damage is absorted when Glavoid is using a TP move, so we'll allow offensive magic."
+            ]
+          }
+        }
+      },
+      "Raja": {
+        "abilities": {
+          "Royal Decree": { "distance": 20 }
+        }
+      },
+      "Rani": {
+        "abilities": {
+          "*": true
+        }
+      },
+      "*": {
+        "abilities": {
+          "Afflicting Gaze": true,
+          "Baleful Gaze": true,
+          "Blaster": true,
+          "Deathly Glare": { "wait": 4 },
+          "Grim Glower": true,
+          "Mortal Blast": true,
+          "Mortal Ray": true,
+          "Oppressive Glare": true,
+          "Shah Mat": {
+            "wait": 6,
+            "allow_offensive_magic": true,
+            "comment": "AOE gaze with terror and doom effect. Seems to last for a while after use."
+          }
+        }
+      }
+    }
+  },
+  "actions": [
+    {
+      "commands": ["setVar('vars.face_away_on_ability.trigger', nil)"],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "comment": "This will run exactly once at the start of any battle, and ensure that the trigger is cleared."
+    },
+    {
+      "when": ["vars.face_away_on_ability.trigger", "not enemyUsingAbility()"],
+      "commands": [
+        "wait(vars.face_away_on_ability.trigger.wait or 2)",
+        "not vars.face_away_on_ability.trigger.allow_offensive_magic and resumeOffensiveMagic()",
+        "not vars.face_away_on_ability.trigger.allow_weapon_skills and resumeWeaponSkills()",
+        "setVar('vars.face_away_on_ability.trigger', nil)",
+        "log('====== END ABILITY FACE-AWAY SEQUENCE ====== ')"
+      ],
+      "delay": 0
+    },
+    {
+      "when": [
+        "not vars.face_away_on_ability.trigger",
+        "enemyUsingAbility()",
+        "getMatchingAbilityFaceAway(vars.face_away_on_ability, enemy_ability, bt)"
+      ],
+      "commands": [
+        "ability_face_away.no_turn and faceEnemy() or faceAway(bt)",
+        "setVar('vars.face_away_on_ability.trigger', ability_face_away)",
+        "not vars.face_away_on_ability.trigger.allow_offensive_magic and suppressOffensiveMagic()",
+        "not vars.face_away_on_ability.trigger.allow_weapon_skills and suppressWeaponSkills()",
+        "log(enemy_ability.name, 'detected: BEGIN ABILITY FACE-AWAY SEQUENCE ====== ')",
+        "vars.face_away_on_ability.distance and align(bt, nil, vars.face_away_on_ability.distance, 8, true)",
+        "vars.face_away_on_ability.distance and (vars.face_away_on_ability.no_turn and faceEnemy() or faceAway(bt))",
+        "wait(2)"
+      ],
+      "delay": 0
+    },
+    {
+      "when": [
+        "vars.face_away_on_ability.hotkeys_battle_set",
+        "enemyUsedAbility('Hurricane Breath')"
+      ],
+      "commands": [
+        "log('Reqeuipping battle set:', vars.face_away_on_ability.hotkeys_battle_set)",
+        "sendCommand('hk gear equip \"%s\"', vars.face_away_on_ability.hotkeys_battle_set)"
+      ]
+    },
+    {
+      "when": "vars.face_away_on_ability.trigger",
+      "commands": [
+        "vars.face_away_on_ability.trigger.no_turn and faceEnemy() or faceAway(bt)",
+        "wait(2)"
+      ],
+      "delay": 0
+    }
+  ]
+}

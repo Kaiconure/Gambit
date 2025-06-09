@@ -1,5 +1,6 @@
 -------------------------------------------------------------------------------
 -- Known spawn types
+SPAWN_TYPE_PET      = 2
 SPAWN_TYPE_PLAYER   = 13
 SPAWN_TYPE_TRUST    = 14
 SPAWN_TYPE_MOB      = 16
@@ -25,12 +26,15 @@ BUFF_TERROR         = 28
 BUFF_SABER_DANCE    = 410
 BUFF_FAN_DANCE      = 411
 BUFF_FOOD           = 251
+BUFF_ELVORSEAL      = 603
+BUFF_BATTLEFIELD    = 254
 
 -------------------------------------------------------------------------------
 -- Known statuses
 STATUS_IDLE           = 0
 STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
+STATUS_EVENT          = 4
 STATUS_RESTING        = 33
 
 -------------------------------------------------------------------------------
@@ -117,6 +121,12 @@ function arraysIntersect(a1, a2)
     end
 end
 
+-------------------------------------------------------------------------------
+-- Append an item to an array
+function arrayAppend(array, item)
+    array[#array + 1] = item
+end
+
 --------------------------------------------------------------------------------------
 -- Determine if the two string arrays have a non-empty intersect set, with
 -- a case-insensitive comparison operation
@@ -160,15 +170,32 @@ end
 
 --------------------------------------------------------------------------------------
 -- Find the index of the specified array key, or nil
-function arrayIndexOfStrI(array, search)
+function arrayIndexOfStrI(array, search, start)
     if isArray(array) and search ~= nil then
         search = string.lower(search)
-        for index, value in ipairs(array) do
+        --for index, value in ipairs(array) do
+        for index = (start or 1), #array do
+            local value = array[index]
             if value ~= nil and string.lower(tostring(value)) == search then
                 return index
             end
         end
     end
+end
+
+--------------------------------------------------------------------------------------
+-- Count the number of occurences of [search] within the specified array
+function arrayCountOccurences(array, search, start)
+    local count = 0
+    if isArray(array) then
+        for index = (start or 1), #array do
+            if array[index] == search then
+                count = count + 1
+            end
+        end
+    end
+
+    return count
 end
 
 --------------------------------------------------------------------------------------
@@ -189,6 +216,22 @@ function tableFirst(table, fn)
     for key, val in pairs(table) do
         if fn == nil or fn(val, key) then return val end
     end
+end
+
+--------------------------------------------------------------------------------------
+-- Build an array of all elements of table that have a truthful result from fn
+function tableAll(table, fn)
+    local results = { }
+
+    if type(table) == 'table' and type(fn) == 'function' then
+        for key, val in pairs(table) do
+            if fn(val, key) then 
+                arrayAppend(results, val)
+            end
+        end
+    end
+
+    return results
 end
 
 --------------------------------------------------------------------------------------
@@ -243,4 +286,40 @@ function isPartyTrustEngaged(party)
             (party.p4 and party.p4.mob.spawn_type == SPAWN_TYPE_TRUST and party.p4.mob.status == STATUS_ENGAGED) or
             (party.p5 and party.p5.mob.spawn_type == SPAWN_TYPE_TRUST and party.p5.mob.status == STATUS_ENGAGED)
     end
+end
+
+-------------------------------------------------------------------------------
+-- 
+function stringStartsWith(str, start)
+    if type(str) == 'string' and type('start') == 'string' then
+        local sub = str:sub(1, #start)
+        if sub == start then
+            return true
+        end
+    end
+
+    return false
+end
+
+-------------------------------------------------------------------------------
+--
+function stringStartsWithI(str, start)
+    if type(str) == 'string' and type('start') == 'string' then
+        local sub = str:sub(1, #start)
+        if sub:lower() == start:lower() then
+            return true
+        end
+    end
+
+    return false
+end
+
+-------------------------------------------------------------------------------
+-- Searches an action message for field names
+function fieldsearch(message)
+    local fieldarr = {}
+    if message then
+        string.gsub(message,'{(.-)}', function(a) fieldarr[a] = true end)
+    end
+    return fieldarr
 end

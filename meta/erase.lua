@@ -15,7 +15,7 @@ local meta = {
     19    -- Viruna
 
     --95,   -- Esuna* TODO: Implement later. This is AOE.
-    --94   -- Sacrifice* TODO: Implement later. This transfers from party member to self.
+    --94    -- Sacrifice* TODO: Implement later. This transfers from party member to self.
   },
   job_abilities = {
     194   -- Healing Waltz (DNC)

@@ -1,0 +1,347 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+   "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+<head>
+    <title>Reference</title>
+    <link rel="stylesheet" href="../ldoc.css" type="text/css" />
+</head>
+<body>
+
+<div id="container">
+
+<div id="product">
+	<div id="product_logo"></div>
+	<div id="product_name"><big><b></b></big></div>
+	<div id="product_description"></div>
+</div> <!-- id="product" -->
+
+
+<div id="main">
+
+
+<!-- Menu -->
+
+<div id="navigation">
+<br/>
+<h1>Cylibs-UI</h1>
+
+
+<ul>
+  <li><a href="../index.html">Index</a></li>
+</ul>
+
+
+
+<h2>Functions</h2>
+<ul class="nowrap">
+    <li><a href="#new">new (selectedBackgroundColor, defaultBackgroundColor, fontName, fontSize, fontColor, highlightColor, padding, strokeWidth, strokeAlpha, bold)</a></li>
+    <li><a href="#getSelectedBackgroundColor">getSelectedBackgroundColor ()</a></li>
+    <li><a href="#getDefaultBackgroundColor">getDefaultBackgroundColor ()</a></li>
+    <li><a href="#getFontName">getFontName ()</a></li>
+    <li><a href="#getFontSize">getFontSize ()</a></li>
+    <li><a href="#getFontColor">getFontColor ()</a></li>
+    <li><a href="#getHighlightColor">getHighlightColor ()</a></li>
+    <li><a href="#getPadding">getPadding ()</a></li>
+    <li><a href="#getStrokeWidth">getStrokeWidth ()</a></li>
+    <li><a href="#getStrokeAlpha">getStrokeAlpha ()</a></li>
+    <li><a href="#isBold">isBold ()</a></li>
+</ul>
+<h2>Modules</h2>
+<ul class="nowrap">
+  <li><strong>ListViewItemStyle</strong></li>
+  <li><a href="../modules/View.html">View</a></li>
+</ul>
+
+</div>
+
+<div id="content">
+
+<h1>Module <code>ListViewItemStyle</code></h1>
+<p>
+
+</p>
+<p>
+
+</p>
+
+
+
+    <h2 class="section-header "><a name="Functions"></a>Functions</h2>
+
+    <dl class="function">
+    <dt>
+    <a name = "new"></a>
+    <strong>new (selectedBackgroundColor, defaultBackgroundColor, fontName, fontSize, fontColor, highlightColor, padding, strokeWidth, strokeAlpha, bold)</strong>
+    </dt>
+    <dd>
+    Creates a new ListViewItemStyle instance.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">selectedBackgroundColor</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+         The selected background color as {alpha, red, green, blue}.
+        </li>
+        <li><span class="parameter">defaultBackgroundColor</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+         The default background color as {alpha, red, green, blue}.
+        </li>
+        <li><span class="parameter">fontName</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.4">string</a></span>
+         The font name.
+        </li>
+        <li><span class="parameter">fontSize</span>
+            <span class="types"><span class="type">number</span></span>
+         The font size.
+        </li>
+        <li><span class="parameter">fontColor</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+         The font color as {red, green, blue}.
+        </li>
+        <li><span class="parameter">highlightColor</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+         The highlighted font color as {red, green, blue}.
+        </li>
+        <li><span class="parameter">padding</span>
+            <span class="types"><span class="type">number</span></span>
+         The padding on each side.
+        </li>
+        <li><span class="parameter">strokeWidth</span>
+            <span class="types"><span class="type">number</span></span>
+         The stroke width.
+        </li>
+        <li><span class="parameter">strokeAlpha</span>
+            <span class="types"><span class="type">number</span></span>
+         The stroke alpha.
+        </li>
+        <li><span class="parameter">bold</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Whether the text should be bolded.
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">ListViewItemStyle</span></span>
+        The newly created ListViewItemStyle instance.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getSelectedBackgroundColor"></a>
+    <strong>getSelectedBackgroundColor ()</strong>
+    </dt>
+    <dd>
+    Gets the selected background color.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        The selected background color as {a, r, g, b}.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getDefaultBackgroundColor"></a>
+    <strong>getDefaultBackgroundColor ()</strong>
+    </dt>
+    <dd>
+    Gets the default background color.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        The default background color as {a, r, g, b}.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getFontName"></a>
+    <strong>getFontName ()</strong>
+    </dt>
+    <dd>
+    Gets the font name.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.4">string</a></span>
+        The font name.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getFontSize"></a>
+    <strong>getFontSize ()</strong>
+    </dt>
+    <dd>
+    Gets the font size.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        The font size.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getFontColor"></a>
+    <strong>getFontColor ()</strong>
+    </dt>
+    <dd>
+    Gets the font color.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        The font color as {red, green, blue}.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getHighlightColor"></a>
+    <strong>getHighlightColor ()</strong>
+    </dt>
+    <dd>
+    Gets the highlighted font color.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.4/manual.html#6.6">table</a></span>
+        The font color as {red, green, blue}.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getPadding"></a>
+    <strong>getPadding ()</strong>
+    </dt>
+    <dd>
+    Gets the padding.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        The padding.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getStrokeWidth"></a>
+    <strong>getStrokeWidth ()</strong>
+    </dt>
+    <dd>
+    Gets the stroke width.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        The stroke width.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "getStrokeAlpha"></a>
+    <strong>getStrokeAlpha ()</strong>
+    </dt>
+    <dd>
+    Gets the stroke alpha.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        The stroke alpha.
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "isBold"></a>
+    <strong>isBold ()</strong>
+    </dt>
+    <dd>
+    Gets the value of bold.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">boolean</span></span>
+        Value of bold.
+    </ol>
+
+
+
+
+</dd>
+</dl>
+
+
+</div> <!-- id="content" -->
+</div> <!-- id="main" -->
+<div id="about">
+<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
+<i style="float:right;">Last updated 2023-09-11 05:57:40 </i>
+</div> <!-- id="about" -->
+</div> <!-- id="container" -->
+</body>
+</html>

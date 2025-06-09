@@ -26,7 +26,13 @@ By default, an action file named after your current job/sub job will be loaded. 
 ./settings/Shrek/actions/rdm-blm.json
 ```
 
-If no matching actions file can be found, default values will be loaded and saved. The default actions file is defined in the following location:
+If a job/sub job file cannot be found, a file named for your current main job will be loaded instead. This is actually the way Gambit generates new action files for you when running`//gbt actions -save-default`.
+
+```
+./settings/Shrek/actions/rdm.json
+```
+
+If no matching actions file can be found, default values will be loaded. The default actions file is defined in the following location:
 
 ```
 ./actions/defaults/default-actions.json
@@ -122,9 +128,13 @@ We've seen `when`, `commands`, and `frequency` in use so far. Here's the full li
 
 - **disabled** - *Optional* This Boolean (true or false) value allows you to turn off the current action without deleting it.
 
-- **frequency** - *Optional* This is a number that sets the maximum frequency, in seconds, at which this action is allowed to trigger. If omitted, it will be executed as often as the condition is met -- assuming no higher priority actions are triggered first!
+- **frequency** - *Optional* This is a number that sets the maximum frequency, in seconds, at which this action is allowed to trigger. If omitted, it will be executed as often as the condition is met -- assuming no higher priority actions are triggered first! 
+
+  Note that the special string value `infinity` (or `inf` for short) can be used to specify that an action can only be executed once within the given scope.
 
 - **import** - *Optional* This allows you to pull in externally defined actions. Those actions will be inserted in place of the importing action. An **import** directive causes all other action properties to be ignored, with the exception of **disable** (which will cause the import to be skipped).
+
+- **scope** - *Optional* This allows you to control how the `frequency` value is evaluated. By default, the global scope is used and frequency is applied literally. However, if you specify a scope if `battle`, then frequency tracking is cleared once you become disengaged. For example, if you specify a frequency of 30 without a scope, the action will have no chance of executing until 30 seconds has elapsed; however, with a scope of `battle` the action *could* execute sooner if you acquire a new target. A scope of `battle` with a frequency of `infinite` allows you to specify once-per-battle actions.
 
    
 
@@ -137,6 +147,8 @@ Gambit allows you to define distinct, independent actions based on current condi
 - **battle** - These are actions that are executed in the heat of battle. Note that you will always transition out of idle/pull into battle if a mob is aggroing you or a party member.
 - **dead** - These are actions that will be performed in the unfortunate event of your death. You could send a tell to your bestie to give you a rez, or return to your home point.
 - **idle** - These are actions that will be performed when outside of battle. This could be used to recast buffs, remove status ailments, cycle Trusts, or allow for recovery of MP.
+- **idle_battle** - These are actions that can only be executed while using the `manual` targeting strategy. These will be fired when you are disengaged (idle) but your party leader has acquired a battle target.
+- **mounted** - These are actions that will be performed when you are riding a mount (rented chocobos or personal mounts).
 - **pull** - These are actions that will be performed when no *Idle* actions remain and a mob is ready to be pulled. This could be used to move into position, or use a pulling spell/ability.
 - **resting** - These are actions that will be performed when you are resting (i.e. "taking a knee"). This could be used to trigger standing up when HP or MP has recovered to a certain point.
 
@@ -147,14 +159,14 @@ In JSON, each of these categories is defined as an array of actions. The top-lev
     "idle": [],
     "pull": [],
     "battle": [],
+    "idle_battle": [],
+    "mounted": [],
     "resting": [],
     "dead": []
 }
 ```
 
 The nuking action we described above would make the most sense under the *battle* category.
-
-
 
 
 

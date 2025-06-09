@@ -52,8 +52,12 @@ end
 -------------------------------------------------------------------------------------
 -- Face the specified direction (semantic or actual radian value)
 directionality.faceDirection = function (direction)
+    if type(direction) == 'number' then
+        return windower.ffxi.turn(direction)
+    end
+
     direction = directionality.directionToRadians(direction)
-    if direction ~= nil then
+    if type(direction) == 'number' then
         windower.ffxi.turn(direction)
         return direction
     end
@@ -116,7 +120,34 @@ directionality.faceTarget = function (target, calculationOnly)
 
             local heading = -directionality.vectorAngle(forward, toTarget)
             if not calculationOnly then
-                return directionality.faceDirection(heading)
+                windower.ffxi.turn(heading)
+                --return directionality.faceDirection(heading)
+            end
+
+            return heading
+        end
+    end
+
+    return nil
+end
+
+-------------------------------------------------------------------------------------
+-- Calculate the angle required to face the specified mob, and turn to face it,
+-- returning the new heading angle. If the calculationOnly flag is set, then the
+-- turn portion will be skipped and the return value can be used to turn directly later.
+directionality.faceAwayFromTarget = function (target, calculationOnly)
+    if type(target) == 'table' then
+        local me = windower.ffxi.get_mob_by_target('me')
+        if me and (target.id == nil or me.id ~= target.id) then
+            local forward = V({1, 0})
+            local fromTarget = vector.normalize(V({
+                (me.x - target.x),
+                (me.y - target.y)
+            }))
+
+            local heading = -directionality.vectorAngle(forward, fromTarget)
+            if not calculationOnly then
+                windower.ffxi.turn(heading)
             end
 
             return heading
@@ -232,24 +263,22 @@ directionality.walkTo = function(x, y, maxDuration, continueFn)
             
                 local direction = directionality.faceTarget(target, true)
                 windower.ffxi.run(direction)            
-            -- if not started then
-            --     started = true
-                writeDebug('Initiating walk on heading %03d degrees.':format(directionality.radToDeg(direction)))
             end
 
             coroutine.sleep(0.25)
         end
-        writeDebug('d=%.2f, nd=%.2f':format(distance ~= nil and distance or '-1337', newDistance))
         distance = newDistance
     end
 
     windower.ffxi.run(false)
 
-    writeDebug('Walk to (%.1f, %.1f) is exiting after %.2fs with d=%.2f':format(
-        x, y,
-        (os.clock() - startTime),
-        distance
-    ))
+    if settings.verbosity >= VERBOSITY_DEBUG then
+        writeDebug('Walk to (%.1f, %.1f) is exiting after %.2fs with d=%.2f':format(
+            x, y,
+            (os.clock() - startTime),
+            distance
+        ))
+    end
 
     -- Success will be gauged on whether we got close enough to the target
     return distance < tolerance

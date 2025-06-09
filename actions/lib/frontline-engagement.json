@@ -11,14 +11,21 @@
   },
   "actions": [
     {
+      "when": "bt and not facingEnemy()",
+      "commands": "faceEnemy()",
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "comment": "Ensure we face the enemy immediately."
+    },
+    {
       "when": [
-        "vars.frontline_engagement.angle ~= nil",
         "actionType == 'battle'",
         "bt and bt.distance <= vars.frontline_engagement.distance + 2",
         "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance)"
       ],
       "commands": [
-        "align(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance)"
+        "align(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance) or postpone(10)"
       ],
       "frequency": 1,
       "scope": "battle",
@@ -54,7 +61,6 @@
       ],
       "commands": [
         "not following(bt) and follow(bt, vars.frontline_engagement.distance) and log('Unexpected: Initiated melee range following')",
-        "debug('Getting into frontline position with distance =', bt.distance)",
         "wait(1)"
       ],
       "comment": "Ensure that we get into melee range without executing later actions."

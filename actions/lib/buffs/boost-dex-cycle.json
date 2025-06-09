@@ -5,7 +5,7 @@
   "actions": [
     {
       "when": ["canUse('Boost-DEX') and not hasEffectOf(spell)"],
-      "commands": ["use(me)", "postpone(spellRecast(spell.name) + 5)"],
+      "commands": ["use(me)", "postpone((spellRecast(spell.name) or 0) + 5)"],
       "frequency": 1
     }
   ]

@@ -21,6 +21,15 @@ local SPECIAL_NEXT_ATTACK_JOB_ABILITIES = {
     "Assassin's Charge"
 }
 
+---------------------------------------------------------------------
+-- Job abilities that we want to have complete faster than the
+-- standard ability time
+local FAST_JOB_ABILITIES = {
+    'Provoke',
+    'Animated Flourish',
+    'Chi Blast'
+}
+
 -----------------------------------------------------------------------------------------
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
@@ -51,6 +60,37 @@ local function varargs(args, default)
     end
 
     return args
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets the full path to a variable under the 'vars' action object. This splits on
+-- all the dot (.) characters, and omits the 'vars' parent.
+local function get_action_variable_path(s)
+    result = {};
+    for match in (s..'.'):gmatch('(.-)%.') do
+        match = trimString(match)
+        if 
+            match ~= '' and
+            (match ~= 'vars' or #result > 0)
+        then
+            result[#result + 1] = match
+        end
+    end
+    return result;
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if the specified symbol string is something we can handle for
+-- direct targeting.
+local function is_known_targeting_symbol(symbol)
+    return 
+        symbol == 't' or
+        symbol == 'bt' or
+        symbol == 'st' or
+        symbol == 'lastst' or
+        symbol == 'pet' or
+        symbol == 'ft' or
+        symbol == 'scan'
 end
 
 -----------------------------------------------------------------------------------------
@@ -93,11 +133,322 @@ local function context_send_command(command, ...)
         command = command:format(...)
 
         if settings.verbosity >= VERBOSITY_TRACE then
-            writeTrace('Sending action ' .. text_magenta(command))
+            writeTrace('Sending command: %s':format(
+                text_magenta(command, Colors.trace)
+            ))
         end
         
         windower.send_command(command)
+
+        return true
     end
+end
+
+-----------------------------------------------------------------------------------------
+-- Send multiple commands at once
+local function context_send_commands(...)
+    local commands = varargs({...})
+    local result = ''
+    local count = 0
+    for i, _command in ipairs(commands) do
+        local command = trimString(_command)
+        if command ~= '' then
+            result = result .. command .. ';'
+            count = count + 1
+        end
+    end
+
+    if count > 0 then
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('Sending %s: %s':format(
+                pluralize(count, 'command', 'commands', Colors.trace),
+                text_magenta(result, Colors.trace)
+            ))
+        end
+        
+        windower.send_command(result)
+
+        return true
+    else
+        writeMessage('No valid commands were provided.')
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_send_text(command, ...)
+    if type(command) == 'string' then
+        command = ('input ' .. command):format(...)
+
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('Sending command: %s':format(
+                text_magenta(command, Colors.trace)
+            ))
+        end
+        
+        windower.send_command(command)
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_key_tap(key, wait)
+    if type(key) == 'string' then
+        windower.send_command('setkey %s down;  wait 0.2; setkey %s up;':format(key, key))
+        coroutine.sleep((tonumber(wait) or 0.2) + 0.2)
+    end
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_array_length(array)
+    if type(array) == 'table' and array[1] then
+        return #array
+    end
+
+    return 0
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_array_merge(...)
+    local arrays = {...}
+    local result = { }
+
+    if #arrays > 0 and arrays[1] then
+        result = { unpack(arrays[1]) }
+    end
+
+    for i = 2, #arrays do
+        local current = arrays[i]
+        if type(current) == 'table' and current[1] then
+            -- For arrays, each element will be appended individually
+            for j = 1, #current do
+                local value = current[j]
+                if value ~= nil then
+                    arrayAppend(result, value)
+                end
+            end
+        else
+            -- For non-arrays, append the element directly (unless nil)
+            if current ~= nil then
+                arrayAppend(result, current)
+            end
+        end
+    end
+
+    return result
+end
+
+-----------------------------------------------------------------------------------------
+--
+local function context_is_array(array)
+    return context_array_length(array) > 0
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if an array contains all elements of another array
+--  - array:    The array to check.
+--  - all:      An second array, of all elements that must be in the first one.
+local function context_array_contains_all(array, all)
+    if 
+        type(array) == 'table' and
+        type(all) == 'table' and
+        array[1] and
+        all[1]
+    then
+        for i, val in ipairs(array) do
+            if not arrayIndexOf(all, val) then
+                return false
+            end
+        end
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if all fields in a table are represented in an array.
+--  - array:    The table  to check.
+--  - all:      An array of all field names that must be in the first table.
+local function context_table_contains_all(array, all)
+    if 
+        type(array) == 'table' and
+        type(all) == 'table'
+    then
+        for key, val in pairs(array) do
+            if not arrayIndexOf(all, key) then
+                return false
+            end
+        end
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if a table contains field names for all elements in an array.
+local function context_table_has_all_field_names(table, array)
+    if 
+        type(table) == 'table' and
+        type(array) == 'table' and
+        array[1]
+    then
+        for i, val in pairs(array) do
+            if table[val] == nil then
+                return false
+            end
+        end
+
+        return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if a value is within a min/max range (min inclusive, max exclusive)
+local function context_in_range(value, min, max)
+    return value >= min and value < max
+end
+
+
+
+-----------------------------------------------------------------------------------------
+--
+local function context_is_apex(mob)
+    if type(mob) == 'table' then mob = mob.name end
+    return type(mob) == 'string' and stringStartsWithI(mob, 'apex ')
+end
+local function context_is_locus(mob)
+    if type(mob) == 'table' then mob = mob.name end
+    return type(mob) == 'string' and stringStartsWithI(mob, 'locus ')
+end
+local function context_is_apex_tier(mob)
+    return context_is_apex(mob) or context_is_locus(mob)
+end
+
+-----------------------------------------------------------------------------------------
+-- Sets an action context variable by name, allowing for dot ('.') syntax. The leading
+-- 'vars' name is implicit, and can be either provided or omitted with the same result.
+local function context_set_var(name, value)
+    local levels = get_action_variable_path(name)
+
+    -- If only one level is necessary, we'll just set it now and be done
+    if #levels == 1 then
+        actionStateManager.vars[levels[1]] = value
+        return value
+    end
+
+    local ref = actionStateManager.vars
+
+    -- Go through all levels --except-- the final one that we'll actually set below
+    for i = 1, #levels - 1 do
+        local level = levels[i]
+        local cur = ref[level]
+        
+        if type(cur) == 'nil' then
+            -- If the current level does not exist, we will create it
+            ref[level] = { }
+            cur = ref[level]            
+        elseif type(cur) ~= 'table' then
+            -- We will not allow a scalar to be overwritten with a table as part of this
+            return nil
+        end
+
+        ref = cur
+    end
+
+    ref[levels[#levels]] = value
+    return value
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets an action context variable by name, allowing for dot ('.') syntax. The leading
+-- 'vars' name is implicit, and can be either provided or omitted with the same result.
+local function context_get_var(name)
+    local levels = get_action_variable_path(name)
+
+    -- If only one level is necessary, we'll just set it now and be done
+    if #levels == 1 then
+        return actionStateManager.vars[levels[1]]
+    end
+
+    local ref = actionStateManager.vars
+
+    -- Go through all levels to find the final value
+    for i = 1, #levels - 1 do
+        local level = levels[i]
+        local cur = ref[level]
+
+        -- If this is not a table, we've reached the end of the search
+        if type(cur) ~= 'table' then
+            return nil
+        end
+
+        ref = cur
+    end
+
+    -- Return the final level
+    return ref[levels[#levels]]
+end
+
+-----------------------------------------------------------------------------------------
+-- Creates or updates a field under the specified variable name.
+local function context_set_var_field(name, field, value)
+    if 
+        type(name) == 'string' and
+        type(field) == 'string'
+    then
+        local val = context_get_var(name)
+        if val == nil then
+            val = context_set_var(name, {})
+        elseif type(val) ~= 'table' then
+            return
+        end
+
+        val[field] = value
+        return value
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets a field under the specified variable name.
+local function context_get_var_field(name, field)
+    if 
+        type(name) == 'string' and
+        type(field) == 'string' 
+    then
+        local val = context_get_var(name)
+        if type(val) == 'table' then
+            return val[field]
+        end
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Increments a numeric variable value by a specified amount, or 1 if no amount is provided.
+-- Defaults to 1 if the variable does not exist yet.
+local function context_var_increment(name, amount, default)
+    local value = context_get_var(name)
+    if value == nil then
+        value = tonumber(default) or 1
+    elseif type(value) == 'number' then
+        value = value + (tonumber(amount) or 1)
+    else
+        return
+    end
+    return context_set_var(name, value)
+end
+
+-----------------------------------------------------------------------------------------
+-- Decrements a numeric variable value by a specified amount, or 1 if no amount is provided.
+-- Defaults to 0 if the variable does not exist yet.
+local function context_var_decrement(name, amount, default)
+    return context_var_increment(
+        name,
+        -1 * (tonumber(amount) or 1),
+        0)
 end
 
 -----------------------------------------------------------------------------------------
@@ -117,13 +468,46 @@ local function context_boolean(condition)
 end
 
 -----------------------------------------------------------------------------------------
+-- Gets a numeric value, or a default if not a valid number
+local function context_number(value, default)
+    return tonumber(value) or tonumber(default)
+end
+
+-----------------------------------------------------------------------------------------
+-- Gets a recast timer value, or a default fallback if not a valid number. The fallback will
+-- have a value of 100,000 by default, but it can be overridden with the second argument.
+local function context_recastTime(value, default)
+    return math.max(
+        context_number(value, tonumber(default) or 100000),
+        0)
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if the specified recast time value represents a "ready" status.
+local function context_recastReady(value)
+    return context_recastTime(value) <= 0
+end
+
+-----------------------------------------------------------------------------------------
 --
 local function context_noop() 
     return true
 end
 
 -----------------------------------------------------------------------------------------
---
+-- Generate a random number.
+function context_rand(...)
+    return math.random(...)
+end
+
+-----------------------------------------------------------------------------------------
+-- Return the absolute value of a number
+function context_abs(n)
+    return math.abs(tonumber(n) or 0)
+end
+
+-----------------------------------------------------------------------------------------
+-- Randomize the order of elements in an array.
 function context_randomize(...)
     local args = varargs({...})
     local count = args and #args or 0
@@ -162,15 +546,17 @@ function context_wait(s, ...)
         followJob = smartMove:cancelJob()
     end
 
-    local s = math.max(tonumber(s) or 1, 0)
-    writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
+    s = math.max(tonumber(s) or 1, 0)
+    if settings.verbosity >= VERBOSITY_DEBUG then
+        writeDebug('Context waiting for %s':format(pluralize(s, 'second', 'seconds', Colors.debug)))
+    end
     coroutine.sleep(s)
 
     if followJob then
         smartMove:reschedule(followJob)
     end
 
-    return true
+    return s
 end
 
 -----------------------------------------------------------------------------------------
@@ -237,8 +623,8 @@ context_makeXYDO = function(...)
         return {
             x = args[1],
             y = args[2],
-            duration = args[3],
-            offset = args[4] or 0
+            duration = tonumber(args[3]),
+            offset = tonumber(args[4]) or 0
         }
     end
 
@@ -270,6 +656,7 @@ local function enumerateContextByExpression(context, keys, expression, ...)
             
             if field then
                 local fenv = field
+                fenv.vars = context.vars
 
                 -- Add all fields for this party member to the context
                 -- for field, value in pairs(field) do
@@ -279,9 +666,12 @@ local function enumerateContextByExpression(context, keys, expression, ...)
                 -- end
 
                 -- Apply the env to the function, and execute it. Return this member if it evaluates successfully.
-                --writeDebug('Evaluating: %s':format(expression))
                 setfenv(fn, fenv)
-                if fn() then
+
+                local result = fn()
+                fenv.vars = nil
+
+                if result then
                     --writeDebug('Evaluation passed!')
                     retVal[#retVal + 1] = fenv
                 end
@@ -417,7 +807,7 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- 
     context.partyAll = function(expression, ...)
-        return getNextMemberEnumerator(context) or context.partyAny(expression)
+        return getNextMemberEnumerator(context, ...) or context.partyAny(expression, ...)
     end
 
     -----------------------------------------------------------------------------------------
@@ -445,7 +835,7 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- 
     context.allyAll = function(expression, ...)
-        return getNextMemberEnumerator(context) or context.allyAny(expression, ...)
+        return getNextMemberEnumerator(context, ...) or context.allyAny(expression, ...)
     end
 
     -----------------------------------------------------------------------------------------
@@ -515,7 +905,7 @@ local function setArrayEnumerators(context)
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
-            context.is_new_result      = true
+            context.is_new_result   = true
 
             context.action.enumerators.array_name = name
 
@@ -885,7 +1275,7 @@ local function initContextTargetSymbol(context, symbol)
         Party = symbol.mob.in_party,
         NPC = symbol.mob.is_npc,
         Player = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER,
-        Ally = symbol.mob.is_ally,
+        Ally = symbol.mob.in_alliance,
         Enemy = symbol.mob.spawn_type == SPAWN_TYPE_MOB
     }
 
@@ -954,6 +1344,7 @@ local function initContextTargetSymbol(context, symbol)
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
     symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
     symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
+    symbol.is_me = (symbol.id == context.player.id)
     symbol.is_mob = (symbol.mob.spawn_type == SPAWN_TYPE_MOB)
     symbol.x = symbol.mob.x
     symbol.y = symbol.mob.y
@@ -962,11 +1353,16 @@ local function initContextTargetSymbol(context, symbol)
     symbol.valid_target = symbol.mob.valid_target
     symbol.spawn_type = symbol.mob.spawn_type
     symbol.status = symbol.mob.status
+    symbol.target_index = symbol.mob.target_index
 
     if symbol.status == STATUS_RESTING then symbol.is_resting = true end
     if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
+    if symbol.status == 4 then symbol.is_cutscene = true end
     if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
+    if symbol.status == 85 or symbol.status == 5 then symbol.is_mounted = true end
     if symbol.status == STATUS_IDLE then symbol.is_idle = true end
+    if symbol.status == 44 then symbol.is_crafting = true end
+    if symbol.is_idle or symbol.is_engaged or symbol.is_mounted or symbol.is_resting then symbol.can_follow = true end
 
     if symbol.is_mob then
         -- Set the has_claim flag when someone in the party has claimed the mob
@@ -996,12 +1392,25 @@ local function initContextTargetSymbol(context, symbol)
     end
 
     -----------------------------------------------------------------
+    -- Save the vertical/z distance offset
+    if  context.me and context.me.z and symbol.z then
+        symbol.offset_z     = symbol.z - context.me.z
+        symbol.delta_z      = math.abs(symbol.offset_z)
+        symbol.distance_z   = symbol.delta_z
+    end
+
+    -----------------------------------------------------------------
     -- Perform a name match on the specified value
     symbol.isNameMatch = function(test)
-        test = string.lower(test or '!!invalid')
-        return test == string.lower(symbol.name or '') or
-            test == string.lower(symbol.symbol or '') or
-            test == string.lower(symbol.symbol2 or '')
+        if type(test) == 'string' then
+            test = string.lower(test or '')
+            return 
+                test ~= '' and (
+                test == string.lower(symbol.name or '') or
+                test == string.lower(symbol.symbol or '') or
+                test == string.lower(symbol.symbol2 or '')
+            )
+        end
     end
 
     -----------------------------------------------------------------
@@ -1015,9 +1424,23 @@ end
 -----------------------------------------------------------------------------------------
 --
 local function loadContextTargetSymbols(context, target)
-    -- Fill in targets
-    if target then
-        context.t = { symbol = 't', symbol2 = 'bt', mob = target }
+    -- Fill in all symbols
+
+    -- Set up the "me" symbol
+    context.me = { symbol = 'me', mob = windower.ffxi.get_mob_by_target('me') }
+    initContextTargetSymbol(context, context.me)
+    context.self = context.me
+    
+    -- Set up the t/bt symbols
+    if type(target) == 'table' then
+        context.t = { 
+            symbol = 't',
+            symbol2 = 'bt',
+            mob = target,
+            is_apex = context_is_apex(target.name),
+            is_locus = context_is_locus(target.name),
+            is_apex_tier = context_is_apex_tier(target.name)
+        }
         initContextTargetSymbol(context, context.t)
         context.bt = context.t
     else
@@ -1025,22 +1448,34 @@ local function loadContextTargetSymbols(context, target)
         context.bt = nil
     end
 
-    context.me = { symbol = 'me', mob = windower.ffxi.get_mob_by_target('me') }
-    initContextTargetSymbol(context, context.me)
-    context.self = context.me
-
+    -- Set up the pet symbol
     local pet = windower.ffxi.get_mob_by_target('pet')
     if pet then
-        context.pet = { symbol = 'pet', mob = windower.ffxi.get_mob_by_target('pet') }
+        context.pet = { symbol = 'pet', mob = pet }
         initContextTargetSymbol(context, context.pet)
     else
         context.pet = nil
+    end
+
+    -- Set up the scan symbol
+    local scan = windower.ffxi.get_mob_by_target('scan')
+    if scan then
+        context.scan = { symbol = 'scan', mob = scan }
+        initContextTargetSymbol(context, context.scan)
+    else
+        context.scan = nil
     end
 
     -- We'll store the list of trusts in our main party. Trusts can't be called in 
     -- an alliance, so this is all we need.
     context.party1_trusts = {}
     context.pinfo = {}
+
+    local cpi = actionStateManager:getCapacityPointInfo()
+    context.jobPoints = tonumber(cpi and cpi.jobPoints) or 0
+
+    local mpi = actionStateManager:getMeritPointInfo()
+    context.meritPoints = tonumber(mpi and mpi.current) or 0
 
     for i = 0, 5 do
         local p = 'p' .. i
@@ -1050,8 +1485,11 @@ local function loadContextTargetSymbols(context, target)
         context[p] = nil
         if context.party[p] and context.party[p].mob then
             local mob = context.party[p].mob
-            context[p] = { symbol = p, mob = mob, member = context.party[p], targets = {}, isParty = true, isAlly = true }
+            context[p] = { symbol = p, mob = mob, member = context.party[p], targets = {}, in_party = true, in_alliance = true }
             initContextTargetSymbol(context, context[p])
+
+            context.party1_by_id[mob.id] = context[p]
+            context.party1_by_index[mob.index] = context[p]
 
             -- Store party leader info as well
             if context.party.party1_leader == mob.id then
@@ -1073,14 +1511,14 @@ local function loadContextTargetSymbols(context, target)
         context[a1] = nil
         if context.party[a1] then
             local mob = context.party[a1].mob
-            context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, isParty = false, isAlly = true }
+            context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, in_party = false, in_alliance = true }
             initContextTargetSymbol(context, context[a1])
         end
 
         context[a2] = nil
         if context.party[a2] then
             local mob = context.party[a2].mob
-            context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, isParty = false, isAlly = true }
+            context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, in_party = false, in_alliance = true }
             initContextTargetSymbol(context, context[a2])
         end
     end
@@ -1106,45 +1544,107 @@ local function loadContextTargetSymbols(context, target)
         context.p0.is_party_leader = true
         context.me.is_party_leader = true
     end
+
+    -- Set up an easy way to identify the party leader's target and battle target
+    local leader = context.party_leader
+    if leader and leader.valid_target and leader.target_index and leader.target_index > 0 then
+        --print('leader2: %s':format(leader and leader.name or 'nil'))
+        local leader_t = windower.ffxi.get_mob_by_index(leader.target_index)
+        context.party_leader_t = leader_t
+        if leader_t and leader_t.valid_target then
+            leader_t.distance = math.sqrt(leader_t.distance)
+            leader_t.buffs = 
+                leader_t.spawn_type == SPAWN_TYPE_PLAYER and
+                    actionStateManager:getMemberBuffsFor(leader_t) or
+                    actionStateManager:getBuffsForMob(leader_t)
+            if leader.is_engaged then            
+                if leader_t.claim_id and leader_t.claim_id > 0 and context.party1_by_id[leader_t.claim_id] then
+                    context.party_leader_bt = leader_t
+                end
+            end
+        end
+    end
 end
 
 -----------------------------------------------------------------------------------------
 --
-local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope)
+local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
     local context = {
         actionType = actionType,
         time = time,
+        game_info = windower.ffxi.get_info(),
         strategy = settings.strategy,
         mobTime = mobEngagedTime or 0,
         battleScope = battleScope,
-        skillchain = actionStateManager:getSkillchain(),
-        party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(),
+        skillchain = actionStateManager:getSkillchain(target),
+        party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
         vars = actionStateManager.vars,
     }
 
+    context.skillchain_trigger_time = 
+        (context.skillchain and context.skillchain.time) or 
+        (context.party_weapon_skill and context.party_weapon_skill.time) or
+        0
+
     context.target = target
     context.player = windower.ffxi.get_player()
-    context.party = windower.ffxi.get_party() or {}
+    context.party = party or windower.ffxi.get_party() or {}
+
+    context.game_time = { hour = 0, minute = 0, day = 0 }
+    if context.game_info then
+        ------------------------------------
+        -- Time info
+        if context.game_info.time then
+            -- game_info.time is the number of game minutes since Vanadiel midnight
+            context.game_time.hour = math.floor(context.game_info.time / 60)
+            context.game_time.minute = context.game_info.time % 60
+
+            -- game_info.day is the id of the current day, from 0-7:
+            --  Firesday, Earthsday, Watersday, Windsday, Iceday, Lightningday, Lightsday, Darksday
+            local day = resources.days[context.game_info.day]
+            context.game_time.day = day.id
+            context.game_time.day_name = day.name
+            context.game_time.day_element = day.element
+            context.game_time.yesterday = (day.id - 1) % 8
+            context.game_time.tomorrow = (day.id + 1) % 8
+        end
+
+        ------------------------------------
+        -- Zone info
+        context.zone_id = context.game_info.zone
+        context.zone = context.zone_id and resources.zones[context.zone_id] or nil
+
+        ------------------------------------
+        -- Weather info
+        context.weather_id = context.game_info.weather
+        context.weather = context.weather_id and resources.weather[context.weather_id]
+        context.weather_element = context.weather and context.weather.element and resources.elements[context.weather.element] and resources.elements[context.weather.element].name
+
+        ------------------------------------
+        -- Moon info
+        context.moon_phase_id = context.game_info.moon_phase
+        context.moon_phase = context.moon_phase_id and resources.moon_phases[context.moon_phase_id]
+    end
 
     -- Store a mapping of id->member and index->member for the party
     context.party1_by_id = {}
     context.party1_by_index = {}
-    if context.party then
-        for i = 0, 5 do
-            local key = 'p' .. i
-            local member = context.party[key]
-            if member and member.mob then
-                context.party1_by_id[member.mob.id] = member
-                context.party1_by_index[member.mob.index] = member
-            end
-        end
-    end
+    -- if context.party then
+    --     for i = 0, 5 do
+    --         local key = 'p' .. i
+    --         local member = context.party[key]
+    --         if member and member.mob then
+    --             context.party1_by_id[member.mob.id] = member
+    --             context.party1_by_index[member.mob.index] = member
+    --         end
+    --     end
+    -- end
 
     -- Must be called after the player and party have been assigned
     loadContextTargetSymbols(context, target)    
 
     --------------------------------------------------------------------------------------
-    --
+    -- Writes a concatenation of all arguments to the action log
     context.log = function (...) 
         local messages = varargs({...})
         local output = ''
@@ -1159,6 +1659,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             text_gray('[action]'),
             text_cornsilk(output)
         ))
+
+        return true
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Writes each argument to the log as a separate line item
+    context.logEach = function(...)
+        local logs = varargs({...})
+        for i, _log in ipairs(logs) do
+            local log = trimString(_log)
+            if log ~= '' then
+                context.log('  ' .. log)
+            end
+        end
 
         return true
     end
@@ -1188,13 +1702,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.equip = function(slot, name)
-        if slot == nil then return end
+        if type(slot) == 'table' then
+            name = slot.name
+            slot = slot.slot
+        end
 
+        -- Get the item name
         if name == nil then
             if context.item == nil then return end            
             name = context.item.name
 
             if name == nil then
+                return
+            end
+        end
+
+        -- Get the item slot
+        if slot == nil then
+            if context.item then
+                slot = context.item.slot
+            end
+            if slot == nil then
                 return
             end
         end
@@ -1212,40 +1740,169 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         sendActionCommand(
             command,
             context,
-            1.5
+            0.1
         )
 
         return true
     end
 
+    context.equipMany = function(...)
+        local entries = varargs({...})
+
+        if #entries == 0 then return end
+
+        if type(entries[1]) == 'string' then
+            local _entries = {}
+            for i = 1, #entries, 2 do 
+                local slot = entries[i]
+                local equipment = entries[i + 1]
+
+                if slot and equipment then
+                    arrayAppend(_entries, {equipment = equipment, slot = slot })
+                end
+            end
+            entries = _entries
+        end
+        
+        if type(entries[1]) == 'table' then
+            local count = inventory.equip_many(entries)
+            if count > 0 then
+                writeVerbose('Equipped: %s':format(
+                    pluralize(count, 'gear item', 'gear items', Colors.verbose)
+                ))
+            end
+        end
+    end
+
+    context.equipMany_OLD = function(...)
+        local entries = varargs({...})
+
+        if #entries == 0 then return end
+
+        local count = 0
+        local commands = {}
+
+        if type(entries[1]) == 'string' then
+            for i = 1, #entries, 2 do 
+                local slot = entries[i]
+                local equipment = entries[i + 1]
+
+                if slot and equipment then
+                    if context.findUnequippedItem(equipment) then
+                        arrayAppend(commands, 'input /equip %s "%s"':format(slot, equipment))
+                        count = count + 1
+                    end
+                end
+            end
+        elseif type(entries[1]) == 'table' then
+            for i, entry in ipairs(entries) do
+                if type(entry) == 'table' then
+                    local slot = entry.slot
+                    local equipment = entry.equipment or entry.item or entry.gear
+
+                    if slot and equipment then
+                        if context.findUnequippedItem(equipment) then
+                            arrayAppend(commands, 'input /equip %s "%s"':format(slot, equipment))
+                            count = count + 1
+                        end
+                    end
+                end
+            end
+        end
+
+        if count > 0 then
+            writeVerbose('Equipping: %s':format(
+                pluralize(count, 'gear item', 'gear items', Colors.verbose)
+            ))
+
+            sendActionCommand(
+                table.concat(commands, ';'),
+                context,
+                0.0
+            )
+
+            return true
+        end
+    end
+
+    context.stopFunction = function()
+        if context.action and context.action._running then
+            context.action._fn_exiting = true
+            return true
+        end
+    end
+    context.stopFunc = context.stopFunction
+
     --------------------------------------------------------------------------------------
     --
     context.canUseWeaponSkill = function (...)
         local weaponSkills = varargs({...})
+        local abilities = windower.ffxi.get_abilities()
+
         for key, _weaponSkill in ipairs(weaponSkills) do
             weaponSkill = findWeaponSkill(_weaponSkill)
             if weaponSkill then
-                local target = weaponSkill.targets.Self and context.me or context.bt
-                local targetOutOfRange = target and
-                    target.distance and
-                    target.distance > math.max(weaponSkill.range, 6)
+                local target    = weaponSkill.targets.Self and context.me or context.bt
+                local suppress  = context.vars.__suppress_weapon_skills and target == context.bt
 
-                if not targetOutOfRange then
-                    if canUseWeaponSkill(
-                        context.player,
-                        weaponSkill) 
-                    then
-                        context.weapon_skill = weaponSkill
-                        return key
+                if not suppress then
+                    local targetOutOfRange = target and
+                        target.distance and
+                        target.distance > math.max(weaponSkill.range, 6)
+
+                    if not targetOutOfRange then
+                        if canUseWeaponSkill(
+                            context.player,
+                            weaponSkill,
+                            abilities) 
+                        then
+                            context.weapon_skill = weaponSkill
+                            return key
+                        end
                     end
-                else
-                    -- writeDebug('Target %s is not in range of weapon skill %s':format(
-                    --     text_mob(target.name),
-                    --     text_weapon_skill(weaponSkill.name)
-                    -- ))
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Given a list of spells, find the usable subset
+    context.usableSpells = function (...)
+        local spells = varargs({...})
+        local results = {}
+
+        local known_spells = windower.ffxi.get_spells()
+        local recasts = windower.ffxi.get_spell_recasts()
+        local player = windower.ffxi.get_player()
+
+        for key, _spell in ipairs(spells) do
+            spell = findSpell(_spell)
+            if canUseSpell(player, spell, recasts, known_spells) ~= nil then
+                arrayAppend(results, spell.name)
+            end
+        end
+
+        return results
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Given a list of weapon skills, find the usable subset
+    context.usableWeaponSkills = function (...)
+        local weaponSkills = varargs({...})
+        local abilities = windower.ffxi.get_abilities()
+        local results = {}
+
+        for key, _weaponSkill in ipairs(weaponSkills) do
+            weaponSkill = findWeaponSkill(_weaponSkill)
+            if isUsableWeaponSkill(
+                weaponSkill,
+                abilities) 
+            then
+                arrayAppend(results, weaponSkill.name)
+            end
+        end
+
+        return results
     end
 
     --------------------------------------------------------------------------------------
@@ -1269,7 +1926,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 weaponSkill.targets.Self and 'me' or 't'
             )
 
-            writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
+            local target = weaponSkill.targets.Self and context.me or context.bt
+            if type(weaponSkill.range) == 'number' and type(target.model_size) == 'number' then
+                if target and target.distance > ((2 * weaponSkill.range) + target.model_size) then
+                    writeVerbose('WARNING: Target is out of weapon skill range. Continuing, but consider skipping.')
+                    -- return
+                end
+            end
+
+            --writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
 
             return sendActionCommand(
                 command,
@@ -1294,12 +1959,224 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return context.item
     end
 
+    -- Find the item equipped in the specified slot
+    context.findEquipmentInSlot = function(slot)
+        context.item = inventory.find_equipment_in_slot(slot)
+        return context.item
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if all of the specified items are in the inventory. The argument list
+    -- is the names of all items to check, with each item optionally followed by
+    -- a number representing how many are required. If no number is specified, the
+    -- count is assumed to be one (1).
+    context.findItemsInInventory = function (...)
+        local args = varargs({...})
+        local num_missed = 0
+        local num_hit = 0
+
+        local flags = {
+            usable = true,
+            inventory = true
+        }
+
+        local items = windower.ffxi.get_items()
+
+        local i = 1
+        local count = #args
+        local verbose = not arrayIndexOfStrI(args, '-silent')
+        local last_result = nil
+
+        while i <= count do
+            local item = args[i]
+
+            if item == '-silent' then
+                verbose = false  -- This should already be set
+            else
+                if type(item) == 'string' then
+                    -- If we actually got a count, skip past it the next time
+                    local count = tonumber(args[i + 1])
+                    if count then
+                        i = i + 1
+                    else
+                        count = 1
+                    end
+
+                    local result = inventory.find_item(item, flags, items)
+                    if result and result.count >= count then
+                        num_hit = num_hit + 1
+                        last_result = result
+                    else
+                        if verbose then
+                            context.log('Item was not found in inventory: %s%s':format(
+                                text_item(item, Colors.cornsilk),
+                                count > 1 and text_number(' x%d':format(count), Colors.cornsilk) or ''
+                            ))
+                        end
+                        num_missed = num_missed + 1
+                    end
+                else
+                    num_missed = num_missed + 1
+                end
+            end
+
+            i = i + 1
+        end
+
+        context.item = last_result
+
+        -- writeMessage('num_hit: %d, num_missed: %d':format(num_hit, num_missed))
+
+        return num_hit > 0 and num_missed == 0
+    end
+
+    --------------------------------------------------------------------------------------
+    -- 
+    context.freeInventorySlots = function()
+        -- safe: {
+        --     1: {
+        --         count: int,
+        --         status: int,
+        --         id: int,
+        --         slot: int,
+        --         bazaar: int,
+        --         extdata: string,
+        --     },
+        --     2: {...},
+        --     ...
+        -- }
+        -- locker: {...}
+        -- sack: {...}
+        -- case: {...}
+        -- satchel: {...}
+        -- inventory: {...}
+        -- storage: {...}
+        -- temporary: {...}
+        -- wardrobe: {...}
+        -- treasure: {...}
+        -- gil: int
+
+        local bag_info = windower.ffxi.get_bag_info()
+        --writeJsonToFile('./data/get_bag_info.json', bag_info)
+
+        if bag_info and bag_info.inventory then
+            return bag_info.inventory.max - bag_info.inventory.count
+        end
+
+        return 0
+        
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if an item is in the specified slot. Optionally require a strict
+    -- match, which looks at the specific item instance. Strict matches are only
+    -- available when a context item was set with all the appropriate metadata.
+    context.isEquipmentInSlot = function(slot, item, strict, all_items)
+        if item == nil then
+            item = context.item
+        elseif type(item) == 'string' then
+            item = findItem(item)
+        end
+
+        if type(item) ~= 'table' then return end
+
+        slot = slot or (item and item.slot)
+        if slot == nil then return end
+
+        strict = strict and item and item.bagId and item.localId
+
+        if type(all_items) ~= 'table' or type(all_items.equipment) ~= 'table' then
+            all_items = windower.ffxi.get_items()
+        end
+
+        local itemInSlot = inventory.find_equipment_in_slot(slot, all_items)
+        if itemInSlot then
+            local match = item.id == itemInSlot.id
+
+            -- When strict, we'll need to match up all the id's rather than just the underlying item id
+            if strict and match then
+                match =
+                    item.bagId == itemInSlot.bagId and
+                    item.localId == itemInSlot.localId
+            end
+
+            if match then
+                context.item = itemInSlot
+                return context.item
+            end
+        end
+    end
+
     --------------------------------------------------------------------------------------
     -- Find equippable items in any of your bags
-    context.findEquippableItem = function(item)
-        context.item = inventory.find_item(item, { equippable = true })
-        return context.item
-    end    
+    context.findEquippableItem = function(...)
+        local items = varargs({...})
+        context.item = nil
+        if #items > 0 then
+            local all_items = windower.ffxi.get_items()
+            for key, item in ipairs(items) do
+                context.item = inventory.find_item(
+                    item,
+                    { equippable = true },
+                    all_items
+                )
+
+                if context.item then
+                    return context.item
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find the first equippable item from the list that is NOT currently equipped
+    context.findUnequippedItem = function(...)
+        local items = varargs({...})
+        context.item = nil
+
+        if #items > 0 then
+            local flags = { equippable = true, equipped = false }
+            local all_items = windower.ffxi.get_items()
+            for key, item in ipairs(items) do
+                local item = inventory.find_item(
+                    item,
+                    flags,
+                    all_items)
+
+                if item then
+                    if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
+                        context.item = item
+                        return context.item
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find the first equippable item from the list that is NOT currently equipped.
+    -- Uses a strict match (excact item match required)
+    context.findUnequippedItemStrict = function(...)
+        local items = varargs({...})
+        context.item = nil
+
+        if #items > 0 then
+            local flags = { equippable = true, equipped = false }
+            local all_items = windower.ffxi.get_items()
+            for key, item in ipairs(items) do
+                local item = inventory.find_item(item,
+                    flags,
+                    all_items)
+
+                if item then
+                    if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
+                        context.item = item
+                        return context.item
+                    end
+                end
+            end
+        end
+    end
 
     --------------------------------------------------------------------------------------
     -- Get information about the ranged gear you have equipped
@@ -1339,8 +2216,53 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Engage with your current target, if idle
+    context.engage = function ()
+        local player = windower.ffxi.get_player()
+        if player and player.status == STATUS_IDLE then
+            local t = context.getMobByTarget('t')
+            if t and t.spawn_type == SPAWN_TYPE_MOB then
+                context.sendCommand('input /attack <t>')
+                context.wait(1)
+
+                return true
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Disengage from your current battle target, if engaged
+    context.disengage = function ()
+        local player = windower.ffxi.get_player()
+        if player and player.status == STATUS_ENGAGED then
+            context.sendCommand('input /attack')
+            context.wait(1)
+
+            return true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     --
     context.useItem = function (target, itemName)
+        local bypass_target_check = false
+        if is_known_targeting_symbol(target) then 
+            local t = windower.ffxi.get_mob_by_target(target)
+            if t == nil then
+                return
+            end
+
+            t.symbol = target
+            target = t
+            bypass_target_check = true
+        end
+
+        -- If we're passed a "raw" mob, we'll just use <t>
+        if type(target) == 'table' and not target.symbol then
+            bypass_target_check = true
+            target.symbol = 't'
+        end
+        
         local item = nil
         local secondsUntilActivation = 0    -- TODO: Figure out how to make this work
 
@@ -1379,12 +2301,21 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             target = context.me
         end
 
+        if not target or not target.symbol then
+            return
+        end
+
         -- Validate the target
-        if not hasAnyFlagMatch(target.targets, item.targets) then
-            target = context.bt
+        if not bypass_target_check and target.targets then
             if not hasAnyFlagMatch(target.targets, item.targets) then
-                writeDebug(string.format(' **A valid target for [%s] could not be identified.', item.name))
-                return
+                target = context.bt
+                if not target then
+                    return
+                end
+                if not hasAnyFlagMatch(target.targets, item.targets) then
+                    writeDebug(string.format(' **A valid target for [%s] could not be identified.', item.name))
+                    return
+                end
             end
         end
 
@@ -1410,6 +2341,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             waitTime,
             true
         )
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Get the spell tier from a roman numeral-based spell name
+    context.spellTierFromName = function(spell)
+        if type(spell) == 'table' then
+            spell = spell.name
+        end
+
+        if type(spell) ~= 'string' then
+            return 1
+        end
+
+        return romanNumeralTier(spell)
     end
 
     --------------------------------------------------------------------------------------
@@ -1520,6 +2465,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local player = windower.ffxi.get_player()
             local recasts = windower.ffxi.get_ability_recasts()
 
+            context.ability = nil
+            context.ability_recast = nil
+
             for key, _ability in ipairs(abilities) do
                 local ability = _ability
                 if type(ability) ~= 'nil' then
@@ -1543,7 +2491,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.useAbility = function (target, ability)
-        if ability == nil then ability = context.ability end
+        local bypass_target_check = false
+        if is_known_targeting_symbol(target) then 
+            local t = windower.ffxi.get_mob_by_target(target)
+            if t == nil then
+                return
+            end
+
+            t.symbol = target
+            target = t
+            bypass_target_check = true
+        end
+
+        -- If we're passed a "raw" mob, we'll just use <t>
+        if type(target) == 'table' and not target.symbol then
+            bypass_target_check = true
+            target.symbol = 't'
+        end
+
+        if ability == nil then
+            ability = context.ability
+        end
         if type(ability) == 'string' then ability = findJobAbility(ability) end
         
         if ability ~= nil then
@@ -1562,11 +2530,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 target = context.bt
             end
 
-            if target == nil or not hasAnyFlagMatch(target.targets, ability.targets) then
-                target = context.me
-                if not hasAnyFlagMatch(target.targets, ability.targets) then
-                    writeDebug(' **A valid target for [%s] could not be identified.':format(text_ability(ability.name, Colors.debug)))
-                    return
+            if not target or not target.symbol then
+                return
+            end
+
+            if not bypass_target_check and target.targets then
+                if target == nil or not hasAnyFlagMatch(target.targets, ability.targets) then
+                    target = context.me
+                    if not hasAnyFlagMatch(target.targets, ability.targets) then
+                        writeDebug(' **A valid target for [%s] could not be identified.':format(text_ability(ability.name, Colors.debug)))
+                        return
+                    end
                 end
             end
 
@@ -1576,6 +2550,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 SPECIAL_NEXT_ATTACK_JOB_ABILITIES[ability.name] 
             then
                 waitTime = 2.0
+                stopWalk = false
+            elseif 
+                FAST_JOB_ABILITIES[ability.name]
+            then
+                waitTime = 0.5
                 stopWalk = false
             end
 
@@ -1625,6 +2604,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Get the recast timer (in seconds) for the specified spell, or zero if there is none
+    context.spellRecastOrZero = function(...)
+        return context.spellRecast(...) or 0
+    end
+
+    --------------------------------------------------------------------------------------
     -- Determine if the specified spell is available
     context.hasSpell = function(...)
         return context.spellRecast(...) ~= nil
@@ -1638,18 +2623,32 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local player = windower.ffxi.get_player()
             local recasts = windower.ffxi.get_spell_recasts()
 
+            context.spell = nil
+            context.spell_recast = nil
+
             for key, _spell in ipairs(spells) do
                 local spell = _spell
                 if type(spell) ~= 'nil' then
                     spell = findSpell(spell)
                     if spell then
-                        local canUse, recast = canUseSpell(player, spell, recasts)
+                        -- We will identify offensive spells as those that can target an enemy but not a player.
+                        -- There's a bit of a gray area here, mainly around curative spells cast on undead, but
+                        -- this logic should be correct in 99% of cases or more.
+                        local suppress = context.vars.__suppress_offensive_magic and
+                            spell.targets.Enemy and 
+                            not spell.targets.Self and
+                            not spell.targets.Party and
+                            not spell.targets.Ally
 
-                        context.spell = spell
-                        context.spell_recast = recast
-                        
-                        if canUse then
-                            return key
+                        if not suppress then
+                            local canUse, recast = canUseSpell(player, spell, recasts)
+
+                            context.spell = spell
+                            context.spell_recast = recast
+                            
+                            if canUse then
+                                return key
+                            end
                         end
                     end
                 end
@@ -1660,6 +2659,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Uses the specified spell on the specified target
     context.useSpell = function (target, spell, ignoreIncomplete)
+        local bypass_target_check = false
+
+        -- If we're passed a known targeting string, use it
+        if is_known_targeting_symbol(target) then 
+            local t = windower.ffxi.get_mob_by_target(target)
+            if t == nil then
+                return
+            end
+
+            t.symbol = target
+            target = t
+            bypass_target_check = true
+        end
+
+        -- If we're passed a "raw" mob, we'll just use <t>
+        if type(target) == 'table' and not target.symbol then
+            bypass_target_check = true
+            target.symbol = 't'
+        end
+
+
         if spell == nil then spell = context.spell end
         if type(spell) == 'string' then spell = findSpell(spell) end
         
@@ -1683,27 +2703,55 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 target = context.me
             end
 
-            if target ~= nil then
-                if not hasAnyFlagMatch(target.targets, spell.targets) then
-                     target = context.me
-                     if not hasAnyFlagMatch(target.targets, spell.targets) then
-                        -- At this point, if we still don't have a target then we're out of targeting options
-                        writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
-                        return
+            if target ~= nil and target.symbol then
+                if not bypass_target_check and target.targets then
+                    local original_effect = context.effect
+                    local original_effect_count = context.effect_count
+
+                    if 
+                        (
+                            target.in_party or
+                            (target.targets and target.targets.Party) or
+                            (target.mob and target.mob.in_party)
+                        ) and
+                        spell.targets.Self and
+                        (
+                            (context.hasBuff('Entrust') and spell.type == 'Geomancy') or
+                            (context.hasBuff('Pianissimo') and spell.type == 'BardSong')
+                        )
+                    then
+                        writeMessage('%s detected! %s can be cast on party members.':format(
+                            text_buff(context.effect.name),
+                            text_spell(spell.name)
+                        ))
+                    else
+                        if not hasAnyFlagMatch(target.targets, spell.targets) then
+                            target = context.me
+                            if not hasAnyFlagMatch(target.targets, spell.targets) then
+                                -- At this point, if we still don't have a target then we're out of targeting options
+                                writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
+                                return
+                            end
+                        end
                     end
+
+                    -- We need to restore the original effect info, because the hasBuff call 
+                    -- above would have overwritten it
+                    context.effect          = original_effect
+                    context.effect_count    = original_effect_count
                 end
 
-                -- NOTE: Spell usage is handled generally via the 'action' event handler
-                --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
+               -- NOTE: Spell usage is handled generally via the 'action' event handler
+               --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
 
-                -- This is the newer spell casting implementation. As ooposed to the normal
-                -- sendActionCommand function, this one performs a sleeping loop that will
-                -- detect when spell casting has completed (for any reason) and will exit
-                -- sooner. This allows us to spend a little time as possible waiting for
-                -- spells to complete (fast cast, interruption, and so on can impact this).
+               -- This is the newer spell casting implementation. As ooposed to the normal
+               -- sendActionCommand function, this one performs a sleeping loop that will
+               -- detect when spell casting has completed (for any reason) and will exit
+               -- sooner. This allows us to spend a little time as possible waiting for
+               -- spells to complete (fast cast, interruption, and so on can impact this).
 
-                -- Returns a flag indicating whether the action completed successfully
-                return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+               -- Returns a flag indicating whether the action completed successfully
+               return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
             end
         end
     end
@@ -1761,12 +2809,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         -- If a spell was set, use that
-        if context.spell then
+        if context.spell and context.canUseSpell(context.spell) then
             return context.useSpell(target)
         end
 
         -- If an ability was set, use that
-        if context.ability then
+        if context.ability and context.canUseAbility(context.ability) then
             return context.useAbility(target)
         end
 
@@ -1801,27 +2849,38 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             smartMove:cancelJob()
         end
 
-        writeVerbose('Facing toward %s target: %s':format(
-            text_action(context.actionType, Colors.verbose),
-            text_mob(context.bt.name, Colors.verbose)
-        ))
+        -- writeVerbose('Facing toward %s target: %s':format(
+        --     text_action(context.actionType, Colors.verbose),
+        --     text_mob(context.bt.name, Colors.verbose)
+        -- ))
         return directionality.faceTarget(context.bt.mob) ~= nil
     end
 
     --------------------------------------------------------------------------------------
     --
-    context.faceAway = function ()
-        if context.bt == nil or context.bt.mob == nil then return end
+    context.faceAway = function (target)
+        target = target or context.bt
+        if type(target) == 'string' then target = context[target] end
+        if type(target) ~= 'table' or target.id == nil then return end
 
-        local angle = directionality.facingOffset(context.bt.mob)
-        if type(angle) == 'number' then
-            writeVerbose('Turning away from %s target: %s':format(
-                text_action(context.actionType, Colors.verbose),
-                text_mob(context.bt.name, Colors.verbose)
-            ))
-            directionality.faceDirection(angle + math.pi)
+        -- Cancel any follow job in progress so it doesn't interfere with our facing action
+        local job = smartMove:getJobInfo()
+        if job ~= nil then
+            smartMove:cancelJob()
+        end
 
-            context.wait(0.5)
+        -- Unlock from the target so we can face away
+        local player = windower.ffxi.get_player()
+        if player.target_locked then
+            windower.send_command('input /lockon')
+            context.wait(0.25)
+        end
+
+        if directionality.faceAwayFromTarget(target) then
+            --context.wait(0.125)
+            return true
+        else
+            writeMessage('WARNING: Unable to face away from target!')
         end
     end
 
@@ -1839,7 +2898,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    context.align = function(target, angle, distance, duration)
+    context.align = function(target, angle, distance, duration, noFace)
         -- Nothing to do if we're already aligned
         if context.aligned(target, angle, distance) then
             return
@@ -1857,10 +2916,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             position[2],
             math.max(tonumber(duration or 3), 1))
         
-        directionality.faceTarget(target)
+        if not noFace then
+            directionality.faceTarget(target)
+        end
         if not success then
             -- TODO: Make this configurable? Parameterized?
-            context.postpone(5)
+            context.postpone(2)
             return false
         end
 
@@ -1874,6 +2935,230 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if target then
             if smartMove:atMobRear(target.index) then
                 return true
+            end
+        end
+    end
+
+    context.getMatchingBracketedFaceAwayStart = function(faceaways, abilityName, mobName)
+        -- writeMessage('Entering getMatchingBracketedFaceAwayStart with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     abilityName and abilityName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert ability objects to their name. Then validate that we have something.
+        if type(abilityName) == 'table' then abilityName = abilityName.name end
+        if type(abilityName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.initiators) == 'table' then
+            local rules = entry.initiators[abilityName] or entry.initiators["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.ability_face_away_start = rules
+                return context.ability_face_away_start
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.initiators) == 'table' then
+            local rules = entry.initiators[abilityName] or entry.initiators["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.ability_face_away_start = rules
+                return context.ability_face_away_start
+            end
+        end
+    end
+
+    context.getMatchingBracketedFaceAwayEnd = function(faceaways, abilityName, mobName)
+        -- writeMessage('Entering getMatchingBracketedFaceAwayEnd with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     abilityName and abilityName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert ability objects to their name. Then validate that we have something.
+        if type(abilityName) == 'table' then abilityName = abilityName.name end
+        if type(abilityName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.terminators) == 'table' then
+            local rules = entry.terminators[abilityName] or entry.terminators["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.ability_face_away_end = rules
+                return context.ability_face_away_end
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.terminators) == 'table' then
+            local rules = entry.terminators[abilityName] or entry.terminators["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.ability_face_away_end = rules
+                return context.ability_face_away_end
+            end
+        end
+    end
+
+    context.getMatchingAbilityFaceAway = function(faceaways, abilityName, mobName)
+        -- writeMessage('Entering getMatchingAbilityFaceAway with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     abilityName and abilityName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert ability objects to their name. Then validate that we have something.
+        if type(abilityName) == 'table' then abilityName = abilityName.name end
+        if type(abilityName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.abilities) == 'table' then
+            local rules = entry.abilities[abilityName] or entry.abilities["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.ability_face_away = rules
+                return context.ability_face_away
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.abilities) == 'table' then
+            local rules = entry.abilities[abilityName] or entry.abilities["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.ability_face_away = rules
+                return context.ability_face_away
+            end
+        end
+    end
+
+    context.getMatchingSpellFaceAway = function(faceaways, spellName, mobName)
+        -- writeMessage('Entering getMatchingSpellFaceAway with: %s, %s, %s':format(
+        --     type(faceaways),
+        --     spellName and spellName.name or 'n/a',
+        --     mobName and mobName.name or 'n/a'
+        -- ))
+        
+        -- Ensure that we have a valid face away description table
+        if type(faceaways) ~= 'table' then return end
+        
+        -- We can convert mob objects to their name. Then validate that we have something.
+        if mobName == nil then mobName = context.bt end
+        if type(mobName) == 'table' then mobName = mobName.name end
+        if type(mobName) ~= 'string' then return end
+
+        -- We can convert spell objects to their name. Then validate that we have something.
+        if type(spellName) == 'table' then spellName = spellName.name end
+        if type(spellName) ~= 'string' then return end
+
+        -- Check the mob-specific rule set
+        local entry = faceaways[mobName]
+        if type(entry) == 'table' and type(entry.spells) == 'table' then
+            local rules = entry.spells[spellName] or entry.spells["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.spell_face_away = rules
+                return context.spell_face_away
+            end
+        end
+
+        -- Check the general rule set
+        entry = faceaways["*"]
+        if type(entry) == 'table' and type(entry.spells) == 'table' then
+            local rules = entry.spells[spellName] or entry.spells["*"]
+            if rules ~= nil then
+                if type(rules) == 'boolean' then
+                    if rules then
+                        rules = {}
+                    else
+                        rules = nil
+                    end
+                end
+
+                context.spell_face_away = rules
+                return context.spell_face_away
             end
         end
     end
@@ -1919,7 +3204,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 duration = math.max(tonumber(duration) or 3, 1)
                 failureDelay = math.max(tonumber(failureDelay) or 5, 1)
 
-                writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+                if settings.verbosity >= VERBOSITY_TRACE then
+                    writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+                end
 
                 local jobId = smartMove:moveBehindIndex(context.bt.index, duration)
                 if jobId then
@@ -1927,7 +3214,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         coroutine.sleep(0.5)
                         local job = smartMove:getJobInfo()
                         if job == nil or job.jobId ~= jobId then
-                            writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
+                            if settings.verbosity >= VERBOSITY_TRACE then
+                                writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
+                            end
                             local success = context.alignedRear()
                             if not success then
                                 context.postpone(failureDelay)
@@ -1943,7 +3232,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -------------------------------------------------------------------------------------
     -- Check if the specified target is being followed
-    context.following = function(target)
+    context.following0 = function(target)
         target = target or context.member or context.bt
         
         if type(target) == 'string' then
@@ -1967,9 +3256,48 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Get the mob we're following, or nil if there is no follow
+    context.following = function (target)
+        -- if context.player and context.player.follow_index then
+        --     local mob = windower.ffxi.get_mob_by_index(context.player.follow_index)
+        --     if mob and mob.valid_target then
+        --         return mob
+        --     end
+        -- end
+
+        if type(target) == 'string' then
+            target = windower.ffxi.get_mob_by_target(target)
+        end
+
+        if type(target) ~= 'table' or not target.id or not target.index then
+            return
+        end
+
+        local jobInfo = smartMove:getJobInfo()
+        if context.player and jobInfo then
+            if jobInfo.follow_index then
+                if target.index == jobInfo.follow_index and target.valid_target then
+                    return target, jobInfo.jobId
+                end
+                -- local mob = windower.ffxi.get_mob_by_index(jobInfo.follow_index)
+                -- if mob and mob.valid_target then
+                --     if target == nil or (target.id == mob.id and target.index == mob.index) then
+                --         return mob, jobInfo.jobId
+                --     end
+                -- end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- 
     context.follow = function (target, distance)
         target = target or context.member or context.bt
+
+        local _mob, _job_id = context.following(target)
+        if _mob and _job_id then
+            return _job_id
+        end
 
         -- Allow string targets
         if type(target) == 'string' then
@@ -1983,8 +3311,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return
         end
         
+        -- Validate the distance value. If no value is provided, or it is invalid,
+        -- we will fall back to the follow command distance. If that is not valid,
+        -- we will fall back to a default of 1.0.
         if type(distance) ~= 'number' or distance < 0 then
-            distance = 1
+            distance = math.max(tonumber(settings.followCommandDistance) or 1, 1)
         end
 
         if settings and type(settings.minDistanceList[target.name]) == 'number' then
@@ -2037,6 +3368,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local furthesti = context.furthestIndex(args)
         if furthesti then
             context.point = args[furthesti]
+            context.furthest_result = context.point
+            context.farthest_result = context.point
             return context.point
         end
     end
@@ -2077,6 +3410,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local nearesti = context.nearestIndex(args)
         if nearesti then
             context.point = args[nearesti]
+            context.nearest_result = context.point
             return context.point
         end
     end
@@ -2088,6 +3422,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if not pos then return end
 
         local me = windower.ffxi.get_mob_by_target('me')
+        if not me then
+            return 0
+        end
         local v = V({pos.x, pos.y})
         local vme = V({me.x, me.y})
 
@@ -2153,9 +3490,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local start = os.time()
             duration = math.max(duration, 0.5)
 
-            while true do
-                coroutine.sleep(0.25)
+            coroutine.sleep(0.5)
 
+            while true do
                 local now = os.time()
                 local job = smartMove:getJobInfo()
 
@@ -2188,6 +3525,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     --context.log('The movement operation was not completed.')
                     return
                 end
+
+                coroutine.sleep(0.25)
             end
         end
 
@@ -2202,22 +3541,64 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         smartMove:cancelJob()
     end
 
-    --------------------------------------------------------------------------------------
-    -- Get the mob we're following, or nil if there is no follow
-    context.following = function ()
-        -- if context.player and context.player.follow_index then
-        --     local mob = windower.ffxi.get_mob_by_index(context.player.follow_index)
-        --     if mob and mob.valid_target then
-        --         return mob
-        --     end
-        -- end
+    context.findFieldItem = function(name)
+        -- Note:
+        --  Emblazoned Reliquary (Blue)
+        --      - "spawn_type": 2, "models": [965]
+        --  Emblazoned Reliquary (Brown)
+        --      - "spawn_type": 2, "models": [966]
+        --  Emblazoned Reliquary (Gold)
+        --      - "spawn_type": 2, "models": [967]
+        return
+    end
 
-        local jobInfo = smartMove:getJobInfo()
-        if context.player and jobInfo then
-            if jobInfo.follow_index then
-                local mob = windower.ffxi.get_mob_by_index(jobInfo.follow_index)
-                if mob and mob.valid_target then
-                    return mob
+    --------------------------------------------------------------------------------------
+    -- Find a player by name
+    context.findPlayer = function(name)
+        context.player_result = nil
+
+        if type(name) == 'string' then
+            local mobs = windower.ffxi.get_mob_array()
+            if mobs then
+                name = string.lower(name)
+                for key, mob in pairs(mobs) do
+                    if mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == 1 then
+                        if string.lower(mob.name) == name then
+                            local _mob = windower.ffxi.get_mob_by_id(mob.id)
+                            if _mob and _mob.valid_target then
+                                local p = { symbol = _mob.name, mob = _mob }
+                                initContextTargetSymbol(context, p)
+
+                                context.player_result = p
+                                return context.player_result
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find a player by name
+    context.findByName = function(name)
+        context.find_result = nil
+
+        if type(name) == 'string' then
+            local mobs = windower.ffxi.get_mob_array()
+            if mobs then
+                name = string.lower(name)
+                for key, mob in pairs(mobs) do
+                    if string.lower(mob.name) == name then
+                        local _mob = windower.ffxi.get_mob_by_id(mob.id)
+                        if _mob and _mob.valid_target then
+                            local f = { symbol = _mob.name, mob = _mob }
+                            initContextTargetSymbol(context, f)
+
+                            context.find_result = f
+                            return context.find_result
+                        end
+                    end
                 end
             end
         end
@@ -2240,21 +3621,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if isName then identifier = string.lower(identifier) end
 
             for key, mob in pairs(mobs) do
-                if
-                    mob.spawn_type == SPAWN_TYPE_MOB and
-                    mob.valid_target and
-                    mob.hpp > 0 and
-                    mob.distance <= distanceSquared
-                then
+                if mob.distance <= distanceSquared then
                     if
-                        (isIndex and identifier == mob.index) or
-                        (isName and identifier == string.lower(mob.name))
+                        mob.spawn_type == SPAWN_TYPE_MOB and
+                        mob.valid_target and
+                        mob.hpp > 0
                     then
                         if
-                            (not withAggro or mob.status == STATUS_ENGAGED) and
-                            (nearest == nil or nearest.distance > mob.distance)
+                            (isIndex and identifier == mob.index) or
+                            (isName and identifier == string.lower(mob.name))
                         then
-                            nearest = mob
+                            if
+                                (not withAggro or mob.status == STATUS_ENGAGED) and
+                                (nearest == nil or nearest.distance > mob.distance)
+                            then
+                                nearest = mob
+                            end
                         end
                     end
                 end
@@ -2267,11 +3649,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- Store any managed buffs
                 nearest.buffs = actionStateManager:getBuffsForMob(nearest.id)
 
-                writeDebug('Nearest mob match: %s (%s) (distance: %s)':format(
-                    text_mob(nearest.name, Colors.debug),
-                    text_number('%03X':format(nearest.index), Colors.debug),
-                    text_number('%.1f':format(nearest.distance), Colors.debug)
-                ))
+                if settings.verbosity >= VERBOSITY_DEBUG then
+                    writeDebug('Nearest mob match: %s (%s) (distance: %s)':format(
+                        text_mob(nearest.name, Colors.debug),
+                        text_number('%03X':format(nearest.index), Colors.debug),
+                        text_number('%.1f':format(nearest.distance), Colors.debug)
+                    ))
+                end
 
                 context.mob = nearest
                 return nearest
@@ -2317,6 +3701,59 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         return count
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Returns all mobs with the given name(s) within the specified distance. If the 
+    -- first argument is a number, it will be treated as the search radius; otherwise,
+    -- a distance value of 50 will be used by default.
+    context.findMobs = function(...)
+        local count = 0
+        local distance = 50
+        local names = varargs({...})
+        local results = { }
+        local start = nil
+
+        if type(names[1]) == 'number' then
+            distance = names[1]
+            start = 2
+        end
+
+        if distance > 0 then
+            local mobs = windower.ffxi.get_mob_array()
+            local distanceSquared = distance * distance
+
+            for key, mob in pairs(mobs) do
+                if 
+                    mob.spawn_type == SPAWN_TYPE_MOB and
+                    mob.valid_target and
+                    mob.hpp > 0 and
+                    mob.distance <= distanceSquared
+                then
+                    if 
+                        names[1] == nil or
+                        arrayIndexOfStrI(names, mob.name, start) 
+                    then
+                        mob.buffs = actionStateManager:getBuffsForMob(mob)
+                        arrayAppend(results, mob)
+                        count = count + 1
+                    end
+                end
+            end
+        end
+
+        return count > 0 and results or nil
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Forces the next battle target to the specified mob (id or object)
+    context.setBattleTarget = function(mob)
+        if type(mob) == 'table' and mob[1] then mob = mob[1] end
+        if type(mob) == 'table' then mob = mob.id end
+        if type(mob) == 'number' then
+            actionStateManager.user_target_id = mob
+            return true
+        end
     end
 
     -------------------------------------------------------------------------------------
@@ -2443,6 +3880,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local member = context[p]
             if member and member.buffs then
                 if context.hasBuff(member, names) then
+                    context.member = member
                     return true
                 end
             end
@@ -2497,15 +3935,23 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             start_index = 1
         end
 
+        -- local buffs = target.buffs
+        -- if target.id == context.me.id then
+        --     local player = windower.ffxi.get_player()
+        --     buffs = player.buffs
+        -- end
+
         for i = start_index, #names do
             local name = names[i]
             local buff = hasBuffInArray(target.buffs, name, strict)
 
             if buff then
                 context.effect = buff
-                if target.spawn_type ~= SPAWN_TYPE_MOB then
-                    context.member = target
-                end
+                context.effect_count = arrayCountOccurences(target.buffs, buff.id)
+
+                -- if target.spawn_type ~= SPAWN_TYPE_MOB then
+                --     context.member = target
+                -- end
                 return buff
             end
         end
@@ -2605,6 +4051,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local buff = hasBuffInArray(target.buffs, buffId, strict)
                 if buff then
                     context.effect = buff    
+                    context.effect_count = arrayCountOccurences(target.buffs, buff.id)
                     return buff
                 end
             end
@@ -2668,33 +4115,225 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Clears tracking of the current weapon skill and skillchain info (if any)
+    context.resetSkillchain = function()
+        actionStateManager:clearSkillchain(context.bt)
+        --actionStateManager:setSkillchain(nil, context.bt)
+        actionStateManager:clearPartyWeaponSkills()
+
+        context.skillchain = nil
+        context.party_weapon_skill = nil
+    end
+
+    --------------------------------------------------------------------------------------
     -- Returns true if the specified buff is active
     context.skillchaining = function (...)
         local names = varargs({...})
 
-        local sc = context.skillchain
-        if sc.name ~= nil and 
-            (names[1] == nil or arrayIndexOfStrI(names, sc.name))
+        local skillchain = context.skillchain
+        if
+            context.party_weapon_skill and
+            skillchain and
+            skillchain.name ~= nil and 
+            (names[1] == nil or arrayIndexOfStrI(names, skillchain.name))
         then
-            context.skillchain_trigger_time = sc.time
+            context.skillchain_trigger_time = skillchain.time
+            context.skillchain_age = os.clock() - skillchain.time
             return true
         end
     end
 
     --------------------------------------------------------------------------------------
-    -- Trigger if our enemy is using a TP move
+    -- Similar to skillchaining, but only triggers if a minimum amount
+    -- of time has ellapsed since the weapon skill was used.
+    context.skillchaining2 = function(...)
+        local result = context.skillchaining(...)
+        if result then
+            local age = os.clock() - context.skillchain_trigger_time
+            if age >= settings.skillchainDelay - 1 then
+                return result
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Suppresses offensive magic spells via canUseSpell (and canUse)
+    context.suppressOffensiveMagic = function()
+        if context and context.vars then
+            if type(context.vars.__suppress_offensive_magic) == 'number' then
+                context.vars.__suppress_offensive_magic = context.vars.__suppress_offensive_magic + 1
+            else
+                context.vars.__suppress_offensive_magic = 1
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Cancells suppression of offensive magic spells via canUseSpell (and canUse)
+    context.resumeOffensiveMagic = function()
+        if context and context.vars then
+            if type(context.vars.__suppress_offensive_magic) == 'number' then
+                context.vars.__suppress_offensive_magic = context.vars.__suppress_offensive_magic - 1
+            end
+
+            if (tonumber(context.vars.__suppress_offensive_magic) or 0) < 1 then
+                context.vars.__suppress_offensive_magic = false
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Suppresses weapon skills via canUseWeaponSkill
+    context.suppressWeaponSkills = function()
+        if context and context.vars then
+            if type(context.vars.__suppress_weapon_skills) == 'number' then
+                context.vars.__suppress_weapon_skills = context.vars.__suppress_weapon_skills + 1
+            else
+                context.vars.__suppress_weapon_skills = 1
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Cancells suppression of weapon skills spells via canUseWeaponSkill
+    context.resumeWeaponSkills = function()
+        if context and context.vars then
+            if type(context.vars.__suppress_weapon_skills) == 'number' then
+                context.vars.__suppress_weapon_skills = context.vars.__suppress_weapon_skills - 1
+            end
+
+            if (tonumber(context.vars.__suppress_offensive_magic) or 0) < 1 then
+                context.vars.__suppress_weapon_skills = false
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy is in the process of casting a spell
+    context.enemyCastingSpell = function (...)
+        if context.bt then
+            local spells = varargs({...})
+            local info = actionStateManager:getOthersSpellInfo(context.bt)
+            if info then
+                -- We'll match if either no filters were provided, or if the current spell is in the filter list
+                if 
+                    spells[1] == nil or
+                    arrayIndexOf(spells, "*") or
+                    arrayIndexOfStrI(spells, info.spell.name) 
+                then
+                    context.enemy_spell = info.spell
+
+                    if info.targetId == context.bt.id then
+                        context.enemy_spell_target = context.bt
+                    elseif context.party1_by_id[info.targetId] then
+                        context.enemy_spell_target = context.party1_by_id[info.targetId]
+                    else
+                        context.enemy_spell_target = windower.ffxi.get_mob_by_id(info.targetId)
+                    end
+
+                    return info.spell
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy is in the process of using a TP move. The ability WILL be
+    -- cleared in windowed, so it will be detectable on certain subsequent calls.
     context.enemyUsingAbility = function (...)
         if context.bt then
             local skills = varargs({...})
-            local info = actionStateManager:getMobAbilityInfo(context.bt)
+
+            -- We do NOT want to use Windowed mode (second param) for any "using" function; the "using"
+            -- functions are looking for things that are happening right now, and Windowed mode
+            -- is all about detecting when something happened recently (even if it's already done).
+            local info = actionStateManager:getMobAbilityInfo(context.bt, false)
+            if info then
+                -- We'll match if either no filters were provided, or if the current ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOf(skills, "*") or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- Clear the mob ability. It will still be available for what we're calling 'windowed' detection via
+                    -- context.enemyUsedAbility. That is, the ability will be detectable for a certain window of time.
+                    actionStateManager:clearMobAbility(context.bt)
+
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy is in the process of using a TP move. The ability will NOT be
+    -- cleared, so it will be detectable on subsequent calls.
+    context.enemyUsingAbilityNC = function (...)
+        if context.bt then
+            local skills = varargs({...})
+
+            -- We do NOT want to use Windowed mode (second param) for any "using" function; the "using"
+            -- functions are looking for things that are happening right now, and Windowed mode
+            -- is all about detecting when something happened recently (even if it's already done).
+            local info = actionStateManager:getMobAbilityInfo(context.bt, false)
+            if info then
+                -- We'll match if either no filters were provided, or if the current ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOf(skills, "*") or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- We do NOT clear the ability at all here. It will still be available for subsequent
+                    -- calls, until the ability ends. A call to enemyUsingAbility(enemy_ability) from
+                    -- a gambit can force the actual clear to happen.
+
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy used a TP move recently. The ability will be cleared, so
+    -- it will NOT be detectable on subsequent calls.
+    context.enemyUsedAbility = function (...)
+        if context.bt then
+            local skills = varargs({...})
+            local info = actionStateManager:getMobAbilityInfo(context.bt, true)
             if info then
                 -- We'll match if either no filters were provided, or if the current  ability is in the filter list
                 if 
                     skills[1] == nil or
                     arrayIndexOfStrI(skills, info.ability.name) 
                 then
-                    -- We'll only allow one trigger per single mob ability. TODO: Maybe change this in the future?
-                    actionStateManager:clearMobAbility(context.bt)
+                    -- Clear the mob ability for good. When the second argument is true, it will no longer be tracked.
+                    actionStateManager:clearMobAbility(context.bt, true)
+
+                    context.enemy_ability = info.ability
+                    return info.ability
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if our enemy used a TP move recently. The ability will NOT be cleared, so
+    -- it will be detectable on subsequent calls.
+    context.enemyUsedAbilityNC = function (...)
+        if context.bt then
+            local skills = varargs({...})
+            local info = actionStateManager:getMobAbilityInfo(context.bt, true)
+            if info then
+                -- We'll match if either no filters were provided, or if the current  ability is in the filter list
+                if 
+                    skills[1] == nil or
+                    arrayIndexOfStrI(skills, info.ability.name) 
+                then
+                    -- Clear the mob ability for good. When the second argument is false, it will continue to be tracked.
+                    actionStateManager:clearMobAbility(context.bt, false)
+
                     context.enemy_ability = info.ability
                     return info.ability
                 end
@@ -2728,6 +4367,23 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Similar to partyUsingWeaponSkill, but only triggers if a minimum amount
+    -- of time has ellapsed since the weapon skill was used.
+    context.partyUsingWeaponSkill2 = function(...)
+        local result = context.partyUsingWeaponSkill(...)
+        if result then
+            local age = os.clock() - context.skillchain_trigger_time
+            if
+                --(not context.skillchain and age >= SKILLCHAIN_START_DELAY) or
+                (age >= settings.skillchainDelay - 1)
+            then
+                --writeVerbose('partyUsingWeaponSkill2: %s':format(result and text_green('true') or text_red('false')))
+                return result
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Wait the appropriate amount of time to close a skillchain. Returns
     context.waitSkillchain = function(seconds)
         if
@@ -2737,7 +4393,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             seconds = math.max(
                 tonumber(seconds) or tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY,
                 0)
-            
+
+             -- If there's no skillchain active, we don't need to space things out too far
+             if not context.skillchain then
+                --writeVerbose('shrinking sc time now with seconds=%.1f, age=%.1f':format(seconds, os.clock() - context.skillchain_trigger_time))
+                seconds = math.min(seconds, SKILLCHAIN_START_DELAY)
+            end
+
             -- Calculate the age of our weapon skill, and the corresponding sleep time needed
             -- to ensure we have a chance at creating a skillchain effect. Note that we will
             -- subtract a small amount of time to account for the general execution delay, 
@@ -2765,10 +4427,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Similar to waitSkillchain above, except it waits for a shorter time period to
     -- allow for use of an ability (SA, TA, flourishes, etc)
-    context.waitSkillchainWithAbility = function()
-        return context.waitSkillchain(
-            (tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY) - 1.5
-        )
+    context.waitSkillchainWithAbility = function(abilityCount)
+        if context.ability_recast and context.ability_recast <= 0 then
+
+            local scd = tonumber(settings.skillchainDelay) or SKILLCHAIN_DELAY
+            local modifier = (tonumber(abilityCount) or 1) + 0.5
+
+            scd = math.max(scd - modifier, 0)
+            context.waitSkillchain(scd)
+
+            return true
+        else
+            context.waitSkillchain()
+        end
     end
     context.waitSCWithAbility = context.waitSkillchainWithAbility
 
@@ -2870,10 +4541,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Ensure that the current action does not execute again for at least
     -- the given number of seconds
     context.postpone = function(s)
-        s = math.max(0, tonumber(s) or 0)
-        if s > 0 then
-            writeDebug('Postponing next action execution by %.1fs':format(s))
-            context.action.availableAt = math.max(context.action.availableAt, os.clock() + s)
+        if type(s) == 'number' then
+            if s > 0 then
+                if settings.verbosity >= VERBOSITY_DEBUG then
+                    writeDebug('Postponing next action execution by %s':format(
+                        text_number('%.1fs':format(s), Colors.debug)
+                    ))
+                end
+                context.action.availableAt = math.max(context.action.availableAt, os.clock() + s)
+            end
         end
     end
 
@@ -2918,7 +4594,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.wake = function ()
         if actionStateManager:isIdleSnoozing() then
             actionStateManager.idleWakeTime = 0
-            writeTrace('Waking from idle!')
         end
     end
 
@@ -3016,9 +4691,159 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Determine if we're already at the merit point cap
+    context.hasCappedMerits = function()
+        local mpi = actionStateManager:getMeritPointInfo()
+        if 
+            mpi and
+            type(mpi.current) == 'number' and
+            mpi.current == mpi.max
+        then
+            return true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Performs a "touch" on a mob, which is to target it and hit enter
+    context.touch = function(identifier, max_distance)
+        local mob = identifier
+
+        if type(identifier) == 'number' then
+            mob = {}
+            mob.id = identifier
+        elseif type(identifier) == 'string' then
+            mob = context.findByName(identifier)
+        end
+
+        if type(mob) == 'table' then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        if type(mob) == 'table' then
+            max_distance = math.max(tonumber(max_distance) or 10, 0)
+            if mob.distance <= (max_distance * max_distance) then
+                local player = windower.ffxi.get_player()
+
+                local lt = lockTarget(player, mob)
+                local t = windower.ffxi.get_mob_by_target('t')
+                if t == nil or t.id ~= mob.id then
+                    coroutine.sleep(0.1)
+                    lt = lockTarget(player, mob)
+                    t = windower.ffxi.get_mob_by_target('t')
+                    if t == nil or t.id ~= mob.id then
+                        t = nil
+                    end
+                end
+
+                -- if settings.debugging then
+                --     writeMessage('DBG: touch targeting ended with lt=%s, t=%s':format(
+                --         lt and text_green('true') or text_red('false'),
+                --         t and text_number(t.id) or text_red('nil')
+                --     ))
+                -- end
+
+                if t ~= nil then
+                    -- if settings.debugging then
+                    --     writeMessage('DBG: touch sending enter key press...')
+                    -- end
+
+                    coroutine.sleep(1)
+
+                    -- Activate the target
+                    context.keyTap('enter', 0.5)
+                else
+                    writeMessage(text_red('Warning: Targeting failed!'))
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Performs a "tap" on a mob, which is to target it and hit enter and escape
+    context.tap = function(identifier, max_distance)
+        local mob = identifier
+
+        if type(identifier) == 'number' then
+            mob = {}
+            mob.id = identifier
+        elseif type(identifier) == 'string' then
+            mob = context.findByName(identifier)
+        end
+
+        if type(mob) == 'table' then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        if mob then
+            max_distance = math.max(tonumber(max_distance) or 5, 0)
+            if mob.distance <= (max_distance * max_distance) then
+                local player = windower.ffxi.get_player()
+                if lockTarget(player, mob) then
+                    coroutine.sleep(1)
+                    
+                    -- Activate the target
+                    context.keyTap('enter', 0.5)
+                    
+                    -- We'll double-escape: Once to exit dialog (if any), and again to clear the target.
+                    context.keyTap('escape', 0.5)
+                    context.keyTap('escape', 0.5)
+                else
+                    writeMessage(text_red('Warning: Targeting failed!'))
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Gets a mob by its target name. Uses 't' by default, but can be overridden.
+    context.getMobByTarget = function(target)
+        context.mob_by_target = nil
+        
+        target = tostring(target) or 't'
+        local mob = windower.ffxi.get_mob_by_target(target)
+        if mob and mob.valid_target then
+            mob.distance = math.sqrt(mob.distance)
+            
+            if mob.spawn_tpe == SPAWN_TYPE_PLAYER then
+                mob.buffs   = actionStateManager:getMemberBuffsFor(mob.id)
+                mob.symbol  = mob.name
+                mob.symbol2 = target
+            else
+                mob.buffs   = actionStateManager.getBuffsForMob(mob.id)
+                mob.symbol  = target
+            end
+
+            context.mob_by_target = mob
+
+            return mob
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Try to set the target cursor to the specified mob
+    context.setTargetCursor = function(mob, allow_retarget)
+        local id = type(mob) == 'table' and mob.id or mob
+        if type(id) == 'number' then
+            mob = windower.ffxi.get_mob_by_id(id)
+            if mob and mob.valid_target then
+                if allow_retarget or (context.me and context.me.target_index ~= mob.index) then
+                    return lockTarget(context.player, mob)
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- "Static" context properties
     context.constants = context_constants
     context.const = context.constants
+
+    -- Expose some timing related values
+    context.state_time  = actionStateManager:elapsedTimeInType()
+    context.mob_time    = globals.target:runtime()
+    if context.bt then
+        context.bt.mob_time = context.mob_time
+    end
 
     --------------------------------------------------------------------------------------
     -- "Static" context functions
@@ -3027,10 +4852,35 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.max = context_max
     context.iif = context_iif
     context.bool = context_boolean
+    context.number = context_number
+    context.recastTime = context_recastTime
+    context.recastReady = context_recastReady
     context.noop = context_noop
+    context.rand = context_rand
+    context.abs = context_abs
     context.randomize = context_randomize
-    context.send_command = context_send_command
+    context.sendCommand = context_send_command
+    context.sendCommands = context_send_commands
+    context.sendText = context_send_text
+    context.keyTap = context_key_tap
+    context.isApex = context_is_apex
+    context.isLocus = context_is_locus
+    context.isApexTier = context_is_apex_tier
+    context.isArray = context_is_array
+    context.arrayLength = context_array_length
+    context.arrayCount = context.arrayLength
+    context.arrayMerge = context_array_merge
+    context.arrayAll = context_array_contains_all
+    context.tableAll = context_table_contains_all
+    context.hasAllFieldNames = context_table_has_all_field_names
+    context.inRange = context_in_range
     context.wait = context_wait
+    context.setVar = context_set_var
+    context.getVar = context_get_var
+    context.setVarField = context_set_var_field
+    context.getVarField = context_get_var_field
+    context.varIncrement = context_var_increment
+    context.varDecrement = context_var_decrement
 
     -- Final setup
     setEnumerators(context)
@@ -3039,7 +4889,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 end
 
 return {
-    create = function(actionType, time, target, mobEngagedTime, battleScope)
-        return makeActionContext(actionType, time, target, mobEngagedTime, battleScope)
+    create = function(actionType, time, target, mobEngagedTime, battleScope, party)
+        local context = makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+
+        -- Store the most recently created context
+        actionStateManager:setContext(context)
+
+        return context
     end
 }

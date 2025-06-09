@@ -15,7 +15,10 @@
         "hasSpell(vars.regen_cycle.spells) and canUse(spell)",
         "partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, spell)"
       ],
-      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 10)"],
+      "commands": [
+        "useSpell()",
+        "postpone((spellRecast(spell.name) or 0) + 10)"
+      ],
       "frequency": 1
     }
   ]

@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "crafting": {
+      "crystal": "Light Crystal",
+      "name": "Holy Water",
+      "ingredients": ["Distilled Water"]
+    }
+  },
+  "actions": [{ "import": "crafting/synthesis" }]
+}

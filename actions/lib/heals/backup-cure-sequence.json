@@ -13,6 +13,7 @@
     },
     {
       "when": [
+        "vars.roles.main_healer or (not skillchaining() and not partyUsingWeaponSkill())",
         "canUse('Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 60')",
         "member.distance <= constants.spell_distance"
       ],

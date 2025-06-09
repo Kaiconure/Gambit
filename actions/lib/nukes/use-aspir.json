@@ -1,0 +1,78 @@
+{
+  "vars": {
+    "use_aspir": {
+      "frequency": 10,
+      "max_mpp": 80,
+      "max_ws_mpp": 30,
+      "spells": ["Aspir III", "Aspir II", "Aspir"],
+      "gear": {
+        "casting": [],
+        "battle": [],
+        "inherit_casting_from": null,
+        "inherit_battle_from": null
+      },
+      "targets": {
+        "Air Elemental": true,
+        "Apex Crab": true,
+        "Apex Helm Elytra": true,
+        "Apex Idle Drifter": true,
+        "Asb": true,
+        "Azure-toothed Clawberry": true,
+        "Darkness Elemental": true,
+        "Earth Elemental": true,
+        "Fire Elemental": true,
+        "Ice Elemental": true,
+        "Light Elemental": true,
+        "Locus Armet Beetle": true,
+        "Locus Ghost Crab": true,
+        "Locus Tomb Worm": true,
+        "Mukasura": true,
+        "Pil": true,
+        "Rukh": true,
+        "Sarbaz": true,
+        "Shah": true,
+        "Sprinkler": true,
+        "Thunder Elemental": true,
+        "Water Elemental": true,
+        "Wazir": true
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "arrayCount(vars.use_aspir.gear.casting) == 0 and vars.use_aspir.gear.inherit_casting_from"
+      ],
+      "commands": [
+        "false and log('Inheriting pre-Aspir casting gear from:', vars.use_aspir.gear.inherit_casting_from)",
+        "setVar('vars.use_aspir.gear.casting', getVar(vars.use_aspir.gear.inherit_casting_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "arrayCount(vars.use_aspir.gear.battle) == 0 and vars.use_aspir.gear.inherit_battle_from"
+      ],
+      "commands": [
+        "false and log('Inheriting post-Aspir battle gear from:', vars.use_aspir.gear.inherit_battle_from)",
+        "setVar('vars.use_aspir.gear.battle', getVar(vars.use_aspir.gear.inherit_battle_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "bt and vars.use_aspir.targets[bt.name]",
+        "bt.distance <= 20",
+        "me.mpp <= vars.use_aspir.max_mpp",
+        "(me.mpp <= vars.use_aspir.max_ws_mpp and not skillchaining('Light', 'Darkness')) or not partyUsingWeaponSkill()",
+        "canUse(vars.use_aspir.spells)"
+      ],
+      "commands": [
+        "arrayCount(vars.use_aspir.gear.casting) > 0 and equipMany(vars.use_aspir.gear.casting)",
+        "use(bt)",
+        "arrayCount(vars.use_aspir.gear.battle) > 0 and equipMany(vars.use_aspir.gear.battle)",
+        "postpone(vars.use_aspir.frequency)"
+      ]
+    }
+  ]
+}

@@ -12,7 +12,7 @@
       "when": [
         "hasSpell(vars.keep_phalanx.spells) and not hasEffectOf(spell) and canUse(spell)"
       ],
-      "commands": ["use(me)", "postpone(spellRecast(spell.name) + 10)"],
+      "commands": ["use(me)", "postpone((spellRecast(spell.name) or 0) + 10)"],
       "frequency": 10
     }
   ]

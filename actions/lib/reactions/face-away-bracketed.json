@@ -1,0 +1,83 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": [
+      "Place this at the very top of your battle section, or at least above any gambit that will turn or move toward the mob.",
+      "This will cause you to turn and face away from the mob when certain abilities are used, and then turn back when other",
+      "abilities are later used."
+    ]
+  },
+  "vars": {
+    "face_away_bracketed": {
+      "Amphitrite": {
+        "initiators": { "Palsynyxis": true },
+        "terminators": { "Painful Whip": true }
+      },
+      "Cloud of Darkness": {
+        "initiators": { "Primordial Surge": true },
+        "terminators": { "Waning Vigor": true, "Expunge": true }
+      },
+      "*": {}
+    }
+  },
+  "actions": [
+    {
+      "commands": ["setVar('vars.face_away_bracketed.trigger', nil)"],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "comment": "This will run exactly once at the start of any battle, and ensure that the trigger is cleared."
+    },
+    {
+      "when": [
+        "vars.face_away_bracketed.trigger",
+        "enemyUsedAbilityNC()",
+        "getMatchingBracketedFaceAwayEnd(vars.face_away_bracketed, enemy_ability, bt)"
+      ],
+      "commands": [
+        "wait(vars.face_away_bracketed.trigger.wait or 2)",
+        "not vars.face_away_bracketed.trigger.allow_offensive_magic and resumeOffensiveMagic()",
+        "not vars.face_away_bracketed.trigger.allow_weapon_skills and resumeWeaponSkills()",
+        "setVar('vars.face_away_bracketed.trigger', nil)",
+        "enemyUsedAbility(enemy_ability.name)",
+        "log(enemy_ability.name, 'detected: END BRACKETED FACE-AWAY SEQUENCE')"
+      ],
+      "comment": "Refer to the comment in the next gambit for notes on enemyUsedAbilityNC/enemyUsedAbility."
+    },
+    {
+      "when": [
+        "bt",
+        "not vars.face_away_bracketed.trigger",
+        "enemyUsedAbilityNC()",
+        "getMatchingBracketedFaceAwayStart(vars.face_away_bracketed, enemy_ability, bt)"
+      ],
+      "commands": [
+        "ability_face_away_start.no_turn and faceEnemy() or faceAway(bt)",
+        "setVar('vars.face_away_bracketed.trigger', ability_face_away_start)",
+        "enemyUsedAbility(enemy_ability.name)",
+        "not vars.face_away_bracketed.trigger.allow_offensive_magic and suppressOffensiveMagic()",
+        "not vars.face_away_bracketed.trigger.allow_weapon_skills and suppressWeaponSkills()",
+        "log(enemy_ability.name, 'detected: BEGIN BRACKETED FACE-AWAY SEQUENCE ====== ')",
+        "vars.face_away_bracketed.trigger.distance and align(bt, nil, vars.face_away_bracketed.trigger.distance, 8, true)",
+        "vars.face_away_bracketed.trigger.distance and (vars.face_away_bracketed.trigger.no_turn and faceEnemy() or faceAway(bt))",
+        "wait(2)"
+      ],
+      "delay": 0,
+      "comment": [
+        "The enemyUsedAbilityNC function does [N]ot [C]lear the ability it detects. This allows us",
+        "us further check the ability against the bracketed set while still allowing other gambits",
+        "to detect the ability if we don't have rules for it.",
+        "By calling enemyUsedAbility with the specific matching ability name in the commands",
+        "section, we ensure that it is only cleared once we've actually done something with it."
+      ]
+    },
+    {
+      "when": ["vars.face_away_bracketed.trigger"],
+      "commands": [
+        "vars.face_away_bracketed.trigger.no_turn and faceEnemy() or faceAway(bt)",
+        "wait(1)"
+      ],
+      "delay": 0
+    }
+  ]
+}

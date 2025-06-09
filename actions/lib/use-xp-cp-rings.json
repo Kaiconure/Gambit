@@ -13,7 +13,7 @@
       ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
-        "wait(6.0, 'pause-follow')",
+        "wait(7, 'pause-follow')",
         "useItem(me)"
       ],
       "frequency": 15,
@@ -22,22 +22,39 @@
     {
       "when": [
         "me.level < 99 or vars.use_xp_cp_rings.ignore_xp_level_cap",
+        "me.level >= vars.use_xp_cp_rings.min_xp_level",
         "not hasBuff('Dedication', 'Commitment')",
         "canUseItem(vars.use_xp_cp_rings.xp_rings)"
       ],
       "commands": [
         "equip(vars.use_xp_cp_rings.slot)",
-        "wait(6.0, 'pause-follow')",
+        "wait(7, 'pause-follow')",
         "useItem(me)"
       ],
       "frequency": 15,
       "comment": "Use the first available XP ring if we don't have the Dedication effect. Only used if level is below 99."
+    },
+    {
+      "when": [
+        "me.level == 99",
+        "hasCappedMerits()",
+        "not hasBuff(\"Emporox's Gift\")",
+        "canUseItem(\"Emporox's Ring\")"
+      ],
+      "commands": [
+        "equip(vars.use_xp_cp_rings.slot)",
+        "wait(7, 'pause-follow')",
+        "useItem(me)"
+      ],
+      "frequency": 15,
+      "comment": "Use Emperox's Ring when we're at max level and max limits."
     }
   ],
   "vars": {
     "use_xp_cp_rings": {
       "ignore_master_levels": false,
       "ignore_xp_level_cap": false,
+      "min_xp_level": 10,
       "slot": "ring1",
       "cp_rings": [
         "Endorsement Ring",

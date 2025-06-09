@@ -1,0 +1,124 @@
+{
+  "vars": {
+    "crafting": {
+      "food": null,
+      "crystal": null,
+      "name": null,
+      "craft_key": null,
+      "ingredients": null,
+      "disable_on_ingredients": true,
+      "disable_on_inventory": false,
+      "sell_npc": null,
+      "sell_frequency": 120,
+      "require_imagery": null,
+      "crystal_clusters": {
+        "Fire Crystal": "Fire Cluster",
+        "Ice Crystal": "Ice Cluster",
+        "Wind Crystal": "Wind Cluster",
+        "Earth Crystal": "Earth Cluster",
+        "Lightng. Crystal": "Lightning Cluster",
+        "Lightning Crystal": "Lightning Cluster",
+        "Water Crystal": "Water Cluster",
+        "Light Crystal": "Light Cluster",
+        "Dark Cluster": "Dark Cluster"
+      }
+    }
+  },
+  "macros": {
+    "craft_has_ingredients": [
+      "(arrayLength(vars.crafting.ingredients) > 0 and findItemsInInventory(vars.crafting.ingredients))"
+    ],
+    "craft_has_crystal": [
+      "(vars.crafting.crystal and findItemsInInventory(vars.crafting.crystal))"
+    ],
+    "craft_has_all": [
+      "$macro(craft_has_ingredients)",
+      "$macro(craft_has_crystal)"
+    ]
+  },
+  "actions": [
+    {
+      "commands": [
+        "log('NOTE: Gambit crafting requires that the [craft] addon be installed!')",
+        "sendCommand('lua r craft')"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": ["vars.crafting.sell_npc"],
+      "commands": [
+        "log('NOTE: Gambit craft sales require the [SellNPC] addon to be installed!')",
+        "sendCommand('lua r SellNPC')"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "me.is_idle",
+        "vars.crafting.name",
+        "vars.crafting.sell_npc",
+        "findItemsInInventory(vars.crafting.name, '-silent')"
+      ],
+      "commands": [
+        "sendCommand('SellNPC \"%s\"', vars.crafting.name)",
+        "wait(1)",
+        "tap(vars.crafting.sell_npc)",
+        "wait(1)",
+        "postpone(vars.crafting.sell_frequency)"
+      ],
+      "frequency": 1
+    },
+    {
+      "when": ["freeInventorySlots() == 0"],
+      "commands": [
+        "log('CRAFTING: Your inventory is full.')",
+        "vars.crafting.disable_on_inventory and sendCommand('gbt disable') or wait(10)"
+      ]
+    },
+    {
+      "when": [
+        "me.is_idle",
+        "vars.crafting.name",
+        "not $macro(craft_has_crystal)",
+        "findItemsInInventory(vars.crafting.crystal_clusters[vars.crafting.crystal])",
+        "freeInventorySlots() > 0"
+      ],
+      "commands": ["useItem(me)", "wait(1)"],
+      "frequency": 2
+    },
+    {
+      "when": [
+        "me.is_idle",
+        "vars.crafting.name",
+        "arrayLength(vars.crafting.ingredients) == 0 or \\",
+        "  not findItemsInInventory(vars.crafting.crystal) or \\",
+        "  not findItemsInInventory(vars.crafting.ingredients)"
+      ],
+      "commands": [
+        "log('CRAFTING: Insufficient ingredients available for:', vars.crafting.name)",
+        "vars.crafting.disable_on_ingredients and sendCommand('gbt disable') or wait(10)"
+      ]
+    },
+    {
+      "when": [
+        "me.is_idle",
+        "vars.crafting.name",
+        "$macro:craft_has_all",
+        "freeInventorySlots() > 0"
+      ],
+      "commands": [
+        "vars.crafting.food and not hasBuff('Food') and canUseItem(vars.crafting.food) and use(me) and wait(2)",
+        "sendCommand('craft clear; wait 0.25; craft make \"%s\"', vars.crafting.craft_key or vars.crafting.name)"
+      ],
+      "frequency": 10
+    },
+    {
+      "comment": [
+        "==========================================================================",
+        "Ensures that other later gambits do not run while this is active."
+      ],
+      "when": ["1 == 1"],
+      "commands": ["wait(1)"]
+    }
+  ]
+}

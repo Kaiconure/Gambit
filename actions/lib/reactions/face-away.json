@@ -1,0 +1,20 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "notes": [
+      "Place this at the very top of your battle section, or at least above any gambit that will turn or move toward the mob.",
+      "This will pull in all of the face away gambits, to ensure you turn away from mobs at the right time."
+    ]
+  },
+  "actions": [
+    {
+      "import": "reactions/face-away-on-ability"
+    },
+    {
+      "import": "reactions/face-away-bracketed"
+    },
+    {
+      "import": "reactions/face-away-on-spell"
+    }
+  ]
+}

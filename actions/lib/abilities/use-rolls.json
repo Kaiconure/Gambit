@@ -7,33 +7,140 @@
       "rolls": ["Corsair's Roll", "Chaos Roll"],
       "allow_crooked_cards": ["Corsair's Roll"],
       "logic": {
+        "Allies' Roll": {
+          "snake_eye": [2, 10],
+          "double_up": [1, 2, 4, 5],
+          "data": {
+            "lucky": 3,
+            "unlucky": 10,
+            "summary": "Enhances Skillchain damage and skillchain accuracy for party members within area of effect."
+          }
+        },
+        "Blitzer's Roll": {
+          "snake_eye": [3, 9, 10],
+          "double_up": [1, 2, 3, 5],
+          "data": {
+            "lucky": 4,
+            "unlucky": 9,
+            "summary": "Reduces melee attack delay for party members within area of effect."
+          }
+        },
+        "Bolter's Roll": {
+          "snake_eye": [2, 9, 10],
+          "double_up": [1, 2, 4, 5],
+          "data": {
+            "lucky": 3,
+            "unlucky": 9,
+            "summary": "Increases Movement Speed for party members within area of effect."
+          }
+        },
         "Chaos Roll": {
           "snake_eye": [3, 8, 10],
-          "double_up": [1, 2, 3, 5]
+          "double_up": [1, 2, 3, 5],
+          "data": {
+            "lucky": 4,
+            "unlucky": 8,
+            "sub": "DRK",
+            "summary": "Enhances attacks for party members within area of effect."
+          }
+        },
+        "Choral Roll": {
+          "snake_eye": [1, 6, 10],
+          "double_up": [1, 3, 4, 5],
+          "data": {
+            "lucky": 2,
+            "unlucky": 6,
+            "sub": "BRD",
+            "summary": "Decreases spell interruption rate for party members within area of effect."
+          }
         },
         "Corsair's Roll": {
           "snake_eye": [4, 9, 10],
-          "double_up": [1, 2, 3, 4]
+          "double_up": [1, 2, 3, 4],
+          "data": {
+            "lucky": 5,
+            "unlucky": 9,
+            "summary": "Increases the amount of Experience Points earned by party members within area of effect."
+          }
         },
         "Fighter's Roll": {
           "snake_eye": [4, 9, 10],
-          "double_up": [1, 2, 3, 4]
+          "double_up": [1, 2, 3, 4],
+          "data": {
+            "lucky": 5,
+            "unlucky": 9,
+            "sub": "WAR",
+            "summary": "Improves \"Double Attack\" rate for party members within area of effect."
+          }
+        },
+        "Evoker's Roll": {
+          "snake_eye": [4, 9, 10],
+          "double_up": [1, 2, 3, 4],
+          "data": {
+            "lucky": 5,
+            "unlucky": 9,
+            "sub": "SMN",
+            "summary": "Gradually restores MP for party members within area of effect."
+          }
+        },
+        "Healer's Roll": {
+          "snake_eye": [2, 7, 10],
+          "double_up": [1, 2, 4, 5],
+          "data": {
+            "lucky": 3,
+            "unlucky": 7,
+            "sub": "WHM",
+            "summary": "Increases potency of \"Cure\" effect received for party members within area of effect."
+          }
         },
         "Hunter's Roll": {
           "snake_eye": [3, 8, 10],
-          "double_up": [1, 2, 3, 5]
+          "double_up": [1, 2, 3, 5],
+          "data": {
+            "lucky": 4,
+            "unlucky": 8,
+            "sub": "RNG",
+            "summary": "Enhances accuracy and ranged accuracy for party members within area of effect."
+          }
         },
         "Samurai Roll": {
           "snake_eye": [1, 6, 10],
-          "double_up": [1, 3, 4, 5]
+          "double_up": [1, 3, 4, 5],
+          "data": {
+            "lucky": 2,
+            "unlucky": 6,
+            "sub": "SAM",
+            "summary": "Enhances \"Store TP\" effect for party members within area of effect."
+          }
         },
         "Tactician's Roll": {
           "snake_eye": [4, 8, 10],
-          "double_up": [1, 2, 3, 4]
+          "double_up": [1, 2, 3, 4],
+          "data": {
+            "lucky": 5,
+            "unlucky": 8,
+            "summary": "Grants a \"Regain\" effect to party members within area of effect."
+          }
+        },
+        "Warlock's Roll": {
+          "snake_eye": [3, 8, 10],
+          "double_up": [1, 2, 3, 5],
+          "data": {
+            "lucky": 4,
+            "unlucky": 8,
+            "sub": "RDM",
+            "summary": "Enhances magic accuracy for party members within area of effect."
+          }
         },
         "Wizard's Roll": {
           "snake_eye": [4, 9, 10],
-          "double_up": [1, 2, 3, 4]
+          "double_up": [1, 2, 3, 4],
+          "data": {
+            "lucky": 5,
+            "unlucky": 9,
+            "sub": "BLM",
+            "summary": "Enhances magic attack for party members within area of effect."
+          }
         }
       }
     }
@@ -44,7 +151,12 @@
         "iterate(vars.use_rolls.rolls)",
         "canUse(result) and not hasEffectOf(result)"
       ],
-      "commands": ["use(me)", "wait(1)"],
+      "commands": [
+        "any(result, vars.use_rolls.allow_crooked_cards) and canUse('Crooked Cards') and use(me) and wait(0.5)",
+        "use(me, result)",
+        "vars.use_rolls.logic[result] and vars.use_rolls.logic[result].data and vars.use_rolls.logic[result].data.summary and log(result .. ':', vars.use_rolls.logic[result].data.summary)",
+        "wait(1)"
+      ],
       "frequency": 15
     },
     {
@@ -57,7 +169,7 @@
       "commands": [
         "log('Rolling snake eyes on', latestRoll.name, 'from', latestRoll.count)",
         "use(me, 'Snake Eye')",
-        "wait(0.5)",
+        "wait(1.0)",
         "use(me, 'Double-Up')",
         "wait(1.0)"
       ]

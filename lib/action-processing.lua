@@ -21,8 +21,8 @@ function recompileActions()
     actionStateManager.needsRecompile = true
 end
 
-function setSkillchain(name)
-    actionStateManager:setSkillchain(name)
+function setSkillchain(name, mob)
+    actionStateManager:setSkillchain(name, mob)
 end
 
 function markMobAbilityStart(mob, ability, targets)
@@ -66,20 +66,22 @@ function sendActionCommand(
 
     local movementJob = pauseFollow and smartMove:cancelJob()
     if command and command ~= '' then
-        writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
+        end
         windower.send_command(command)
     end
 
     if commandDuration > 0 then
-        coroutine.sleep(commandDuration)
+        coroutine.sleep(commandDuration)        
+    end
 
-        -- Kick the movement job back on, if any
-        if movementJob then
-            smartMove:reschedule(movementJob)
-        elseif not pauseFollow then
-            -- We'll reset jitter again once the command is done
-            smartMove:resetJitter()
-        end
+    -- Kick the movement job back on, if any
+    if movementJob then
+        smartMove:reschedule(movementJob)
+    elseif not pauseFollow then
+        -- We'll reset jitter again once the command is done
+        smartMove:resetJitter()
     end
 
     -- TODO: Maybe see if there's a better way to figure this out dynamically?
@@ -239,12 +241,14 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
         context.action.incomplete = false
     end
 
-    -- In debug mode, let's log that we've finished our work here
-    writeTrace('%s: Cast time %s / Observer time %s':format(
-        text_spell(spell.name, Colors.trace),
-        pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
-        pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)        
-    ))
+    -- In trace mode, let's log that we've finished our work here
+    if settings.verbosity >= VERBOSITY_TRACE then
+        writeTrace('%s: Cast time %s / Observer time %s':format(
+            text_spell(spell.name, Colors.trace),
+            pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
+            pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)        
+        ))
+    end
 
     return complete
 end
@@ -257,9 +261,9 @@ function string_trim(s)
     return ''
  end
 
---------------------------------------------------------------------------------------
+ --------------------------------------------------------------------------------------
 -- Recompiles the specified action type
-local function compileActions(actionType, rawActions)
+local function compileActions(actionType, parent, rawActions)
     --writeMessage(string.format('Recompiling [%s] actions...', actionType))
 
     if isArray(rawActions) then
@@ -271,17 +275,44 @@ local function compileActions(actionType, rawActions)
             -- If the "when" clause was broken into an array, we'll combine it all into
             -- a single parenthesised AND'ed expression here.
             if type(action.when) == 'table' then
-                local count = 0
+                local and_count = 0
                 local combined = ''
+                local expression = ''
+                local expression_count = 0
+                local has_multiline = false
                 for i, _when in ipairs(action.when) do
                     if type(_when) == 'string' then
                         _when = trimString(_when)
                         if _when ~= '' then
-                            combined = combined .. (count > 0 and ' and ' or '') .. '(' .. _when .. ')'
-                            count = count + 1
+                            local len = #_when
+                            if _when[len] == '\\' then
+                                expression = expression .. (expression_count > 0 and ' ' or '') .. string.sub(_when, 1, len - 1) 
+                                expression_count = expression_count + 1
+                                has_multiline = true                                
+                            else
+                                combined = combined .. 
+                                    (and_count > 0 and ' and ' or '') .. 
+                                    '(' .. ((expression_count > 0 and (expression .. ' ') or '') .. _when) .. ')'
+
+                                and_count = and_count + 1
+                                expression = ''
+                                expression_count = 0
+                            end
                         end
                     end
                 end
+
+                if expression ~= '' then
+                    if combined == '' then
+                        combined = '(' .. expression .. ')'
+                    else
+                        combined = combined .. ' and (' .. expression .. ')'
+                    end
+                end
+
+                -- if has_multiline then
+                --     writeMessage('multiline: ' .. combined)
+                -- end
 
                 action.when = combined
             end
@@ -318,7 +349,7 @@ local function compileActions(actionType, rawActions)
                     end
 
                     -- Certain action types will have a built in default delay
-                    if actionType == 'battle' then
+                    if actionType == 'battle' or actionType == 'idle_battle' then
                         -- Battle actions will default to a delay of 2 unless otherwise specified
                         if tonumber(action.delay) == nil then
                             action.delay = 2
@@ -361,6 +392,13 @@ local function compileActions(actionType, rawActions)
 
             if shouldAdd then
                 _temp[#_temp + 1] = action
+
+                if actionType == 'functions' or type(action.name) == 'string' then
+                    if type(action.name) == 'string' then
+                        --writeMessage(text_gray('  Adding action function: %s'):format(text_green(action.name, Colors.gray)))
+                        actionStateManager.functions[action.name] = action
+                    end
+                end
             end
         end
 
@@ -391,12 +429,16 @@ local function compileAllActions()
     actionStateManager:reset()
 
     local actions = settingsCopy.actions
+    actionStateManager.functions = {}
 
-    compileActions('battle',    actions and actions.battle or {})
-    compileActions('pull',      actions and actions.pull or {})
-    compileActions('idle',      actions and actions.idle or {})
-    compileActions('resting',   actions and actions.resting or {})
-    compileActions('dead',      actions and actions.dead or {})
+    compileActions('battle',        actions, actions and actions.battle or {})
+    compileActions('idle_battle',    actions, actions and actions.idle_battle or {})
+    compileActions('pull',          actions, actions and actions.pull or {})
+    compileActions('idle',          actions, actions and actions.idle or {})
+    compileActions('resting',       actions, actions and actions.resting or {})
+    compileActions('dead',          actions, actions and actions.dead or {})
+    compileActions('mounted',       actions, actions and actions.mounted or {})
+    compileActions('functions',     actions, actions and actions.functions or {})
 
     actionStateManager.vars = actions and actions.vars or {}
 
@@ -410,7 +452,9 @@ local function getNextBattleAction(context)
     if actionStateManager:isActionSnoozing() then
         --return nil
         -- TODO: Nothing for now, let's just log
-        writeTrace('WARNING: actionStateManager:isActionSnoozing() returned true (NO-OP for now)')
+        if settings.verbosity >= VERBOSITY_TRACE then
+            writeTrace('WARNING: actionStateManager:isActionSnoozing() returned true (NO-OP for now)')
+        end
     end
 
     actionStateManager:setActionType(context.actionType)
@@ -455,19 +499,33 @@ local function getNextBattleAction(context)
                 context.spell_recast            = nil   -- Recast (in seconds) of the current spell
                 context.ability                 = nil   -- Current ability
                 context.ability_recast          = nil   -- Recast (in seconds) of the current ability
+                context.ability_face_away       = nil   -- The currently triggered ability face away
+                context.spell_face_away         = nil   -- The currently triggered spell face away
+                context.ability_face_away_start = nil   -- The currently triggered bracketed ability face away starter
+                context.ability_face_away_end   = nil   -- The currently triggered bracketed ability face away closer
                 context.item                    = nil   -- Current item info [Item resource is at context.item.item]
                 context.ranged                  = nil   -- Current ranged attack equipment and ammo info
                 context.effect                  = nil   -- Current buff/effect
+                context.effect_count            = 0     -- Current buff/effect count (e.g. you could have multiple Ballad effects at once)
                 context.member                  = nil   -- The result of a targeting enumerator
                 context.mob                     = nil   -- The result of a mob search iterator
+                context.mob_by_target           = nil   -- The result of a successful getMobByTarget operation
                 context.point                   = nil   -- The result of a position lookup
                 context.result                  = nil   -- The result of the latest arrayiterator operation
+                context.player_result           = nil   -- The result of the latest find player operation
+                context.find_result             = nil   -- The result of a general find by name operation
+                context.nearest_result          = nil   -- The result of a nearest operation
+                context.farthest_result         = nil   -- The result of a farthest/furthest operation
+                context.furthest_result         = nil   -- The (alternate) result of a farthest/furthest operation
                 context.results                 = { }   -- The results of all current array iterator operations
                 context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
                 context.enemy_ability           = nil   -- The current mob ability
+                context.enemy_spell             = nil   -- The current mob spell
+                context.enemy_spell_target      = nil   -- The current mob spell's target
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
                 context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
-
+                context.skillchain_age          = math.huge -- The time at which the latest skillchain occurred
+                
                 -- Reload the enumerator data
                 if 
                     action.enumerators and
@@ -491,6 +549,8 @@ local function getNextBattleAction(context)
                 setfenv(action._whenFn, context)
 
                 if action._whenFn() then
+                    --writeMessage('action scope: %s, context scope: %s':format(action.lastBattleScope or 'n/a', context.battleScope or 'n/a'))
+
                     -- If this action will get run, we'll need to schedule the next run time. We'll actually
                     -- update this later, after the actions are executed, based on the time they complete.
                     action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
@@ -498,12 +558,13 @@ local function getNextBattleAction(context)
                     -- Save the scope that was present when this action was triggered.
                     action.lastBattleScope = context.battleScope
 
-                    writeDebug('Condition met %s %s [scope: %s]':format(
-                        text_action(context.actionType .. '.' .. i, Colors.debug),
-                        --action.when
-                        text_green(action.when, Colors.debug),
-                        text_gray(tostring(action.lastBattleScope), Colors.debug)
-                    ))
+                    if settings.verbosity >= VERBOSITY_DEBUG then
+                        writeDebug('Condition met %s %s [scope: %s]':format(
+                            text_action(context.actionType .. '.' .. i, Colors.debug),
+                            text_green(action.when, Colors.debug),
+                            text_gray(tostring(action.lastBattleScope), Colors.debug)
+                        ))
+                    end
 
                     --print(action.when)
 
@@ -563,7 +624,7 @@ function processNextAction(context)
     return executeBattleAction(context, action)
 end
 
-local function doNextActionCycle(time, player)
+local function doNextActionCycle(time, player, party)
     local playerStatus = player.status
 
     local mob = globals.target:mob()
@@ -573,6 +634,7 @@ local function doNextActionCycle(time, player)
     local actionsExecuted = false
     local restingActionsExecuted = false
     local idleActionsExecuted = false
+    local idleBattleActionsExecuted = false
     local battleActionsExecuted = false
     local pullActionsExecuted = false
 
@@ -582,6 +644,9 @@ local function doNextActionCycle(time, player)
     -- We''l start by assuming that we're idle if there's no mob, or the mob isn't engaged.
     -- Note that if mobs are aggroing, we'll always get those back first.
     local isIdle = player.status ~= STATUS_ENGAGED and (mob == nil or mob.status ~= STATUS_ENGAGED)
+
+    -- Determine if we're in an idle battle mode
+    local isIdleBattle = false
     
     -- Determine if we're in an idling state (forced idle until a given time unless aggro'd). See the above
     -- initialization of isIdle to see the situations that would force us out of idling.
@@ -590,15 +655,22 @@ local function doNextActionCycle(time, player)
     -- Resting: Execute any actions, and bail
     local isResting = playerStatus == STATUS_RESTING
     if isResting then
-        local context = ActionContext.create('resting', time, mob, mobTime, battleScope)
-        local action = processNextAction(context);
+        local context = ActionContext.create('resting', time, mob, mobTime, battleScope, party)
+        local action = processNextAction(context)
+        return
+    end
+
+    local isMounted = playerStatus == 85 or playerStatus == 5
+    if isMounted then
+        local context = ActionContext.create('mounted', time, mob, mobTime, battleScope, party)
+        local action = processNextAction(context)
         return
     end
 
     -- Death: Execute any actions, and bail
     local isDead = player.vitals.hp <= 0
     if isDead then
-        local context = ActionContext.create('dead', time, nil, mobTime, battleScope)
+        local context = ActionContext.create('dead', time, nil, mobTime, battleScope, party)
         local action = processNextAction(context);
         return
     end
@@ -607,91 +679,116 @@ local function doNextActionCycle(time, player)
     ----------------------------------------------------------------------------------------------------
     -- Executed when we are disengaged and no mobs are aggroing us
     if isIdle then        
-        local context = ActionContext.create('idle', time, mob, mobTime, battleScope)
+        local idleContext = ActionContext.create('idle', time, mob, mobTime, battleScope, party)        
 
-        -- We'll ensure that we're facing the target mob at this point
-        -- if mob and not context.facingEnemy() then
-        --     context.faceEnemy()
-        -- end
+        -- Idle battle actions will always execute alongside idle actions. In a given cycle,
+        -- the idle battle actions will always execute first.
+        if 
+            settings.strategy == 'manual' and
+            not idleContext.me.is_party_leader and
+            idleContext.party_leader_bt
+        then
+            isIdleBattle = true
 
-        local action = processNextAction(context);
+            local idleBattleContext = ActionContext.create('idle_battle', time, idleContext.party_leader_bt, actionStateManager:elapsedTimeInType(), battleScope, party)
+           
+            if idleBattleContext then
+                local action = processNextAction(idleBattleContext);
 
-        actionsExecuted = action ~= nil
-        idleActionsExecuted = actionsExecuted
+                actionsExecuted = action ~= nil
+                idleBattleActionsExecuted = actionsExecuted
+            end
+        end
+
+        if idleContext and not idleBattleActionsExecuted then
+            local action = processNextAction(idleContext);
+
+            actionsExecuted = action ~= nil
+            idleActionsExecuted = actionsExecuted
+        end
 
         -- writeDebug('Is timed idle? ' .. (isTimedIdling and 'true' or 'false')
         --     .. ' Actions executed? ' .. (actionsExecuted and 'true' or 'false'))
     end
 
-    -- Battle
-    ----------------------------------------------------------------------------------------------------
-    -- Executed when:
-    --  1. We have a target AND
-    --  2. We are engaged AND
-    --  3. The mob is engaged
-    local isBattle = false
-    if not isTimedIdling then
-        if not actionsExecuted then
-            if playerStatus == STATUS_ENGAGED and hasPullableMob then
-                --local mob = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('bt')
-
-                -- Determine if the target mob is engaged
-                local isMobEngaged = mob and (mob.claim_id > 0 and isPartyId(mob.claim_id) and mob.status == STATUS_ENGAGED)
-
-                -- If the target mob is already engaged, it's not pullable (no need to pull)
-                hasPullableMob = not isMobEngaged
-
-                if isMobEngaged then
-                    local context = ActionContext.create('battle', time, mob, mobTime, battleScope)
-                    local action = processNextAction(context);
-
-                    isBattle = true
-                    actionsExecuted = action ~= nil
-                    battleActionsExecuted = actionsExecuted
-                end
-            end
-        end
-
-        -- Pull
+    if not isIdleBattle then
+        -- Battle
         ----------------------------------------------------------------------------------------------------
         -- Executed when:
-        --  1. We have a target that's not yet engaged AND
-        --  2. There are no idle actions remaining to run.
-        --  3. We're not in a forced/timed idle state.
-        if not actionsExecuted and not isTimedIdling then
-            if hasPullableMob and not isBattle then
-                local command = ''
-                local commandDelay = 0
+        --  1. We have a target AND
+        --  2. We are engaged AND
+        --  3. The mob is engaged
+        local isBattle = false
+        if not isTimedIdling then
+            if not actionsExecuted then
+                if playerStatus == STATUS_ENGAGED and hasPullableMob then
+                    --local mob = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('bt')
 
-                -- Lock on if necessary
-                if player.target_index ~= mob.index then
-                    command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
-                    commandDelay = commandDelay + 0.5
+                    -- Determine if the target mob is engaged
+                    local isMobEngaged = 
+                        mob and 
+                        mob.status == STATUS_ENGAGED and
+                        (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD) or isPartyId(mob.claim_id)))
+
+                    -- If the target mob is already engaged, it's not pullable (no need to pull)
+                    hasPullableMob = not isMobEngaged
+
+                    -- TODO: Multi-party mobs switch between idle/pull and battle because of the party claim check. Think about this.
+
+                    if isMobEngaged then
+                        local context = ActionContext.create('battle', time, mob, mobTime, battleScope, party)
+                        local action = processNextAction(context);
+
+                        isBattle = true
+                        actionsExecuted = action ~= nil
+                        battleActionsExecuted = actionsExecuted
+                    end
                 end
+            end
 
-                -- Engage if necessary
-                if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
-                    command = command .. string.format('input /attack <t>; ')
-                    commandDelay = commandDelay + 1
-                end
+            -- Pull
+            ----------------------------------------------------------------------------------------------------
+            -- Executed when:
+            --  1. We have a target that's not yet engaged AND
+            --  2. There are no idle actions remaining to run.
+            --  3. We're not in a forced/timed idle state.
+            if not actionsExecuted and not isTimedIdling then
+                if hasPullableMob and not isBattle then
+                    local command = ''
+                    local commandDelay = 0
+                    local hasCommand = false
 
-                if commandDelay > 0 then
-                    sendActionCommand(command, nil, commandDelay)
-                end
+                    -- Lock on if necessary
+                    if player.target_index ~= mob.index then
+                        lockTarget(player, mob, true)
+                        --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
+                        --hasCommand = true
+                    end
 
-                -- Give some time for us to establish and engage with a new target before jumping straight to the pull
-                if mobTime > 1 then
-                    local context = ActionContext.create('pull', time, mob, mobTime, battleScope)
+                    -- Engage if necessary
+                    if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
+                        command = command .. string.format('input /attack <t>; ')
+                        hasCommand = true
+                    end
 
-                    -- We'll ensure that we're facing the target mob at this point
-                    -- if not context.facingEnemy() then
-                    --     context.faceEnemy()
-                    -- end
+                    if hasCommand then
+                        sendActionCommand(command, nil, 0.25)
+                    end
 
-                    local action = processNextAction(context)
+                    -- Give some time for us to establish and engage with a new target before jumping straight to the pull
+                    if mobTime > 1 then
+                        local context = ActionContext.create('pull', time, mob, mobTime, battleScope, party)
 
-                    actionsExecuted = action ~= nil
-                    pullActionsExecuted = actionsExecuted
+                        -- We'll ensure that we're facing the target mob at this point
+                        -- if not context.facingEnemy() then
+                        --     context.faceEnemy()
+                        -- end
+
+                        local action = processNextAction(context)
+
+                        actionsExecuted = action ~= nil
+                        pullActionsExecuted = actionsExecuted
+                    end
                 end
             end
         end
@@ -701,7 +798,10 @@ end
 --------------------------------------------------------------------------------------
 -- Processes battle actions in the background
 function cr_actionProcessor()
+    local GARBAGE_COLLECTION_INTERVAL = 30
+
     local startTime = 0 --os.clock()
+    local latestGarbageCollection = os.clock()
 
     while true do
         local sleepTimeSeconds = 0.5
@@ -710,9 +810,32 @@ function cr_actionProcessor()
             compileAllActions()
         end
 
-        if globals.enabled then
-            local time = os.clock() - startTime
-            local player = windower.ffxi.get_player()
+        local now = os.clock()
+        local time = now - startTime
+        local party = windower.ffxi.get_party()
+        local player = windower.ffxi.get_player()
+        local zoneTime = os.clock() - (globals.zoneEntryTime or 0)
+
+        -- Perform background garbage collection operations. These will only occur when we are
+        -- not in combat, to ensure that there's no interference with time-sensitive gambits.
+        local garbageCollectionAge = now - latestGarbageCollection
+        if 
+            garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL and
+            (player == nil or player.in_combat)
+        then
+            actionStateManager:clearOthersSpells(true)
+            actionStateManager:purgeStaleMobAbilities()
+            actionStateManager:purgeWeaponSkills()
+            actionStateManager:purgeSkillchains()
+            latestGarbageCollection = os.clock()
+        end
+
+        if 
+            globals.enabled and
+            player and
+            player.status ~= STATUS_EVENT and
+            zoneTime >= 5
+        then
             local me = windower.ffxi.get_mob_by_target('me')
 
             if 
@@ -724,19 +847,20 @@ function cr_actionProcessor()
                 local isResting = (playerStatus == STATUS_RESTING)              -- Resting
                 local isDead = player.vitals.hp <= 0                            -- Dead
 
-                if
-                    not isMounted
-                then
+                if 1 == 1 then
                     actionStateManager:tick(time)
 
                     -- As long as we're not dead or resting, we can process targeting info
                     if 
                         not isDead
                     then
-                        processTargeting()
+                        processTargeting(player, party)
                     end
 
-                    doNextActionCycle(time, player)
+                    -- Refresh the player
+                    player = windower.ffxi.get_player()
+
+                    doNextActionCycle(time, player, party)
                 else
                     sleepTimeSeconds = 2
                 end
@@ -755,6 +879,15 @@ function cr_actionProcessor()
                 end
             end
         else
+            -- We will create a context when disabled. This simply ensures that we have context-based
+            -- state changes available and up to date once we re-enable.
+            local context = ActionContext.create('idle', 
+                time,
+                nil,
+                0,
+                -1,
+                party)
+
             -- Wake from idle if we're disabled
             actionStateManager.idleWakeTime = 0
             sleepTimeSeconds = 2

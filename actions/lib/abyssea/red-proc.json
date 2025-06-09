@@ -1,0 +1,98 @@
+{
+  "vars": {
+    "abyssea": {
+      "weapons": null,
+      "red_proc": {
+        "weapons": null,
+        "all_ws": [
+          "Cyclone",
+          "Energy Drain",
+          "Red Lotus Blade",
+          "Seraph Blade",
+          "Freeze Bite",
+          "Shadow of Death",
+          "Raiden Thrust",
+          "Blade: Ei",
+          "Tachi: Jinpu",
+          "Tachi: Koki",
+          "Seraph Strike",
+          "Earth Crusher",
+          "Sunburst"
+        ]
+      }
+    }
+  },
+  "actions": [
+    {
+      "commands": [
+        "setVar('vars.abyssea.red_proc.used_ws', {})",
+        "setVar('vars.abyssea.red_proc.used_count', 0)",
+        "setVar('vars.abyssea.red_proc.usable_ws', {})",
+        "setVar('vars.abyssea.red_proc.reset', true)",
+        "setVar('vars.abyssea.red_proc._weapons', arrayLength(vars.abyssea.red_proc.weapons) > 0 and vars.abyssea.red_proc.weapons or vars.abyssea.weapons)"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "comment": "This clears the list of already-tried weapon skills at the start of any fight."
+    },
+    {
+      "when": ["vars.abyssea.red_proc.reset"],
+      "commands": [
+        "setVar('vars.abyssea.red_proc.usable_ws', usableWeaponSkills(vars.abyssea.red_proc.all_ws))",
+        "setVar('vars.abyssea.red_proc.used_ws', nil)",
+        "setVar('vars.abyssea.red_proc.used_count', 0)",
+        "setVar('vars.abyssea.red_proc.reset', false)",
+        "log('Identified', arrayCount(vars.abyssea.red_proc.usable_ws), 'usable RED PROC weapon skill(s)!')"
+      ],
+      "delay": 0,
+      "frequency": 0,
+      "scope": "battle",
+      "comment": "Resets the current weapon skill pool based on the currently equipped weapon type."
+    },
+    {
+      "when": [
+        "hasAllFieldNames(vars.abyssea.red_proc.used_ws, vars.abyssea.red_proc.usable_ws) or \\",
+        "  arrayLength(vars.abyssea.red_proc.usable_ws) == 0",
+        "arrayLength(vars.abyssea.red_proc._weapons) > 0 and iterate(vars.abyssea.red_proc._weapons)",
+        "findUnequippedItem(result)"
+      ],
+      "commands": [
+        "log('All applicable RED PROC weapons skills have been used, equipping', result)",
+        "equip(item)",
+        "setVar('vars.abyssea.red_proc.reset', true)",
+        "wait(2)"
+      ],
+      "frequency": 1,
+      "scoped_enumerators": true
+    },
+    {
+      "when": [
+        "arrayLength(vars.abyssea.red_proc._weapons) == 0",
+        "hasAllFieldNames(vars.abyssea.red_proc.used_ws, vars.abyssea.red_proc.usable_ws)"
+      ],
+      "commands": [
+        "log('All applicable RED PROC weapon skills have been used, restting...')",
+        "setVar('vars.abyssea.red_proc.reset', true)",
+        "wait(2)"
+      ],
+      "frequency": 5
+    },
+    {
+      "when": [
+        "bt",
+        "iterate(vars.abyssea.red_proc.usable_ws)",
+        "not getVarField('vars.abyssea.red_proc.used_ws', result)",
+        "canUseWeaponSkill(result)"
+      ],
+      "commands": [
+        "log('Using RED PROC weapon skill:', weapon_skill.name)",
+        "setVarField('vars.abyssea.red_proc.used_ws', result, true)",
+        "useWeaponSkill()",
+        "varIncrement('vars.abyssea.red_proc.used_count')"
+      ],
+      "delay": 7,
+      "scoped_enumerators": true
+    }
+  ]
+}

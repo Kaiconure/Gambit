@@ -14,7 +14,10 @@
         "hasSpell(vars.keep_bio.spells) and canUse(spell)",
         "not hasEffectOf(bt, spell)"
       ],
-      "commands": ["useSpell()", "postpone(spellRecast(spell.name) + 5)"],
+      "commands": [
+        "useSpell()",
+        "postpone((spellRecast(spell.name) or 0) + 5)"
+      ],
       "frequency": 1
     }
   ]
