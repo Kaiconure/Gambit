@@ -287,7 +287,7 @@ handlers['config'] = function(args)
     if distancez > 0 then
         distancez = tonumber(args[distancez + 1])
         if distancez and distancez >= 0 then
-            distancez = math.clamp(distancez, 3, 50)
+            distancez = math.clamp(distancez, 1, 50)
             settings.maxDistanceZ = distancez
             hasChanges = true
         end

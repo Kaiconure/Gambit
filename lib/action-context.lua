@@ -1673,6 +1673,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.log('  ' .. log)
             end
         end
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -2307,6 +2309,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if not bypass_target_check and target.targets then
             if not hasAnyFlagMatch(target.targets, item.targets) then
                 target = context.bt
+                if not target then
+                    return
+                end
                 if not hasAnyFlagMatch(target.targets, item.targets) then
                     writeDebug(string.format(' **A valid target for [%s] could not be identified.', item.name))
                     return
@@ -3417,6 +3422,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if not pos then return end
 
         local me = windower.ffxi.get_mob_by_target('me')
+        if not me then
+            return 0
+        end
         local v = V({pos.x, pos.y})
         local vme = V({me.x, me.y})
 
@@ -3872,6 +3880,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local member = context[p]
             if member and member.buffs then
                 if context.hasBuff(member, names) then
+                    context.member = member
                     return true
                 end
             end
@@ -4123,6 +4132,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         local skillchain = context.skillchain
         if
+            context.party_weapon_skill and
             skillchain and
             skillchain.name ~= nil and 
             (names[1] == nil or arrayIndexOfStrI(names, skillchain.name))
@@ -4787,6 +4797,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Gets a mob by its target name. Uses 't' by default, but can be overridden.
     context.getMobByTarget = function(target)
+        context.mob_by_target = nil
+        
         target = tostring(target) or 't'
         local mob = windower.ffxi.get_mob_by_target(target)
         if mob and mob.valid_target then
@@ -4801,18 +4813,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 mob.symbol  = target
             end
 
+            context.mob_by_target = mob
+
             return mob
         end
     end
 
     --------------------------------------------------------------------------------------
     -- Try to set the target cursor to the specified mob
-    context.setTargetCursor = function(mob)
+    context.setTargetCursor = function(mob, allow_retarget)
         local id = type(mob) == 'table' and mob.id or mob
         if type(id) == 'number' then
             mob = windower.ffxi.get_mob_by_id(id)
             if mob and mob.valid_target then
-                if context.me and context.me.target_index ~= mob.index then
+                if allow_retarget or (context.me and context.me.target_index ~= mob.index) then
                     return lockTarget(context.player, mob)
                 end
             end

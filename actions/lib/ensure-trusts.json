@@ -10,7 +10,8 @@
       "recall_on_hpp": 40,
       "mob_safety_range": 10,
       "recall_on_effects": ["Petrification"],
-      "recall_blacklist": []
+      "recall_blacklist": [],
+      "min_idle": 4
     }
   },
   "actions": [
@@ -40,6 +41,7 @@
       "commands": [
         "log('Release/recall trust', member.name, 'due to debuff', effect.name)",
         "vars.ensure_trusts.stationary or member.distance <= 5 or move(member.x, member.y, 5, -1)",
+        "state_time > vars.ensure_trusts.min_idle or wait(state_time - vars.ensure_trusts.min_idle)",
         "releaseTrust(member.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
@@ -59,6 +61,7 @@
       "commands": [
         "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
         "vars.ensure_trusts.stationary or member.distance <= 5 or move(member.x, member.y, 5, -1)",
+        "state_time > vars.ensure_trusts.min_idle or wait(state_time - vars.ensure_trusts.min_idle)",
         "releaseTrust(member.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
@@ -79,9 +82,9 @@
       "commands": [
         "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
         "vars.ensure_trusts.stationary or member.distance <= 5 or move(member.x, member.y, 5, -1)",
-        "wait(2.5)",
+        "state_time > vars.ensure_trusts.min_idle or wait(state_time - vars.ensure_trusts.min_idle)",
         "releaseTrust(member.name)",
-        "wait(2.0)",
+        "wait(1)",
         "log('Recalling trust', spell.name)",
         "useSpell(me)",
         "wait(1.0)"

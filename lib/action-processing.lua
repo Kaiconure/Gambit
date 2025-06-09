@@ -509,6 +509,7 @@ local function getNextBattleAction(context)
                 context.effect_count            = 0     -- Current buff/effect count (e.g. you could have multiple Ballad effects at once)
                 context.member                  = nil   -- The result of a targeting enumerator
                 context.mob                     = nil   -- The result of a mob search iterator
+                context.mob_by_target           = nil   -- The result of a successful getMobByTarget operation
                 context.point                   = nil   -- The result of a position lookup
                 context.result                  = nil   -- The result of the latest arrayiterator operation
                 context.player_result           = nil   -- The result of the latest find player operation

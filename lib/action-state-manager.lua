@@ -138,7 +138,6 @@ state_manager.setActionType = function (self, newType)
         local isBattle = (self.actionType == 'battle')
         local isMounted = (self.actionType == 'mounted')
 
-        --local isIdlePullTarget = (newType == 'idle' or newType == 'pull' or self.actionType == 'resting')
         local isNewTypeResting = newType == 'resting'
         local isNewTypeDead = newType == 'dead'
         local isNewTypeIdlePull = newType == 'idle' or newType == 'pull' or newType == 'idle_battle'
@@ -158,8 +157,7 @@ state_manager.setActionType = function (self, newType)
             or (isNewTypeBattle and 'battle')
             or (isNewTypeMounted and 'mounted')
 
-        -- Only reset time if we're transitioning between idle/pull and battle
-        --if mode ~= newMode then
+        -- Only reset time if we're changing state
         if mode ~= newMode then
             writeVerbose(string.format(
                 'Transitioning from %s to %s after %s',
