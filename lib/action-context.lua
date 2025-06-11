@@ -884,6 +884,8 @@ local function setArrayEnumerators(context)
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
                 context.is_new_result   = true
+                context.indices         = context.indices or {}
+                context.indices[name]   = enumerator.at
 
                 context.action.enumerators.array_name = name
 
@@ -906,6 +908,8 @@ local function setArrayEnumerators(context)
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
             context.is_new_result   = true
+            context.indices         = context.indices or {}
+            context.indices[name]   = enumerator.at
 
             context.action.enumerators.array_name = name
 
@@ -955,7 +959,9 @@ local function setArrayEnumerators(context)
                 -- Store the result
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
-                context.is_new_result      = true
+                context.is_new_result   = true
+                context.indices         = context.indices or {}
+                context.indices[name]   = enumerator.at
 
                 context.action.enumerators.array_name = name
 
@@ -977,7 +983,9 @@ local function setArrayEnumerators(context)
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
-            context.is_new_result      = true
+            context.is_new_result   = true
+            context.indices         = context.indices or {}
+            context.indices[name]   = enumerator.at
 
             context.action.enumerators.array_name = name
 
@@ -1027,7 +1035,9 @@ local function setArrayEnumerators(context)
                 -- Store the result
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
-                context.is_new_result      = true
+                context.is_new_result   = true
+                context.indices         = context.indices or {}
+                context.indices[name]   = enumerator.at
 
                 context.action.enumerators.array_name = name
 
@@ -1050,7 +1060,9 @@ local function setArrayEnumerators(context)
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
-            context.is_new_result      = true
+            context.is_new_result   = true
+            context.indices         = context.indices or {}
+            context.indices[name]   = enumerator.at
 
             context.action.enumerators.array_name = name
 
@@ -1122,6 +1134,8 @@ local function setArrayEnumerators(context)
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
                 context.is_new_result   = true
+                context.indices         = context.indices or {}
+                context.indices[name]   = enumerator.at
 
                 context.action.enumerators.array_name = name
 
@@ -1143,7 +1157,9 @@ local function setArrayEnumerators(context)
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
-            context.is_new_result      = true
+            context.is_new_result   = true
+            context.indices         = context.indices or {}
+            context.indices[name]   = enumerator.at
 
             context.action.enumerators.array_name = name
 
@@ -1215,6 +1231,8 @@ local function setArrayEnumerators(context)
                 context.result          = enumerator.data[enumerator.at]
                 context.results[name]   = context.result
                 context.is_new_result   = true
+                context.indices         = context.indices or {}
+                context.indices[name]   = enumerator.at
 
                 context.action.enumerators.array_name = name
 
@@ -1237,7 +1255,9 @@ local function setArrayEnumerators(context)
             -- Store the results
             context.result          = enumerator.data[enumerator.at]
             context.results[name]   = context.result
-            context.is_new_result      = true
+            context.is_new_result   = true
+            context.indices         = context.indices or {}
+            context.indices[name]   = enumerator.at
 
             context.action.enumerators.array_name = name
 
@@ -1574,6 +1594,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         time = time,
         game_info = windower.ffxi.get_info(),
         strategy = settings.strategy,
+        settings = {
+            strategy = settings.strategy,
+            distance = settings.maxDistance,
+            z = settings.maxDistanceZ
+        },
         mobTime = mobEngagedTime or 0,
         battleScope = battleScope,
         skillchain = actionStateManager:getSkillchain(target),
@@ -1613,6 +1638,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- Zone info
         context.zone_id = context.game_info.zone
         context.zone = context.zone_id and resources.zones[context.zone_id] or nil
+        context.zone_name = context.zone and context.zone.name
+        context.zone_search = context.zone and context.zone.search
 
         ------------------------------------
         -- Weather info
@@ -2490,6 +2517,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
+    context.syncBuffs = function(wait)
+        if context.me then
+            context.wait(math.max(tonumber(wait) or 0.5, 0.0))
+            context.me.buffs = actionStateManager:getMemberBuffsFor(context.me)
+            return true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    --
     context.useAbility = function (target, ability)
         local bypass_target_check = false
         if is_known_targeting_symbol(target) then 
@@ -2716,14 +2753,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         ) and
                         spell.targets.Self and
                         (
-                            (context.hasBuff('Entrust') and spell.type == 'Geomancy') or
-                            (context.hasBuff('Pianissimo') and spell.type == 'BardSong')
+                            (spell.type == 'Geomancy') or
+                            (spell.type == 'BardSong')
                         )
+                        -- (
+                        --     (context.hasBuff('Entrust') and spell.type == 'Geomancy') or
+                        --     (context.hasBuff('Pianissimo') and spell.type == 'BardSong')
+                        -- )
                     then
-                        writeMessage('%s detected! %s can be cast on party members.':format(
-                            text_buff(context.effect.name),
-                            text_spell(spell.name)
-                        ))
+                        local noop = true
+                        -- writeMessage('%s detected! %s can be cast on party members.':format(
+                        --     text_buff(context.effect.name),
+                        --     text_spell(spell.name)
+                        -- ))
                     else
                         if not hasAnyFlagMatch(target.targets, spell.targets) then
                             target = context.me
@@ -3943,6 +3985,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         for i = start_index, #names do
             local name = names[i]
+
             local buff = hasBuffInArray(target.buffs, name, strict)
 
             if buff then

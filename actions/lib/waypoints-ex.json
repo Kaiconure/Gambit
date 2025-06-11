@@ -1,0 +1,106 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": "Provides a mechanism for scripted movement between points."
+  },
+  "vars": {
+    "waypoints_ex": {
+      "data": {}
+    }
+  },
+  "actions": [
+    {
+      "when": ["vars.waypoints_ex._latest"],
+      "commands": [
+        "vars.waypoints_ex._latest.strategy and not any(vars.waypoints_ex._latest.strategy, settings.strategy) and sendCommand('gbt config -strat %s', vars.waypoints_ex._latest.strategy) and wait(1)",
+        "vars.waypoints_ex._latest.distance and vars.waypoints_ex._latest.distance ~= settings.distance and sendCommand('gbt config -d %d', vars.waypoints_ex._latest.distance) and wait(1)",
+        "vars.waypoints_ex._latest.z and vars.waypoints_ex._latest.z ~= settings.z and sendCommand('gbt config -z %d', vars.waypoints_ex._latest.z) and wait(1)",
+        "setVar('vars.waypoints_ex._latest', nil)"
+      ],
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
+        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
+        "not vars.waypoints_ex._current.scoped",
+        "vars.waypoints_ex._current.mode ~= 'cycle'",
+        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
+        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints_ex._current.points)",
+        "result and not checkPosition(result)"
+      ],
+      "commands": [
+        "vars.waypoints_ex._latest ~= vars.waypoints_ex._current and setVar('vars.waypoints_ex._latest', vars.waypoints_ex._current)",
+        "is_new_result and log('Bouncing to', vars.waypoints_ex.active, 'location', result.x, result.y)",
+        "move(result)"
+      ],
+      "delay": 1,
+      "frequency": 2,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
+        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
+        "not vars.waypoints_ex._current.scoped",
+        "vars.waypoints_ex._current.mode == 'cycle'",
+        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
+        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints_ex._current.points)",
+        "result and not checkPosition(result)"
+      ],
+      "commands": [
+        "vars.waypoints_ex._latest ~= vars.waypoints_ex._current and setVar('vars.waypoints_ex._latest', vars.waypoints_ex._current)",
+        "is_new_result and log('Cycling to', vars.waypoints_ex.active, 'location', result.x, result.y)",
+        "move(result)"
+      ],
+      "delay": 1,
+      "frequency": 2,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
+        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
+        "vars.waypoints_ex._current.scoped",
+        "vars.waypoints_ex._current.mode ~= 'cycle'",
+        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
+        "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints_ex._current.points)",
+        "result and not checkPosition(result)"
+      ],
+      "commands": [
+        "vars.waypoints_ex._latest ~= vars.waypoints_ex._current and setVar('vars.waypoints_ex._latest', vars.waypoints_ex._current)",
+        "is_new_result and log('Bouncing to', vars.waypoints_ex.active, 'location', result.x, result.y)",
+        "move(result)"
+      ],
+      "delay": 1,
+      "frequency": 2,
+      "scope": "battle",
+      "scoped_enumerators": true
+    },
+    {
+      "when": [
+        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
+        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
+        "vars.waypoints_ex._current.scoped",
+        "vars.waypoints_ex._current.mode == 'cycle'",
+        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
+        "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints_ex._current.points)",
+        "result and not checkPosition(result)"
+      ],
+      "commands": [
+        "vars.waypoints_ex._latest ~= vars.waypoints_ex._current and setVar('vars.waypoints_ex._latest', vars.waypoints_ex._current)",
+        "is_new_result and log('Cycling to', vars.waypoints_ex.active, 'location', result.x, result.y)",
+        "move(result)"
+      ],
+      "delay": 1,
+      "frequency": 2,
+      "scope": "battle",
+      "scoped_enumerators": true
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+{
+  "vars": {
+    "default_instrument": null,
+    "frontline": {
+      "position": null,
+      "target": null,
+      "effects": [{ "name": "March" }, { "name": "Minuet" }],
+      "using": {
+        "Minuet": ["Valor Minuet V", "Valor Minuet IV"],
+        "March": ["Victory March"],
+        "Madrigal": ["Blade Madrigal"]
+      }
+    },
+    "backline": {
+      "position": null,
+      "target": null,
+      "effects": [{ "name": "Ballad" }],
+      "using": {
+        "Ballad": ["Mage's Ballad III", "Mage's Ballad II"]
+      }
+    },
+    "pianissimo": [
+      {
+        "targets": [],
+        "effects": [{ "name": "Ballad" }],
+        "using": {
+          "Ballad": ["Mage's Ballad III"]
+        }
+      },
+      {
+        "targets": [],
+        "effects": [{ "name": "Ballad" }],
+        "using": {
+          "Ballad": ["Mage's Ballad III"]
+        }
+      }
+    ],
+    "enemy": {
+      "songs": [{ "song": "Carnage Elegy" }, { "song": "Foe Requiem VII" }]
+    },
+    "to_dispel": {
+      "instrument": null,
+      "effects": [
+        "Protect",
+        "Defense Boost",
+        "Evasion Boost",
+        "Phalanx",
+        "Shell",
+        "Magic Def. Boost"
+      ]
+    }
+  },
+  "actions": [
+    {
+      "comment": [
+        "=====================================================================",
+        " Remove Mob Buffs",
+        "====================================================================="
+      ],
+      "when": [
+        "bt.distance < 20",
+        "vars.bardic.to_dispel and vars.bardic.to_dispel.effects",
+        "canUse('Magic Finale') and hasBuff(bt, vars.bardic.to_dispel.effects)"
+      ],
+      "commands": [
+        "equip('range', vars.bardic.to_dispel.instrument or vars.bardic.default_instrument)",
+        "use(bt)"
+      ],
+      "scope": "battle",
+      "frequency": 1
+    },
+    {
+      "comment": [
+        "=====================================================================",
+        " Add Mob Debuffs",
+        "=====================================================================",
+        "",
+        "  - Will try to get closer to the mob before casting."
+      ],
+      "when": [
+        "bt and bt.distance < 20",
+        "vars.bardic.enemy and vars.bardic.enemy.songs and iterate(vars.bardic.enemy.songs)",
+        "result.song",
+        "canUseSpell(result.song)",
+        "not hasEffectOf(bt, spell)"
+      ],
+      "commands": [
+        "equip('range', result.instrument or vars.bardic.default_instrument)",
+        "useSpell(bt)"
+      ],
+      "frequency": 5
+    },
+    {
+      "comment": [
+        "=====================================================================",
+        " Frontline Songs",
+        "====================================================================="
+      ],
+      "when": [
+        "vars.bardic",
+        "vars.bardic.frontline and vars.bardic.frontline.effects and vars.bardic.frontline.using",
+        "partyByName(vars.bardic.frontline.target or me.name)",
+        "iterate('effect', vars.bardic.frontline.effects) and vars.bardic.frontline.using[results.effect.name]",
+        "not hasEffect(member, results.effect.name) or effect_count < #vars.bardic.frontline.using[results.effect.name]",
+        "iterate(results.effect.name .. '_songs', vars.bardic.frontline.using[results.effect.name])",
+        "canUseSpell(results[results.effect.name .. '_songs'])"
+      ],
+      "commands": [
+        "log('Preparing to apply', results.effect.name, 'with', spell.name .. '!')",
+        "equip('range', results.effect.instrument or vars.bardic.default_instrument)",
+        "vars.bardic.frontline.position and move(vars.bardic.frontline.position.x, vars.bardic.frontline.position.y, 20)",
+        "useSpell(me)"
+      ]
+    },
+    {
+      "comment": [
+        "=====================================================================",
+        " Backline Songs",
+        "=====================================================================",
+        "  - Will not fire at all if either frontline or backline positions are unset."
+      ],
+      "when": [
+        "vars.bardic and vars.bardic.backline and vars.bardic.backline.position and vars.bardic.frontline and vars.bardic.frontline.position",
+        "vars.bardic.backline and vars.bardic.backline.effects and vars.bardic.backline.using",
+        "vars.bardic.backline.target and partyByName(vars.bardic.backline.target)",
+        "iterate('effect', vars.bardic.backline.effects) and vars.bardic.backline.using[results.effect.name]",
+        "not hasEffect(member, results.effect.name) or effect_count < #vars.bardic.backline.using[results.effect.name]",
+        "iterate(results.effect.name .. '_songs', vars.bardic.backline.using[results.effect.name])",
+        "canUseSpell(results[results.effect.name .. '_songs'])"
+      ],
+      "commands": [
+        "log('Preparing to apply', results.effect.name, 'with', spell.name .. '!')",
+        "equip('range', results.effect.instrument or vars.bardic.default_instrument)",
+        "vars.bardic.backline.position and move(vars.bardic.backline.position.x, vars.bardic.backline.position.y, 20)",
+        "useSpell(me)"
+      ]
+    },
+    {
+      "comment": [
+        "=====================================================================",
+        " Pianissimo Songs",
+        "====================================================================="
+      ],
+      "when": [
+        "vars.bardic",
+        "vars.bardic.pianissimo and arrayCount(vars.bardic.pianissimo) > 0",
+        "canUseAbility('Pianissimo')",
+        "iterate('pianissimo', vars.bardic.pianissimo) and arrayCount(results.pianissimo.targets) > 0 and arrayCount(results.pianissimo.effects) > 0",
+        "iterate('pianissimo_target' .. indices.pianissimo, results.pianissimo.targets) and setVar('vars.bardic.__target', result)",
+        "partyByName(vars.bardic.__target) and member.distance < 20",
+        "iterate('pianissimo_effect' .. indices.pianissimo, results.pianissimo.effects) and setVar('vars.bardic.__effect', result)",
+        "not hasEffect(member, vars.bardic.__effect.name) or effect_count < #results.pianissimo.using[vars.bardic.__effect.name]",
+        "iterate('pianissimo_' .. vars.bardic.__effect.name .. '_songs' .. indices.pianissimo, results.pianissimo.using[vars.bardic.__effect.name]) and setVar('vars.bardic.__song', result)",
+        "canUseSpell(vars.bardic.__song)"
+      ],
+      "commands": [
+        "log('Preparing to apply', spell.name, 'to', member.name, 'with Pianissimo!')",
+        "useAbility(me, 'Pianissimo') and syncBuffs()",
+        "equip('range', vars.bardic.__effect and vars.bardic.__effect.instrument or vars.bardic.default_instrument)",
+        "useSpell(member)"
+      ]
+    }
+  ]
+}
