@@ -18,6 +18,11 @@
         "Apex Idle Drifter": true,
         "Asb": true,
         "Azure-toothed Clawberry": true,
+        "Bozzetto High Vicar": true,
+        "Bozzetto Elementalist": true,
+        "Bozzetto Disruptor": true,
+        "Bozzetto Devout": true,
+        "Bozzetto Defiler": true,
         "Darkness Elemental": true,
         "Earth Elemental": true,
         "Fire Elemental": true,
@@ -65,7 +70,8 @@
         "bt.distance <= 20",
         "me.mpp <= vars.use_aspir.max_mpp",
         "(me.mpp <= vars.use_aspir.max_ws_mpp and not skillchaining('Light', 'Darkness')) or not partyUsingWeaponSkill()",
-        "canUse(vars.use_aspir.spells)"
+        "canUse(vars.use_aspir.spells)",
+        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
       ],
       "commands": [
         "arrayCount(vars.use_aspir.gear.casting) > 0 and equipMany(vars.use_aspir.gear.casting)",

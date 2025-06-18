@@ -18,7 +18,7 @@
         "not hasEffectOf(member, spell) and not hasEffectOf(member, 'Sublimation')",
         "member.is_player or (member.is_trust and member.mpp <= vars.refresh_cycle.trust_mpp)"
       ],
-      "commands": ["use()", "postpone(spellRecast(spell.name) or 0 + 10)"],
+      "commands": ["useSpell()", "postpone(spellRecast(spell.name) or 0 + 10)"],
       "frequency": 1
     }
   ]

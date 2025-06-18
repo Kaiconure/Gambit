@@ -1,7 +1,8 @@
 {
   "vars": {
     "follow_leader": {
-      "distance": null
+      "distance": null,
+      "suppress_on_leader_engaged": null
     }
   },
   "actions": [
@@ -9,6 +10,7 @@
       "when": [
         "me.can_follow",
         "vars.follow_leader.target or (not me.is_party_leader and party_leader)",
+        "not suppress_on_leader_engaged or not party_leader or not party_leader.is_engaged",
         "pinfo[vars.follow_leader.target or party_leader.name]"
       ],
       "commands": [

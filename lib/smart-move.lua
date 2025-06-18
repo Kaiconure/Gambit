@@ -168,6 +168,8 @@ local function sm_movement_exp(self, job)
     windower.ffxi.run(false)
 
     local me = windower.ffxi.get_mob_by_target('me')
+    if not me then return end
+    
     local vme = coordVector(me)
     local vto = job:pos():subtract(vme) -- to = target - me
     local d = vto:length()              -- d = |vdirection|

@@ -12,12 +12,6 @@
       "comment": "Drives frontline engagement positioning. Use distance and/or angle (degrees) to set placement around the enemy."
     }
   },
-  "imports": [],
-  "functions": [
-    {
-      "import": "fn/common"
-    }
-  ],
   "pull": [
     {
       "import": "frontline-engagement"

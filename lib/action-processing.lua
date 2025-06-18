@@ -438,6 +438,7 @@ local function compileAllActions()
     compileActions('resting',       actions, actions and actions.resting or {})
     compileActions('dead',          actions, actions and actions.dead or {})
     compileActions('mounted',       actions, actions and actions.mounted or {})
+    compileActions('imports',       actions, actions and actions.imports or {})
     compileActions('functions',     actions, actions and actions.functions or {})
 
     actionStateManager.vars = actions and actions.vars or {}

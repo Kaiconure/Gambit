@@ -29,6 +29,7 @@
         "me.mpp >= vars.black_magic_nuke.min_mpp",
         "bt.hpp <= vars.black_magic_nuke.max_hpp and bt.hpp >= vars.black_magic_nuke.min_hpp",
         "not partyUsingWeaponSkill()",
+        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)",
         "canUseSpell(randomize(withTierRange(vars.black_magic_nuke.min_tier, vars.black_magic_nuke.max_tier, vars.black_magic_nuke.spells)))"
       ],
       "commands": [

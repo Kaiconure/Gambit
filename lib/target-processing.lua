@@ -80,53 +80,55 @@ local function shouldAquireNewTarget(player, party, party_by_id)
     -- Make sure we don't fixate on a mob we can't actually engage
     local currentTarget = globals.target
     local currentMob = currentTarget:mob()
-    if currentMob then
-        checkEngagement = false
+    if settings.strategy ~= TargetStrategy.manual then
+        if currentMob then
+            checkEngagement = false
 
-        local runtime = currentTarget:runtime()
+            local runtime = currentTarget:runtime()
 
-        -- Certain environments are set up to allow any number of parties to engage with the same mobs
-        local allowMultiPartyMobs = 
-            hasBuff(player, BUFF_ELVORSEAL) or
-            hasBuff(player, BUFF_BATTLEFIELD)
+            -- Certain environments are set up to allow any number of parties to engage with the same mobs
+            local allowMultiPartyMobs = 
+                hasBuff(player, BUFF_ELVORSEAL) or
+                hasBuff(player, BUFF_BATTLEFIELD)
 
-        -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
-        local mobClaimed = currentMob.claim_id > 0
-        local mobClaimedByParty = party_by_id[currentMob.claim_id]
+            -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
+            local mobClaimed = currentMob.claim_id > 0
+            local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
-        local maxDistanceSquared = settings.maxDistance * settings.maxDistance
+            local maxDistanceSquared = settings.maxDistance * settings.maxDistance
 
-        local claimStolen = 
-            not allowMultiPartyMobs and
-            mobClaimed and
-            not mobClaimedByParty
-        local claimTimedOut = 
-            not mobClaimed and
-            runtime >= settings.maxChaseTime
-        local claimOutOfRange = 
-            not mobClaimed and
-            currentMob.distance > maxDistanceSquared
+            local claimStolen = 
+                not allowMultiPartyMobs and
+                mobClaimed and
+                not mobClaimedByParty
+            local claimTimedOut = 
+                not mobClaimed and
+                runtime >= settings.maxChaseTime
+            local claimOutOfRange = 
+                not mobClaimed and
+                currentMob.distance > maxDistanceSquared
 
-        if 
-            claimStolen or
-            claimTimedOut or
-            claimOutOfRange
-        then
-            writeMessage('%s / %s: Stolen=%s, TimedOut=%s (%s), TooFar=%s. Looking for another...':format(
-                text_mob(currentMob.name),
-                text_number(currentMob.id),
-                text_number(claimStolen and 'yes' or 'no'),
-                text_number(claimTimedOut and 'yes' or 'no'),
-                text_number('%.1fs':format(runtime)),
-                text_number(claimOutOfRange and 'yes' or 'no')
-            ))
+            if 
+                claimStolen or
+                claimTimedOut or
+                claimOutOfRange
+            then
+                writeMessage('%s / %s: Stolen=%s, TimedOut=%s (%s), TooFar=%s. Looking for another...':format(
+                    text_mob(currentMob.name),
+                    text_number(currentMob.id),
+                    text_number(claimStolen and 'yes' or 'no'),
+                    text_number(claimTimedOut and 'yes' or 'no'),
+                    text_number('%.1fs':format(runtime)),
+                    text_number(claimOutOfRange and 'yes' or 'no')
+                ))
 
-            smartMove:cancelJob()
-            windower.send_command('input /attack off')
+                smartMove:cancelJob()
+                windower.send_command('input /attack off')
 
-            resetCurrentMob(nil)
-        else
-            return false
+                resetCurrentMob(nil)
+            else
+                return false
+            end
         end
     end
 
@@ -139,8 +141,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         -- while engaged, or the player manually engaged a mob.
         if player.status == STATUS_ENGAGED then
             local t = windower.ffxi.get_mob_by_target('t') or windower.ffxi.get_mob_by_target('bt')
-            if t and t.valid_target and t.hpp > 0 and t.spawn_type == SPAWN_TYPE_MOB then
-                writeVerbose('You are engaged with an unregistered target. Syncing up now.')
+            if t and t.valid_target and t.hpp > 0 and t.spawn_type == SPAWN_TYPE_MOB and (currentMob == nil or currentMob.id ~= t.id) then
+                writeVerbose('Syncing with unregistered engagement target: %s':format(text_mob(t.name)))
                 
                 resetCurrentMob(t)                
                 return false
@@ -149,8 +151,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
                 -- next target. This could be mob status latency, or an actual in-game auto-target that we
                 -- aren't properly facing.
                 if timeWithTarget >= settings.retargetDelay then
-                    --writeVerbose('Engaged without a valid target, forcing new target search.')
-                    return true
+                    -- Return true here, unless we're manually targeting
+                    return settings.strategy ~= TargetStrategy.manual
                 end
             end
         end
@@ -166,7 +168,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         player.status == STATUS_IDLE or
         player.status == STATUS_RESTING
     then
-        return true
+        -- Return true here, unless we're manually targeting
+        return settings.strategy ~= TargetStrategy.manual
     end
 
     return false

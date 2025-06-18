@@ -11,6 +11,7 @@
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
+        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)",
         "hasSpell(vars.keep_addle.spells) and canUse(spell)",
         "not hasEffectOf(bt, spell)"
       ],

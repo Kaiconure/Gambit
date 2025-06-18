@@ -3,6 +3,7 @@
     "ws": {
       "terminal_reset": {
         "disabled": null,
+        "on_skillchains": null,
         "wait": 0
       }
     }
@@ -12,7 +13,8 @@
       "when": [
         "not vars.ws.terminal_reset.disabled",
         "party_weapon_skill and skillchain",
-        "any(skillchain.name, 'Light', 'Darkness') and any(skillchain.name, party_weapon_skill.skillchains)",
+        "(arrayCount(vars.ws.terminal_reset.on_skillchains) > 0 and any(skillchain.name, vars.ws.terminal_reset.on_skillchains)) or \\",
+        "    (any(skillchain.name, 'Light', 'Darkness') and any(skillchain.name, party_weapon_skill.skillchains))",
         "skillchain_age >= vars.ws.terminal_reset.wait"
       ],
       "commands": [

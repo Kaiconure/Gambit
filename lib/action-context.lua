@@ -1450,6 +1450,14 @@ local function loadContextTargetSymbols(context, target)
     context.me = { symbol = 'me', mob = windower.ffxi.get_mob_by_target('me') }
     initContextTargetSymbol(context, context.me)
     context.self = context.me
+
+    -- Set up a target representing the cursor
+    context.cursor = { symbol = 't', mob = windower.ffxi.get_mob_by_target('t') }
+    if context.cursor.mob then
+        initContextTargetSymbol(context, context.cursor)
+    else
+        context.cursor = nil
+    end
     
     -- Set up the t/bt symbols
     if type(target) == 'table' then
@@ -1603,7 +1611,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         battleScope = battleScope,
         skillchain = actionStateManager:getSkillchain(target),
         party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
-        vars = actionStateManager.vars,
+        vars = actionStateManager.vars
     }
 
     context.skillchain_trigger_time = 
@@ -4870,7 +4878,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             mob = windower.ffxi.get_mob_by_id(id)
             if mob and mob.valid_target then
                 if allow_retarget or (context.me and context.me.target_index ~= mob.index) then
-                    return lockTarget(context.player, mob)
+                    local result = lockTarget(context.player, mob)
+
+                    -- Update the target cursor
+                    context.cursor = { symbol = 't', mob = windower.ffxi.get_mob_by_target('t') }
+                    if context.cursor.mob then
+                        initContextTargetSymbol(context, context.cursor)
+                    else
+                        context.cursor = nil
+                    end
+
+                    return result
                 end
             end
         end

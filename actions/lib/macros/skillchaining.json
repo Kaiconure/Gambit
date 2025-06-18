@@ -12,8 +12,9 @@
       "partner3_tp_threshold": 800,
       "partner4_tp_threshold": 800,
       "partner5_tp_threshold": 800,
-      "secondary_tp_min": 900,
+      "secondary_tp_min": 700,
       "hold_on_buffs": null,
+      "blacklist": null,
       "default_scd": null,
       "fast_scd": null
     }
@@ -44,6 +45,7 @@
     "check_skillchaining": ["(skillchaining2)"],
     "ws_partners_deferring": [
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
+      "arrayCount(vars.ws.blacklist) == 0 or not any(bt.name, vars.ws.blacklist)",
       "not vars.ws.partner  or not pinfo[vars.ws.partner]  or (not pinfo[vars.ws.partner].is_engaged  or pinfo[vars.ws.partner].tp <= vars.ws.partner_tp_threshold)",
       "not vars.ws.partner2 or not pinfo[vars.ws.partner2] or (not pinfo[vars.ws.partner2].is_engaged or pinfo[vars.ws.partner2].tp <= vars.ws.partner2_tp_threshold)",
       "not vars.ws.partner3 or not pinfo[vars.ws.partner3] or (not pinfo[vars.ws.partner3].is_engaged or pinfo[vars.ws.partner3].tp <= vars.ws.partner3_tp_threshold)",
@@ -52,6 +54,7 @@
     ],
     "ws_defer_to_secondary": [
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
+      "arrayCount(vars.ws.blacklist) == 0 or not any(bt.name, vars.ws.blacklist)",
       "vars.ws.is_secondary or (not partyByName(vars.ws.partner or '!!') and (not partyByName(vars.ws.secondary or '!!') or not member.is_engaged or member.tp < vars.ws.secondary_tp_min))"
     ]
   },

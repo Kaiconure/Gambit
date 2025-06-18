@@ -165,19 +165,36 @@ local function loadVars(original, incoming)
                     end
                 end
             else
-                -- For non-tables, copy the value in if it hasn't already been defined
-                if original[key] == nil then
-                    original[key] = val
+                if      -- Override setting of an empty table
+                    val == '$array.empty' or
+                    val == '$object.empty' or
+                    val == '$table.empty'
+                then
+                    original[key] = {}
+                elseif  -- Override seting of a null value
+                    val == '$object.null' or
+                    val == '$table.null'
+                then
+                    original[key] = nil
+                else
+                    -- For non-tables, copy the value in if it hasn't already been defined
+                    if original[key] == nil then
+                        original[key] = val
+                    end
                 end
             end
         end
     end
 end
 
+local IMPORT_PLAYER_LIB     = "^$%(PlayerLib%)"
+local IMPORT_SETTINGS_LIB   = "^$%(SettingsLib%)"
+local IMPORT_GLOBAL_LIB     = "^$%(GlobalLib%)"
+
 ----------------------------------------------------------------------------------------
 -- Pulls the next round of imports into the specified actions array. Returns
 -- true if new actions were imported as part of this pass.
-local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
+local function _loadActionImportsInternal(playerName, baseActions, actionType, pass, player)
     local imported = false
     local actions = baseActions and baseActions[actionType]
     if actions then
@@ -188,29 +205,70 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
         -- if baseActions.importedImports == nil then
         --     baseActions.importedImports = {}
         -- end
+        if 
+            player and 
+            (type(player) ~= 'table' or type(player.name) ~= 'string' or type(player.main_job) ~= 'string' or type(player.main_job_level) ~= 'number')
+        then
+            player = nil
+        end
+
+        if not player then print('no player') end
 
         for i = #actions, 1, -1 do
             local action = actions[i]
+            action.filter = action.filter or {}
+
+            -- For actions that are not enabled, we allow a "filter" object that can be used
+            -- to filter who should be able run this action. The filters that are currently
+            -- supported are:
+            --  - main_jobs:    An array of jobs that can run this action.
+            --  - names:        An array of character names that can run this action.
+            --
+            if action and not action.disabled and player then
+                if
+                    (action.filter.main_jobs and not arrayIndexOf(useArray(action.filter.main_jobs), player.main_job))  or
+                    (action.filter.names and not arrayIndexOf(useArray(action.filter.names), player.name))
+                then
+                    action.disabled = true
+                end
+            end
 
             -- Import any items that have an import reference and which aren't marked as disabled
             if type(action.import) == 'string' and not action.disabled then
-                -- First, try the character-level actions libs folder
-                local fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
-                local file = files.new(fileName)
+                local file = nil
+                local fileName = nil
 
-                -- If the import doesn't exist there, try the user-level actions lib folder
-                if not file:exists() then
-                    fileName = './settings/actions/lib/%s.json':format(action.import)
+                if action.import:find(IMPORT_PLAYER_LIB) then
+                    fileName = action.import:gsub(IMPORT_PLAYER_LIB, './settings/%s/actions/lib':format(playerName)) .. '.json'
+                    -- print('Referenced player-level import: ' .. fileName)
                     file = files.new(fileName)
+                elseif action.import:find(IMPORT_SETTINGS_LIB) then
+                    fileName = action.import:gsub(IMPORT_SETTINGS_LIB, './settings/actions/lib') .. '.json'
+                    -- print('Referenced Settings-level import: ' .. fileName)
+                    file = files.new(fileName)
+                elseif action.import:find(IMPORT_GLOBAL_LIB) then
+                    fileName = action.import:gsub(IMPORT_GLOBAL_LIB, './actions/lib') .. '.json'
+                    --print('Referenced Global-level import: ' .. fileName)
+                    file = files.new(fileName)
+                else                
+                    -- First, try the character-level actions libs folder
+                    fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
+                    file = files.new(fileName)
+
+                    -- If the import doesn't exist there, try the user-level actions lib folder
+                    if not file:exists() then
+                        fileName = './settings/actions/lib/%s.json':format(action.import)
+                        file = files.new(fileName)
+                    end
+
+                    -- If the import doesn't exist there, use the standard actions lib folder
+                    if not file:exists() then
+                        fileName = './actions/lib/%s.json':format(action.import)
+                        file = files.new(fileName)
+                    end
                 end
 
-                -- If the import doesn't exist there, use the standard actions lib folder
-                if not file:exists() then
-                    fileName = './actions/lib/%s.json':format(action.import)
-                    file = files.new(fileName)
-                end
-
-                if file:exists() then
+                if file and file:exists() then
                     import = json.parse(file:read())
 
                     if import then
@@ -262,10 +320,12 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                         end
                     end
                 else
-                    writeMessage('Warning: Referenced %s action import [%s] could not be found.':format(
-                        text_action(actionType),
-                        text_gold(action.import)
-                    ))
+                    if not action.silent then
+                        writeMessage('Warning: Referenced %s action import [%s] could not be found.':format(
+                            text_action(actionType),
+                            text_gold(action.import)
+                        ))
+                    end
                 end
             end
         end
@@ -425,14 +485,24 @@ local function _expandActionMacrosToArray(macros, array)
 
 ----------------------------------------------------------------------------------------
 --
-local function loadActionImports(playerName, actions)
+local function loadActionImports(playerName, actions, player)
     -- Keep importing actions until there are no more to pull in. This is to ensure that
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
         local types = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'imports', 'functions'}
 
+        -- Force macros and imports to an object, even if empty
         actions.macros = type(actions.macros) == 'table' and actions.macros or { }
+        actions.imports = type(actions.imports) == 'table' and actions.imports or { }
+
+        -- Attempt to load the built-in files, if possible.
+        table.insert(actions.imports, 1, { silent = true, import = "$(PlayerLib)/common/%s":format(player.main_job) })
+        table.insert(actions.imports, 1, { silent = true, import = "$(PlayerLib)/common/common" })
+        table.insert(actions.imports, 1, { silent = true, import = "$(SettingsLib)/common/%s":format(player.main_job) })
+        table.insert(actions.imports, 1, { silent = true, import = "$(SettingsLib)/common/common" })
+        table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/%s":format(player.main_job) })
+        table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/common" })
 
         for i = 1, #types do
             local actionType = types[i]
@@ -440,7 +510,7 @@ local function loadActionImports(playerName, actions)
 
             -- Prevent runaway, infinite imports. Most likely caused if an include references 
             -- itself. Let's not crash the game because of a mistake or typo.
-            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType, passes + 1) do
+            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType, passes + 1, player) do
                 passes = passes + 1
             end
 
@@ -497,7 +567,7 @@ local function loadActionsFromFile(playerName, fileName)
 
     local actions = _loadActionsWithPreprocessing(file)
     if actions then
-        loadActionImports(playerName, actions)
+        loadActionImports(playerName, actions, windower.ffxi.get_player())
         --writeJsonToFile('.\\settings\\%s\\.output\\processed-actions.json':format(playerName), actions)
 
         -- if type(actions.importedImports) then

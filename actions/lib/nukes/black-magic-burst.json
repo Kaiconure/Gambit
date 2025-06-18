@@ -6,7 +6,8 @@
     "check_magic_burst": [
       "bt and bt.distance < 20",
       "not hasBuff('Immanence')",
-      "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp"
+      "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp",
+      "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
     ],
     "exec_magic_burst": [
       "log('Magic bursting', skillchain.name, 'with', spell.name)",

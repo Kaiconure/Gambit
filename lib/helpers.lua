@@ -156,6 +156,16 @@ function arrayIndexOf(array, search)
 end
 
 --------------------------------------------------------------------------------------
+-- If the specified item is already an array, use it; otherwise, create a new
+-- array with the item as its single element.
+function useArray(item)
+    if type(item) == 'table' and #item > 0 then
+        return item
+    end
+    return {item}
+end
+
+--------------------------------------------------------------------------------------
 -- Find the first in an array that matches one of the specified search parameters
 function arrayIndexOfAny(array, ...)
     local searches = {...}
