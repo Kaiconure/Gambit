@@ -1,9 +1,12 @@
+### Please refer to the [wiki](https://github.com/Kaiconure/Gambit/wiki) for my ongoing attempt at documenting the entire Gambit rules interface.
+---
+
 | Tips                                                         |
 | ------------------------------------------------------------ |
 | *Shift+Alt+G* on the keyboard will toggle automation on or off. |
 | *Ctrl+F* on the keyboard will toggle a custom "follow" operation on your current target. Hitting the hotkey again will cancel your follow. |
 
-##### Documentation is a huge work in progress, and is quite lacking at this point. Sorry.
+
 
 # Gambit
 
