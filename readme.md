@@ -33,7 +33,7 @@ Once you've got the addon installed, it can be loaded in the standard way.
 //lua r gambit
 ```
 
-Doing so, it will show you some information including how to enable automation with the `Ctrl+Alt+G` hotkey. The same hotkey will disable automation again, and the addon will output information about its current enabled/disabled state as you change it.
+Doing so, it will show you some information including how to enable automation with the `Shift+Alt+G` hotkey. The same hotkey will disable automation again, and the addon will output information about its current enabled/disabled state as you change it.
 
 The default actions will cause you to engage with any aggroing mob near you, and will use the best available XP or CP rings on hand.
 
