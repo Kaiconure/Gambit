@@ -77,11 +77,13 @@ end
 local function shouldAquireNewTarget(player, party, party_by_id)
     local checkEngagement = true
 
+    local current_t = windower.ffxi.get_mob_by_target('t') or windower.ffxi.get_mob_by_target('bt')
+
     -- Make sure we don't fixate on a mob we can't actually engage
     local currentTarget = globals.target
     local currentMob = currentTarget:mob()
     if settings.strategy ~= TargetStrategy.manual then
-        if currentMob then
+        if currentMob and current_t and current_t.id == currentMob.id then
             checkEngagement = false
 
             local runtime = currentTarget:runtime()
@@ -95,7 +97,8 @@ local function shouldAquireNewTarget(player, party, party_by_id)
             local mobClaimed = currentMob.claim_id > 0
             local mobClaimedByParty = party_by_id[currentMob.claim_id]
 
-            local maxDistanceSquared = settings.maxDistance * settings.maxDistance
+            local refDistance = settings.maxDistance + 2
+            local maxDistanceSquared = refDistance * refDistance
 
             local claimStolen = 
                 not allowMultiPartyMobs and
@@ -140,11 +143,15 @@ local function shouldAquireNewTarget(player, party, party_by_id)
         -- something that was not assigned via automation. It could be that the addon was loaded/reloaded
         -- while engaged, or the player manually engaged a mob.
         if player.status == STATUS_ENGAGED then
-            local t = windower.ffxi.get_mob_by_target('t') or windower.ffxi.get_mob_by_target('bt')
-            if t and t.valid_target and t.hpp > 0 and t.spawn_type == SPAWN_TYPE_MOB and (currentMob == nil or currentMob.id ~= t.id) then
-                writeVerbose('Syncing with unregistered engagement target: %s':format(text_mob(t.name)))
-                
-                resetCurrentMob(t)                
+            if 
+                current_t and
+                current_t.valid_target and
+                current_t.hpp > 0 and
+                current_t.spawn_type == SPAWN_TYPE_MOB and
+                (currentMob == nil or currentMob.id ~= current_t.id) 
+            then
+                writeVerbose('Syncing with unregistered engagement target: %s':format(text_mob(current_t.name)))                
+                resetCurrentMob(current_t)                
                 return false
             else
                 -- If we are engaged and have no valid t or bt, then we're ready to start looking for our
@@ -460,6 +467,20 @@ function processTargeting(player, party)
     if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
     if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
     if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
+
+    if party.a10 and party.a10.mob then party_by_id[party.a10.mob.id] = party.a10 end
+    if party.a11 and party.a11.mob then party_by_id[party.a11.mob.id] = party.a11 end
+    if party.a12 and party.a12.mob then party_by_id[party.a12.mob.id] = party.a12 end
+    if party.a13 and party.a13.mob then party_by_id[party.a13.mob.id] = party.a13 end
+    if party.a14 and party.a14.mob then party_by_id[party.a14.mob.id] = party.a14 end
+    if party.a15 and party.a15.mob then party_by_id[party.a15.mob.id] = party.a15 end
+
+    if party.a20 and party.a20.mob then party_by_id[party.a20.mob.id] = party.a20 end
+    if party.a21 and party.a21.mob then party_by_id[party.a21.mob.id] = party.a21 end
+    if party.a22 and party.a22.mob then party_by_id[party.a22.mob.id] = party.a22 end
+    if party.a23 and party.a23.mob then party_by_id[party.a23.mob.id] = party.a23 end
+    if party.a24 and party.a24.mob then party_by_id[party.a24.mob.id] = party.a24 end
+    if party.a25 and party.a25.mob then party_by_id[party.a25.mob.id] = party.a25 end
 
     local isMultiParty = hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD)
 

@@ -40,7 +40,7 @@
     {
       "commands": [
         "log('NOTE: Gambit crafting requires that the [craft] addon be installed!')",
-        "sendCommand('lua r craft')"
+        "sendCommand('lua l craft')"
       ],
       "frequency": "infinity"
     },
@@ -48,7 +48,7 @@
       "when": ["vars.crafting.sell_npc"],
       "commands": [
         "log('NOTE: Gambit craft sales require the [SellNPC] addon to be installed!')",
-        "sendCommand('lua r SellNPC')"
+        "sendCommand('lua l SellNPC')"
       ],
       "frequency": "infinity"
     },

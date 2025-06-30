@@ -60,6 +60,11 @@
   },
   "actions": [
     {
+      "comment": [
+        " ================================================================================ ",
+        "  Clears the list of already-tried weapon skills at the start of any fight.",
+        " ================================================================================ "
+      ],
       "commands": [
         "setVar('vars.abyssea.blue_proc.used_ws', nil)",
         "setVar('vars.abyssea.blue_proc.used_count', 0)",
@@ -70,10 +75,14 @@
       ],
       "delay": 0,
       "frequency": "infinity",
-      "scope": "battle",
-      "comment": "This clears the list of already-tried weapon skills at the start of any fight."
+      "scope": "battle"
     },
     {
+      "comment": [
+        " ================================================================================ ",
+        "  Resets the current weapon skill pool based on time of day.",
+        " ================================================================================ "
+      ],
       "when": ["vars.abyssea.blue_proc.reset"],
       "commands": [
         "inRange(game_time.hour - 6, 0, 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614) and log('Setting BLUE PROC pool to 06-14')",
@@ -87,10 +96,16 @@
       ],
       "delay": 0,
       "frequency": 0,
-      "scope": "battle",
-      "comment": "Resets the current weapon skill pool based on time of day."
+      "scope": "battle"
     },
     {
+      "comment": [
+        " ================================================================================ ",
+        "  Trigger a reset of the used weapon skills.",
+        "    - Fires when all known weapon skills for this weapon were used.",
+        "    - This variant only fires when there ARE weapon swaps defined.",
+        " ================================================================================ "
+      ],
       "when": [
         "hasAllFieldNames(vars.abyssea.blue_proc.used_ws, vars.abyssea.blue_proc.usable_ws) or \\",
         "  arrayLength(vars.abyssea.blue_proc.usable_ws) == 0",
@@ -107,6 +122,13 @@
       "scoped_enumerators": true
     },
     {
+      "comment": [
+        " ================================================================================ ",
+        "  Trigger a reset of the used weapon skills.",
+        "    - Fires when all known weapon skills for this weapon were used.",
+        "    - This variant only fires when there are NO weapon swaps defined.",
+        " ================================================================================ "
+      ],
       "when": [
         "arrayLength(vars.abyssea.red_proc._weapons) == 0",
         "hasAllFieldNames(vars.abyssea.blue_proc.used_ws, vars.abyssea.blue_proc.usable_ws)"
@@ -119,6 +141,11 @@
       "frequency": 5
     },
     {
+      "comment": [
+        " ================================================================================ ",
+        "  Uses the next available weapon skill for this weapon.",
+        " ================================================================================ "
+      ],
       "when": [
         "bt",
         "iterate(vars.abyssea.blue_proc.usable_ws)",

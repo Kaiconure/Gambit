@@ -30,6 +30,13 @@ local FAST_JOB_ABILITIES = {
     'Chi Blast'
 }
 
+local SKILLCHAIN_ALIASES = {
+    Light1      = { 'Light 1', 'Light I'},
+    Darkness1   = { 'Darkness 1', 'Darkness I' },
+    Light2      = { 'Light 2', 'Light II'},    
+    Darkness2   = { 'Darkness 2', 'Darkness II' }
+}
+
 -----------------------------------------------------------------------------------------
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
@@ -108,6 +115,38 @@ local context_constants = {
     returnfaith_distance = 6,
     returntrust_distance = 6
 }
+
+local function StringSortI(a, b)
+    return a:lower() < b:lower()
+end
+
+local function DumpStrings(fileName, strings)
+    local f = files.new(fileName)
+    f:write(table.concat(strings, '\n'))
+end
+
+local function context_dump(context, for_wiki)
+    local functions = {}
+    local symbols = {}
+
+    for key, value in pairs(context) do
+        if type(value) == 'function' then
+            if for_wiki then
+                functions[#functions + 1] = ' - [[%s|functions/%s]]':format(key, key)
+            else
+                functions[#functions + 1] = key
+            end
+        else
+            symbols[#symbols + 1] = '%s (%s)':format(key, type(value))
+        end
+    end
+
+    table.sort(functions, StringSortI)
+    DumpStrings('functions.txt', functions)
+    
+    table.sort(symbols, StringSortI)
+    DumpStrings('symbols.txt', symbols)
+end
 
 local function context_any(search, ...)
     local cmp = __context_compare
@@ -196,8 +235,8 @@ end
 --
 local function context_key_tap(key, wait)
     if type(key) == 'string' then
-        windower.send_command('setkey %s down;  wait 0.2; setkey %s up;':format(key, key))
-        coroutine.sleep((tonumber(wait) or 0.2) + 0.2)
+        windower.send_command('setkey %s down;  wait 0.5; setkey %s up;':format(key, key))
+        coroutine.sleep((tonumber(wait) or 0.2) + 0.5)
     end
 end
 
@@ -1618,6 +1657,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         (context.skillchain and context.skillchain.time) or 
         (context.party_weapon_skill and context.party_weapon_skill.time) or
         0
+    if context.skillchain and context.skillchain.time then
+        context.skillchain_age = os.clock() - context.skillchain.time
+    else
+        context.skillchain_age = math.huge
+    end
 
     context.target = target
     context.player = windower.ffxi.get_player()
@@ -1659,6 +1703,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- Moon info
         context.moon_phase_id = context.game_info.moon_phase
         context.moon_phase = context.moon_phase_id and resources.moon_phases[context.moon_phase_id]
+        context.moon_phase_name = context.moon_phase and context.moon_phase.name
     end
 
     -- Store a mapping of id->member and index->member for the party
@@ -1696,6 +1741,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         ))
 
         return true
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Write a formatted (printf-style) string to the action log
+    context.logf = function(fmt, ...)
+        if type(fmt) == 'string' then
+            return context.log(fmt:format(...))
+        end
     end
 
     --------------------------------------------------------------------------------------
@@ -1806,57 +1859,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     pluralize(count, 'gear item', 'gear items', Colors.verbose)
                 ))
             end
-        end
-    end
-
-    context.equipMany_OLD = function(...)
-        local entries = varargs({...})
-
-        if #entries == 0 then return end
-
-        local count = 0
-        local commands = {}
-
-        if type(entries[1]) == 'string' then
-            for i = 1, #entries, 2 do 
-                local slot = entries[i]
-                local equipment = entries[i + 1]
-
-                if slot and equipment then
-                    if context.findUnequippedItem(equipment) then
-                        arrayAppend(commands, 'input /equip %s "%s"':format(slot, equipment))
-                        count = count + 1
-                    end
-                end
-            end
-        elseif type(entries[1]) == 'table' then
-            for i, entry in ipairs(entries) do
-                if type(entry) == 'table' then
-                    local slot = entry.slot
-                    local equipment = entry.equipment or entry.item or entry.gear
-
-                    if slot and equipment then
-                        if context.findUnequippedItem(equipment) then
-                            arrayAppend(commands, 'input /equip %s "%s"':format(slot, equipment))
-                            count = count + 1
-                        end
-                    end
-                end
-            end
-        end
-
-        if count > 0 then
-            writeVerbose('Equipping: %s':format(
-                pluralize(count, 'gear item', 'gear items', Colors.verbose)
-            ))
-
-            sendActionCommand(
-                table.concat(commands, ';'),
-                context,
-                0.0
-            )
-
-            return true
         end
     end
 
@@ -2948,10 +2950,31 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
+    context.aligning = function(target, angle, distance)
+        -- Convert degrees to radians if an angle was provided
+        angle = tonumber(angle)
+        if type(angle) == 'number' then
+            angle = angle * math.pi / 180
+        end
+
+        local job = smartMove:getJobInfo()
+        if job and job.position then
+            local position = smartMove:findMobOffset(target, angle, distance)
+            local deltax = math.abs(job.position[1] - position[1])
+            local deltay = math.abs(job.position[2] - position[2])
+
+            if deltax < 0.5 and deltay < 0.5 then
+                return true
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    --
     context.align = function(target, angle, distance, duration, noFace)
         -- Nothing to do if we're already aligned
         if context.aligned(target, angle, distance) then
-            return
+            return true
         end
 
         -- Convert degrees to radians if an angle was provided
@@ -2976,6 +2999,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         return true
+    end
+
+    --------------------------------------------------------------------------------------
+    --
+    context.align2 = function(target, angle, distance, duration)
+        -- Nothing to do if we're already aligned
+        if context.aligned(target, angle, distance) then
+            return true
+        end
+
+        -- Convert degrees to radians if an angle was provided
+        angle = tonumber(angle)
+        if type(angle) == 'number' then
+            angle = angle * math.pi / 180
+        end
+
+        local position = smartMove:findMobOffset(target, angle, distance)
+        local success = context.move(
+            position[1],
+            position[2],
+            tonumber(duration))
+
+        return success
     end
 
     --------------------------------------------------------------------------------------
@@ -3277,31 +3323,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     end
                 end
             end
-        end
-    end
-
-    -------------------------------------------------------------------------------------
-    -- Check if the specified target is being followed
-    context.following0 = function(target)
-        target = target or context.member or context.bt
-        
-        if type(target) == 'string' then
-            target = windower.ffxi.get_mob_by_target(target) 
-        elseif type(target) == 'table' and target.mob then
-            target = target.mob
-        end
-
-        if
-            target == nil
-            or type(target.index) ~= 'number' or
-            not target.valid_target 
-        then
-            return
-        end
-
-        local jobInfo = smartMove:getJobInfo()
-        if jobInfo and jobInfo.follow_index == target.index then
-            return true
         end
     end
 
@@ -4168,27 +4189,39 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Clears tracking of the current weapon skill and skillchain info (if any)
     context.resetSkillchain = function()
-        actionStateManager:clearSkillchain(context.bt)
-        --actionStateManager:setSkillchain(nil, context.bt)
-        actionStateManager:clearPartyWeaponSkills()
+        if context.skillchain or context.party_weapon_skill then
+            actionStateManager:clearSkillchain(context.bt)
+            --actionStateManager:setSkillchain(nil, context.bt)
+            actionStateManager:clearPartyWeaponSkills()
+        end
 
         context.skillchain = nil
         context.party_weapon_skill = nil
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
     -- Returns true if the specified buff is active
     context.skillchaining = function (...)
         local names = varargs({...})
-
         local skillchain = context.skillchain
         if
             context.party_weapon_skill and
             skillchain and
-            skillchain.name ~= nil and 
-            (names[1] == nil or arrayIndexOfStrI(names, skillchain.name))
+            skillchain.name ~= nil and  (
+                names[1] == nil or 
+                arrayIndexOfStrI(names, skillchain.name) or
+                (skillchain.name == 'Light' and
+                    not arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Light') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Light1)) or         -- Light 1 (explicit)
+                (skillchain.name == 'Light' and 
+                    arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Light') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Light2)) or             -- Light 2
+                (skillchain.name == 'Darkness' and 
+                    not arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Darkness') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Darkness1)) or   -- Darkness 1 (explicit)
+                (skillchain.name == 'Darkness' and 
+                    arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Darkness') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Darkness2))          -- Darkness 2
+            )
         then
-            context.skillchain_trigger_time = skillchain.time
             context.skillchain_age = os.clock() - skillchain.time
             return true
         end
@@ -4200,8 +4233,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.skillchaining2 = function(...)
         local result = context.skillchaining(...)
         if result then
-            local age = os.clock() - context.skillchain_trigger_time
-            if age >= settings.skillchainDelay - 1 then
+            if context.skillchain_age >= settings.skillchainDelay - 1 then
                 return result
             end
         end
@@ -4215,6 +4247,53 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.vars.__suppress_offensive_magic = context.vars.__suppress_offensive_magic + 1
             else
                 context.vars.__suppress_offensive_magic = 1
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Sends a raw packet to the game
+    context.sendPacket = function(id, data)
+        -- local packet = packets.new('outgoing', 0x05B)
+        -- packet["Target"] = obj['Target']
+        -- packet["Option Index"]=obj["Option Index"]
+        -- packet["_unknown1"]=obj["_unknown1"]
+        -- packet["Target Index"]=obj["Target Index"]
+        -- packet["Automated Message"]=true
+        -- packet["_unknown2"]=0
+        -- packet["Zone"]=zone
+        -- packet["Menu ID"]=menuid
+        -- packets.inject(packet)
+        
+        -- local packet = packets.new('outgoing', 0x05B)
+        -- packet["Target"] = obj['Target']
+        -- packet["Option Index"]=0
+        -- packet["_unknown1"]=16384
+        -- packet["Target Index"]=obj["Target Index"]
+        -- packet["Automated Message"]=false
+        -- packet["_unknown2"]=0
+        -- packet["Zone"]=zone
+        -- packet["Menu ID"]=menuid
+        -- packets.inject(packet)
+
+        -- print('id = %s (%s)':format(tostring(id), type(id)))
+        -- print('data = %s':format(type(data)))
+
+        if type(id) == 'number' and type(data) == 'table' then
+            local packet = packets.new('outgoing', id, data)
+
+            if packet and not packet._error then
+                -- for key, value in pairs(data) do
+                --     packet[key] = value
+                --     --print('[%s] = [%s] (%s)':format(key, value, type(value)))
+                -- end
+
+                -- writeJsonToFile('/data/outgoing/%d/%d-packet.json':format(id, os.clock()), packet)
+                -- context.wait(1)
+
+                packets.inject(packet)
+
+                return true
             end
         end
     end
@@ -4410,7 +4489,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     skills[1] == nil or
                     arrayIndexOfStrI(skills, party_weapon_skill.name)
                 then
-                    context.skillchain_trigger_time = party_weapon_skill.time
                     return party_weapon_skill
                 end
             end
@@ -4425,10 +4503,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if result then
             local age = os.clock() - context.skillchain_trigger_time
             if
-                --(not context.skillchain and age >= SKILLCHAIN_START_DELAY) or
                 (age >= settings.skillchainDelay - 1)
             then
-                --writeVerbose('partyUsingWeaponSkill2: %s':format(result and text_green('true') or text_red('false')))
                 return result
             end
         end
@@ -4587,6 +4663,34 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.hasTarget = function ()
         return (context.t and context.t.mob) ~= nil
     end
+
+    --------------------------------------------------------------------------------------
+    -- Refreshes the context version of the specified mob
+    context.syncMob = function (mob, wait)
+        local symbol = type(mob) == 'table' and mob.symbol or tostring(mob)
+        if symbol then
+            local context_mob = context[symbol]
+            if context_mob and context_mob.symbol and context_mob.id and context_mob.index then
+                wait = math.max(tonumber(wait) or 0, 0)
+                if wait > 0 then
+                    context.wait(wait)
+                end
+
+                local mob = windower.ffxi.get_mob_by_id(context_mob.id)
+                if mob and mob.valid_target then
+                    context_mob.mob = mob
+                    initContextTargetSymbol(context, context_mob)
+
+                    if context_mob.symbol2 then
+                        context[context_mob.symbol2] = context_mob
+                    end
+
+                    return context_mob
+                end
+            end
+        end
+    end
+
 
     --------------------------------------------------------------------------------------
     -- Ensure that the current action does not execute again for at least
@@ -4771,39 +4875,45 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         if type(mob) == 'table' then
-            max_distance = math.max(tonumber(max_distance) or 10, 0)
-            if mob.distance <= (max_distance * max_distance) then
-                local player = windower.ffxi.get_player()
+            max_distance = math.max(tonumber(max_distance) or 6, 0)
+            if mob.distance < (max_distance * max_distance) and mob.valid_target then
+                if
+                    mob.spawn_type == 2 or not mob.spawn_type
+                then
+                    -- context.keyTap('escape', 0.5)
+                    -- coroutine.sleep(1)
+                    coroutine.sleep(0.25 + (math.random() * 3))
 
-                local lt = lockTarget(player, mob)
-                local t = windower.ffxi.get_mob_by_target('t')
-                if t == nil or t.id ~= mob.id then
-                    coroutine.sleep(0.1)
-                    lt = lockTarget(player, mob)
-                    t = windower.ffxi.get_mob_by_target('t')
-                    if t == nil or t.id ~= mob.id then
-                        t = nil
-                    end
-                end
-
-                -- if settings.debugging then
-                --     writeMessage('DBG: touch targeting ended with lt=%s, t=%s':format(
-                --         lt and text_green('true') or text_red('false'),
-                --         t and text_number(t.id) or text_red('nil')
-                --     ))
-                -- end
-
-                if t ~= nil then
-                    -- if settings.debugging then
-                    --     writeMessage('DBG: touch sending enter key press...')
-                    -- end
-
-                    coroutine.sleep(1)
-
-                    -- Activate the target
-                    context.keyTap('enter', 0.5)
+                    local packet = packets.new('outgoing', 0x01A, {
+                        ["Target"] = mob.id,
+                        ["Target Index"] = mob.index,
+                        ["Category"] = 0,
+                        ["Param"] = 0,
+                        ["_unknown1"] = 0
+                    })
+                    packets.inject(packet)
                 else
-                    writeMessage(text_red('Warning: Targeting failed!'))
+                    local player = windower.ffxi.get_player()
+
+                    local lt = lockTarget(player, mob)
+                    local t = windower.ffxi.get_mob_by_target('t')
+                    if t == nil or t.id ~= mob.id then
+                        coroutine.sleep(0.1)
+                        lt = lockTarget(player, mob)
+                        t = windower.ffxi.get_mob_by_target('t')
+                        if t == nil or t.id ~= mob.id then
+                            t = nil
+                        end
+                    end
+
+                    if t ~= nil then
+                        coroutine.sleep(1)
+
+                        -- Activate the target
+                        context.keyTap('enter', 0.5)
+                    else
+                        writeMessage(text_red('Warning: Targeting failed!'))
+                    end
                 end
             end
         end
@@ -4826,20 +4936,35 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         if mob then
-            max_distance = math.max(tonumber(max_distance) or 5, 0)
-            if mob.distance <= (max_distance * max_distance) then
-                local player = windower.ffxi.get_player()
-                if lockTarget(player, mob) then
-                    coroutine.sleep(1)
-                    
-                    -- Activate the target
-                    context.keyTap('enter', 0.5)
-                    
-                    -- We'll double-escape: Once to exit dialog (if any), and again to clear the target.
+            max_distance = math.max(tonumber(max_distance) or 6, 0)
+            if mob.distance < (max_distance * max_distance) then
+                if
+                    mob.spawn_type == 2
+                then
                     context.keyTap('escape', 0.5)
-                    context.keyTap('escape', 0.5)
+
+                    local packet = packets.new('outgoing', 0x01A, {
+                        ["Target"] = mob.id,
+                        ["Target Index"] = mob.index,
+                        ["Category"] = 0,
+                        ["Param"] = 0,
+                        ["_unknown1"] = 0
+                    })
+                    packets.inject(packet)
                 else
-                    writeMessage(text_red('Warning: Targeting failed!'))
+                    local player = windower.ffxi.get_player()
+                    if lockTarget(player, mob) then
+                        coroutine.sleep(1)
+                        
+                        -- Activate the target
+                        context.keyTap('enter', 0.5)
+                        
+                        -- We'll double-escape: Once to exit dialog (if any), and again to clear the target.
+                        context.keyTap('escape', 0.5)
+                        context.keyTap('escape', 0.5)
+                    else
+                        writeMessage(text_red('Warning: Targeting failed!'))
+                    end
                 end
             end
         end
@@ -4949,9 +5074,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     return context
 end
 
+local dumped = false
+
 return {
     create = function(actionType, time, target, mobEngagedTime, battleScope, party)
         local context = makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+
+        -- if not dumped then
+        --     context_dump(context)
+        --     dumped = true
+        -- end
 
         -- Store the most recently created context
         actionStateManager:setContext(context)

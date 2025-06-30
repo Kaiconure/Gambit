@@ -75,7 +75,10 @@ local DefaultIgnoreList = {
     { name = 'Umberwood Tiger', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Uprooted Sapling', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Velkk Vaticinator', ignoreAlways = true, _note = 'Reive guard' },
-    { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' }
+    { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' },
+    { name = 'Iroha', ignoreAlways = true, _note = 'NPC ally in certain battles' },
+    { name = 'Arciela', ignoreAlways = true, _note = 'NPC ally in certain battles' },
+    { name = 'Lion', ignoreAlways = true, _note = 'NPC ally in certain battles' }
 }
 
 --

@@ -524,8 +524,6 @@ local function getNextBattleAction(context)
                 context.enemy_spell             = nil   -- The current mob spell
                 context.enemy_spell_target      = nil   -- The current mob spell's target
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
-                context.skillchain_trigger_time = 0     -- The time at which the latest skillchain occurred
-                context.skillchain_age          = math.huge -- The time at which the latest skillchain occurred
                 
                 -- Reload the enumerator data
                 if 

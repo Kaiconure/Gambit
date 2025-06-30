@@ -1,4 +1,4 @@
-__version = '0.95.5-beta40'
+__version = '0.95.5-beta41'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -192,6 +192,7 @@ windower.register_event('load', function()
     windower.send_command(bind_tap)         -- Tap your current target
 
     windower.send_command('alias gbtfn gbt func -n')
+    windower.send_command('alias gbtta gbt target -n')
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
@@ -236,10 +237,17 @@ windower.register_event('login', function ()
         globals.me_id = me.id
         globals.me_name = me.name
     end
+
+    sendSelfCommand('disable')
     
     -- Reload all settings
     resetCurrentMob(nil, true)
     reloadSettings()
+end)
+
+windower.register_event('logout', function()
+    -- This may cause a crash...?
+    -- sendSelfCommand('disable')
 end)
 
 ---------------------------------------------------------------------
@@ -1089,3 +1097,76 @@ windower.register_event('incoming chunk', function (id, data)
         _handle_limitCapacityChunk(id, data)
     end
 end)
+
+--[[
+windower.register_event('outgoing chunk', function(id, data, modified, injected, blocked)
+    if id == 0x05B then
+        local packet = packets.parse('outgoing', data)
+        if packet then
+            local target = packet.Target and windower.ffxi.get_mob_by_id(packet.Target)
+            if not target or target.spawn_type ~= 2 then
+                return
+            end
+
+            local is_waypoint = target.name == "Waypoint"
+            local is_homepoint = not is_waypoint and string.sub(target.name, 1, 10) == 'Home Point'
+
+            if is_waypoint or is_homepoint then
+                local me = windower.ffxi.get_mob_by_target('me')
+                if not me then
+                    return
+                end
+
+                local option_index = tonumber(packet['Option Index']) or 0
+                local automated_message = packet['Automated Message']
+                local unknown1 = tonumber(packet['_unknown1']) or 0
+                local unknown2 = tonumber(packet['_unknown2']) or 0
+                local menu_id = tonumber(packet['Menu ID']) or 0
+                local zone = tonumber(packet['Zone']) or 0
+
+                if
+                    automated_message and option_index > 0 and unknown1 > 0
+                then
+                    sendSelfCommand('warp -by %d -m %d -o %d -z %d u1 %d':format(
+                        me.id,
+                        menu_id,
+                        option_index,
+                        zone,
+                        unknown1
+                    ))
+
+                    -- {
+                    --     "Menu ID": 32762,
+                    --     "_name": "Dialog choice",
+                    --     "_dir": "outgoing",
+                    --     "_id": 91,
+                    --     "Option Index": 32800,
+                    --     "_unknown2": 0,
+                    --     "_description": "Chooses a dialog option.",
+                    --     "Zone": 230,
+                    --     "Automated Message": false,
+                    --     "Target Index": 101,
+                    --     "_size": 20,
+                    --     "Target": 17719397,
+                    --     "_unknown1": 0,
+                    --     "_sequence": 0
+                    -- }
+
+                    writeMessage(
+                        'Home point selection made:\n' ..
+                        ' Id: %s\n':format(text_number(target.id)) ..
+                        ' Index: %s\n':format(text_number(target.index)) ..
+                        ' Name: %s\n':format(text_green(target.name)) ..
+                        ' Menu ID: %s\n':format(text_number(menu_id)) ..
+                        ' Option Index: %s\n':format(text_number(option_index)) ..
+                        ' Zone: %s\n':format(text_number(zone)) ..
+                        ' Automated Message: %s\n':format(text_item(automated_message == true and 'true' or 'false')) ..
+                        ' _unknown1: %s\n':format(text_number(unknown1)) ..
+                        ' _unknown2: %s\n':format(text_number(zone))
+                    )
+                end
+            end
+        end
+    end
+end)
+]]

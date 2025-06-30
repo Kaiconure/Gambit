@@ -16,7 +16,9 @@
       "hold_on_buffs": null,
       "blacklist": null,
       "default_scd": null,
-      "fast_scd": null
+      "fast_scd": null,
+      "free_for_all": null,
+      "anarchy_for_all": null
     }
   },
   "macros": {
@@ -44,18 +46,20 @@
     "check_using_ws": ["(partyUsingWeaponSkill2)"],
     "check_skillchaining": ["(skillchaining2)"],
     "ws_partners_deferring": [
+      "not vars.ws.anarchy_for_all or resetSkillchain()",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
       "arrayCount(vars.ws.blacklist) == 0 or not any(bt.name, vars.ws.blacklist)",
-      "not vars.ws.partner  or not pinfo[vars.ws.partner]  or (not pinfo[vars.ws.partner].is_engaged  or pinfo[vars.ws.partner].tp <= vars.ws.partner_tp_threshold)",
-      "not vars.ws.partner2 or not pinfo[vars.ws.partner2] or (not pinfo[vars.ws.partner2].is_engaged or pinfo[vars.ws.partner2].tp <= vars.ws.partner2_tp_threshold)",
-      "not vars.ws.partner3 or not pinfo[vars.ws.partner3] or (not pinfo[vars.ws.partner3].is_engaged or pinfo[vars.ws.partner3].tp <= vars.ws.partner3_tp_threshold)",
-      "not vars.ws.partner4 or not pinfo[vars.ws.partner4] or (not pinfo[vars.ws.partner4].is_engaged or pinfo[vars.ws.partner4].tp <= vars.ws.partner4_tp_threshold)",
-      "not vars.ws.partner5 or not pinfo[vars.ws.partner5] or (not pinfo[vars.ws.partner5].is_engaged or pinfo[vars.ws.partner5].tp <= vars.ws.partner5_tp_threshold)"
+      "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner  or not pinfo[vars.ws.partner]  or (not pinfo[vars.ws.partner].is_engaged  or pinfo[vars.ws.partner].tp <= vars.ws.partner_tp_threshold)",
+      "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner2 or not pinfo[vars.ws.partner2] or (not pinfo[vars.ws.partner2].is_engaged or pinfo[vars.ws.partner2].tp <= vars.ws.partner2_tp_threshold)",
+      "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner3 or not pinfo[vars.ws.partner3] or (not pinfo[vars.ws.partner3].is_engaged or pinfo[vars.ws.partner3].tp <= vars.ws.partner3_tp_threshold)",
+      "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner4 or not pinfo[vars.ws.partner4] or (not pinfo[vars.ws.partner4].is_engaged or pinfo[vars.ws.partner4].tp <= vars.ws.partner4_tp_threshold)",
+      "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner5 or not pinfo[vars.ws.partner5] or (not pinfo[vars.ws.partner5].is_engaged or pinfo[vars.ws.partner5].tp <= vars.ws.partner5_tp_threshold)"
     ],
     "ws_defer_to_secondary": [
+      "not vars.ws.anarchy_for_all or resetSkillchain()",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
       "arrayCount(vars.ws.blacklist) == 0 or not any(bt.name, vars.ws.blacklist)",
-      "vars.ws.is_secondary or (not partyByName(vars.ws.partner or '!!') and (not partyByName(vars.ws.secondary or '!!') or not member.is_engaged or member.tp < vars.ws.secondary_tp_min))"
+      "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or vars.ws.is_secondary or (not partyByName(vars.ws.partner or '!!') and (not partyByName(vars.ws.secondary or '!!') or not member.is_engaged or member.tp < vars.ws.secondary_tp_min))"
     ]
   },
   "actions": [

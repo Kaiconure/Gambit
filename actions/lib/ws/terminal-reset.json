@@ -4,18 +4,25 @@
       "terminal_reset": {
         "disabled": null,
         "on_skillchains": null,
-        "wait": 0
+        "wait": null,
+        "_defaults": ["Light II", "Darkness II"]
       }
     }
   },
   "actions": [
     {
+      "commands": [
+        "setVar('vars.ws.terminal_reset._resets', arrayCount(vars.ws.terminal_reset.on_skillchains) > 0 and vars.ws.terminal_reset.on_skillchains or {'Light II', 'Darkness II'})"
+      ],
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
       "when": [
         "not vars.ws.terminal_reset.disabled",
         "party_weapon_skill and skillchain",
-        "(arrayCount(vars.ws.terminal_reset.on_skillchains) > 0 and any(skillchain.name, vars.ws.terminal_reset.on_skillchains)) or \\",
-        "    (any(skillchain.name, 'Light', 'Darkness') and any(skillchain.name, party_weapon_skill.skillchains))",
-        "skillchain_age >= vars.ws.terminal_reset.wait"
+        "skillchain_age >= (vars.ws.terminal_reset.wait or 0)",
+        "skillchaining(vars.ws.terminal_reset._resets)"
       ],
       "commands": [
         "log(' === Resetting Skillchain Tracking === ')",

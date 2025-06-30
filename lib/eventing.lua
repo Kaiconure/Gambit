@@ -245,7 +245,7 @@ ActionPacket.open_listener(function (act)
                             my_target and
                             --actor.spawn_type ~= SPAWN_TYPE_MOB and
                             --(my_target.id == target.id or (target.spawn_type ~= SPAWN_TYPE_MOB))
-                            (my_target.id == target.id or target.in_party or target.in_alliance)
+                            (my_target.id == target.id or actor.in_party or actor.in_alliance)
                         then
                             -- if ability.name == 'Spirit Taker' or ability.name == 'Myrkr' then
                             --     writeJsonToFile('data/ws/tracking/%s_%s_uses_%s_on_%s.json':format(os.clock(), actor.name, ability.name, target.name), actionPacket)

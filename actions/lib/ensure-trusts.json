@@ -18,7 +18,7 @@
     {
       "name": "call_trusts",
       "when": [
-        "me.is_party_leader",
+        "me.is_party_leader and not a10 and not a20",
         "needsTrust(vars.ensure_trusts.spells)",
         "not any(zone_id, 182) or hasBuff('Battlefield')"
       ],
@@ -32,7 +32,7 @@
     {
       "name": "recall_trusts.debuff",
       "when": [
-        "me.is_party_leader and actionType == 'idle'",
+        "me.is_party_leader and not a10 and not a20 and actionType == 'idle'",
         "partyAll('is_trust') and hasEffect(member, vars.ensure_trusts.recall_on_effects) and canUseSpell(trustSpellName(member.name))",
         "not any(member.name, vars.ensure_trusts.recall_blacklist)",
         "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
@@ -52,7 +52,7 @@
     {
       "name": "recall_trusts.mp",
       "when": [
-        "me.is_party_leader and actionType == 'idle'",
+        "me.is_party_leader and not a10 and not a20 and actionType == 'idle'",
         "partyAll('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
         "not any(member.name, vars.ensure_trusts.recall_blacklist)",
         "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
@@ -73,7 +73,7 @@
     {
       "name": "recall_trusts.hp",
       "when": [
-        "me.is_party_leader and actionType == 'idle'",
+        "me.is_party_leader and not a10 and not a20 and actionType == 'idle'",
         "partyAll('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name))",
         "not any(member.name, vars.ensure_trusts.recall_blacklist)",
         "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",

@@ -655,7 +655,7 @@ handlers['target'] = function(args)
 end
 
 handlers['touch'] = function(args)
-    local name = arrayIndexOfStrI(args, '-name')
+    local name = arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n')
     local id = arrayIndexOfStrI(args, '-id')
     local t = arrayIndexOfStrI(args, '-t')
     local all = arrayIndexOfStrI(args, '-all')
