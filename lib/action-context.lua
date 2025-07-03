@@ -4880,18 +4880,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if
                     mob.spawn_type == 2 or not mob.spawn_type
                 then
-                    -- context.keyTap('escape', 0.5)
-                    -- coroutine.sleep(1)
-                    coroutine.sleep(0.25 + (math.random() * 3))
-
-                    local packet = packets.new('outgoing', 0x01A, {
-                        ["Target"] = mob.id,
-                        ["Target Index"] = mob.index,
-                        ["Category"] = 0,
-                        ["Param"] = 0,
-                        ["_unknown1"] = 0
-                    })
-                    packets.inject(packet)
+                    coroutine.sleep(0.5 + (math.random() * 1.5))
+                    for i = 1, 2 do
+                        local packet = packets.new('outgoing', 0x01A, {
+                            ["Target"] = mob.id,
+                            ["Target Index"] = mob.index,
+                            ["Category"] = 0,
+                            ["Param"] = 0,
+                            ["_unknown1"] = 0
+                        })
+                        packets.inject(packet)
+                        coroutine.sleep(1.0)
+                    end
                 else
                     local player = windower.ffxi.get_player()
 
@@ -4941,16 +4941,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if
                     mob.spawn_type == 2
                 then
-                    context.keyTap('escape', 0.5)
+                    coroutine.sleep(0.5 + (math.random() * 1.5))
+                    for i = 1, 2 do
+                        local packet = packets.new('outgoing', 0x01A, {
+                            ["Target"] = mob.id,
+                            ["Target Index"] = mob.index,
+                            ["Category"] = 0,
+                            ["Param"] = 0,
+                            ["_unknown1"] = 0
+                        })
+                        packets.inject(packet)
+                        coroutine.sleep(1.0)
+                    end
 
-                    local packet = packets.new('outgoing', 0x01A, {
-                        ["Target"] = mob.id,
-                        ["Target Index"] = mob.index,
-                        ["Category"] = 0,
-                        ["Param"] = 0,
-                        ["_unknown1"] = 0
-                    })
-                    packets.inject(packet)
+                    coroutine.sleep(1)
+
+                    -- We'll double-escape: Once to exit dialog (if any), and again to clear the target.
+                    context.keyTap('escape', 0.5)
+                    context.keyTap('escape', 0.5)
                 else
                     local player = windower.ffxi.get_player()
                     if lockTarget(player, mob) then

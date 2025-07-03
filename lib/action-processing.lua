@@ -727,7 +727,7 @@ local function doNextActionCycle(time, player, party)
                     local isMobEngaged = 
                         mob and 
                         mob.status == STATUS_ENGAGED and
-                        (mob.claim_id > 0 and (hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD) or isPartyId(mob.claim_id)))
+                        (mob.claim_id > 0 and partyInfo:canShareClaim(mob.claim_id))
 
                     -- If the target mob is already engaged, it's not pullable (no need to pull)
                     hasPullableMob = not isMobEngaged
@@ -814,6 +814,10 @@ function cr_actionProcessor()
         local party = windower.ffxi.get_party()
         local player = windower.ffxi.get_player()
         local zoneTime = os.clock() - (globals.zoneEntryTime or 0)
+
+        -- Refresh the party info object. It will only actually refresh on a set interval,
+        -- which can be controlled via partyInfo.refresh_interval.
+        partyInfo:refresh(player, party, false)
 
         -- Perform background garbage collection operations. These will only occur when we are
         -- not in combat, to ensure that there's no interference with time-sensitive gambits.

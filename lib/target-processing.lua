@@ -74,7 +74,7 @@ local function setTargetMob(mob)
     resetCurrentMob(mob)
 end
 
-local function shouldAquireNewTarget(player, party, party_by_id)
+local function shouldAquireNewTarget(player, party)
     local checkEngagement = true
 
     local current_t = windower.ffxi.get_mob_by_target('t') or windower.ffxi.get_mob_by_target('bt')
@@ -95,13 +95,12 @@ local function shouldAquireNewTarget(player, party, party_by_id)
 
             -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
             local mobClaimed = currentMob.claim_id > 0
-            local mobClaimedByParty = party_by_id[currentMob.claim_id]
+            local mobClaimedByParty = partyInfo:canShareClaim(currentMob.claim_id)
 
             local refDistance = settings.maxDistance + 2
             local maxDistanceSquared = refDistance * refDistance
 
             local claimStolen = 
-                not allowMultiPartyMobs and
                 mobClaimed and
                 not mobClaimedByParty
             local claimTimedOut = 
@@ -459,32 +458,7 @@ function processTargeting(player, party)
         end
     end
 
-    -- Build a map of party members by their id so we can easily identify if we are the mob claim owner
-    local party_by_id = { }
-    if party.p0 and party.p0.mob then party_by_id[party.p0.mob.id] = party.p0 end
-    if party.p1 and party.p1.mob then party_by_id[party.p1.mob.id] = party.p1 end
-    if party.p2 and party.p2.mob then party_by_id[party.p2.mob.id] = party.p2 end
-    if party.p3 and party.p3.mob then party_by_id[party.p3.mob.id] = party.p3 end
-    if party.p4 and party.p4.mob then party_by_id[party.p4.mob.id] = party.p4 end
-    if party.p5 and party.p5.mob then party_by_id[party.p5.mob.id] = party.p5 end
-
-    if party.a10 and party.a10.mob then party_by_id[party.a10.mob.id] = party.a10 end
-    if party.a11 and party.a11.mob then party_by_id[party.a11.mob.id] = party.a11 end
-    if party.a12 and party.a12.mob then party_by_id[party.a12.mob.id] = party.a12 end
-    if party.a13 and party.a13.mob then party_by_id[party.a13.mob.id] = party.a13 end
-    if party.a14 and party.a14.mob then party_by_id[party.a14.mob.id] = party.a14 end
-    if party.a15 and party.a15.mob then party_by_id[party.a15.mob.id] = party.a15 end
-
-    if party.a20 and party.a20.mob then party_by_id[party.a20.mob.id] = party.a20 end
-    if party.a21 and party.a21.mob then party_by_id[party.a21.mob.id] = party.a21 end
-    if party.a22 and party.a22.mob then party_by_id[party.a22.mob.id] = party.a22 end
-    if party.a23 and party.a23.mob then party_by_id[party.a23.mob.id] = party.a23 end
-    if party.a24 and party.a24.mob then party_by_id[party.a24.mob.id] = party.a24 end
-    if party.a25 and party.a25.mob then party_by_id[party.a25.mob.id] = party.a25 end
-
-    local isMultiParty = hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD)
-
-    if not shouldAquireNewTarget(player, party, party_by_id) then
+    if not shouldAquireNewTarget(player, party) then
         return
     end
 
@@ -526,7 +500,7 @@ function processTargeting(player, party)
                 target.status == STATUS_ENGAGED and
                 target.spawn_type == SPAWN_TYPE_MOB and
                 (target.claim_id and target.claim_id > 0) and
-                (party_by_id[target.claim_id] or isMultiParty)
+                partyInfo:canShareClaim(target.claim_id)
             then
                 -- If the party leader is engaged with the target -AND- the target is engaged, then this is
                 -- the mob we're looking for. Move along, move along.
@@ -560,9 +534,7 @@ function processTargeting(player, party)
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 
-            (candidateMob.distance <= maxDistanceSquared
-                -- or (candidateMob.distance < (25*25) and party_by_id[candidateMob.claim_id or 0]) -- This will let us see mobs that are possibly out of distance range, but claimed
-                ) 
+            (candidateMob.distance <= maxDistanceSquared) 
             and candidateMob.valid_target 
             and candidateMob.spawn_type == 16
             and candidateMob.is_npc
@@ -583,8 +555,7 @@ function processTargeting(player, party)
             strategy == TargetStrategy.puller 
         then
             isValidCandidate = 
-                candidateMob.hpp == 100 or
-                party_by_id[candidateMob.claim_id or 0]
+                candidateMob.hpp == 100 or partyInfo:canShareClaim(candidateMob.claim_id)
         end
 
         -- Weird bug with tomb worms; mobs can be engaged and not claimed.
@@ -623,8 +594,7 @@ function processTargeting(player, party)
         then
             if 
                 candidateMob.claim_id == 0 or 
-                isMultiParty or
-                party_by_id[candidateMob.claim_id] 
+                partyInfo:canShareClaim(candidateMob.claim_id)
             then
 
                 -- We'll store the nearest aggroing mob, and give it priority over others
@@ -640,8 +610,7 @@ function processTargeting(player, party)
                         -- nearest to match the current candidate. This ensures that all members
                         -- theoretically target the same claimed mob (assuming strategies allow).
                         if 
-                            not party_by_id[nearestAggroingMob.claim_id] or
-                            party_by_id[candidateMob.claim_id]
+                            not partyInfo:isMember(nearestAggroingMob.claim_id) or partyInfo:isMember(candidateMob.claim_id)
                         then
                             nearestAggroingMob = candidateMob
                         else

@@ -279,45 +279,6 @@ function trimString(s)
  end
 
 -------------------------------------------------------------------------------
--- Returns true if the specified id belongs to a party member
-function isPartyId(id, party)
-    local is_party = false
-
-    party = party or windower.ffxi.get_party()
-    if party then
-        is_party = 
-            (party.p0 and party.p0.mob and party.p0.mob.id == id) or
-            (party.p1 and party.p1.mob and party.p1.mob.id == id) or
-            (party.p2 and party.p2.mob and party.p2.mob.id == id) or
-            (party.p3 and party.p3.mob and party.p3.mob.id == id) or
-            (party.p4 and party.p4.mob and party.p4.mob.id == id) or
-            (party.p5 and party.p5.mob and party.p5.mob.id == id)
-
-        if not is_party and party.a10 then
-            is_party = 
-                (party.a10 and party.a10.mob and party.a10.mob.id == id) or
-                (party.a11 and party.a11.mob and party.a11.mob.id == id) or
-                (party.a12 and party.a12.mob and party.a12.mob.id == id) or
-                (party.a13 and party.a13.mob and party.a13.mob.id == id) or
-                (party.a14 and party.a14.mob and party.a14.mob.id == id) or
-                (party.a15 and party.a15.mob and party.a15.mob.id == id)
-        end
-
-        if not is_party and party.a20 then
-            is_party = 
-                (party.a20 and party.a20.mob and party.a20.mob.id == id) or
-                (party.a21 and party.a21.mob and party.a21.mob.id == id) or
-                (party.a22 and party.a22.mob and party.a22.mob.id == id) or
-                (party.a23 and party.a23.mob and party.a23.mob.id == id) or
-                (party.a24 and party.a24.mob and party.a24.mob.id == id) or
-                (party.a25 and party.a25.mob and party.a25.mob.id == id)
-        end        
-    end
-
-    return is_party
-end
-
--------------------------------------------------------------------------------
 -- Returns true if any member of the party is engaged
 function isPartyEngaged(party)
     party = party or windower.ffxi.get_party()

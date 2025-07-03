@@ -1,4 +1,4 @@
-__version = '0.95.5-beta41'
+__version = '0.95.5-beta42'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -46,6 +46,8 @@ smartMove = require('./lib/smart-move')
 
 actionStateManager = require('./lib/action-state-manager')
 require('./lib/action-processing')
+
+partyInfo = require('./lib/party-info')
 
 ActionContext = require('./lib/action-context')
 
