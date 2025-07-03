@@ -422,7 +422,10 @@ function canUseSpell(player, spell, recasts, spellsLearned)
         if globals.currentZone then
             if 
                 globals.currentZone.can_pet ~= true or
-                globals.currentZone.id == 80 -- South San d'Oria [S] seems to be inappropriately tagged
+                globals.currentZone.id == 80 or     -- South San d'Oria [S]
+                globals.currentZone.id == 87 or     -- Bastok Markets [S]
+                globals.currentZone.id == 94 or     -- Windurst Waters [S]
+                false
             then
                 return
             end
