@@ -808,12 +808,9 @@ function cr_actionProcessor()
         if actionStateManager.needsRecompile then
             compileAllActions()
         end
-
-        local now = os.clock()
-        local time = now - startTime
+        
         local party = windower.ffxi.get_party()
         local player = windower.ffxi.get_player()
-        local zoneTime = os.clock() - (globals.zoneEntryTime or 0)
 
         -- Refresh the party info object. It will only actually refresh on a set interval,
         -- which can be controlled via partyInfo.refresh_interval.
@@ -821,7 +818,7 @@ function cr_actionProcessor()
 
         -- Perform background garbage collection operations. These will only occur when we are
         -- not in combat, to ensure that there's no interference with time-sensitive gambits.
-        local garbageCollectionAge = now - latestGarbageCollection
+        local garbageCollectionAge = os.clock() - latestGarbageCollection
         if 
             garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL and
             (player == nil or player.in_combat)
@@ -833,43 +830,39 @@ function cr_actionProcessor()
             latestGarbageCollection = os.clock()
         end
 
+        -- Refresh the time
+        local now = os.clock()
+        local time = now - startTime
+        local zoneTime = now - (globals.zoneEntryTime or 0)
+
+        -- We'll get the 'me' mob and verify it, because there are scenarios where
+        -- it would come back as nil. Let's avoid that.
+        local me = windower.ffxi.get_mob_by_target('me')
+
         if 
             globals.enabled and
             player and
             player.status ~= STATUS_EVENT and
+            me and
             zoneTime >= 5
         then
-            local me = windower.ffxi.get_mob_by_target('me')
+            local playerStatus = player.status
+            local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
+            local isResting = (playerStatus == STATUS_RESTING)              -- Resting
+            local isDead = player.vitals.hp <= 0                            -- Dead
 
+            actionStateManager:tick(time)
+
+            -- As long as we're not dead or resting, we can process targeting info
             if 
-                player and  -- There are conditions where these could be nil and crash the addon.
-                me          -- These conditions include things like zoning or logging out.
+                not isDead
             then
-                local playerStatus = player.status
-                local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
-                local isResting = (playerStatus == STATUS_RESTING)              -- Resting
-                local isDead = player.vitals.hp <= 0                            -- Dead
-
-                if 1 == 1 then
-                    actionStateManager:tick(time)
-
-                    -- As long as we're not dead or resting, we can process targeting info
-                    if 
-                        not isDead
-                    then
-                        processTargeting(player, party)
-                    end
-
-                    -- Refresh the player
-                    player = windower.ffxi.get_player()
-
-                    doNextActionCycle(time, player, party)
-                else
-                    sleepTimeSeconds = 2
-                end
-            else
-                sleepTimeSeconds = 2
+                processTargeting(player, party)
             end
+
+            -- Refresh the player and execute the next cycle
+            player = windower.ffxi.get_player()
+            doNextActionCycle(time, player, party)
 
             -- If automation was disabled during this iteration, forcibly stop following. Note that
             -- this could inadvertently stop a manual follow, but there's not a good way around
@@ -882,8 +875,8 @@ function cr_actionProcessor()
                 end
             end
         else
-            -- We will create a context when disabled. This simply ensures that we have context-based
-            -- state changes available and up to date once we re-enable.
+            -- We will create a context when disabled or are otherwise unable to run. This simply ensures 
+            -- that we have context-based state changes available and up to date once we re-enable.
             local context = ActionContext.create('idle', 
                 time,
                 nil,

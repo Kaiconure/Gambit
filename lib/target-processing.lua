@@ -88,11 +88,6 @@ local function shouldAquireNewTarget(player, party)
 
             local runtime = currentTarget:runtime()
 
-            -- Certain environments are set up to allow any number of parties to engage with the same mobs
-            local allowMultiPartyMobs = 
-                hasBuff(player, BUFF_ELVORSEAL) or
-                hasBuff(player, BUFF_BATTLEFIELD)
-
             -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
             local mobClaimed = currentMob.claim_id > 0
             local mobClaimedByParty = partyInfo:canShareClaim(currentMob.claim_id)

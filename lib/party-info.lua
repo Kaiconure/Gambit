@@ -2,8 +2,11 @@ local party_info = {
     p_by_id = {},
     a1_by_id = {},
     a2_by_id = {},
+    p_names = {},
+    a1_names = {},
+    a2_names = {},
     player = nil,
-    refresh_interval = 3,
+    refresh_interval = 5,
     last_refreshed = 0
 }
 
@@ -25,21 +28,54 @@ party_info.refresh = function(self, player, party, force)
         local a1_by_id = {}
         local a2_by_id = {}
 
-        for i = 0, 5 do
-            local p   = party['p' .. i]
-            local a1  = party['a1' .. i]
-            local a2  = party['a2' .. i]
+        local p_names  = {}
+        local a1_names = {}
+        local a2_names = {}
 
-            if p and p.mob and p.mob.id then p_by_id[p.mob.id] = p end
-            if a1 and a1.mob and a1.mob.id then a1_by_id[a1.mob.id] = a1 end
-            if a2 and a2.mob and a2.mob.id then a2_by_id[a2.mob.id] = a2 end
+        -- We've got slots 0-5 for parties and alliances. Go through them in parallel.
+        for i = 0, 5 do
+            local p  = party['p' .. i]
+            local a1 = party['a1' .. i]
+            local a2 = party['a2' .. i]
+
+            -- Party members
+            if p and p.mob and p.mob.id then
+                p_by_id[p.mob.id] = p
+                p_names[i] = p.name
+            else
+                p_names[i] = nil
+            end
+
+            -- Alliance #1 members
+            if a1 and a1.mob and a1.mob.id then
+                a1_by_id[a1.mob.id] = a1
+                a1_names[i] = a1.name
+            else
+                a1_names[i] = nil
+            end
+
+            -- Alliance #2 members
+            if a2 and a2.mob and a2.mob.id then
+                a2_by_id[a2.mob.id] = a2
+                a2_names[i] = a2.name
+            else
+                a2_names[i] = nil
+            end
         end
 
-        self.p_by_id = p_by_id
+        -- ID-based lookups
+        self.p_by_id  = p_by_id
         self.a1_by_id = a1_by_id
         self.a2_by_id = a2_by_id
 
+        -- Member names
+        self.p_names  = p_names
+        self.a1_names = a1_names
+        self.a2_names = a2_names
+
         self.last_refreshed = os.clock()
+
+        return true
     end
 end
 
