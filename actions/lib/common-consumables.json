@@ -1,6 +1,7 @@
 {
   "vars": {
     "common_consumables": {
+      "disabled": null,
       "escha_items": [
         "Silt Pouch",
         "Bead Pouch",
@@ -9,10 +10,14 @@
         "Frayed Sack (Tau)"
       ],
       "unm_items": [
+        "Arke's Coffer",
         "Bakunawa's Coffer",
-        "Vedrfolnir's Coffer",
+        "Belinda's Coffer",
         "Clawberry's Coffer",
-        "Arke's Coffer"
+        "Harold's Coffer",
+        "Shedu's Coffer",
+        "Sovereign's Coffer",
+        "Vedrfolnir's Coffer"
       ],
       "woe_items": [
         "Frayed Sack (D)",
@@ -27,17 +32,26 @@
   },
   "actions": [
     {
-      "when": "canUseItem(vars.common_consumables.escha_items)",
+      "when": [
+        "not vars.common_consumables.disabled and not vars.common_consumables.escha_items_disabled",
+        "canUseItem(vars.common_consumables.escha_items) and freeInventorySlots() > 0"
+      ],
       "commands": ["useItem(me)"],
       "comment": "Escha Items"
     },
     {
-      "when": "canUseItem(vars.common_consumables.unm_items)",
+      "when": [
+        "not vars.common_consumables.disabled and not vars.common_consumables.unm_items_disabled",
+        "canUseItem(vars.common_consumables.unm_items) and freeInventorySlots() > 0"
+      ],
       "commands": ["useItem(me)"],
       "comment": "UNM Items"
     },
     {
-      "when": "canUseItem(vars.common_consumables.woe_items)",
+      "when": [
+        "not vars.common_consumables.disabled and not vars.common_consumables.woe_items_disabled",
+        "canUseItem(vars.common_consumables.woe_items) and freeInventorySlots() > 0"
+      ],
       "commands": ["useItem(me)"],
       "comment": "Walk of Echoes Items"
     }

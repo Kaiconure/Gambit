@@ -221,6 +221,10 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
             local action = actions[i]
             action.filter = action.filter or {}
 
+            -- Let's just wipe out any comments on this action to save some memory
+            action.comment = nil
+            action.comments = nil
+
             -- For actions that are not enabled, we allow a "filter" object that can be used
             -- to filter who should be able run this action. The filters that are currently
             -- supported are:

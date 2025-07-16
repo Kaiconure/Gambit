@@ -4,7 +4,7 @@
   },
   "vars": {
     "use_provoke": {
-      "except_members": ["Valaineral"],
+      "except_members": ["Valaineral", "ArkEV"],
       "min_hpp": 25,
       "allow_flourish": true,
       "allow_flash": true,
@@ -14,6 +14,7 @@
   "actions": [
     {
       "when": [
+        "me.is_party_leader or not vars.use_provoke.leader_only",
         "bt.distance <= 15 and bt.hpp >= vars.use_provoke.min_hpp",
         "canUse('Provoke')",
         "arrayLength(vars.use_provoke.except_members) == 0 or not partyByName(vars.use_provoke.except_members)"
@@ -26,6 +27,7 @@
     },
     {
       "when": [
+        "me.is_party_leader or not vars.use_provoke.leader_only",
         "vars.use_provoke.allow_flourish",
         "bt.distance <= 15 and bt.hpp >= vars.use_provoke.min_hpp",
         "not canUse('Provoke') and not ability_recast",

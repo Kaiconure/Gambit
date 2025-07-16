@@ -1,0 +1,25 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "comment": [
+        "=======================================================================",
+        " Myoshu puts up a Subtle Blow Plus effect.",
+        "======================================================================="
+      ],
+      "when": [
+        "canUseSpell('Myoshu: Ichi') and not hasEffectOf(spell)",
+        "findItemInInventory('Kabenro', 'Shikanofuda') or \\",
+        "  (findUsableItem('Toolbag (Kaben)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
+        "  (findUsableItem('Toolbag (Shika)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+      ],
+      "commands": [
+        "log('Casting', spell.name, '(Subtle Blow Plus) on', me.name)",
+        "useSpell(me) and postpone(10)"
+      ],
+      "frequency": 2
+    }
+  ]
+}

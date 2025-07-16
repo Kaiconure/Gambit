@@ -6,7 +6,8 @@
     "frontline_engagement": {
       "prioritize_melee_engagement": true,
       "angle": null,
-      "distance": 2
+      "distance": 2,
+      "engage_trusts": null
     }
   },
   "actions": [
@@ -17,6 +18,28 @@
       "frequency": "infinity",
       "scope": "battle",
       "comment": "Ensure we face the enemy immediately."
+    },
+    {
+      "comment": [
+        "=========================================================================",
+        " This gambit ensures that the leader engages trusts in the fight before",
+        " adhering to the configured engagement distance rules.",
+        "========================================================================="
+      ],
+      "when": [
+        "bt and me.is_party_leader",
+        "vars.frontline_engagement.engage_trusts and waiting_for_trusts",
+        "vars.frontline_engagement.distance > 2",
+        "bt and bt.distance > 3",
+        "not hasEffect('Bind')"
+      ],
+      "commands": [
+        "log('getting closer for trusts!')",
+        "follow(bt, 2)",
+        "wait(max(2, min(bt.distance, 32) / 8))"
+      ],
+      "frequency": 0,
+      "delay": 0
     },
     {
       "when": [

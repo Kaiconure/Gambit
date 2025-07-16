@@ -49,7 +49,7 @@ local function varargs(args, default)
         type(args[1]) == 'table' and    -- That one element is a table
         args[1][1] ~= nil               -- That one element looks to be an array
     then
-        args = args[1]
+        args = table.pack(table.unpack(args[1]))
     end
 
     -- If args is not a table, we'll promote it as appropriate
@@ -159,7 +159,7 @@ local function context_any(search, ...)
     if type(_set) == 'table' then
         for i, v in ipairs(_set) do
             if cmp(search, v) then
-                return true
+                return i
             end
         end
     end
@@ -1322,7 +1322,7 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-local function initContextTargetSymbol(context, symbol)
+local function initContextTargetSymbol(context, symbol, debug)
     if not symbol.mob then
         symbol.targets = {}
         return
@@ -1440,6 +1440,7 @@ local function initContextTargetSymbol(context, symbol)
         if metadata then
             symbol.meta = metadata
             symbol.is_non_interactive = context_boolean(metadata.non_interactive)
+            symbol.is_interactive = not symbol.is_non_interactive
             symbol.is_magic_trust = context_boolean(
                 not symbol.is_non_interactive and (meta.jobs_with_mp[metadata.main_job] or meta.jobs_with_mp[metadata.sub_job]))
         end
@@ -1544,6 +1545,8 @@ local function loadContextTargetSymbols(context, target)
     local mpi = actionStateManager:getMeritPointInfo()
     context.meritPoints = tonumber(mpi and mpi.current) or 0
 
+    context.waiting_for_trusts = false
+
     for i = 0, 5 do
         local p = 'p' .. i
         local a1 = 'a1' .. i
@@ -1568,7 +1571,16 @@ local function loadContextTargetSymbols(context, target)
 
             -- Add trusts to the list
             if mob.spawn_type == SPAWN_TYPE_TRUST then
+                --print('found trust [%s] with status=%d / interactive=%s':format(mob.name, mob.status, context[p].is_interactive and 'yes' or 'no'))
                 context.party1_trusts[#context.party1_trusts + 1] = context[p]
+
+                -- Indicate whether trusts are fully engaged
+                if 
+                    context[p].is_interactive and
+                    mob.status == STATUS_IDLE
+                then
+                    context.waiting_for_trusts = true
+                end                                        
             end
 
             -- Save an array of members by name
@@ -2003,6 +2015,90 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Determine if any of the specified items are in your inventory
+    context.findItemInInventory = function(...)
+        local args = varargs({...})
+        if #args > 0 then
+            local items = windower.ffxi.get_items()
+            local flags = {
+                usable = true,
+                inventory = true
+            }
+            for i, item in ipairs(args) do
+                context.item = inventory.find_item(item, flags, items)
+                if context.item then
+                    return true
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if all of the specified items are in the inventory. The argument list
+    -- is the names of all items to check, with each item optionally followed by
+    -- a number representing how many are required. If no number is specified, the
+    -- count is assumed to be one (1).
+    context.findItemsInInventory = function (...)
+        local args = varargs({...})
+        local num_missed = 0
+        local num_hit = 0
+
+        local flags = {
+            usable = true,
+            inventory = true
+        }
+
+        local items = windower.ffxi.get_items()
+
+        local i = 1
+        local count = #args
+        local verbose = not arrayIndexOfStrI(args, '-silent')
+        local last_result = nil
+
+        while i <= count do
+            local item = args[i]
+
+            if item == '-silent' then
+                verbose = false  -- This should already be set
+            else
+                if type(item) == 'string' then
+                    -- If we actually got a count, skip past it the next time
+                    local count = tonumber(args[i + 1])
+                    if count then
+                        i = i + 1
+                    else
+                        count = 1
+                    end
+
+                    local result = inventory.find_item(item, flags, items)
+                    if result and result.count >= count then
+                        num_hit = num_hit + 1
+                        last_result = result
+                    else
+                        if verbose then
+                            context.log('Item was not found in inventory: %s%s':format(
+                                text_item(item, Colors.cornsilk),
+                                count > 1 and text_number(' x%d':format(count), Colors.cornsilk) or ''
+                            ))
+                        end
+                        num_missed = num_missed + 1
+                    end
+                else
+                    num_missed = num_missed + 1
+                end
+            end
+
+            i = i + 1
+        end
+
+        context.item = last_result
+
+        -- writeMessage('num_hit: %d, num_missed: %d':format(num_hit, num_missed))
+
+        return num_hit > 0 and num_missed == 0
+    end
+
+    --------------------------------------------------------------------------------------
     -- Determine if all of the specified items are in the inventory. The argument list
     -- is the names of all items to check, with each item optionally followed by
     -- a number representing how many are required. If no number is specified, the
@@ -2389,6 +2485,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         if type(spell) ~= 'string' then
             return 1
+        end
+
+        local s = findSpell(spell)
+        if s and s.type == 'Ninjutsu' then
+            if string.find(s.en, ': San') then
+                return 3
+            elseif string.find(s.en, ': Ni') then
+                return 2
+            else
+                return 1
+            end
         end
 
         return romanNumeralTier(spell)
@@ -3453,6 +3560,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         local nearestd = math.huge
         local nearesti = nil
+        local count = #args
 
         -- Find the nearest entry
         for i, p in ipairs(args) do
@@ -3466,7 +3574,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local dy = p.y - me.y
                 local d = math.sqrt((dx*dx) + (dy*dy))
 
-                if d < nearestd then
+                if d < nearestd and (count < 2 or d > 0.5) then
                     nearestd = d
                     nearesti = i
                 end
@@ -3671,6 +3779,72 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         end
                     end
                 end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find and returns the first mob from a list of mob names that is within
+    -- targeting range. If multiple mobs with the same name are found, the
+    -- nearest of those mobs will be returned. The result will be placed
+    -- into the `mob` context symbol.
+    context.findFirstMob = function(...)
+        local names = varargs({...})
+        local count = #names
+
+        context.mob = nil
+
+        if count > 0 then
+            local distance = 50 * 50
+
+            if type(names[1]) == 'number' then
+                -- If all we have is a distance, we can just exit now
+                if count == 1 then
+                    return
+                end
+
+                distance = names[1]
+                distance = distance * distance
+
+                -- TODO: Might be better to just leave this element alone? It wouldn't match
+                -- any valid mob name, and removing stuff from an array can be costly.
+                --table.remove(names, 1)
+                names[1] = '#discard'
+            end
+
+            local best = nil
+            local besti = math.huge
+            local bestd = math.huge
+
+            local mobs = windower.ffxi.get_mob_array()
+            for id, _mob in pairs(mobs) do
+                if 
+                    _mob.valid_target and
+                    _mob.hpp and
+                    _mob.hpp > 0 and
+                    _mob.distance and
+                    _mob.distance <= distance 
+                then
+                    local i = context.any(_mob.name, names)
+                    if
+                        i and (
+                            (i < besti) or
+                            (i == besti and _mob.distance < bestd)
+                        )
+                    then
+                        besti   = i
+                        bestd   = _mob.distance
+                        best    = _mob
+                    end
+                end
+            end
+
+            if best then
+                local result = { symbol = best.name, mob = best }
+                initContextTargetSymbol(context, result)
+
+                context.mob = result
+                return context.mob
             end
         end
     end
@@ -4891,6 +5065,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         })
                         packets.inject(packet)
                         coroutine.sleep(1.0)
+
+                        local player = windower.ffxi.get_player()
+                        if player.status == STATUS_EVENT then
+                            break
+                        end
                     end
                 else
                     local player = windower.ffxi.get_player()
@@ -4952,6 +5131,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         })
                         packets.inject(packet)
                         coroutine.sleep(1.0)
+
+                        local player = windower.ffxi.get_player()
+                        if player.status == STATUS_EVENT then
+                            break
+                        end
                     end
 
                     coroutine.sleep(1)
@@ -4993,7 +5177,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 mob.symbol  = mob.name
                 mob.symbol2 = target
             else
-                mob.buffs   = actionStateManager.getBuffsForMob(mob.id)
+                mob.buffs   = actionStateManager:getBuffsForMob(mob.id)
                 mob.symbol  = target
             end
 
@@ -5012,9 +5196,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if mob and mob.valid_target then
                 if allow_retarget or (context.me and context.me.target_index ~= mob.index) then
                     local result = lockTarget(context.player, mob)
+                    local t = windower.ffxi.get_mob_by_target('t')
 
                     -- Update the target cursor
-                    context.cursor = { symbol = 't', mob = windower.ffxi.get_mob_by_target('t') }
+                    context.cursor = { symbol = 't', mob = t }
                     if context.cursor.mob then
                         initContextTargetSymbol(context, context.cursor)
                     else

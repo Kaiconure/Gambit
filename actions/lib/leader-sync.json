@@ -1,0 +1,28 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": "Ensures that your battle target always lines up with the party leader."
+  },
+  "actions": [
+    {
+      "comment": [
+        "While in the leader strategy, disengages from your current battle target when:",
+        "   1. The party leader has no battle target -OR-",
+        "   2. The party leader has a battle target that differs from yours.",
+        " In these cases, disengaging will cause the leader strategy to automatically",
+        " re-engage you with the proper target to stay in sync with the leader."
+      ],
+      "when": [
+        "bt and bt.id",
+        "not me.is_party_leader and settings.strategy == 'leader'",
+        "not party_leader_bt or not party_leader_bt.id or party_leader_bt.id ~= bt.id"
+      ],
+      "commands": [
+        "log('Disengaging from', bt.name, 'to sync up with the party leader!')",
+        "disengage()",
+        "wait(1)"
+      ],
+      "frequency": 5
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "ninjutsu": {
+      "nukes": {
+        "suiton": {}
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt.distance <= 20",
+        "hasSpell('Suiton: San', 'Suiton: Ni', 'Suiton: Ichi') and canUseSpell(spell)",
+        "findItemInInventory('Mizu-Deppo', 'Inoshishinofuda') or \\",
+        "  (findUsableItem('Toolbag (Mizu)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
+        "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+      ],
+      "commands": [
+        "log('Casting', spell.name, '(Water damage + Lightning resistance down) on', bt.name)",
+        "useSpell(bt) and postpone(vars.ninjutsu.nukes.suiton.frequency or vars.ninjutsu.nukes.frequency or 5)"
+      ],
+      "scope": "battle"
+    }
+  ]
+}

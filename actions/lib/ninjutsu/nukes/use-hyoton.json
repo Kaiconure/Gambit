@@ -1,0 +1,28 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "ninjutsu": {
+      "nukes": {
+        "hyoton": {}
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt.distance <= 20",
+        "hasSpell('Hyoton: San', 'Hyoton: Ni', 'Hyoton: Ichi') and canUseSpell(spell)",
+        "findItemInInventory('Tsurara', 'Inoshishinofuda') or \\",
+        "  (findUsableItem('Toolbag (Tsura)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
+        "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+      ],
+      "commands": [
+        "log('Casting', spell.name, '(Ice damage + Fire resistance down) on', bt.name)",
+        "useSpell(bt) and postpone(vars.ninjutsu.nukes.hyoton.frequency or vars.ninjutsu.nukes.frequency or 5)"
+      ],
+      "scope": "battle"
+    }
+  ]
+}

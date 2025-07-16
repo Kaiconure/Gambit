@@ -1,0 +1,25 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "comment": [
+        "=======================================================================",
+        " Kakka puts up a Store TP effect.",
+        "======================================================================="
+      ],
+      "when": [
+        "canUseSpell('Kakka: Ichi') and not hasEffectOf(spell)",
+        "findItemInInventory('Ryuno', 'Shikanofuda') or \\",
+        "  (findUsableItem('Toolbag (Ryuno)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
+        "  (findUsableItem('Toolbag (Shika)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+      ],
+      "commands": [
+        "log('Casting', spell.name, '(Store TP) on', me.name)",
+        "useSpell(me) and postpone(10)"
+      ],
+      "frequency": 2
+    }
+  ]
+}

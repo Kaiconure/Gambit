@@ -225,7 +225,7 @@ function lockTarget(player, mob, battleTarget)
                 local last_tab = start
                 local looping = true
                 local tried_bt = false
-
+                
                 while looping and (not battleTarget or globals.enabled) do
                     local sleep_duration = 0.25
 
@@ -266,7 +266,6 @@ function lockTarget(player, mob, battleTarget)
                         local bt = battleTarget and windower.ffxi.get_mob_by_target('bt')
                         local just_tried_bt = false
                         if bt and bt.valid_target and bt.hpp > 0 then
-                            
                             if tabs_remaining <= 0 and mob.spawn_type == SPAWN_TYPE_MOB then
                                 -- If the current battle target id matches that of our intended target, we will try
                                 -- try exactly once to use that for direct client-side targeting.
@@ -286,7 +285,6 @@ function lockTarget(player, mob, battleTarget)
                             not just_tried_bt and max_tabs > 0 
                         then
                             directionality.faceTarget(mob)
-
                             if tabs_remaining > 0 then
                                 tabs_remaining = tabs_remaining - 1
                                 sleep_duration = 0.25
@@ -599,7 +597,11 @@ function processTargeting(player, party)
                     then
                         nearestAggroingMob = candidateMob
                     elseif 
-                        candidateMob.distance < nearestAggroingMob.distance
+                        candidateMob.distance < nearestAggroingMob.distance and
+                        (
+                            (nearestAggroingMob.claim_id or 0) == 0 or      -- Our best match is unclaimed --OR--
+                            (candidateMob.claim_id or 0) ~= 0               -- Our current match is claimed
+                        )
                     then
                         -- If the mob we're already tracking isn't claimed by the party, update the
                         -- nearest to match the current candidate. This ensures that all members
@@ -629,7 +631,8 @@ function processTargeting(player, party)
 
                     -- If we've already got a point of reference, compare that with the current 
                     -- to see if it's better than what we've already looked at.
-                    if (assumeStrategy == TargetStrategy.nearest and isNearer) or
+                    if 
+                        (assumeStrategy == TargetStrategy.nearest and isNearer) or
                         (assumeStrategy == TargetStrategy.maxhp and candidateMob.hpp > bestMatchingMob.hpp) or
                         (assumeStrategy == TargetStrategy.minhp and candidateMob.hpp < bestMatchingMob.hpp) or
                         (isHpStrategy and isHpEqual and isNearer) -- Pick the nearest mob with the same HP if we're tracking HP

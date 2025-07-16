@@ -1,0 +1,29 @@
+{
+  "vars": {
+    "ninjutsu": {
+      "nukes": {
+        "frequency": 30
+      }
+    }
+  },
+  "actions": [
+    {
+      "import": "ninjutsu/nukes/use-hyoton"
+    },
+    {
+      "import": "ninjutsu/nukes/use-katon"
+    },
+    {
+      "import": "ninjutsu/nukes/use-suiton"
+    },
+    {
+      "import": "ninjutsu/nukes/use-raiton"
+    },
+    {
+      "import": "ninjutsu/nukes/use-doton"
+    },
+    {
+      "import": "ninjutsu/nukes/use-huton"
+    }
+  ]
+}

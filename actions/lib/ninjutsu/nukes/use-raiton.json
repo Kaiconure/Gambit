@@ -1,0 +1,28 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "ninjutsu": {
+      "nukes": {
+        "raiton": {}
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt.distance <= 20",
+        "hasSpell('Raiton: San', 'Raiton: Ni', 'Raiton: Ichi') and canUseSpell(spell)",
+        "findItemInInventory('Hiraishin', 'Inoshishinofuda') or \\",
+        "  (findUsableItem('Toolbag (Hira)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
+        "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+      ],
+      "commands": [
+        "log('Casting', spell.name, '(Lightning damage + Earth resistance down) on', bt.name)",
+        "useSpell(bt) and postpone(vars.ninjutsu.nukes.raiton.frequency or vars.ninjutsu.nukes.frequency or 5)"
+      ],
+      "scope": "battle"
+    }
+  ]
+}

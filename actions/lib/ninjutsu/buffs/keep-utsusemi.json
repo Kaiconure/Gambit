@@ -1,0 +1,28 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "comment": [
+        "=======================================================================",
+        " Utsusemi puts up shadows that absorb single-target damage.",
+        "  This gambit will recast utsusemi when there are zero or",
+        "  one shadow(s) remaining.",
+        "======================================================================="
+      ],
+      "when": [
+        "canUseSpell('Utsusemi: San', 'Utsusemi: Ni', 'Utsusemi: Ichi')",
+        "not hasEffect('Copy Image (4+)', 'Copy Image (3)', 'Copy Image (2)')",
+        "findItemInInventory('Shihei', 'Shikanofuda') or \\",
+        "  (findUsableItem('Toolbag (Shihe)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
+        "  (findUsableItem('Toolbag (Shika)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+      ],
+      "commands": [
+        "log('Casting', spell.name, '(Copy Image) on', me.name)",
+        "cancelBuff('Copy Image (4+)', 'Copy Image (3)', 'Copy Image (2)', 'Copy Image')",
+        "useSpell(me)"
+      ]
+    }
+  ]
+}
