@@ -429,7 +429,6 @@ local function compileAllActions()
     actionStateManager:reset()
 
     local actions = settingsCopy.actions
-    actionStateManager.functions = {}
 
     compileActions('battle',        actions, actions and actions.battle or {})
     compileActions('idle_battle',    actions, actions and actions.idle_battle or {})
@@ -442,6 +441,8 @@ local function compileAllActions()
     compileActions('functions',     actions, actions and actions.functions or {})
 
     actionStateManager.vars = actions and actions.vars or {}
+
+    actionStateManager:keybindFunctions()
 
     actionStateManager.needsRecompile = false
 end
@@ -478,9 +479,9 @@ local function getNextBattleAction(context)
         for i, action in ipairs(actions) do
             -- If this action is scoped to a battle -AND- it either has no scope yet or its scope does not
             -- match that of the current battle scope, then it is immediately reschedulable.
-            if 
-                action.scope == 'battle' and
-                (action.lastBattleScope == nil or action.lastBattleScope ~= context.battleScope)
+            if
+                (action.scope == 'battle' and (action.lastBattleScope == nil or action.lastBattleScope ~= context.battleScope)) or
+                (action.scope == 'zone' and (action.lastZoneTime == nil or action.lastZoneTime ~= globals.zoneEntryTime))
             then
                 action.availableAt = 0
 
@@ -555,13 +556,14 @@ local function getNextBattleAction(context)
                     action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
 
                     -- Save the scope that was present when this action was triggered.
-                    action.lastBattleScope = context.battleScope
+                    action.lastBattleScope  = context.battleScope
+                    action.lastZoneTime     = globals.zoneEntryTime
 
                     if settings.verbosity >= VERBOSITY_DEBUG then
                         writeDebug('Condition met %s %s [scope: %s]':format(
                             text_action(context.actionType .. '.' .. i, Colors.debug),
                             text_green(action.when, Colors.debug),
-                            text_gray(tostring(action.lastBattleScope), Colors.debug)
+                            text_gray(tostring(action.scope) or 'none', Colors.debug)
                         ))
                     end
 

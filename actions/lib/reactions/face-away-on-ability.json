@@ -8,7 +8,13 @@
   },
   "vars": {
     "face_away_on_ability": {
-      "hotkeys_battle_set": null,
+      "gear_removal": {
+        "abilities": {
+          "Hurricane Breath": true,
+          "Torrential Torrent": true
+        },
+        "execute": null
+      },
       "Assailer Chariot": {
         "abilities": {
           "Discoid": { "distance": 12 }
@@ -93,13 +99,17 @@
     },
     {
       "when": [
-        "vars.face_away_on_ability.hotkeys_battle_set",
-        "enemyUsedAbility('Hurricane Breath')"
+        "vars.face_away_on_ability.gear_removal",
+        "vars.face_away_on_ability.gear_removal.execute and vars.face_away_on_ability.gear_removal.abilities",
+        "enemyUsedAbilityNC()",
+        "vars.face_away_on_ability.gear_removal.abilities[enemy_ability.name]"
       ],
       "commands": [
-        "log('Reqeuipping battle set:', vars.face_away_on_ability.hotkeys_battle_set)",
-        "sendCommand('hk gear equip \"%s\"', vars.face_away_on_ability.hotkeys_battle_set)"
-      ]
+        "logf('Gear removal ability [%s] detected, executing reaction command...', enemy_ability.name)",
+        "sendCommand(vars.face_away_on_ability.gear_removal.execute)",
+        "enemyUsedAbility(enemy_ability.name)"
+      ],
+      "delay": 0
     },
     {
       "when": "vars.face_away_on_ability.trigger",

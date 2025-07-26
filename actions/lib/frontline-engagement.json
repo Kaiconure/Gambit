@@ -7,10 +7,36 @@
       "prioritize_melee_engagement": true,
       "angle": null,
       "distance": 2,
-      "engage_trusts": null
+      "engage_trusts": null,
+      "camp": {
+        "max_distance": 4,
+        "max_duration": 10,
+        "zone": null,
+        "location": null,
+        "action_types": null
+      }
     }
   },
   "actions": [
+    {
+      "when": [
+        "vars.frontline_engagement.camp",
+        "vars.frontline_engagement.camp.max_distance and vars.frontline_engagement.camp.location",
+        "vars.frontline_engagement.camp.zone and any(vars.frontline_engagement.camp.zone, zone_id, zone_name, zone_search)",
+        "arrayCount(vars.frontline_engagement.camp.action_types) == 0 or any(actionType, vars.frontline_engagement.camp.action_types)",
+        "distanceTo(vars.frontline_engagement.camp.location) > vars.frontline_engagement.camp.max_distance"
+      ],
+      "commands": [
+        "logf('[%s] Returning to camp location (%.1f, %.1f)', actionType, vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y)",
+        "move(vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y, vars.frontline_engagement.camp.max_duration)",
+        "faceEnemy() and wait(1)"
+      ],
+      "comment": [
+        "If we have an assigned camp location for this zone and we've moved too far from it, get back to it."
+      ],
+      "frequency": "infinity",
+      "scope": "battle"
+    },
     {
       "when": "bt and not facingEnemy()",
       "commands": "faceEnemy()",

@@ -177,6 +177,15 @@ local function shouldAquireNewTarget(player, party)
 end
 
 --------------------------------------------------------------------------------------
+-- Certain mobs are only targetable when they are actively engaged
+local BATTLE_ONLY_MOBS = {
+    ['Amphiptere'] = true,
+    ['Eschan Yovra'] = true,
+    ['Greater Amphiptere'] = true,
+    ['Turul'] = true
+}
+
+--------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
 local lock_target_id = 1
 function lockTarget(player, mob, battleTarget)
@@ -186,6 +195,7 @@ function lockTarget(player, mob, battleTarget)
     if player and mob then
         if 
             mob.valid_target and
+            (not BATTLE_ONLY_MOBS[mob.name] or mob.status == STATUS_ENGAGED) and
             mob.hpp > 0
         then
             local max_tabs = settings.maxTabs

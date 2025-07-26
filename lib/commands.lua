@@ -395,15 +395,29 @@ handlers['function'] = function(args)
     if list or not name then
         local count = 0
         writeMessage('Registered function list:')
-        for key, val in pairs(actionStateManager.functions) do
-            count = count + 1
+
+        local keys = {}
+        for key, _ in pairs(actionStateManager.functions) do
+            keys[#keys + 1] = key
+        end
+        table.sort(keys, function (a, b) return a < b end)
+        for i, key in ipairs(keys) do
+            local val = actionStateManager.functions[key]
             writeMessage('%s':format(text_green(key)))
             if type(val.description) == 'string' then
                 writeMessage('%s':format(text_gray(val.description)))
             end
         end
 
-        writeMessage('You have %s configured!':format(pluralize(count, 'function', 'functions')))
+        -- for key, val in pairs(actionStateManager.functions) do
+        --     count = count + 1
+        --     writeMessage('%s':format(text_green(key)))
+        --     if type(val.description) == 'string' then
+        --         writeMessage('%s':format(text_gray(val.description)))
+        --     end
+        -- end
+
+        writeMessage('You have %s configured!':format(pluralize(#keys, 'function', 'functions')))
 
         return
     end
@@ -424,9 +438,12 @@ handlers['function'] = function(args)
 
             action._running = true
             action._fn_exiting = false
+            action._fn_iteration = 0
 
             local done = false
             while not done do
+                action._fn_iteration = action._fn_iteration + 1
+
                 local context = actionStateManager:getContext()
                 if context then
                     context.action = action
@@ -987,6 +1004,39 @@ handlers['mobbuffs'] = function(args)
     end
 end
 handlers['mb'] = handlers['mobbuffs']
+
+handlers['equipment'] = function(args)
+    local slot = arrayIndexOfStrI(args, '-slot') or arrayIndexOfStrI(args, '-s')
+    slot = type(slot) == 'number' and args[slot + 1] or nil
+
+    local verbose = arrayIndexOfStrI(args, '-verbose') or arrayIndexOfStrI(args, '-v')
+
+    if slot then
+        local equipment = inventory.find_equipment_in_slot(slot)
+        if equipment then
+            writeMessage('Found %s equipped in %s with %s!':format(
+                text_item(equipment.name),
+                text_gearslot(equipment.slot),
+                pluralize(equipment.augments and #equipment.augments or 0, 'augment', 'augments')
+            ))
+
+            if equipment.augments and #equipment.augments > 0 then
+                writeMessage('    Augments:')
+                for i, augment in ipairs(equipment.augments) do
+                    writeMessage('      %s. %s':format(text_number(i), text_item(augment)))
+                end
+            end
+
+            if verbose then
+                writeMessage('    Details:')
+                writeMessage('      Name: %s':format(text_item(equipment.name)))
+                writeMessage('      Bag: %s / %s':format(text_item(equipment.bagName), text_number(equipment.bagId)))
+                writeMessage('      Item id: %s':format(text_number(equipment.id)))
+                writeMessage('      Local id: %s':format(text_number(equipment.localId)))
+            end
+        end
+    end
+end
 
 local BagsById = 
 {

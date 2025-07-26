@@ -1802,78 +1802,126 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.equip = function(slot, name)
-        if type(slot) == 'table' then
-            name = slot.name
-            slot = slot.slot
-        end
-
-        -- Get the item name
-        if name == nil then
-            if context.item == nil then return end            
-            name = context.item.name
-
-            if name == nil then
-                return
-            end
-        end
-
-        -- Get the item slot
-        if slot == nil then
+        local augments = nil
+        
+        if slot == nil and name == nil then
             if context.item then
                 slot = context.item.slot
+                name = context.item.name
+                augments = context.item.matched_augments
             end
-            if slot == nil then
-                return
+        else
+            if type(slot) == 'table' then
+                name = slot.name
+                slot = slot.slot
+                augments = slot.matched_augments or slot.augments
             end
         end
 
-        local command = string.format('input /equip %s "%s";',
-            slot,
-            name)
+        if type(slot) == 'string' and not name then
+            name = context.item and context.item.name
+            augments = context.item and context.item.matched_augments
+        end
 
-        writeVerbose('Equipping: %s %s %s':format(
-            text_item(name, Colors.verbose),
-            CHAR_RIGHT_ARROW,
-            text_gearslot(slot, Colors.verbose)
-        ))
+        if not slot or not name then
+            return
+        end
 
-        sendActionCommand(
-            command,
-            context,
-            0.1
-        )
+
+        local items = {}
+        items[1] = {
+            name = name,
+            slot = slot,
+            augments = augments
+        }
+
+        context.equipMany(items)
 
         return true
     end
 
-    context.equipMany = function(...)
+    context.sanitizeEquipmentList = function(allow_simple_strings, ...)
         local entries = varargs({...})
-
-        if #entries == 0 then return end
-
         if type(entries[1]) == 'string' then
-            local _entries = {}
-            for i = 1, #entries, 2 do 
-                local slot = entries[i]
-                local equipment = entries[i + 1]
+            -- SIMPLIFY: Allow items to be specified as a sequence of slot/name pairs as separate arguments.
+            -- This won't allow augment specifications, but it's easy to use for static changes.
 
-                if slot and equipment then
-                    arrayAppend(_entries, {equipment = equipment, slot = slot })
+            -- The allow_simple_strings flag means that string lists will be interpreted as items only,
+            -- without slot information.
+            if not allow_simple_strings then
+                local _entries = {}
+                for i = 1, #entries, 2 do 
+                    local slot = entries[i]
+                    local equipment = entries[i + 1]
+
+                    if slot and equipment then
+                        _entries[slot] = { equipment = equipment }
+                    end
+                end
+                entries = _entries
+            end
+        else
+            entries = ...
+
+            if #entries > 0 then
+                -- BACKCOMPAT: Maintain compatibility with equipment specified in the old way. It used to 
+                -- be an array of objects with slot/item/augment info.
+                if #entries > 0 then
+                    local _entries = {}
+                    for i, entry in ipairs(entries) do
+                        local slot = entry.slot
+                        local equipment = entry.equipment or entry.item or entry.gear or entry.name
+                        if slot and equipment then
+                            _entries[slot] = { equipment = equipment, augments = entry.augments }
+                        end
+                    end
+                    entries = _entries
+                end
+            else
+                if entries.equipment or entries.name or entries.item or entries.gear then
+                    -- Sometimes we may have a single, non-array entry specified. Promote that to an
+                    -- array of one for the sake of data uniformity.
+                    entries = { entries }
+                else
+                    -- Copy the slot into the entry itself for easier reference later
+                    for slot, entry in pairs(entries) do
+                        entry.slot = slot
+                    end
                 end
             end
-            entries = _entries
         end
-        
-        if type(entries[1]) == 'table' then
-            local count = inventory.equip_many(entries)
-            if count > 0 then
-                writeVerbose('Equipped: %s':format(
-                    pluralize(count, 'gear item', 'gear items', Colors.verbose)
-                ))
-            end
+
+        return entries
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Checks to see if any equipment changes could occur, without actually making
+    -- any equipment changes. Follows the same input pattern as equipMany.
+    context.checkEquipMany = function(...)
+        local entries = context.sanitizeEquipmentList(false, ...)
+        local count = inventory.equip_many(entries, nil, true)
+        if count > 0 then
+            return count
         end
     end
 
+    --------------------------------------------------------------------------------------
+    -- Attempt to change multiple equipment items at once. Returns the number of equipment
+    -- changes if any changes occurred, or nil if no changes occurred.
+    context.equipMany = function(...)
+        local entries = context.sanitizeEquipmentList(false, ...)        
+        local count = inventory.equip_many(entries)
+        if count > 0 then
+            writeVerbose('Equipped: %s':format(
+                pluralize(count, 'gear item', 'gear items', Colors.verbose)
+            ))
+
+            return count
+        end
+    end
+
+    -- Push a stop request to the currently running function, if any. Has no effect
+    -- if not running as a function.
     context.stopFunction = function()
         if context.action and context.action._running then
             context.action._fn_exiting = true
@@ -1881,6 +1929,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
     context.stopFunc = context.stopFunction
+
+    -- Determine if you're currently running as a function
+    context.runningAsFunction = function()
+        return context.action and context.action._running
+    end
+    context.runningAsFunc = context.runningAsFunction
+
+    -- Get the current function's iteration, or nil of not a function
+    context.functionIteration = function()
+        return context.action and context.action._running and context.action._fn_iteration
+    end
+    context.fnIteration = context.functionIteration
 
     --------------------------------------------------------------------------------------
     --
@@ -2196,67 +2256,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return bag_info.inventory.max - bag_info.inventory.count
         end
 
-        return 0
-        
-    end
-
-    --------------------------------------------------------------------------------------
-    -- Determine if an item is in the specified slot. Optionally require a strict
-    -- match, which looks at the specific item instance. Strict matches are only
-    -- available when a context item was set with all the appropriate metadata.
-    context.isEquipmentInSlot = function(slot, item, strict, all_items)
-        if item == nil then
-            item = context.item
-        elseif type(item) == 'string' then
-            item = findItem(item)
-        end
-
-        if type(item) ~= 'table' then return end
-
-        slot = slot or (item and item.slot)
-        if slot == nil then return end
-
-        strict = strict and item and item.bagId and item.localId
-
-        if type(all_items) ~= 'table' or type(all_items.equipment) ~= 'table' then
-            all_items = windower.ffxi.get_items()
-        end
-
-        local itemInSlot = inventory.find_equipment_in_slot(slot, all_items)
-        if itemInSlot then
-            local match = item.id == itemInSlot.id
-
-            -- When strict, we'll need to match up all the id's rather than just the underlying item id
-            if strict and match then
-                match =
-                    item.bagId == itemInSlot.bagId and
-                    item.localId == itemInSlot.localId
-            end
-
-            if match then
-                context.item = itemInSlot
-                return context.item
-            end
-        end
+        return 0        
     end
 
     --------------------------------------------------------------------------------------
     -- Find equippable items in any of your bags
     context.findEquippableItem = function(...)
-        local items = varargs({...})
+        local entries = context.sanitizeEquipmentList(true, ...)
         context.item = nil
-        if #items > 0 then
-            local all_items = windower.ffxi.get_items()
-            for key, item in ipairs(items) do
-                context.item = inventory.find_item(
-                    item,
-                    { equippable = true },
-                    all_items
-                )
+        local all_items = windower.ffxi.get_items()
+        for key, entry in ipairs(entries) do
+            context.item = inventory.find_item(
+                entry,
+                { equippable = true },
+                all_items
+            )
 
-                if context.item then
-                    return context.item
-                end
+            if context.item then
+                return context.item
             end
         end
     end
@@ -2264,49 +2281,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Find the first equippable item from the list that is NOT currently equipped
     context.findUnequippedItem = function(...)
-        local items = varargs({...})
+        local entries = context.sanitizeEquipmentList(true, ...)        
         context.item = nil
 
-        if #items > 0 then
-            local flags = { equippable = true, equipped = false }
-            local all_items = windower.ffxi.get_items()
-            for key, item in ipairs(items) do
-                local item = inventory.find_item(
-                    item,
-                    flags,
-                    all_items)
+        local flags = { equippable = true, equipped = false }
+        local all_items = windower.ffxi.get_items()
+        for key, entry in pairs(entries) do
+            local item = inventory.find_item(
+                entry,
+                flags,
+                all_items)
 
-                if item then
-                    if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
-                        context.item = item
-                        return context.item
-                    end
-                end
-            end
-        end
-    end
-
-    --------------------------------------------------------------------------------------
-    -- Find the first equippable item from the list that is NOT currently equipped.
-    -- Uses a strict match (excact item match required)
-    context.findUnequippedItemStrict = function(...)
-        local items = varargs({...})
-        context.item = nil
-
-        if #items > 0 then
-            local flags = { equippable = true, equipped = false }
-            local all_items = windower.ffxi.get_items()
-            for key, item in ipairs(items) do
-                local item = inventory.find_item(item,
-                    flags,
-                    all_items)
-
-                if item then
-                    if not context.isEquipmentInSlot(item.slot, item, true, all_items) then
-                        context.item = item
-                        return context.item
-                    end
-                end
+            if item then
+                context.item = item
+                return context.item
             end
         end
     end
@@ -3822,8 +3810,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     _mob.valid_target and
                     _mob.hpp and
                     _mob.hpp > 0 and
-                    _mob.distance and
-                    _mob.distance <= distance 
+                    _mob.distance -- and
+                    --_mob.distance <= distance 
                 then
                     local i = context.any(_mob.name, names)
                     if
@@ -3839,7 +3827,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
 
-            if best then
+            if best and best.distance < distance then
                 local result = { symbol = best.name, mob = best }
                 initContextTargetSymbol(context, result)
 
@@ -4318,6 +4306,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
 
         return cancelled
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Cancels the buff imparted by the specified spell or ability
+    context.cancelBuffOf = function(name)
+        if name then
+            local spell = findSpell(name)
+            local ability = findJobAbility(name)
+
+            local res = spell or ability
+            local buffId = res and res.status
+            if buffId then
+                local buff = hasBuff(nil, buffId)
+                if buff then
+                    windower.ffxi.cancel_buff(buffId)
+                    return true
+                end
+            end
+        end
+
+        return false
     end
 
     --------------------------------------------------------------------------------------
@@ -5251,6 +5260,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.arrayMerge = context_array_merge
     context.arrayAll = context_array_contains_all
     context.tableAll = context_table_contains_all
+    context.type = type
+    context.isBoolean = function(val) return type(val) == 'boolean' end
+    context.isNumber = function(val) return type(val) == 'number' end
+    context.isString = function(val) return type(val) == 'string' end    
+    context.isTable = function(val) return type(val) == 'table' end
     context.hasAllFieldNames = context_table_has_all_field_names
     context.inRange = context_in_range
     context.wait = context_wait

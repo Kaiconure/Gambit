@@ -28,6 +28,7 @@ BUFF_FAN_DANCE      = 411
 BUFF_FOOD           = 251
 BUFF_ELVORSEAL      = 603
 BUFF_BATTLEFIELD    = 254
+BUFF_REIVE          = 511
 
 -------------------------------------------------------------------------------
 -- Known statuses

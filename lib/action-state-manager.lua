@@ -908,9 +908,40 @@ state_manager.getRawBuffsForMob = function(self, id)
     return self.mobBuffs and self.mobBuffs[id] and self.mobBuffs[id].buffs or {}
 end
 
+state_manager.keybindFunctions = function(self, unbind)
+    if type(self.functions) == 'table' then    
+        if unbind then
+            -- Unbind all functions from their keys
+            local unbinds = {}
+            for key, fn in pairs(self.functions) do
+                if type(fn) == 'table' and type(fn.bind) == 'string' then
+                    unbinds[#unbinds + 1] = 'unbind %s':format(fn.bind)
+                end
+            end
+
+            if #unbinds > 0 then
+                windower.send_command(table.concat(unbinds, ';'))
+            end
+        else
+            -- Bind all functions to their keys
+            for key, fn in pairs(self.functions) do
+                if
+                    type(fn) == 'table' and
+                    type(fn.bind) == 'string' and
+                    type(fn.name) == 'string'
+                then
+                    windower.send_command('bind %s gbtfn "%s"':format(fn.bind, fn.name))
+                end
+            end
+        end
+    end
+end
+
 -----------------------------------------------------------------------------------------
 --
 state_manager.reset = function (self)
+    self:keybindFunctions(true)
+
     self.currentTime = 0
     self.cycles = 0
     self.idleWakeTime = 0
@@ -927,6 +958,7 @@ state_manager.reset = function (self)
     self.rangedAttack = { time = 0 }
     self.actionTypeStartTime = os.clock()
     self.actions = { }
+    self.functions = {}
     self.vars = { }
     self.meritPointInfo = { current = 0, max = 30, limits = 0 }
     self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0 }

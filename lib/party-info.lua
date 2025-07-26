@@ -96,7 +96,11 @@ party_info.isMember = function(self, id)
 end
 
 party_info.canShareClaim = function(self, id)
-    return self:isMember(id) or hasBuff(player, BUFF_ELVORSEAL) or hasBuff(player, BUFF_BATTLEFIELD)
+    return 
+        self:isMember(id) or 
+        hasBuff(player, BUFF_ELVORSEAL) or
+        hasBuff(player, BUFF_BATTLEFIELD) or
+        hasBuff(player, BUFF_REIVE)
 end
 
 return party_info
