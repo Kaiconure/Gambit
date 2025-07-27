@@ -362,6 +362,7 @@ inventory.find_item = function(item, flags, items, exclusion_list)
 
     local augments = (type(item) == 'table' and (item.augments or item.aug)) or nil
 
+    -- If the flags don't specify a specific bag local id, we'll just look up the item directly from metadata
     if not flags.local_id then
         item = findItem(item)    
         if item == nil then 
@@ -369,12 +370,25 @@ inventory.find_item = function(item, flags, items, exclusion_list)
         end
     end
 
-    local empty = { }
-    local bags_to_search = (flags.bag_id and { INVENTORY_BAGS_BY_ID[flags.bag_id] }) or INVENTORY_BAGS_BY_ID
+    -- Search all bags by default
+    local bags_to_search = INVENTORY_BAGS_BY_ID
 
-    -- Limit to inventory, if requested
+    -- If the flags specify a bag id that is valid, we'll search only that bag
+    if flags.bag_id and INVENTORY_BAGS_BY_ID[flags.bag_id] then
+        bags_to_search =
+        {
+            [flags.bag_id] = INVENTORY_BAGS_BY_ID[flags.bag_id]
+        }
+    end
+
+    local empty = { }
+
+    -- If we're only looking at the main inventory, limit our bag search to that
     if only_inventory then
-        bags_to_search = { INVENTORY_BAGS_BY_ID[INVENTORY_ID_BY_NAME['inventory']] }
+        local inventory_id = INVENTORY_ID_BY_NAME['inventory']
+        bags_to_search = {
+            [inventory_id] = INVENTORY_BAGS_BY_ID[inventory_id]
+        }
     end
 
     items = items or windower.ffxi.get_items()    
