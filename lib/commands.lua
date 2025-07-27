@@ -507,20 +507,46 @@ handlers['targetinfo'] = function (args)
 
     local target = targetArg == 'player' and windower.ffxi.get_player() or
         windower.ffxi.get_mob_by_target(targetArg)
+    local game_info = windower.ffxi.get_info()
+    local zone = game_info and game_info.zone and resources.zones[game_info.zone]
+
     if target ~= nil then
         writeMessage(
             "\n" ..
-            string.format('Target: %s\n', target.name) ..
-            string.format('Id: %s\n', tostring(target.id)) ..
-            string.format('Index: %d (Hex=%03X)\n', target.index, target.index) ..
-            string.format('Target\'s target index: %d (Hex=%03X)\n', target.target_index or 0, target.target_index or 0) ..
-            string.format('Spawn type: %s\n', tostring(target.spawn_type)) ..
-            string.format('Status: %s\n', tostring(target.status)) ..
-            string.format('Claim id: %s\n', tostring(target.claim_id or 0)) ..
-            string.format('Pos: (%.2f, %.2f, %.1f)\n', target.x or -1337, target.y or -1337, target.z or -1337) ..
-            string.format('Hdg: %.2f degrees\n', target.heading and (target.heading * 180 / math.pi) or -1337) ..
-            string.format('Speed: %.2f\n', target.movement_speed or -1337)
-        )
+
+            string.format('Target: %s\n', text_mob(target.name)) ..
+
+            string.format('  Zone: %s / %s (%s)\n':format(
+                text_green(zone and zone.name or '--'),
+                text_green(zone and zone.search or '--'),
+                text_number(tostring(zone and zone.id or 0)
+            )) ..
+
+            string.format('  Id: %s\n', text_number(tostring(target.id))) ..
+            string.format('  Index: %s/%s\n',
+                text_number(tostring(target.index)),
+                text_magenta('%03X':format(target.index or 0))
+            ) ..
+            
+            string.format('  Target\'s target index: %s/%s\n',
+                text_number(tostring(target.target_index or 0)),
+                text_magenta('%03X':format(target.target_index or 0))
+            ) ..
+            
+            string.format('  Spawn type: %s\n', text_number(tostring(target.spawn_type))) ..
+            string.format('  Status: %s\n', text_number(tostring(target.status))) ..
+            string.format('  Claim id: %s\n', text_number(tostring(target.claim_id or 0))) ..
+            
+            string.format('  Pos: %s  %s  %s\n',
+                text_number('%.2f':format(target.x or -1337)),
+                text_number('%.2f':format(target.y or -1337)),
+                text_number('%.2f':format(target.z or -1337))
+            ) ..
+            
+            string.format('  Hdg: %s\n', text_number('%.2f degrees':format(target.heading and (target.heading * 180 / math.pi) or -1337))) ..
+            
+            string.format('  Speed: %s\n', text_number('%.2f':format(target.movement_speed or -1337)))
+        ))
 
         if arrayIndexOfStrI(args, '-save') then
             local filename = string.format('.\\data\\%s-%d.target.json', target.name, target.index)
