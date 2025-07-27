@@ -43,6 +43,11 @@
       "useWeaponSkill()",
       "$macro:equip_for_battle"
     ],
+    "use_weapon_skill": [
+      "$macro:equip_for_ws",
+      "useWeaponSkill()",
+      "$macro:equip_for_battle"
+    ],
     "check_using_ws": ["(partyUsingWeaponSkill2)"],
     "check_skillchaining": ["(skillchaining2)"],
     "ws_partners_deferring": [

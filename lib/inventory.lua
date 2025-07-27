@@ -498,6 +498,8 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                         end
                     end
 
+                    --print('item: %s, augments: %s':format(item.name, augments and tostring(#augments) or 'none'))
+
                     if 
                         (isUsableItem or not flags.usable) and          -- Usable flag
                         (isEquippableItem or not flags.equippable) and  -- Equippable flag

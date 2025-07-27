@@ -389,8 +389,21 @@ handlers['config'] = function(args)
 end
 
 handlers['function'] = function(args)
-    local name = tonumber(arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n'))
-    local list = tonumber(arrayIndexOfStrI(args, '-list') or arrayIndexOfStrI(args, '-l'))
+    local name = arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n')
+    local list = arrayIndexOfStrI(args, '-list') or arrayIndexOfStrI(args, '-l')
+    local silent = arrayIndexOfStrI(args, '-silent')
+    local max_iterations = arrayIndexOfStrI(args, '-max')
+
+    if max_iterations then
+        max_iterations = tonumber(args[max_iterations + 1])
+        if max_iterations then
+            max_iterations = math.max(max_iterations, 1)
+        end
+    end
+
+    if not max_iterations then
+        max_iterations = 20
+    end
 
     if list or not name then
         local count = 0
@@ -409,14 +422,6 @@ handlers['function'] = function(args)
             end
         end
 
-        -- for key, val in pairs(actionStateManager.functions) do
-        --     count = count + 1
-        --     writeMessage('%s':format(text_green(key)))
-        --     if type(val.description) == 'string' then
-        --         writeMessage('%s':format(text_gray(val.description)))
-        --     end
-        -- end
-
         writeMessage('You have %s configured!':format(pluralize(#keys, 'function', 'functions')))
 
         return
@@ -434,7 +439,9 @@ handlers['function'] = function(args)
     local action = actionStateManager.functions[name]
     if action then
         if not action._running then
-            writeMessage('  %s: Beginning execution.':format(text_green(action.name)))
+            if not silent then
+                writeMessage('  %s: Beginning execution.':format(text_green(action.name)))
+            end
 
             action._running = true
             action._fn_exiting = false
@@ -442,6 +449,10 @@ handlers['function'] = function(args)
 
             local done = false
             while not done do
+                if action._fn_iteration >= max_iterations then
+                    writeMessage('  %s: The maximum iteration count of %d has been reached!':format(text_green(action.name), text_number(action._fn_iteration)))
+                end
+
                 action._fn_iteration = action._fn_iteration + 1
 
                 local context = actionStateManager:getContext()
@@ -456,7 +467,9 @@ handlers['function'] = function(args)
                             command._commandFn()
                         end
                     else
-                        writeMessage('  %s: No further conditions have been met, exiting.':format(text_green(action.name)))
+                        if not silent then
+                            writeMessage('  %s: Execution completed!':format(text_green(action.name)))
+                        end
                         done = true
                     end
                 else

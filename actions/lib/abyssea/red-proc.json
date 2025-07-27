@@ -24,6 +24,9 @@
   },
   "actions": [
     {
+      "import": "macros/skillchaining"
+    },
+    {
       "comment": [
         " ================================================================================ ",
         "  Clears the list of already-tried weapon skills at the start of any fight.",
@@ -119,7 +122,7 @@
       "commands": [
         "log('Using RED PROC weapon skill:', weapon_skill.name)",
         "setVarField('vars.abyssea.red_proc.used_ws', result, true)",
-        "useWeaponSkill()",
+        "$macro:use_weapon_skill",
         "varIncrement('vars.abyssea.red_proc.used_count')"
       ],
       "delay": 7,

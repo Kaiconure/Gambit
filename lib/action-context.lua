@@ -1806,15 +1806,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         
         if slot == nil and name == nil then
             if context.item then
+                -- We have nothing, but there's a context item. Use that.
                 slot = context.item.slot
                 name = context.item.name
                 augments = context.item.matched_augments
             end
         else
             if type(slot) == 'table' then
+                -- Assume slot is an item
                 name = slot.name
                 slot = slot.slot
-                augments = slot.matched_augments or slot.augments
+                augments = slot.matched_augments
+            elseif type(name) == 'table' then
+                -- Assume name is an item
+                augments = name.matched_augments
+                name = name.name or name.equipment or name.gear or name.item
+                if not slot then
+                    slot = name.slot
+                end
             end
         end
 
@@ -1826,7 +1835,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if not slot or not name then
             return
         end
-
 
         local items = {}
         items[1] = {
