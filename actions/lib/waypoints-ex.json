@@ -38,7 +38,8 @@
       ],
       "delay": 1,
       "frequency": 2,
-      "scope": "battle"
+      "scope": "zone",
+      "scoped_enumerators": true
     },
     {
       "when": [
@@ -58,7 +59,8 @@
       ],
       "delay": 1,
       "frequency": 2,
-      "scope": "battle"
+      "scope": "zone",
+      "scoped_enumerators": true
     },
     {
       "when": [
