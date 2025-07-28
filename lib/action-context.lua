@@ -3779,6 +3779,55 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
+    context.findNextMob = function(...)
+        local names = varargs({...})
+
+        local max_distance = math.abs(math.min(tonumber(names[1]) or 50, 50))
+        local md = 'maxd: %.2f':format(max_distance)
+        
+        -- We have to square the max distance now, so avoid square rooting it multiple times later
+        max_distance = max_distance * max_distance
+        
+        md = 'maxd2: %.2f':format(max_distance)
+
+        local best = nil
+
+        if #names > 0 then
+            local mobs = windower.ffxi.get_mob_array()
+            
+            for key, _mob in pairs(mobs) do
+                local mob = _mob and windower.ffxi.get_mob_by_id(_mob.id)
+                if
+                    mob and 
+                    mob.spawn_type == SPAWN_TYPE_MOB and
+                    mob.valid_target and
+                    mob.distance <= max_distance and
+                    (context.bt == nil or context.bt.id ~= mob.id) and              -- Only pick the mob that's not our current battle target
+                    (mob.claim_id == 0 or partyInfo:canShareClaim(mob.claim_id))    -- Only pick mobs that we could actually claim
+                then
+                    local candidate = mob
+                    if 
+                        (candidate.status == STATUS_ENGAGED and (best == nil or best.status ~= STATUS_ENGAGED)) or
+                        (candidate.status == STATUS_ENGAGED and best and best.status == STATUS_ENGAGED and candidate.distance < best.distance) or
+                        (best == nil or candidate.distance < best.distance)
+                    then
+                        if arrayIndexOfStrI(names, candidate.name) then
+                            best = candidate
+                        end
+                    end
+                end
+            end
+
+            if best then
+                local f = { symbol = 't', mob = best }
+                initContextTargetSymbol(context, f)
+
+                context.find_result = f
+                return context.find_result
+            end
+        end
+    end
+
     --------------------------------------------------------------------------------------
     -- Find and returns the first mob from a list of mob names that is within
     -- targeting range. If multiple mobs with the same name are found, the

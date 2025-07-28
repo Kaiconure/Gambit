@@ -33,6 +33,14 @@ handlers['strategy'] = function (args)
 end
 handlers['strat'] = handlers['strategy']
 
+handlers['status'] = function(args)
+    writeMessage(text_gray('Gambit status:'))
+    writeMessage('  Current gambit is %s':format(settings and settings.actionInfo and text_green(settings.actionInfo.name) or text_red('n/a')))
+    writeMessage('  Automation is %s':format(globals.enabled and text_green('enabled') or text_red('disabled')))
+    writeMessage('  Targeting strategy is %s':format(text_green(settings.strategy)))
+    
+end
+
 -------------------------------------------------------------------------------
 -- disable
 handlers['disable'] = function (args)
