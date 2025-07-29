@@ -33,27 +33,21 @@
   "actions": [
     {
       "when": [
-        "not vars.common_consumables.disabled and not vars.common_consumables.escha_items_disabled",
-        "canUseItem(vars.common_consumables.escha_items) and freeInventorySlots() > 0"
+        "not vars.common_consumables.disabled",
+        "freeInventorySlots() > 0",
+        "  (not vars.common_consumables.escha_items_disabled and canUseItem(vars.common_consumables.escha_items)) or \\",
+        "  (not vars.common_consumables.unm_items_disabled and canUseItem(vars.common_consumables.unm_items)) or \\",
+        "  (not vars.common_consumables.woe_items_disabled and canUseItem(vars.common_consumables.woe_items))"
       ],
       "commands": ["useItem(me)"],
-      "comment": "Escha Items"
-    },
-    {
-      "when": [
-        "not vars.common_consumables.disabled and not vars.common_consumables.unm_items_disabled",
-        "canUseItem(vars.common_consumables.unm_items) and freeInventorySlots() > 0"
-      ],
-      "commands": ["useItem(me)"],
-      "comment": "UNM Items"
-    },
-    {
-      "when": [
-        "not vars.common_consumables.disabled and not vars.common_consumables.woe_items_disabled",
-        "canUseItem(vars.common_consumables.woe_items) and freeInventorySlots() > 0"
-      ],
-      "commands": ["useItem(me)"],
-      "comment": "Walk of Echoes Items"
+      "miss_frequency": 30,
+      "scope": "battle",
+      "comment": [
+        "The postpone function will always return nil. By placing it at the end of the OR sequence,",
+        "we guarantee it will only be run if none of the other conditions are met. In that case, it will",
+        "prevent the gambit from being checked again for a given amount of time (30 seconds) without changing",
+        "the false result of the when condition."
+      ]
     }
   ]
 }

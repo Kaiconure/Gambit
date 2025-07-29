@@ -188,7 +188,7 @@ local BATTLE_ONLY_MOBS = {
 --------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
 local lock_target_id = 1
-function lockTarget(player, mob, battleTarget)
+function lockTarget(player, mob, battleTarget, noTabs)
     local id = lock_target_id
     lock_target_id = lock_target_id + 1
 
@@ -198,9 +198,10 @@ function lockTarget(player, mob, battleTarget)
             (not BATTLE_ONLY_MOBS[mob.name] or mob.status == STATUS_ENGAGED) and
             mob.hpp > 0
         then
-            local max_tabs = settings.maxTabs
+            local max_tabs = (noTabs and 0) or settings.maxTabs
             local tabs_remaining = 0
             local forced_tabbing = false
+            local fail_fast = false
             
             if
                 mob.spawn_type == SPAWN_TYPE_TRUST or
@@ -211,15 +212,32 @@ function lockTarget(player, mob, battleTarget)
                     writeMessage('DBG: lockTarget called from ' .. debug.traceback())
                 end
 
-                packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
-                    ['Player'] = player.id,
-                    ['Target'] = mob.id,
-                    ['Player Index'] = player.index,
-                }))
+                -- We'll try a few times to establish our target directly
+                for i = 1, 3 do
+                    packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
+                        ['Player'] = player.id,
+                        ['Target'] = mob.id,
+                        ['Player Index'] = player.index,
+                    }))
 
-                -- Give it a moment to target
-                coroutine.sleep(0.125)
+                    -- Give it a moment to target
+                    coroutine.sleep((0.5 * (i - 1)) + 0.125)
+
+                    local t = windower.ffxi.get_mob_by_target('t')
+                    if 
+                        t and
+                        t.id == mob.id and
+                        (not mob.index or t.index == mob.index)
+                    then
+                        if not t.valid_target then
+                            fail_fast = true
+                        end
+
+                        break
+                    end
+                end
             else
+                -- We always need to go back to tabbing if we're going after a target of this spawn type (not a trust, mob, or player)
                 max_tabs = 10
                 tabs_remaining = max_tabs
                 forced_tabbing = true
@@ -227,7 +245,7 @@ function lockTarget(player, mob, battleTarget)
 
             -- In laggy situations, it can take a while for the target to be acquired. This gives us 
             -- some time to try and ensure we can get the target.
-            if 1 == 1 then
+            if not fail_fast then
                 local start = os.clock()
                 local duration = 0
                 
@@ -272,7 +290,9 @@ function lockTarget(player, mob, battleTarget)
 
                     -- If tabs are allowed, we'll occasionally revert to direct tab presses
                     -- when we've been unable to get a lock in a reasonable time.
-                    if duration > 1.5 or max_tabs > 0 then
+                    if 
+                        duration > 1.5 or max_tabs > 0
+                    then
                         local bt = battleTarget and windower.ffxi.get_mob_by_target('bt')
                         local just_tried_bt = false
                         if bt and bt.valid_target and bt.hpp > 0 then

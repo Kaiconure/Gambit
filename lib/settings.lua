@@ -234,6 +234,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
             if action and not action.disabled and player then
                 if
                     (action.filter.main_jobs and not arrayIndexOf(useArray(action.filter.main_jobs), player.main_job))  or
+                    (action.filter.sub_jobs and not arrayIndexOf(useArray(action.filter.sub_jobs), player.sub_job))  or
                     (action.filter.names and not arrayIndexOf(useArray(action.filter.names), player.name))
                 then
                     action.disabled = true

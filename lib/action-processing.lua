@@ -333,14 +333,20 @@ local function compileActions(actionType, parent, rawActions)
                     -- Compute the 'when' function
                     action._whenFn = loadstring(string.format('return %s', action.when))
 
+                    -- Sanitize the frequency value
                     if action.frequency == 'inf' or action.frequency == 'infinity' then
-                        -- We'll allow an infinity string to represent actions that should not normally be rescheduled.
-                        -- This should typically be used in conjunction with a 'scope' value.
                         action.frequency = math.huge
                     else
-                        -- Force frequency to a non-negative number
                         action.frequency = math.max(tonumber(action.frequency or 0), 0)
                     end
+
+                    -- Sanitize the miss frequency value
+                    if action.miss_frequency == 'inf' or action.miss_frequency == 'infinity' then
+                        action.miss_frequency = math.huge
+                    else
+                        action.miss_frequency = math.max(tonumber(action.miss_frequency or 0), 0)
+                    end
+
                     action.availableAt = 0
                     action.enumerators = { }
                     
@@ -570,6 +576,12 @@ local function getNextBattleAction(context)
                     --print(action.when)
 
                     return action
+                else
+                    -- When an action is "missed" (the when condition is not met), we may still need to push out
+                    -- its next available time based on the configured miss frequency.
+                    if action.miss_frequency > 0 then
+                        action.availableAt = math.max(os.clock() + action.miss_frequency, action.availableAt)
+                    end
                 end
             end
         end

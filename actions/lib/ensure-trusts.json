@@ -27,7 +27,9 @@
         "callTrust()",
         "wait(1.5)"
       ],
-      "delay": 0
+      "delay": 0,
+      "miss_frequency": 3,
+      "scope": "battle"
     },
     {
       "name": "recall_trusts.debuff",
@@ -35,8 +37,8 @@
         "me.is_party_leader and not a10 and not a20 and actionType == 'idle'",
         "partyAll('is_trust') and hasEffect(member, vars.ensure_trusts.recall_on_effects) and canUseSpell(trustSpellName(member.name))",
         "not any(member.name, vars.ensure_trusts.recall_blacklist)",
-        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
-        "member.distance < 6 or not vars.ensure_trusts.stationary"
+        "member.distance < 6 or not vars.ensure_trusts.stationary",
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0"
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to debuff', effect.name)",
@@ -47,7 +49,9 @@
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
       ],
-      "delay": 0
+      "delay": 0,
+      "miss_frequency": 3,
+      "scope": "battle"
     },
     {
       "name": "recall_trusts.mp",
@@ -55,8 +59,8 @@
         "me.is_party_leader and not a10 and not a20 and actionType == 'idle'",
         "partyAll('is_magic_trust and mpp <= %f', vars.ensure_trusts.recall_on_mpp) and canUseSpell(trustSpellName(member.name))",
         "not any(member.name, vars.ensure_trusts.recall_blacklist)",
-        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
-        "member.distance < 6 or not vars.ensure_trusts.stationary"
+        "member.distance < 6 or not vars.ensure_trusts.stationary",
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0"
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to mpp at', member.mpp, '%')",
@@ -67,8 +71,9 @@
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
       ],
-      "scope": "battle",
-      "delay": 0
+      "delay": 0,
+      "miss_frequency": 3,
+      "scope": "battle"
     },
     {
       "name": "recall_trusts.hp",
@@ -76,8 +81,8 @@
         "me.is_party_leader and not a10 and not a20 and actionType == 'idle'",
         "partyAll('is_trust and hpp <= %f', vars.ensure_trusts.recall_on_hpp) and canUseSpell(trustSpellName(member.name))",
         "not any(member.name, vars.ensure_trusts.recall_blacklist)",
-        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0",
-        "member.distance < 6 or not vars.ensure_trusts.stationary"
+        "member.distance < 6 or not vars.ensure_trusts.stationary",
+        "mobsInRange(vars.ensure_trusts.mob_safety_range) == 0"
       ],
       "commands": [
         "log('Release/recall trust', member.name, 'due to HPP at', member.hpp, '%')",
@@ -89,8 +94,9 @@
         "useSpell(me)",
         "wait(1.0)"
       ],
-      "scope": "battle",
-      "delay": 0
+      "delay": 0,
+      "miss_frequency": 3,
+      "scope": "battle"
     }
   ]
 }
