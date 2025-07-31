@@ -2259,8 +2259,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         local bag_info = windower.ffxi.get_bag_info(0)
 
-        if bag_info and bag_info.inventory then
-            return bag_info.inventory.max - bag_info.inventory.count
+        --print(json.stringify(bag_info))
+
+        local info = bag_info and bag_info.inventory or bag_info
+
+        if info and info.enabled then
+            return info.max - info.count
         end
 
         return 0        
