@@ -1,5 +1,33 @@
 {
   "vars": {
+    "ninjutsu": {
+      "yellow_proc_only": true,
+      "debuffs": {
+        "kurayami": {
+          "spells": ["Kurayami: Ni"]
+        }
+      },
+      "nukes": {
+        "doton": {
+          "spells": ["Doton: Ni"]
+        },
+        "huton": {
+          "spells": ["Huton: Ni"]
+        },
+        "hyoton": {
+          "spells": ["Hyoton: Ni"]
+        },
+        "katon": {
+          "spells": ["Katon: Ni"]
+        },
+        "raiton": {
+          "spells": ["Raiton: Ni"]
+        },
+        "suiton": {
+          "spells": ["Suiton: Ni"]
+        }
+      }
+    },
     "abyssea": {
       "yellow_proc": {
         "day_order": [
@@ -86,6 +114,15 @@
             "Eyes On Me"
           ]
         ],
+        "functions": {
+          "Kurayami: Ni": "keep_kurayami",
+          "Doton: Ni": "use_doton",
+          "Huton: Ni": "use_huton",
+          "Hyoton: Ni": "use_hyoton",
+          "Katon: Ni": "use_katon",
+          "Raiton: Ni": "use_raiton",
+          "Suiton: Ni": "use_suiton"
+        },
         "reference": "https://www.bg-wiki.com/ffxi/Category:Abyssea#Yellow"
       }
     }
@@ -132,11 +169,59 @@
       ],
       "commands": [
         "log('Using YELLOW PROC spell:', spell.name)",
-        "useSpell(bt) and setVarField('vars.abyssea.yellow_proc.used_spells', result, true) and varIncrement('vars.abyssea.yellow_proc.used_count')"
+        "(vars.abyssea.yellow_proc.functions[spell.name] and sendCommand('gbtfn %s', vars.abyssea.yellow_proc.functions[spell.name]) and wait(2) or useSpell(bt)) and setVarField('vars.abyssea.yellow_proc.used_spells', result, true) and varIncrement('vars.abyssea.yellow_proc.used_count')"
       ],
       "delay": 7,
-      "frequency": 10,
-      "scoped_enumerators": true
+      "frequency": 10
+    },
+    {
+      "import": "ninjutsu/debuffs/keep-kurayami",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
+    },
+    {
+      "import": "ninjutsu/nukes/use-doton",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
+    },
+    {
+      "import": "ninjutsu/nukes/use-huton",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
+    },
+    {
+      "import": "ninjutsu/nukes/use-hyoton",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
+    },
+    {
+      "import": "ninjutsu/nukes/use-katon",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
+    },
+    {
+      "import": "ninjutsu/nukes/use-raiton",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
+    },
+    {
+      "import": "ninjutsu/nukes/use-suiton",
+      "filter": {
+        "main_jobs": ["NIN"],
+        "sub_jobs": ["NIN"]
+      }
     }
   ]
 }

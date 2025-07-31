@@ -39,7 +39,7 @@
         "setVar('vars.abyssea.red_proc.reset', true)",
         "setVar('vars.abyssea.red_proc._weapon_set_name', vars.abyssea.red_proc.weapon_set_name or vars.abyssea.weapon_set_name or 'weapons')",
         "setVar('vars.abyssea.red_proc._weapons', arrayLength(vars.abyssea.red_proc[vars.abyssea.red_proc._weapon_set_name]) > 0 and vars.abyssea.red_proc[vars.abyssea.red_proc._weapon_set_name] or vars.abyssea[vars.abyssea.red_proc._weapon_set_name])",
-        "log('Identified', arrayLength(vars.abyssea.red_proc._weapons), 'RED PROC weapon set(s) to cycle!')"
+        "log('Identified', arrayLength(vars.abyssea.red_proc._weapons), 'RED PROC', '[' .. vars.abyssea.red_proc._weapon_set_name .. ']', 'weapon set(s) to cycle!')"
       ],
       "delay": 0,
       "frequency": "infinity",
@@ -61,7 +61,8 @@
       ],
       "delay": 0,
       "frequency": 0,
-      "scope": "battle"
+      "scope": "battle",
+      "scoped_enumerators": true
     },
     {
       "comment": [
