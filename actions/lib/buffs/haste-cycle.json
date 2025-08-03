@@ -12,7 +12,7 @@
     {
       "when": [
         "hasSpell(vars.haste_cycle.spells) and canUse(spell)",
-        "partyByName(vars.haste_cycle.targets) and not hasEffectOf(member, spell)"
+        "partyByName(vars.haste_cycle.targets) and member.in_spell_range and not hasEffectOf(member, spell)"
       ],
       "commands": [
         "useSpell()",

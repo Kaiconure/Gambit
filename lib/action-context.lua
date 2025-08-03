@@ -328,6 +328,32 @@ local function context_table_contains_all(array, all)
 end
 
 -----------------------------------------------------------------------------------------
+-- Finds the first element of an array that DOES NOT have a corresponding
+-- field set in a table of field names.
+local function context_array_first_missing(array, fieldsToSearch)
+    if type(fieldsToSearch) == 'table' then
+        return tableFirst(array, 
+            function(val)
+                return not fieldsToSearch[val]
+            end
+        )
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Finds the first element of an array that DOES have a corresponding
+-- field set in a table of field names.
+local function context_array_first_contained(array, fieldsToSearch)
+    if type(fieldsToSearch) == 'table' then
+        return tableFirst(array, 
+            function(val)
+                return fieldsToSearch[val]
+            end
+        )
+    end
+end
+
+-----------------------------------------------------------------------------------------
 -- Determine if a table contains field names for all elements in an array.
 local function context_table_has_all_field_names(table, array)
     if 
@@ -1401,6 +1427,10 @@ local function initContextTargetSymbol(context, symbol, debug)
     symbol.id = symbol.mob.id
     symbol.index = symbol.mob.index
     symbol.distance = math.sqrt(symbol.mob.distance or 0)
+    symbol.center_distance = symbol.distance
+    symbol.model_size = symbol.mob.model_size
+    symbol.model_scale = symbol.mob.model_scale
+
     symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
     symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
     symbol.is_me = (symbol.id == context.player.id)
@@ -1422,6 +1452,26 @@ local function initContextTargetSymbol(context, symbol, debug)
     if symbol.status == STATUS_IDLE then symbol.is_idle = true end
     if symbol.status == 44 then symbol.is_crafting = true end
     if symbol.is_idle or symbol.is_engaged or symbol.is_mounted or symbol.is_resting then symbol.can_follow = true end
+
+    if not settings.useRawDistances then
+        if
+            symbol.distance ~= 0
+        then
+            local my_size = context.me and context.me.model_size or 0
+            local mob_size = symbol.model_size or 0
+
+            symbol.distance = math.max(
+                0,
+                symbol.distance - ((mob_size + my_size) * 0.75)
+            )
+
+            -- local tick = os.clock()
+            -- if tick - (last_raw_output_tick or 0) > 3 then
+            --     print('raw: %.2f, calc: %.2f':format(symbol.center_distance, symbol.distance))
+            --     last_raw_output_tick = tick
+            -- end
+        end
+    end
 
     if symbol.is_mob then
         -- Set the has_claim flag when someone in the party has claimed the mob
@@ -1472,6 +1522,18 @@ local function initContextTargetSymbol(context, symbol, debug)
             )
         end
     end
+
+    symbol.in_spell_range   = symbol.center_distance <= 20
+    symbol.in_ra_range      = symbol.center_distance <= 25
+    
+    -- symbol.checkAbilityRange = function(ability)
+    --     if type(ability) ~= 'table' then
+    --         ability = findJobAbility(ability)
+    --     end
+
+    --     local range = (tonumber(ability.range) or 2) + 4
+    --     return symbol.center_distance < range
+    -- end
 
     -----------------------------------------------------------------
     -- Check for buffs
@@ -3133,12 +3195,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Returns true if we're behind the mob and facing it
     context.alignedRear = function (target)
-        target = target or context.bt
-        if target then
-            if smartMove:atMobRear(target.index) then
-                return true
-            end
-        end
+        return context.aligned(
+            target or context.bt,
+            180, 
+            2)
     end
 
     context.getMatchingBracketedFaceAwayStart = function(faceaways, abilityName, mobName)
@@ -3406,28 +3466,36 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 duration = math.max(tonumber(duration) or 3, 1)
                 failureDelay = math.max(tonumber(failureDelay) or 5, 1)
 
-                if settings.verbosity >= VERBOSITY_TRACE then
-                    writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+                local result = context.align(context.bt, 180, 2, duration) and context.alignedRear()
+                if not result then
+                    context.postpone(failureDelay)
+                    return
                 end
 
-                local jobId = smartMove:moveBehindIndex(context.bt.index, duration)
-                if jobId then
-                    while true do
-                        coroutine.sleep(0.5)
-                        local job = smartMove:getJobInfo()
-                        if job == nil or job.jobId ~= jobId then
-                            if settings.verbosity >= VERBOSITY_TRACE then
-                                writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
-                            end
-                            local success = context.alignedRear()
-                            if not success then
-                                context.postpone(failureDelay)
-                            end
+                return true                
 
-                            return success
-                        end
-                    end
-                end
+                -- if settings.verbosity >= VERBOSITY_TRACE then
+                --     writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
+                -- end
+                
+                -- local jobId = smartMove:moveBehindIndex(context.bt.index, duration)
+                -- if jobId then
+                --     while true do
+                --         coroutine.sleep(0.5)
+                --         local job = smartMove:getJobInfo()
+                --         if job == nil or job.jobId ~= jobId then
+                --             if settings.verbosity >= VERBOSITY_TRACE then
+                --                 writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
+                --             end
+                --             local success = context.alignedRear()
+                --             if not success then
+                --                 context.postpone(failureDelay)
+                --             end
+
+                --             return success
+                --         end
+                --     end
+                -- end
             end
         end
     end
@@ -5322,6 +5390,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.arrayMerge = context_array_merge
     context.arrayAll = context_array_contains_all
     context.tableAll = context_table_contains_all
+    context.arrayFirstMissing = context_array_first_missing
+    context.arrayFirstContained = context_array_first_contained
     context.type = type
     context.isBoolean = function(val) return type(val) == 'boolean' end
     context.isNumber = function(val) return type(val) == 'number' end

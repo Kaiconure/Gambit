@@ -300,6 +300,7 @@ text_ability              = text_blue
 text_weapon_skill         = text_blue
 text_item                 = text_green
 text_number               = text_lightblue
+text_hex                  = text_magenta
 text_target               = text_cornsilk
 text_gearslot             = text_cornsilk
 text_command              = text_green

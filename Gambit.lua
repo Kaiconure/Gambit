@@ -1,4 +1,4 @@
-__version = '0.96.0-beta2'
+__version = '0.96.0-beta6'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -101,6 +101,8 @@ function reloadSettings(actionsName, bypassActions)
     end
 
     writeMessage(text_green('Settings have been reloaded!', Colors.default))
+
+    smartMove:applySettings(settings)
 end
 
 -- Player status change
@@ -175,6 +177,7 @@ windower.register_event('load', function()
     sendSelfCommand('disable')
 
     smartMove:setLogger(writeDebug, writeTrace)
+    smartMove:applySettings(settings)
 
     local bind_toggle       = 'bind !~g ' .. makeSelfCommand('toggle')          -- Shift+Alt+G
     local bind_follow       = 'bind %^f ' .. makeSelfCommand('follow -toggle')  -- Ctrl+F

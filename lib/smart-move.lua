@@ -6,7 +6,7 @@ local smartMove = {
     queue = { },
     previousJob = nil,
     current = nil,
-    tolerance = 0.5,
+    tolerance = 0.33,
 
     log = null_log,
     debug = null_log
@@ -30,6 +30,8 @@ local MAX_JITTER        = 3                     -- The maximum duration we'll sp
 local HEADING_TOLERANCE = TWO_PI * 0.0125   -- 1.25% of a unit circle, or 4.5 degrees
 
 local resources = require('resources')
+
+local current_settings = {}
 
 -- ======================================================================================
 -- Helpers
@@ -128,6 +130,18 @@ local function findMobOffset(mob, angleOffset, distance)
     local vMob = V({mob.x, mob.y})
 
     distance = (type(distance) == 'number') and distance or 2
+
+    if not current_settings or not current_settings.useRawDistances then
+        if not mob.model_size then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        local distance_offset = 
+            (player.model_size or 0) +      -- Player model size
+            (mob and mob.model_size or 0)   -- Mob model size
+        distance = 
+            distance + (distance_offset * 0.75)
+    end
 
     if type(angleOffset) == 'number' then
         -- When an angle offset was provided, we'll calculate that from the mob
@@ -973,6 +987,22 @@ function smartMove:followIndex(follow_index, distance)
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
     job.follow_distance =           -- How far behind the mob we should follow
         math.max(tonumber(distance) or 0, 0)
+
+    if not current_settings or not current_settings.useRawDistances then
+        local _p = windower.ffxi.get_mob_by_target('me')
+        local distance_offset = 
+            (_p and _p.model_size or 0) +           -- Player size offset
+            (mob.model_size or 0)                   -- Mob size offset
+        job.follow_distance = 
+            job.follow_distance + (distance_offset * 0.75)
+
+        -- local tick = os.clock()
+        -- if tick - (last_raw_output_tick or 0) > 3 then
+        --     print('base: %.2f, final: %.2f':format(distance, job.follow_distance))
+        --     last_raw_output_tick = tick
+        -- end
+    end
+
     --job.autolock = true             -- Automatically lock onto the target on completion
 
     job.lost_mob_time = nil
@@ -981,7 +1011,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:followIndex(follow_index, distance)
+        return smartMove:followIndex(follow_index, job.follow_distance)
     end
 
     -- Determine if the job is still valid
@@ -1119,6 +1149,11 @@ end
 function smartMove:setLogger(log, verbose)
     self.log        = (type(log) == 'function') and log or null_log
     self.verbose    = (type(verbose) == 'function') and verbose or null_log
+end
+
+function smartMove:applySettings(settings)
+    self.settings = settings or {}
+    current_settings = self.settings
 end
 
 function smartMove:getJobInfo(jobId)

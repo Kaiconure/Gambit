@@ -6,7 +6,7 @@
     "frontline_engagement": {
       "prioritize_melee_engagement": true,
       "angle": null,
-      "distance": 2,
+      "distance": null,
       "engage_trusts": null,
       "camp": {
         "max_distance": 4,
@@ -18,6 +18,14 @@
     }
   },
   "actions": [
+    {
+      "commands": [
+        "setVar('vars.frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle"
+    },
     {
       "when": [
         "vars.frontline_engagement.camp",
@@ -55,7 +63,7 @@
       "when": [
         "bt and me.is_party_leader",
         "vars.frontline_engagement.engage_trusts and waiting_for_trusts",
-        "vars.frontline_engagement.distance > 2",
+        "vars.frontline_engagement._distance > 2",
         "bt and bt.distance > 3",
         "not hasEffect('Bind')"
       ],
@@ -70,33 +78,33 @@
     {
       "when": [
         "actionType == 'battle'",
-        "bt and bt.distance <= vars.frontline_engagement.distance + 2",
-        "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance)"
+        "bt and bt.distance <= vars.frontline_engagement._distance + 2",
+        "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, vars.frontline_engagement._distance)"
       ],
       "commands": [
-        "align(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance) or postpone(10)"
+        "align(bt, vars.frontline_engagement.angle, vars.frontline_engagement._distance) or postpone(10)"
       ],
       "frequency": 1,
       "scope": "battle",
       "delay": 2
     },
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.distance and following(bt)",
+      "when": "bt and bt.distance <= vars.frontline_engagement._distance and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.distance and not facingEnemy()",
+      "when": "bt and bt.distance <= vars.frontline_engagement._distance and not facingEnemy()",
       "commands": ["faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
-      "when": "bt and bt.distance > vars.frontline_engagement.distance and not following(bt)",
+      "when": "bt and bt.distance > vars.frontline_engagement._distance and not following(bt)",
       "commands": [
         "faceEnemy()",
-        "follow(bt, vars.frontline_engagement.distance)",
+        "follow(bt, vars.frontline_engagement._distance)",
         "wait(0.5)"
       ],
       "frequency": 1,
@@ -105,11 +113,11 @@
     {
       "when": [
         "vars.frontline_engagement.prioritize_melee_engagement",
-        "bt and bt.distance > (vars.frontline_engagement.distance + 2)",
+        "bt and bt.distance > (vars.frontline_engagement._distance + 2)",
         "not hasEffect('Bind')"
       ],
       "commands": [
-        "not following(bt) and follow(bt, vars.frontline_engagement.distance) and log('Unexpected: Initiated melee range following')",
+        "not following(bt) and follow(bt, vars.frontline_engagement._distance) and log('Unexpected: Initiated melee range following')",
         "wait(1)"
       ],
       "comment": "Ensure that we get into melee range without executing later actions."

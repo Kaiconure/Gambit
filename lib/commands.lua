@@ -278,7 +278,9 @@ handlers['config'] = function(args)
     local scd = tonumber(arrayIndexOfStrI(args, '-skillchaindelay') or arrayIndexOfStrI(args, '-scdelay') or arrayIndexOfStrI(args, '-scd') or 0)
     local tabs = tonumber(arrayIndexOfStrI(args, '-tabs') or 0)
     local targetingDuration = tonumber(arrayIndexOfStrI(args, '-targetingduration') or arrayIndexOfStrI(args, '-td') or 0)
+    local useRawDistance = tonumber(arrayIndexOfStrI(args, '-rawdistance') or arrayIndexOfStrI(args, '-rd') or 0)
     local debugging = tonumber(arrayIndexOfStrI(args, '-debugging') or 0)
+    
     local hasChanges = false
 
     if distance > 0 then
@@ -360,6 +362,20 @@ handlers['config'] = function(args)
 
         writeMessage('Targeting tab presses: %s':format(
             text_number(settings.maxTabs)
+        ))
+    end
+
+    if useRawDistance > 0 then
+        useRawDistance = string.lower(args[useRawDistance + 1] or '')
+
+        if useRawDistance == 'on' then
+            settings.useRawDistances = true
+        elseif useRawDistance == 'off' then
+            settings.useRawDistances = nil
+        end
+
+        writeMessage('Raw distances? %s':format(
+            settings.useRawDistances and text_green('on') or text_red('off')
         ))
     end
 
@@ -533,17 +549,21 @@ handlers['targetinfo'] = function (args)
             string.format('  Id: %s\n', text_number(tostring(target.id))) ..
             string.format('  Index: %s/%s\n',
                 text_number(tostring(target.index)),
-                text_magenta('%03X':format(target.index or 0))
+                text_hex('%03X':format(target.index or 0))
             ) ..
             
             string.format('  Target\'s target index: %s/%s\n',
                 text_number(tostring(target.target_index or 0)),
-                text_magenta('%03X':format(target.target_index or 0))
+                text_hex('%03X':format(target.target_index or 0))
             ) ..
             
             string.format('  Spawn type: %s\n', text_number(tostring(target.spawn_type))) ..
             string.format('  Status: %s\n', text_number(tostring(target.status))) ..
             string.format('  Claim id: %s\n', text_number(tostring(target.claim_id or 0))) ..
+            string.format('  Model size: %s x%s\n',
+                text_number('%.2f':format(target.model_size or -1337)),
+                text_number('%.2f':format(target.model_scale or -1337))
+            ) ..
             
             string.format('  Pos: %s  %s  %s\n',
                 text_number('%.2f':format(target.x or -1337)),
@@ -557,7 +577,7 @@ handlers['targetinfo'] = function (args)
         ))
 
         if arrayIndexOfStrI(args, '-save') then
-            local filename = string.format('.\\data\\%s-%d.target.json', target.name, target.index)
+            local filename = string.format('.\\data\\targets\\%s-%d.target.json', target.name, target.index)
             writeMessage('Saving target info to file: ' .. filename)
             writeJsonToFile(filename, target)
 

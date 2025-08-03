@@ -177,6 +177,7 @@ state_manager.setActionType = function (self, newType)
             self.mobAbilities = { }
 
             if mode ~= 'init' then
+                --print('incrementing battle scope: %d to %d':format(self.actionTransitionCounter, self.actionTransitionCounter + 1))
                 self.actionTransitionCounter = self.actionTransitionCounter + 1
             end
         end

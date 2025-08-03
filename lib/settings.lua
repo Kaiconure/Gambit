@@ -78,7 +78,8 @@ local DefaultIgnoreList = {
     { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Iroha', ignoreAlways = true, _note = 'NPC ally in certain battles' },
     { name = 'Arciela', ignoreAlways = true, _note = 'NPC ally in certain battles' },
-    { name = 'Lion', ignoreAlways = true, _note = 'NPC ally in certain battles' }
+    { name = 'Lion', ignoreAlways = true, _note = 'NPC ally in certain battles' },
+    { name = 'Resistance Fighter', ignoreAlways = true, _note = 'Background NPC scattered through Abyssea zones' }
 }
 
 --
@@ -232,13 +233,35 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
             --  - names:        An array of character names that can run this action.
             --
             if action and not action.disabled and player then
+                local disable = false
+
+                -- Main/sub jobs are special; one can fail, but as long as the other succeeds, we're good
+                local require_main_job_match = type(action.filter.main_jobs) == 'table' and #action.filter.main_jobs > 0
+                local require_sub_job_match = type(action.filter.sub_jobs) == 'table' and #action.filter.sub_jobs > 0                
+                local require_job_match = require_main_job_match or require_sub_job_match
+
+                local has_main_job_match = require_job_match and require_main_job_match and arrayIndexOf(useArray(action.filter.main_jobs), player.main_job)
+                local has_sub_job_match = require_job_match and require_sub_job_match and arrayIndexOf(useArray(action.filter.sub_jobs), player.sub_job)
+
                 if
-                    (action.filter.main_jobs and not arrayIndexOf(useArray(action.filter.main_jobs), player.main_job))  or
-                    (action.filter.sub_jobs and not arrayIndexOf(useArray(action.filter.sub_jobs), player.sub_job))  or
+                    -- If you require both and have neither
+                    (require_main_job_match and require_sub_job_match and not has_main_job_match and not has_sub_job_match) or                    
+                    -- Require only the main job, and you don't have it
+                    (require_main_job_match and not require_sub_job_match and not has_main_job_match) or
+                    -- Require only the sub job, and you don't have it
+                    (require_sub_job_match and not require_main_job_match and not has_subn_job_match) 
+                then
+                    disable = true
+                end
+
+                if
+                    not disable and
                     (action.filter.names and not arrayIndexOf(useArray(action.filter.names), player.name))
                 then
-                    action.disabled = true
+                    disable = true
                 end
+
+                action.disabled = disable
             end
 
             -- Import any items that have an import reference and which aren't marked as disabled
