@@ -70,7 +70,7 @@
         " ================================================================================ "
       ],
       "commands": [
-        "setVar('vars.abyssea.blue_proc.used_ws', nil)",
+        "setVar('vars.abyssea.blue_proc.used_ws', {})",
         "setVar('vars.abyssea.blue_proc.used_count', 0)",
         "setVar('vars.abyssea.blue_proc.all_ws', {})",
         "setVar('vars.abyssea.blue_proc.usable_ws', {})",
@@ -94,7 +94,7 @@
         "inRange(game_time.hour - 6, 0, 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614) and log('Setting BLUE PROC pool to 06-14')",
         "inRange(game_time.hour - 6, 8, 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_1422) and log('Setting BLUE PROC pool to 14-22')",
         "inRange(game_time.hour - 6, 16, 24) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_2206) and log('Setting BLUE PROC pool to 22-06')",
-        "setVar('vars.abyssea.blue_proc.used_ws', nil)",
+        "setVar('vars.abyssea.blue_proc.used_ws', {})",
         "setVar('vars.abyssea.blue_proc.used_count', 0)",
         "setVar('vars.abyssea.blue_proc.usable_ws', usableWeaponSkills(vars.abyssea.blue_proc.all_ws))",
         "setVar('vars.abyssea.blue_proc.reset', false)",

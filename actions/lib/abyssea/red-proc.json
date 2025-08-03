@@ -33,7 +33,7 @@
         " ================================================================================ "
       ],
       "commands": [
-        "setVar('vars.abyssea.red_proc.used_ws', nil)",
+        "setVar('vars.abyssea.red_proc.used_ws', {})",
         "setVar('vars.abyssea.red_proc.used_count', 0)",
         "setVar('vars.abyssea.red_proc.usable_ws', {})",
         "setVar('vars.abyssea.red_proc.reset', true)",
@@ -54,7 +54,7 @@
       "when": ["vars.abyssea.red_proc.reset"],
       "commands": [
         "setVar('vars.abyssea.red_proc.usable_ws', usableWeaponSkills(vars.abyssea.red_proc.all_ws))",
-        "setVar('vars.abyssea.red_proc.used_ws', nil)",
+        "setVar('vars.abyssea.red_proc.used_ws', {})",
         "setVar('vars.abyssea.red_proc.used_count', 0)",
         "setVar('vars.abyssea.red_proc.reset', false)",
         "log('Identified', arrayCount(vars.abyssea.red_proc.usable_ws), 'usable RED PROC weapon skill(s)!')"
