@@ -4,13 +4,14 @@ local inventory = {}
 -- Bags that store equippable items
 local INVENTORY_BAGS_BY_ID = 
 {
-    [0] = { field = "inventory", usable = true, equippable = true },
+    [0] = { field = "inventory", usable = true, equippable = true, linkshell = true },
     [1] = { field = "safe" },
     [2] = { field = "storage" },
     [3] = { field = "locker" },
     [4] = { field = "temporary", usable = true },
     [5] = { field = "satchel" },
-    [6] = { field = "sack" },
+    [6] = { field = "sack", linkshell = true },
+    [7] = { field = "case", linkshell = true },
     [8] = { field = "wardrobe", usable = true, equippable = true },
     [10] = { field = "wardrobe2", usable = true, equippable = true },
     [11] = { field = "wardrobe3", usable = true, equippable = true },
@@ -29,6 +30,7 @@ local INVENTORY_ID_BY_NAME = {
     ["temporary"] = 4,
     ["satchel"] = 5,
     ["sack"] = 6,
+    ["case"] = 7,
     ["wardrobe"] = 8,
     ["wardrobe2"] = 10,
     ["wardrobe3"] = 11,
@@ -353,6 +355,53 @@ inventory.equip_many = function(pieces, all_items, simulate)
     return #swaps
 end
 
+inventory.find_equipped_linkshells = function(player, items)
+    local result = {}
+
+    player = player or windower.ffxi.get_player()
+    if player then
+        items = items or windower.ffxi.get_items()        
+
+        if items then
+            local primary_linkshell = nil
+            local secondary_linkshell = nil
+
+            local primary_linkshell_name = player.linkshell
+
+            for bagId, bagInfo in pairs(INVENTORY_BAGS_BY_ID) do
+                -- Only search bags that allow linkshell equipping
+                if bagInfo and bagInfo.linkshell then
+                    local bag = items[bagInfo.field]
+
+                    -- Only search bags that are enabled
+                    if bag.enabled then
+                        for localId, bagItem in pairs(bag) do
+
+                            -- Only look at equipped linkshells
+                            if type(bagItem) == 'table' and bagItem.status == 19 then
+                                local ext = extdata.decode(bagItem)
+                                if ext then
+                                    local info = {
+                                        bagId = bagId,
+                                        localId = localId,
+                                        linkshellId = ext.linkshell_id,
+                                        name = ext.name,
+                                        type = ext.status
+                                    }
+
+                                    table.insert(result, info)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return result
+end
+
 inventory.find_item = function(item, flags, items, exclusion_list)
     flags = flags or default_find_item_flags
 
@@ -391,7 +440,7 @@ inventory.find_item = function(item, flags, items, exclusion_list)
         }
     end
 
-    items = items or windower.ffxi.get_items()    
+    items = items or windower.ffxi.get_items()
 
     for bagId, bagInfo in pairs(bags_to_search) do
         local bag_is_usable = bagInfo.usable
@@ -521,7 +570,7 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                             flags.equipped == nil or                    -- Equipped flag
                             (flags.equipped and isEquipped) or
                             (not flags.equipped and not isEquipped)
-                        ) and
+                        ) and 
                         inventory.has_all_augments(ext, augments)       -- Augments match
                     then
                         if slots then

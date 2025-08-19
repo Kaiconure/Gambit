@@ -443,6 +443,42 @@ local function _expandActionMacrosToArray(macros, array)
     end
  end
 
+ local function _stripComments(loadedData, action)
+    
+    local actualWhens = {}
+    if action.when then
+        if type(action.when) == 'string' then
+            action.when = { action.when }
+        end
+
+        -- Remove any empty comment lines in the "when" list
+        for i, when in ipairs(action.when) do
+            local value = trimString(when)
+            if value ~= '' and string.find(value, '--', 1, true) ~= 1 then
+                actualWhens[#actualWhens + 1] = when
+            end
+        end
+    end
+    
+    local actualCommands = {}
+    if action.commands then
+        if type(action.commands) == 'string' then
+            action.commands = { action.commands }
+        end
+
+        -- Remove any empty or comment lines in the "commands" list
+        for i, command in ipairs(action.commands) do
+            local value = trimString(command)
+            if value ~= '' and string.find(value, '--', 1, true) ~= 1 then
+                actualCommands[#actualCommands + 1] = command
+            end
+        end
+    end
+
+    action.when = actualWhens
+    action.commands = actualCommands
+ end
+
  local function _expandActionMacros(loadedData, action)
     local macros = loadedData.macros
     if type(macros) == 'table' then
@@ -503,12 +539,13 @@ local function _expandActionMacrosToArray(macros, array)
     end
 
     -- Now, expand all macros into their respective actions
-    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'functions'}
+    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'functions'}
     for i, actionType in ipairs(actionTypes) do
         local actions = loadedData and loadedData[actionType]
         if type(actions) == 'table' then
             for i, action in ipairs(actions) do
-                _expandActionMacros(loadedData, action)
+                _stripComments(loadedData, action)
+                _expandActionMacros(loadedData, action)                
             end
         end
     end
@@ -521,7 +558,7 @@ local function loadActionImports(playerName, actions, player)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'imports', 'functions'}
+        local types = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'imports', 'functions'}
 
         -- Force macros and imports to an object, even if empty
         actions.macros = type(actions.macros) == 'table' and actions.macros or { }

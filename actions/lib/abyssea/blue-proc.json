@@ -167,6 +167,7 @@
         "varIncrement('vars.abyssea.blue_proc.used_count')"
       ],
       "delay": 7,
+      "scope": "battle",
       "scoped_enumerators": true
     }
   ]

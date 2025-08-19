@@ -13,7 +13,7 @@
       "not hasBuff(vars.homepoint_on_death.block_on_buffs) and not any(zone_id, vars.homepoint_on_death.block_on_zones)"
     ],
     "cannot_death_warp": [
-      "hasBuff('Battlefield', 'Voidwatcher') or any(zone_id, vars.homepoint_on_death.block_on_zones)"
+      "hasBuff('Battlefield', 'Voidwatcher', 'Confrontation') or any(zone_id, vars.homepoint_on_death.block_on_zones)"
     ]
   },
   "actions": [

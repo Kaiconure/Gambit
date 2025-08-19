@@ -133,12 +133,14 @@ state_manager.setActionType = function (self, newType)
     if self.actionType ~= newType and newType ~= nil then
         local isInit = self.actionType == nil
         local isResting = self.actionType == 'resting'
+        local isEvent = self.actionType == 'event'
         local isDead = self.actionType == 'dead'
         local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull' or self.actionType == 'idle_battle')
         local isBattle = (self.actionType == 'battle')
         local isMounted = (self.actionType == 'mounted')
 
         local isNewTypeResting = newType == 'resting'
+        local isNewTypeEvent = newType == 'event'
         local isNewTypeDead = newType == 'dead'
         local isNewTypeIdlePull = newType == 'idle' or newType == 'pull' or newType == 'idle_battle'
         local isNewTypeBattle = newType == 'battle'
@@ -146,12 +148,14 @@ state_manager.setActionType = function (self, newType)
 
         local mode = (isInit and 'init')
             or (isResting and 'resting')
+            or (isEvent and 'event')
             or (isDead and 'dead')
             or (isIdlePull and 'idle/pull')
             or (isBattle and 'battle')
             or (isMounted and 'mounted')
 
         local newMode = (isNewTypeResting and 'resting')
+            or (isNewTypeEvent and 'event')
             or (isNewTypeDead and 'dead')
             or (isNewTypeIdlePull and 'idle/pull')
             or (isNewTypeBattle and 'battle')

@@ -85,6 +85,7 @@
         "wait(2)"
       ],
       "frequency": 1,
+      "scope": "battle",
       "scoped_enumerators": true
     },
     {
@@ -127,6 +128,7 @@
         "varIncrement('vars.abyssea.red_proc.used_count')"
       ],
       "delay": 7,
+      "scope": "battle",
       "scoped_enumerators": true
     }
   ]

@@ -441,6 +441,7 @@ local function compileAllActions()
     compileActions('pull',          actions, actions and actions.pull or {})
     compileActions('idle',          actions, actions and actions.idle or {})
     compileActions('resting',       actions, actions and actions.resting or {})
+    compileActions('event',         actions, actions and actions.event or {})
     compileActions('dead',          actions, actions and actions.dead or {})
     compileActions('mounted',       actions, actions and actions.mounted or {})
     compileActions('imports',       actions, actions and actions.imports or {})
@@ -651,6 +652,14 @@ local function doNextActionCycle(time, player, party)
     local battleActionsExecuted = false
     local pullActionsExecuted = false
 
+    -- Event: In a cutscene or NPC menu
+    local isEvent = playerStatus == STATUS_EVENT
+    if isEvent then
+        local context = ActionContext.create('event', time, mob, mobTime, battleScope, party)
+        local action = processNextAction(context)
+        return
+    end
+
     -- Status flags
     local hasPullableMob = mob ~= nil
     
@@ -835,7 +844,7 @@ function cr_actionProcessor()
         local garbageCollectionAge = os.clock() - latestGarbageCollection
         if 
             garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL and
-            (player == nil or player.in_combat)
+            (player == nil or not player.in_combat)
         then
             actionStateManager:clearOthersSpells(true)
             actionStateManager:purgeStaleMobAbilities()
@@ -856,20 +865,22 @@ function cr_actionProcessor()
         if 
             globals.enabled and
             player and
-            player.status ~= STATUS_EVENT and
+            --player.status ~= STATUS_EVENT and
             me and
             zoneTime >= 5
         then
             local playerStatus = player.status
             local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
             local isResting = (playerStatus == STATUS_RESTING)              -- Resting
+            local isEvent = (playerStatus == STATUS_EVENT)                  -- Event/cutscene
             local isDead = player.vitals.hp <= 0                            -- Dead
 
             actionStateManager:tick(time)
 
             -- As long as we're not dead or resting, we can process targeting info
             if 
-                not isDead
+                not isDead and
+                not isEvent
             then
                 processTargeting(player, party)
             end
@@ -888,6 +899,16 @@ function cr_actionProcessor()
                     smartMove:cancelJob()
                 end
             end
+
+            -- -- Experiment: Double the sleep time when there's no battle target and we're in a non-battle state
+            -- local context = actionStateManager:getContext()
+            -- if
+            --     context == nil or
+            --     (not context.bt and context.actionType ~= 'battle' and context.actionType ~= 'pull' and context.actionType ~= 'idle_battle')
+            -- then
+            --     sleepTimeSeconds = 1
+            -- end
+
         else
             -- We will create a context when disabled or are otherwise unable to run. This simply ensures 
             -- that we have context-based state changes available and up to date once we re-enable.

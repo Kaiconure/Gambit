@@ -516,6 +516,26 @@ local function context_var_decrement(name, amount, default)
         0)
 end
 
+local function context_var_cycle_up(name, max)
+    local value = tonumber(context_get_var(name)) or 0
+    value = value + 1
+    if value > max then
+        value = 1
+    end
+
+    return context_set_var(name, value)
+end
+
+local function context_var_cycle_down(name, max)
+    local value = tonumber(context_get_var(name)) or 1
+    value = value - 1
+    if value < 1 then
+        value = max
+    end
+
+    return context_set_var(name, value)
+end
+
 -----------------------------------------------------------------------------------------
 --
 local function context_iif(condition, ifYes, ifNo)
@@ -2326,6 +2346,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local info = bag_info and bag_info.inventory or bag_info
 
         if info and info.enabled then
+            --print('%d / %d':format(info.count, info.max))
             return info.max - info.count
         end
 
@@ -3059,9 +3080,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    --
+    -- Face toward the enemy
     context.faceEnemy = function ()
-        if context.bt == nil or context.bt.mob == nil then return end
+        return context.faceTarget(context.bt)
+    end
+
+    -- Face toward a target
+    context.faceTarget = function(target)
+        target = target or context.bt
+        if type(target) == 'string' then target = context[target] end
+        if type(target) ~= 'table' or target.id == nil then return end
 
         -- Cancel any follow job in progress so it doesn't interfere with our facing action
         local job = smartMove:getJobInfo()
@@ -3069,11 +3097,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             smartMove:cancelJob()
         end
 
-        -- writeVerbose('Facing toward %s target: %s':format(
-        --     text_action(context.actionType, Colors.verbose),
-        --     text_mob(context.bt.name, Colors.verbose)
-        -- ))
-        return directionality.faceTarget(context.bt.mob) ~= nil
+        return directionality.faceTarget(target.mob) ~= nil
     end
 
     --------------------------------------------------------------------------------------
@@ -5236,6 +5260,37 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Activate a mob (typically an npc) to initiate action
+    context.activate = function(identifier, category, param)
+        local mob = identifier
+
+        if type(identifier) == 'number' then
+            mob = {}
+            mob.id = identifier
+        elseif type(identifier) == 'string' then
+            mob = context.findByName(identifier)
+        end
+
+        if type(mob) == 'table' then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        if mob and mob.valid_target and mob.distance <= (5*5) then
+            local packet = packets.new('outgoing', 0x01A, {
+                ["Target"] = mob.id,
+                ["Target Index"] = mob.index,
+                ["Category"] = type(category) == 'number' and category or 0,
+                ["Param"] = type(param) == 'number' and param or 0,
+                ["_unknown1"] = 0
+            })
+            packets.inject(packet)
+            coroutine.sleep(2.0)
+
+            return true
+        end
+    end
+
+    --------------------------------------------------------------------------------------
     -- Performs a "tap" on a mob, which is to target it and hit enter and escape
     context.tap = function(identifier, max_distance)
         local mob = identifier
@@ -5406,6 +5461,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.getVarField = context_get_var_field
     context.varIncrement = context_var_increment
     context.varDecrement = context_var_decrement
+    context.varCycleUp = context_var_cycle_up
+    context.varCycleDown = context_var_cycle_down
 
     -- Final setup
     setEnumerators(context)
