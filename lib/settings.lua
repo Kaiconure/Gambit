@@ -134,8 +134,8 @@ local function getActionsAlternateFileName(playerName, actionsName)
     return string.format('./settings/actions/%s.json', actionsName)
 end
 
-local function getActionsJobFileName(player)
-    local actionsName = player.main_job
+local function getActionsJobFileName(player, actionsName)
+    actionsName = actionsName or player.main_job
     -- if player.sub_job then
     --     actionsName = actionsName .. '-' .. player.sub_job
     -- end
@@ -671,18 +671,19 @@ end
 local function loadDefaultActions(player, save)
     local fileName = './actions/defaults/default-actions.json'
     local defaults = loadActionsFromFile(player.name, fileName)
+    local saveAsFileName = fileName
 
     if defaults and save then
         local file = files.new(fileName)
         local defaultJson = file:read()
 
         if save then
-            local saveAsFileName = getActionsJobFileName(player)
+            saveAsFileName = getActionsJobFileName(player)
             writeStringToFile(saveAsFileName, defaultJson)
         end
     end
 
-    return defaults
+    return defaults, saveAsFileName
 end
 
 ----------------------------------------------------------------------------------------
@@ -696,7 +697,37 @@ function saveDefaultActions(player, force)
         return
     end
 
-    return loadDefaultActions(player, true) ~= nil
+    local defaults, fileName = loadDefaultActions(player, true)
+    return defaults ~= nil
+end
+
+function saveActions(player, force, actionsName)
+    local saveAsFileName = getActionsJobFileName(player, actionsName)
+    local targetFile = files.new(saveAsFileName)
+
+    -- Can't overwrite an existing file without the force flag
+    if targetFile:exists() and not force then
+        return false, 'The action name %s already exists for %s. Use -force to overwrite.':format(
+            text_action(actionsName),
+            text_player(player.name)
+        )
+    end
+
+    if not settings or not settings.actionInfo or not settings.actionInfo.fileName then
+        return false, 'No current settings are loaded, or the source file name could not be determined.'
+    end
+
+    local sourceFile = files.new(settings.actionInfo.fileName)
+    local sourceJson = sourceFile:read()
+    if type(sourceJson) ~= 'string' or #sourceJson == 0 then
+        return false, 'The source file could not be read.'
+    end
+
+    targetFile:write(sourceJson)
+
+    reloadSettings(actionsName)
+
+    return true
 end
 
 ----------------------------------------------------------------------------------------
@@ -765,14 +796,18 @@ function loadSettings(actionsName, settingsOnly)
     tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 1, 20)
 
     local jobActionsName = nil
+    local actionsFileName = nil
     local actions = nil
-    local defaultsLoaded = false
+    local defaultsLoaded = false    
 
     tempSettings.actions = {}
 
     if actionsName then
-        writeMessage('Attempting to load actions from: [%s/%s]':format(player.name, actionsName))
-        actions = loadActions(player.name, actionsName)
+        writeMessage('Attempting to load actions for %s from: [%s]':format(
+            text_player(player.name),
+            text_action(actionsName)
+        ))
+        actions, actionsFileName = loadActions(player.name, actionsName)
     elseif settingsOnly then
         writeMessage('All previously compiled actions will be reapplied to the current state.')
 
@@ -788,19 +823,19 @@ function loadSettings(actionsName, settingsOnly)
         if subJob then
             actionsName = '%s-%s':format(mainJob, subJob):lower()
             jobActionsName = actionsName
-            actions = loadActions(player.name, actionsName)
+            actions, actionsFileName = loadActions(player.name, actionsName)
         end
 
         -- If no actions were found, load the main job actions (default)
         if actions == nil then
             actionsName = '%s':format(mainJob):lower()
             jobActionsName = actionsName
-            actions = loadActions(player.name, actionsName)
+            actions, actionsFileName = loadActions(player.name, actionsName)
         end
 
         -- Load the default actions if nothing else has worked
         if actions == nil then
-            actions = loadDefaultActions(player)
+            actions, actionsFileName = loadDefaultActions(player)
 
             if actions then
                 defaultsLoaded = true
@@ -819,6 +854,7 @@ function loadSettings(actionsName, settingsOnly)
         tempSettings.actions = actions
         tempSettings.actionInfo = tempSettings.actionInfo or {}
         tempSettings.actionInfo.name = actionsName
+        tempSettings.actionInfo.fileName = actionsFileName
 
         -- Save the post-processed actions
         writeJsonToFile('./settings/%s/.output/%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
@@ -862,7 +898,7 @@ function loadActions(playerName, actionsName)
         actions = loadActionsFromFile(playerName, fileName)
     end
 
-    return actions
+    return actions, fileName
 end
 
 ----------------------------------------------------------------------------------------

@@ -862,11 +862,12 @@ handlers['actions'] = function(args)
     if load > 0 then
         local actionsName = args[load + 1]
         if actionsName then
-            local actions = loadActions(windower.ffxi.get_player().name, actionsName)
+            local actions, fileName = loadActions(windower.ffxi.get_player().name, actionsName)
             if type(actions) == 'table' then
                 
                 settings.actionInfo = settings.actionInfo or {}
                 settings.actionInfo.name = actionsName
+                settings.actionInfo.fileName = fileName
                 settings.actions = actions
 
                 recompileActions()
@@ -886,6 +887,18 @@ handlers['actions'] = function(args)
             writeMessage('Defaults could not be saved. Run with -force to overwrite existing actions.')
         end
 
+        return
+    end
+
+    local saveLocal = tonumber(arrayIndexOfStrI(args, '-save-local'))
+    local saveLocalActions = saveLocal and args[saveLocal + 1]
+    if saveLocal then
+        if saveLocalActions or (settings and settings.actionInfo and type(settings.actionInfo.name) == 'string') then
+            local success, message = saveActions(windower.ffxi.get_player(), force > 0, saveLocalActions or settings.actionInfo.name)
+            if not success then
+                writeMessage(message)
+            end
+        end
         return
     end
 
