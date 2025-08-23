@@ -890,9 +890,9 @@ handlers['actions'] = function(args)
         return
     end
 
-    local saveLocal = tonumber(arrayIndexOfStrI(args, '-save-local'))
-    local saveLocalActions = saveLocal and args[saveLocal + 1]
-    if saveLocal then
+    local saveLocal = tonumber(arrayIndexOfStrI(args, '-save-local') or 0)
+    local saveLocalActions = saveLocal > 0 and args[saveLocal + 1]
+    if saveLocal > 0 then
         if saveLocalActions or (settings and settings.actionInfo and type(settings.actionInfo.name) == 'string') then
             local success, message = saveActions(windower.ffxi.get_player(), force > 0, saveLocalActions or settings.actionInfo.name)
             if not success then

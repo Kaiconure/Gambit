@@ -707,9 +707,10 @@ function saveActions(player, force, actionsName)
 
     -- Can't overwrite an existing file without the force flag
     if targetFile:exists() and not force then
-        return false, 'The action name %s already exists for %s. Use -force to overwrite.':format(
+        return false, 'The action name %s already exists for %s. Use %s to overwrite.':format(
             text_action(actionsName),
-            text_player(player.name)
+            text_player(player.name),
+            text_red('-force')
         )
     end
 
