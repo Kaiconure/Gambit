@@ -40,7 +40,7 @@
     },
     {
       "when": [
-        "me.level == 99",
+        "me.level == 99 and not vars.use_xp_cp_rings.ignore_emporox",
         "hasCappedMerits()",
         "not hasBuff(\"Emporox's Gift\")",
         "canUseItem(\"Emporox's Ring\")"
@@ -58,10 +58,11 @@
   ],
   "vars": {
     "use_xp_cp_rings": {
-      "ignore_master_levels": false,
-      "ignore_xp_level_cap": false,
+      "ignore_master_levels": null,
+      "ignore_xp_level_cap": null,
       "min_xp_level": 10,
       "slot": "ring1",
+      "ignore_emporox": null,
       "cp_rings": [
         "Endorsement Ring",
         "Trizek Ring",
