@@ -1,0 +1,54 @@
+{
+  "vars": {
+    "use_convert": {
+      "min_mp": 5
+    },
+    "protect_spells": ["Protectra III", "Protectra II", "Protectra"],
+    "shell_spells": ["Shellra II", "Shellra"],
+    "barfire_spells": ["Barfira", "Barfire"],
+    "baraero_spells": ["Baraera", "Baraero"],
+    "barthunder_spells": ["Barthundra", "Barthunder"]
+  },
+  "idle": [
+    {
+      "commands": [
+        "setVar('vars.skillups.spells', {})",
+        "hasSpell(vars.protect_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.shell_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.barfire_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.baraero_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.barthunder_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "log('Queuing', arrayCount(vars.skillups.spells), 'skillup spell(s):')",
+        "log(vars.skillups.spells)"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep your best usable Refresh spell up, if any."
+      ],
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep yourself healed up, primarily for recovery from Convert."
+      ],
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep yourself hasted, to minimize recast timers on spells."
+      ],
+      "import": "buffs/haste-cycle"
+    },
+    {
+      "when": ["iterate(vars.skillups.spells) and canUseSpell(result)"],
+      "commands": [
+        "log('Skilling up with spell:', spell.name)",
+        "hasEffectOf(spell) and cancelBuff() and wait(1)",
+        "useSpell(me)"
+      ],
+      "frequency": 1
+    }
+  ]
+}
