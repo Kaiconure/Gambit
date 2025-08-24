@@ -4447,7 +4447,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Cancels a cancellable beneficial buff
     context.cancelBuff = function(...)
-        local names = varargs({...})
+        local names = varargs({...}, context.effect and context.effect.name)
         local cancelled = false
         for i, name in ipairs(names) do
             local buff = hasBuff(nil, name)

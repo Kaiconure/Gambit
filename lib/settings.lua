@@ -124,14 +124,33 @@ local function getSettingsFileName(playerName)
     return string.format('./settings/%s/main.json', playerName)
 end
 
+-----------------------------------------------------------------------------------------
+-- Gets the name of the actions file in the user's own actions directory,
+-- whether it exists or not.
 local function getActionsFileName(playerName, actionsName)
     if actionsName == nil then print('no actionsName provided') end
     return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
 end
 
-local function getActionsAlternateFileName(playerName, actionsName)
+-----------------------------------------------------------------------------------------
+-- Given a player name and actions name, find the best matching file that
+-- exists on disk.
+local function findExistingActionsFileName(playerName, actionsName)
+    if playerName == nil then print('No player name provided') end
     if actionsName == nil then print('no actionsName provided') end
-    return string.format('./settings/actions/%s.json', actionsName)
+
+    local paths = {
+        './settings/%s/actions/%s.json':format(playerName, actionsName),    -- 1. User's settings folder
+        './settings/actions/%s.json':format(actionsName),                   -- 2. Settings folder
+        './actions/standard/%s.json':format(actionsName),                   -- 3. Stock actions folder
+    }
+
+    for i, path in ipairs(paths) do
+        local file = files.new(path)
+        if file and file:exists() then
+            return path
+        end
+    end
 end
 
 local function getActionsJobFileName(player, actionsName)
@@ -892,10 +911,9 @@ end
 ----------------------------------------------------------------------------------------
 -- Load actions by player and action set name
 function loadActions(playerName, actionsName)
-    local fileName = getActionsFileName(playerName, actionsName)
-    local actions = loadActionsFromFile(playerName, fileName)
-    if actions == nil then
-        fileName = getActionsAlternateFileName(playerName, actionsName)
+    local actions = nil
+    local fileName = findExistingActionsFileName(playerName, actionsName)
+    if fileName then
         actions = loadActionsFromFile(playerName, fileName)
     end
 
