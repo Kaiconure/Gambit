@@ -3218,11 +3218,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Returns true if we're behind the mob and facing it
-    context.alignedRear = function (target)
+    context.alignedRear = function (target, distance)
+        target = target or context.bt
+        if target == nil then
+            return nil
+        end
+        
+        if distance == nil then
+            if target.symbol then
+                distance = target.distance
+            else
+                distance = math.sqrt(target.distance)
+            end
+        end
+
         return context.aligned(
             target or context.bt,
             180, 
-            2)
+            distance)
     end
 
     context.getMatchingBracketedFaceAwayStart = function(faceaways, abilityName, mobName)
@@ -3496,30 +3509,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     return
                 end
 
-                return true                
-
-                -- if settings.verbosity >= VERBOSITY_TRACE then
-                --     writeTrace('Aligning behind %s (%03X) for up to %.1fs':format(context.bt.name, context.bt.index, duration))
-                -- end
-                
-                -- local jobId = smartMove:moveBehindIndex(context.bt.index, duration)
-                -- if jobId then
-                --     while true do
-                --         coroutine.sleep(0.5)
-                --         local job = smartMove:getJobInfo()
-                --         if job == nil or job.jobId ~= jobId then
-                --             if settings.verbosity >= VERBOSITY_TRACE then
-                --                 writeTrace('Alignment of %d ended due to JobId=%d':format(jobId, job and job.jobId or -1))
-                --             end
-                --             local success = context.alignedRear()
-                --             if not success then
-                --                 context.postpone(failureDelay)
-                --             end
-
-                --             return success
-                --         end
-                --     end
-                -- end
+                return true
             end
         end
     end
@@ -5224,9 +5214,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             ["Param"] = 0,
                             ["_unknown1"] = 0
                         })
-                        packets.inject(packet)
-                        coroutine.sleep(1.0)
+                        local packet_sent = os.clock()
 
+                        packets.inject(packet)                        
+                        coroutine.sleep(1.5)
+
+                        -- Break if we've detected a recent activation event
+                        if globals.latest_npc_activation >= packet_sent then
+                            break
+                        end
+
+                        -- Break if we've entered the cutscene/event status
                         local player = windower.ffxi.get_player()
                         if player.status == STATUS_EVENT then
                             break
@@ -5321,9 +5319,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             ["Param"] = 0,
                             ["_unknown1"] = 0
                         })
-                        packets.inject(packet)
-                        coroutine.sleep(1.0)
+                        local packet_sent = os.clock()
 
+                        packets.inject(packet)                        
+                        coroutine.sleep(1.5)
+
+                        -- Break if we've detected a recent activation event
+                        if globals.latest_npc_activation >= packet_sent then
+                            break
+                        end
+
+                        -- Break if we've entered the cutscene/event status
                         local player = windower.ffxi.get_player()
                         if player.status == STATUS_EVENT then
                             break

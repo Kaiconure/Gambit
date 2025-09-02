@@ -135,20 +135,25 @@ end
 -----------------------------------------------------------------------------------------
 -- Given a player name and actions name, find the best matching file that
 -- exists on disk.
-local function findExistingActionsFileName(playerName, actionsName)
+local function findExistingActionsFileName(playerName, actionsName, skip_standard)
     if playerName == nil then print('No player name provided') end
     if actionsName == nil then print('no actionsName provided') end
 
     local paths = {
         './settings/%s/actions/%s.json':format(playerName, actionsName),    -- 1. User's settings folder
-        './settings/actions/%s.json':format(actionsName),                   -- 2. Settings folder
-        './actions/standard/%s.json':format(actionsName),                   -- 3. Stock actions folder
+        './settings/actions/%s.json':format(actionsName)                    -- 2. Settings folder
     }
 
+    if not skip_standard then
+        table.append(paths, './actions/standard/%s.json':format(actionsName))
+    end
+
     for i, path in ipairs(paths) do
-        local file = files.new(path)
-        if file and file:exists() then
-            return path
+        if path then
+            local file = files.new(path)
+            if file and file:exists() then
+                return path
+            end
         end
     end
 end
@@ -880,10 +885,12 @@ function loadSettings(actionsName, settingsOnly)
         writeJsonToFile('./settings/%s/.output/%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
 
         if actionsName and not defaultsLoaded then
-            writeMessage('Successfully loaded %s actions: %s':format(
+            writeMessage('Successfully loaded %s actions %s':format(
                 text_player(player.name),
                 text_action(actionsName)
             ))
+
+            print('Gambit: Actions loaded from [%s]':format(actionsFileName or 'n/a'))
         end
     end
 
@@ -909,10 +916,12 @@ function saveSettings(settingsToSave)
 end
 
 ----------------------------------------------------------------------------------------
--- Load actions by player and action set name
-function loadActions(playerName, actionsName)
+-- Load actions by player and action set name. If the no_search flag is set,
+-- then only the 
+function loadActions(playerName, actionsName, skip_standard)
     local actions = nil
-    local fileName = findExistingActionsFileName(playerName, actionsName)
+    local fileName = findExistingActionsFileName(playerName, actionsName, skip_standard)
+
     if fileName then
         actions = loadActionsFromFile(playerName, fileName)
     end

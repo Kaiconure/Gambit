@@ -1,0 +1,203 @@
+{
+  "vars": {
+    "haste_cycle": {
+      "targets": null
+    },
+    "ensure_trusts": {
+      "spells": null
+    },
+    "refresh_cycle": {
+      "targets": null
+    },
+    "regen_cycle": {
+      "targets": null
+    },
+    "frontline_engagement": {
+      "angle": null,
+      "distance": null,
+      "engage_trusts": true
+    },
+    "use_convert": {
+      "min_mp": 200
+    },
+    "waypoints_ex": {
+      "active": null
+    }
+  },
+  "imports": [],
+  "functions": [],
+  "pull": [
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "when": ["hasEffectOf('Silence') and canUseItem('Echo Drops')"],
+      "commands": ["use(me)"],
+      "frequency": 3
+    },
+    {
+      "import": "reactions/face-away"
+    },
+    {
+      "import": "reactions/use-stun"
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "when": [
+        "bt.in_spell_range",
+        "canUse('Dispel') and hasBuff(bt, 'Protect', 'Defense Boost', 'Evasion Boost', 'Phalanx', 'Shell', 'Magic Def. Boost')"
+      ],
+      "commands": "use(bt)",
+      "scope": "battle"
+    },
+    {
+      "when": ["partyHasBuff('Paralysis') and canUse('Paralyna')"],
+      "commands": ["removeEffect(member)"],
+      "frequency": 7
+    },
+    {
+      "import": "debuffs/keep-slow",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-paralyze",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-distract",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-dia",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-addle",
+      "disabled": true
+    },
+    {
+      "import": "debuffs/keep-frazzle",
+      "disabled": true
+    },
+    {
+      "import": "buffs/boost-dex-cycle",
+      "disabled": true
+    },
+    {
+      "when": "partyHasBuff('Bind', 'Slow', 'Max MP Down', 'Max HP Down', 'Weight') and canUse('Erase')",
+      "commands": "use(member)",
+      "frequency": 3
+    },
+    {
+      "when": "bt.hpp > 5 and me.tp > 1000 and me.mpp < 85 and canUseWeaponSkill('Spirit Taker')",
+      "commands": "useWeaponSkill()"
+    },
+    {
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "import": "buffs/haste-cycle"
+    },
+    {
+      "when": "not hasEffectOf('Auspice') and canUse('Auspice')",
+      "commands": "use(me)"
+    },
+    {
+      "when": "not hasEffectOf('Barstonra') and canUse('Barstonra')",
+      "commands": "use(me)",
+      "disabled": true
+    },
+    {
+      "import": "buffs/keep-protectra-shellra"
+    },
+    {
+      "import": "buffs/regen-cycle"
+    },
+    {
+      "when": "not hasBuff('Afflatus Solace') and canUse('Afflatus Solace')",
+      "commands": "use(me)"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": "partyHasBuff('Petrification') and canUse('Stona')",
+      "commands": "removeEffect(member)",
+      "frequency": 5
+    },
+    {
+      "when": "partyHasBuff('Poison') and canUse('Poisona')",
+      "commands": "removeEffect(member)",
+      "frequency": 5
+    },
+    {
+      "when": "not hasBuff('Food') and canUse('Pear Crepe', 'Crab Sushi')",
+      "commands": "use(me)",
+      "frequency": 1,
+      "disabled": false
+    },
+    {
+      "when": "not hasEffectOf('Stoneskin') and canUse('Stoneskin')",
+      "commands": "use(me)",
+      "frequency": 10
+    }
+  ],
+  "idle": [
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "follow-leader"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": [
+        "partyHasBuff('Bind', 'Slow', 'Max MP Down', 'Max HP Down', 'Weight') or postpone(5)",
+        "canUse('Erase')"
+      ],
+      "commands": "use(member)",
+      "delay": 2,
+      "frequency": 2
+    },
+    {
+      "import": "common-consumables"
+    },
+    {
+      "import": "waypoints-ex"
+    }
+  ],
+  "resting": [
+    {
+      "when": "bt or me.mpp > 95",
+      "commands": ["cancelRest()", "wake()"]
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death"
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
+  ]
+}

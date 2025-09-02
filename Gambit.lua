@@ -1,4 +1,4 @@
-__version = '0.96.0-beta8'
+__version = '0.96.0-beta9'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -63,6 +63,7 @@ globals = {
     language = 'en',
     actionsEnabled = true,
     autoFollowIndex = nil,
+    latest_npc_activation = 0,
     spells = {}
 }
 
@@ -1100,6 +1101,16 @@ windower.register_event('incoming chunk', function (id, data)
         id == 0x063     -- Limit Point and Capacity Point updates
     then
         _handle_limitCapacityChunk(id, data)
+    elseif
+        id == 0x032 or  -- NPC Interaction 1
+        id == 0x033 or  -- String NPC Interaction
+        id == 0x034 or  -- NPC Interaction 2
+        id == 0x036 or  -- NPC Chat
+        --id == 0x037 or  -- Update Char
+        id == 0x05C     -- Dialogue Information
+    then
+        --print('npc activation %d (0x%03X)':format(id, id))
+        globals.latest_npc_activation = os.clock()
     end
 end)
 

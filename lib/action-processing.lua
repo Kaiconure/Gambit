@@ -655,7 +655,7 @@ local function doNextActionCycle(time, player, party)
     -- Event: In a cutscene or NPC menu
     local isEvent = playerStatus == STATUS_EVENT
     if isEvent then
-        local context = ActionContext.create('event', time, mob, mobTime, battleScope, party)
+        local context = ActionContext.create('event', time, nil, 0, -1, party)
         local action = processNextAction(context)
         return
     end

@@ -9,7 +9,7 @@ local INVENTORY_BAGS_BY_ID =
     [2] = { field = "storage" },
     [3] = { field = "locker" },
     [4] = { field = "temporary", usable = true },
-    [5] = { field = "satchel" },
+    [5] = { field = "satchel", linkshell = true },
     [6] = { field = "sack", linkshell = true },
     [7] = { field = "case", linkshell = true },
     [8] = { field = "wardrobe", usable = true, equippable = true },
