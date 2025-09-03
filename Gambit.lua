@@ -1,4 +1,4 @@
-__version = '0.96.0-beta9'
+__version = '0.96.0-beta9a'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -1082,6 +1082,16 @@ local _handle_limitCapacityChunk = function(id, data)
     end
 end
 
+local NPC_ACTIVATION_PACKETS =
+{
+    0x032,      -- NPC Interaction 1
+    0x033,      -- String NPC Interaction
+    0x034,      -- NPC Interaction 2
+    --0x04C,    -- Auction House Menu [Also sends 0x52, we'll let that handle things for us]
+    0x052,      -- NPC Release
+    --0x05C       -- Dialogue Information
+}
+
 ---------------------------------------------------------------------
 -- Incoming chunks (chunks are individual pieces of a packet)
 windower.register_event('incoming chunk', function (id, data)
@@ -1102,16 +1112,15 @@ windower.register_event('incoming chunk', function (id, data)
     then
         _handle_limitCapacityChunk(id, data)
     elseif
-        id == 0x032 or  -- NPC Interaction 1
-        id == 0x033 or  -- String NPC Interaction
-        id == 0x034 or  -- NPC Interaction 2
-        id == 0x036 or  -- NPC Chat
-        --id == 0x037 or  -- Update Char
-        id == 0x05C     -- Dialogue Information
+        arrayIndexOf(NPC_ACTIVATION_PACKETS, id)
     then
-        --print('npc activation %d (0x%03X)':format(id, id))
+        --print('npc activation packet received: %d (0x%03X)':format(id, id))
         globals.latest_npc_activation = os.clock()
-    end
+    -- else
+    --     if id ~= 0x00D and id ~= 0x00E and id ~= 0x037 and id ~= 0x067 and id ~= 0x0DF then
+    --         print('packet received: %d (0x%03X)':format(id, id))
+    --     end
+     end
 end)
 
 --[[

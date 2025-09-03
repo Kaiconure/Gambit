@@ -48,7 +48,8 @@
   ],
   "dead": [
     {
-      "import": "homepoint-on-death"
+      "import": "homepoint-on-death",
+      "disabled": true
     }
   ],
   "mounted": [

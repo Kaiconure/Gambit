@@ -4,6 +4,7 @@ SPAWN_TYPE_PET      = 2
 SPAWN_TYPE_PLAYER   = 13
 SPAWN_TYPE_TRUST    = 14
 SPAWN_TYPE_MOB      = 16
+SPAWN_TYPE_DOOR     = 34
 
 -------------------------------------------------------------------------------
 -- Known item slots

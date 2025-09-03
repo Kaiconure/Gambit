@@ -5203,7 +5203,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             max_distance = math.max(tonumber(max_distance) or 6, 0)
             if mob.distance < (max_distance * max_distance) and mob.valid_target then
                 if
-                    mob.spawn_type == 2 or not mob.spawn_type
+                    mob.spawn_type == 2 or mob.spawn_type == SPAWN_TYPE_DOOR or not mob.spawn_type
                 then
                     coroutine.sleep(0.5 + (math.random() * 1.5))
                     for i = 1, 2 do
@@ -5308,7 +5308,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             max_distance = math.max(tonumber(max_distance) or 6, 0)
             if mob.distance < (max_distance * max_distance) then
                 if
-                    mob.spawn_type == 2
+                    mob.spawn_type == 2 or mob.spawn_type == SPAWN_TYPE_DOOR or not mob.spawn_type
                 then
                     coroutine.sleep(0.5 + (math.random() * 1.5))
                     for i = 1, 2 do
