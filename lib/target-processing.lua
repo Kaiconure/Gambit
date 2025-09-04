@@ -388,6 +388,11 @@ local targetScope = 0
 --------------------------------------------------------------------------------------
 --
 function resetCurrentMob(mob, force)
+    -- local info = windower.ffxi.get_info()
+    -- if not info or not info.logged_in then
+    --     return
+    -- end
+
     -- We're setting the same mob if both old and new are nil, or both old and new share the same mob id
     local isSameMob = globals.target and (
         (mob == nil and globals.target._mob == nil) or

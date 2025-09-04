@@ -1198,21 +1198,4 @@ local cr = coroutine.schedule(function ()
     sm_coroutine(smartMove)
 end, 0)
 
--- windower.register_event('zone change', function ()
---     -- Stop on zone change
---     smartMove:cancelJob()
--- end)
-
--- windower.register_event('status change', function (newStatus)
---     -- Stop if we've changed to a status that doesn't make sense. We can't follow if dead, sitting, resting, etc
---     if 
---         newStatus ~= STATUS_IDLE and
---         newStatus ~= STATUS_ENGAGED and 
---         newStatus ~= 5 and  -- Riding a chocobo
---         newStatus ~= 85     -- Riding a mount other than a chocobo
---     then
---         smartMove:cancelJob()
---     end
--- end)
-
 return smartMove

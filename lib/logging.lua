@@ -156,9 +156,12 @@ function hasVerbosity(verbosity)
 end
 
 function writeMessage(message, color, returnColor)
-    windower.add_to_chat(1, 
-        colorize(color or Colors.default, 
-            colorize(Colors.gray, '[' .. globals.selfShortName .. '] ', color) .. (message ~= nil and message or ''), returnColor))
+    -- This condition can be used to control logging
+    if globals == nil or not globals.suppress_logging then
+        windower.add_to_chat(1, 
+            colorize(color or Colors.default, 
+                colorize(Colors.gray, '[' .. globals.selfShortName .. '] ', color) .. (message ~= nil and message or ''), returnColor))
+    end
 end
 
 function writeWarning(message) 

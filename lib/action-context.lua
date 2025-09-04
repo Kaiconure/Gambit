@@ -3232,10 +3232,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
 
-        return context.aligned(
-            target or context.bt,
-            180, 
-            distance)
+        if distance < 5 then
+            return context.aligned(
+                target or context.bt,
+                180, 
+                distance)
+        end
     end
 
     context.getMatchingBracketedFaceAwayStart = function(faceaways, abilityName, mobName)
@@ -3503,7 +3505,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 duration = math.max(tonumber(duration) or 3, 1)
                 failureDelay = math.max(tonumber(failureDelay) or 5, 1)
 
-                local result = context.align(context.bt, 180, 2, duration) and context.alignedRear()
+                local distance = math.min(context.bt.distance, 5)                
+
+                local result = context.align(context.bt, 180, distance, duration) and context.alignedRear()
                 if not result then
                     context.postpone(failureDelay)
                     return

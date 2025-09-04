@@ -14,7 +14,7 @@
     },
     "frontline_engagement": {
       "angle": null,
-      "distance": null,
+      "distance_offset": null,
       "engage_trusts": true
     },
     "use_convert": {

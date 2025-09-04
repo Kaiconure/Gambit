@@ -12,7 +12,7 @@
       "max_hpp": 10,
       "max_tier": "III",
       "min_tier": "I",
-      "frequency": 7
+      "frequency": 5
     },
     "use_aspir": {
       "max_mpp": 75,
@@ -20,7 +20,7 @@
       "max_ws_mpp": 50
     },
     "frontline_engagement": {
-      "distance": null,
+      "distance_offset": null,
       "angle": null
     },
     "use_convert": {
@@ -48,6 +48,9 @@
       "import": "reactions/use-stun"
     },
     {
+      "import": "nukes/black-magic-nuke"
+    },
+    {
       "import": "reactions/face-away"
     },
     {
@@ -66,10 +69,18 @@
       "import": "frontline-engagement"
     },
     {
-      "import": "nukes/black-magic-nuke"
+      "when": [
+        "me.mpp <= 70",
+        "canUseWeaponSkill('Myrkr', 'Spirit Taker', 'Starlight', 'Moonlight')"
+      ],
+      "commands": ["useWeaponSkill()"]
     },
     {
-      "when": ["me.mpp <= 70", "canUseWeaponSkill('Myrkr', 'Spirit Taker')"],
+      "when": [
+        "me.tp >= 1500 and me.mpp > 70",
+        "not partyUsingWeaponSkill()",
+        "canUseWeaponSkill('Judgment', 'Seraph Strike', 'Shining Strike')"
+      ],
       "commands": ["useWeaponSkill()"]
     },
     {

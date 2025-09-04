@@ -64,7 +64,9 @@ globals = {
     actionsEnabled = true,
     autoFollowIndex = nil,
     latest_npc_activation = 0,
-    spells = {}
+    spells = {},
+    action_processor_started = false,
+    suppress_logging = true
 }
 
 globals.spells.trust = resources.spells:type('Trust')
@@ -108,7 +110,6 @@ end
 
 -- Player status change
 windower.register_event('status change', function(new_id, previous_id)
-    
     if
         --new_id == STATUS_IDLE
         new_id and
@@ -170,15 +171,8 @@ windower.register_event('load', function()
         return
     end
 
-    writeMessage('')
-    writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
-    writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
-    writeMessage('')
-
-    sendSelfCommand('disable')
 
     smartMove:setLogger(writeDebug, writeTrace)
-    smartMove:applySettings(settings)
 
     local bind_toggle       = 'bind !~g ' .. makeSelfCommand('toggle')          -- Shift+Alt+G
     local bind_follow       = 'bind %^f ' .. makeSelfCommand('follow -toggle')  -- Ctrl+F
@@ -202,24 +196,36 @@ windower.register_event('load', function()
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
-    if info then
+    if info and info.logged_in then
+        globals.suppress_logging = false
+
+        writeMessage('')
+        writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
+        writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
+        writeMessage('')
+
         globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
         globals.language = info.language
-    end
 
-    -- Store self info
-    local me = windower.ffxi.get_mob_by_target('me')
-    if me then
-        globals.me_id = me.id
-        globals.me_name = me.name
+        -- Store self info
+        local me = windower.ffxi.get_mob_by_target('me')
+        if me then
+            globals.me_id = me.id
+            globals.me_name = me.name
+        end
+
+        -- Reload all settings
+        resetCurrentMob(nil, true)
+        reloadSettings()
+
+        -- Kick off background threads
+        coroutine.schedule(cr_actionProcessor, 0)
+    else
+        globals.suppress_logging = true
+
+        -- The loadSettings function properly handles stubbed out defaults when no user is logged in
+        settings = loadSettings()
     end
-    
-    -- Reload all settings
-    resetCurrentMob(nil, true)
-    reloadSettings()
-    
-    -- Kick off background threads
-    coroutine.schedule(cr_actionProcessor, 0)
 end)
 
 ---------------------------------------------------------------------
@@ -231,6 +237,13 @@ windower.register_event('login', function ()
     then
         return
     end
+
+    globals.suppress_logging = false
+
+    writeMessage('')
+    writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
+    writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
+    writeMessage('')
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
@@ -249,9 +262,19 @@ windower.register_event('login', function ()
     -- Reload all settings
     resetCurrentMob(nil, true)
     reloadSettings()
+
+    if not globals.action_processor_started then
+        -- Kick off background threads
+        coroutine.schedule(cr_actionProcessor, 0)
+    end
 end)
 
 windower.register_event('logout', function()
+    globals.suppress_logging = true
+
+    globals.me_id = nil
+    globals.me_name = nil
+    
     -- This may cause a crash...?
     -- sendSelfCommand('disable')
 end)
@@ -294,6 +317,9 @@ windower.register_event('action', function(action)
     end
 
     local player        = windower.ffxi.get_player()
+    if not player then
+        return
+    end
     local playerId      = player.id
     local actorId       = action.actor_id
     local isSelf        = actorId == playerId
@@ -1087,8 +1113,8 @@ local NPC_ACTIVATION_PACKETS =
     0x032,      -- NPC Interaction 1
     0x033,      -- String NPC Interaction
     0x034,      -- NPC Interaction 2
-    --0x04C,    -- Auction House Menu [Also sends 0x52, we'll let that handle things for us]
-    0x052,      -- NPC Release
+    0x04C,      -- Auction House Menu
+    --0x052,      -- NPC Release
     --0x05C       -- Dialogue Information
 }
 

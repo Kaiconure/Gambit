@@ -820,6 +820,14 @@ end
 --------------------------------------------------------------------------------------
 -- Processes battle actions in the background
 function cr_actionProcessor()
+    if globals.action_processor_started then
+        print('Gambit: Warning: Double-entry of action processor co-routine detected!')
+        return
+    end
+
+    globals.action_processor_started = true
+    print('Gambit: The action processor co-routine has started!')
+
     local GARBAGE_COLLECTION_INTERVAL = 30
 
     local startTime = 0 --os.clock()
@@ -828,99 +836,104 @@ function cr_actionProcessor()
     while true do
         local sleepTimeSeconds = 0.5
 
-        if actionStateManager.needsRecompile then
-            compileAllActions()
-        end
-        
-        local party = windower.ffxi.get_party()
-        local player = windower.ffxi.get_player()
+        local player = windower and windower.ffxi and windower.ffxi.get_player and windower.ffxi.get_player()
 
-        -- Refresh the party info object. It will only actually refresh on a set interval,
-        -- which can be controlled via partyInfo.refresh_interval.
-        partyInfo:refresh(player, party, false)
+        if player then
+            if actionStateManager.needsRecompile then
+                compileAllActions()
+            end
 
-        -- Perform background garbage collection operations. These will only occur when we are
-        -- not in combat, to ensure that there's no interference with time-sensitive gambits.
-        local garbageCollectionAge = os.clock() - latestGarbageCollection
-        if 
-            garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL and
-            (player == nil or not player.in_combat)
-        then
-            actionStateManager:clearOthersSpells(true)
-            actionStateManager:purgeStaleMobAbilities()
-            actionStateManager:purgeWeaponSkills()
-            actionStateManager:purgeSkillchains()
-            latestGarbageCollection = os.clock()
-        end
+            local party = windower.ffxi.get_party()
 
-        -- Refresh the time
-        local now = os.clock()
-        local time = now - startTime
-        local zoneTime = now - (globals.zoneEntryTime or 0)
+            -- Refresh the party info object. It will only actually refresh on a set interval,
+            -- which can be controlled via partyInfo.refresh_interval.
+            partyInfo:refresh(player, party, false)
 
-        -- We'll get the 'me' mob and verify it, because there are scenarios where
-        -- it would come back as nil. Let's avoid that.
-        local me = windower.ffxi.get_mob_by_target('me')
-
-        if 
-            globals.enabled and
-            player and
-            --player.status ~= STATUS_EVENT and
-            me and
-            zoneTime >= 5
-        then
-            local playerStatus = player.status
-            local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
-            local isResting = (playerStatus == STATUS_RESTING)              -- Resting
-            local isEvent = (playerStatus == STATUS_EVENT)                  -- Event/cutscene
-            local isDead = player.vitals.hp <= 0                            -- Dead
-
-            actionStateManager:tick(time)
-
-            -- As long as we're not dead or resting, we can process targeting info
+            -- Perform background garbage collection operations. These will only occur when we are
+            -- not in combat, to ensure that there's no interference with time-sensitive gambits.
+            local garbageCollectionAge = os.clock() - latestGarbageCollection
             if 
-                not isDead and
-                not isEvent
+                garbageCollectionAge > GARBAGE_COLLECTION_INTERVAL and
+                (player == nil or not player.in_combat)
             then
-                processTargeting(player, party)
+                actionStateManager:clearOthersSpells(true)
+                actionStateManager:purgeStaleMobAbilities()
+                actionStateManager:purgeWeaponSkills()
+                actionStateManager:purgeSkillchains()
+                latestGarbageCollection = os.clock()
             end
 
-            -- Refresh the player and execute the next cycle
-            player = windower.ffxi.get_player()
-            doNextActionCycle(time, player, party)
+            -- Refresh the time
+            local now = os.clock()
+            local time = now - startTime
+            local zoneTime = now - (globals.zoneEntryTime or 0)
 
-            -- If automation was disabled during this iteration, forcibly stop following. Note that
-            -- this could inadvertently stop a manual follow, but there's not a good way around
-            -- that as we don't really know how it started. This will ensure that we don't keep
-            -- trying to run to a mob after being disabled (dangerous for mobs that aggro).
-            if not globals.enabled then
-                local existingJobId = smartMove:getJobId()
-                if existingJobId then
-                    smartMove:cancelJob()
+            -- We'll get the 'me' mob and verify it, because there are scenarios where
+            -- it would come back as nil. Let's avoid that.
+            local me = windower.ffxi.get_mob_by_target('me')
+
+            if 
+                globals.enabled and
+                player and
+                --player.status ~= STATUS_EVENT and
+                me and
+                zoneTime >= 5
+            then
+                local playerStatus = player.status
+                local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo
+                local isResting = (playerStatus == STATUS_RESTING)              -- Resting
+                local isEvent = (playerStatus == STATUS_EVENT)                  -- Event/cutscene
+                local isDead = player.vitals.hp <= 0                            -- Dead
+
+                actionStateManager:tick(time)
+
+                -- As long as we're not dead or resting, we can process targeting info
+                if 
+                    not isDead and
+                    not isEvent
+                then
+                    processTargeting(player, party)
                 end
+
+                -- Refresh the player and execute the next cycle
+                player = windower.ffxi.get_player()
+                doNextActionCycle(time, player, party)
+
+                -- If automation was disabled during this iteration, forcibly stop following. Note that
+                -- this could inadvertently stop a manual follow, but there's not a good way around
+                -- that as we don't really know how it started. This will ensure that we don't keep
+                -- trying to run to a mob after being disabled (dangerous for mobs that aggro).
+                if not globals.enabled then
+                    local existingJobId = smartMove:getJobId()
+                    if existingJobId then
+                        smartMove:cancelJob()
+                    end
+                end
+
+                -- -- Experiment: Double the sleep time when there's no battle target and we're in a non-battle state
+                -- local context = actionStateManager:getContext()
+                -- if
+                --     context == nil or
+                --     (not context.bt and context.actionType ~= 'battle' and context.actionType ~= 'pull' and context.actionType ~= 'idle_battle')
+                -- then
+                --     sleepTimeSeconds = 1
+                -- end
+
+            else
+                -- We will create a context when disabled or are otherwise unable to run. This simply ensures 
+                -- that we have context-based state changes available and up to date once we re-enable.
+                local context = ActionContext.create('idle', 
+                    time,
+                    nil,
+                    0,
+                    -1,
+                    party)
+
+                -- Wake from idle if we're disabled
+                actionStateManager.idleWakeTime = 0
+                sleepTimeSeconds = 2
             end
-
-            -- -- Experiment: Double the sleep time when there's no battle target and we're in a non-battle state
-            -- local context = actionStateManager:getContext()
-            -- if
-            --     context == nil or
-            --     (not context.bt and context.actionType ~= 'battle' and context.actionType ~= 'pull' and context.actionType ~= 'idle_battle')
-            -- then
-            --     sleepTimeSeconds = 1
-            -- end
-
         else
-            -- We will create a context when disabled or are otherwise unable to run. This simply ensures 
-            -- that we have context-based state changes available and up to date once we re-enable.
-            local context = ActionContext.create('idle', 
-                time,
-                nil,
-                0,
-                -1,
-                party)
-
-            -- Wake from idle if we're disabled
-            actionStateManager.idleWakeTime = 0
             sleepTimeSeconds = 2
         end
         

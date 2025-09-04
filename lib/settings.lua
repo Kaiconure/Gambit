@@ -759,12 +759,23 @@ end
 -- Load settings
 function loadSettings(actionsName, settingsOnly)
     local player = windower.ffxi.get_player()
+    if not player then
+        tempSettings = json.parse(json.stringify(defaultSettings))
+
+        tempSettings.actions = actions
+        tempSettings.actionInfo = tempSettings.actionInfo or {}
+        tempSettings.actionInfo.name = actionsName
+        tempSettings.actionInfo.fileName = actionsFileName
+
+        return tempSettings
+    end
+
     local fileName = getSettingsFileName(player.name)
 
     local file = files.new(fileName)
     if not file:exists() then
         writeMessage('No settings found for %s. Defaults will be loaded.':format(text_player(player.name)))
-        tempSettings = defaultSettings
+        tempSettings = json.parse(json.stringify(defaultSettings))
     else
         writeMessage('Loading configured settings for %s...':format(text_player(player.name)))
         tempSettings = json.parse(file:read()) or {}
