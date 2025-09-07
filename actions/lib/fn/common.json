@@ -40,9 +40,7 @@
         "hasSpell('Sneak')",
         "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")')"
       ],
-      "commands": [
-        "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
-      ]
+      "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
     },
     {
       "name": "invis_pt",
@@ -51,9 +49,7 @@
         "hasSpell('Invisible')",
         "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")')"
       ],
-      "commands": [
-        "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
-      ]
+      "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
     }
   ]
 }

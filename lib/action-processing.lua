@@ -22,6 +22,27 @@ function recompileActions()
 end
 
 function setSkillchain(name, mob)
+    if globals.cloud_panel and globals.cloud_panel:enabled() then
+        if mob and mob.id then
+            local context = actionStateManager:getContext()
+            if context then
+                if 
+                    (context.t and context.t.id and context.t.id == mob.id) or
+                    (context.soft_t and context.soft_t.id and context.soft_t.id == mob.id)
+                then
+                    local ws = actionStateManager:getPartyWeaponSkillInfo(mob)
+                    local display = nil
+                    if ws and ws.name then
+                        display = '%s → %s':format(ws.name, name)
+                    else
+                        dialog = name
+                    end
+                    globals.cloud_panel:setText(display)
+                end
+            end
+        end
+    end
+
     actionStateManager:setSkillchain(name, mob)
 end
 
@@ -34,6 +55,20 @@ function markMobAbilityEnd(mob)
 end
 
 function setPartyWeaponSkill(actor, skill, mob)
+    if globals.cloud_panel and globals.cloud_panel:enabled() then
+        if skill and mob and mob.id then
+            local context = actionStateManager:getContext()
+            if context then
+                if 
+                    (context.t and context.t.id and context.t.id == mob.id) or
+                    (context.soft_t and context.soft_t.id and context.soft_t.id == mob.id)
+                then
+                    globals.cloud_panel:setText(skill.name)
+                end
+            end
+        end
+    end
+
     actionStateManager:setPartyWeaponSkill(actor, skill, mob)
 end
 
@@ -929,12 +964,35 @@ function cr_actionProcessor()
                     -1,
                     party)
 
+                -- The "soft" t will be the target or battle target that's active while we're disabled
+                context.soft_t = windower.ffxi.get_mob_by_target('t')
+                if 
+                    context.soft_t == nil or
+                    not context.soft_t.valid_target or
+                    context.soft_t.spawn_type ~= SPAWN_TYPE_MOB
+                then
+                    context.soft_t = windower.ffxi.get_mob_by_target('bt')
+                    if
+                        context.soft_t == nil or
+                        not context.soft_t.valid_target or
+                        context.soft_t.spawn_type ~= SPAWN_TYPE_MOB
+                    then
+                        context.soft_t = nil
+                    end
+                end
+
+                --print('soft_t: %d':format(context.soft_t and context.soft_t.id or -1))
+
                 -- Wake from idle if we're disabled
                 actionStateManager.idleWakeTime = 0
                 sleepTimeSeconds = 2
             end
         else
             sleepTimeSeconds = 2
+        end
+
+        if globals.cloud_panel then
+            globals.cloud_panel:tick()
         end
         
         coroutine.sleep(sleepTimeSeconds)

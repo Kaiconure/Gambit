@@ -19,7 +19,8 @@
   ],
   "battle": [
     {
-      "import": "reactions/face-away"
+      "import": "reactions/face-away",
+      "disabled": true
     },
     {
       "import": "frontline-engagement"
@@ -43,7 +44,8 @@
     },
     {
       "import": "common-consumables",
-      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress)."
+      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress).",
+      "disabled": true
     }
   ],
   "dead": [

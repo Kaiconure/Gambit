@@ -1,4 +1,4 @@
-__version = '0.96.0-beta9a'
+__version = '0.96.0-beta10'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -18,6 +18,12 @@ resources = require('resources')
 packets = require('packets')
 config = require('config')
 files = require('files')
+
+texts = require('texts')
+images = require('images')
+
+require('ux/core')
+require('ux/cloud-panel')
 
 require('actions')
 
@@ -66,7 +72,8 @@ globals = {
     latest_npc_activation = 0,
     spells = {},
     action_processor_started = false,
-    suppress_logging = true
+    suppress_logging = true,
+    cloud_panel = nil
 }
 
 globals.spells.trust = resources.spells:type('Trust')
@@ -106,6 +113,10 @@ function reloadSettings(actionsName, bypassActions)
     writeMessage(text_green('Settings have been reloaded!', Colors.default))
 
     smartMove:applySettings(settings)
+
+    if globals.cloud_panel then
+        globals.cloud_panel:configure(settings.cloudPanel)
+    end
 end
 
 -- Player status change
@@ -171,6 +182,7 @@ windower.register_event('load', function()
         return
     end
 
+    globals.cloud_panel = ux.cloud_panel.new()
 
     smartMove:setLogger(writeDebug, writeTrace)
 

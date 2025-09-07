@@ -7,12 +7,11 @@ TargetStrategy = {
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
     leader          = 'leader',     -- The party leader target, or the nearest aggro if none
     puller          = 'puller',     -- Similar to aggressor, but tries to limit to mobs that aren't engaged with others while unclaimed
-    manual          = 'manual',     -- You as the player pick the targets by engaging manually
-    camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
+    manual          = 'manual'      -- You as the player pick the targets by engaging manually
 }
 
--- We will use the 'leader' strategy if no other has been set
-TargetStrategy.default = TargetStrategy.leader
+-- We will use the 'manual' strategy if no other has been set
+TargetStrategy.default = TargetStrategy.manual
 
 --
 -- Ignore list fields:
@@ -115,7 +114,12 @@ local defaultSettings = {
     minDistanceList = DefaultMinDistanceList,
     maxChaseTime = nil,
     followCommandDistance = 1,
-    weaponSkillDelay = nil
+    weaponSkillDelay = nil,
+    cloudPanel = {
+        enabled = true,
+        duration = 3,
+        top = 100
+    }
 }
 
 ----------------------------------------------------------------------------------------
@@ -830,6 +834,10 @@ function loadSettings(actionsName, settingsOnly)
 
     -- The maximum length of targeting attempts
     tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 1, 20)
+
+    if not tempSettings.cloudPanel then
+        tempSettings.cloudPanel = json.parse(json.stringify(defaultSettings.cloudPanel))
+    end
 
     local jobActionsName = nil
     local actionsFileName = nil
