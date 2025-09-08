@@ -113,7 +113,8 @@
       "import": "use-xp-cp-rings"
     },
     {
-      "import": "common-consumables"
+      "import": "common-consumables",
+      "disabled": true
     },
     {
       "import": "waypoints-ex"

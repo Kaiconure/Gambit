@@ -1,0 +1,34 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": [
+      "Standard idler role that just sits in place, using XP/CP rings and common consumables.",
+      "Great for being power leveled in a safe spot."
+    ]
+  },
+  "vars": {
+    "configuration": {
+      "commands": ["gbt config -strat manual"]
+    }
+  },
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "import": "use-xp-cp-rings",
+      "comment": "Uses the appropriate XP or CP rings based on current level and mastery."
+    },
+    {
+      "import": "common-consumables",
+      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress).",
+      "disabled": false
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader",
+      "comment": "Follows the party leader while mounted. Does nothing if you are the party leader."
+    }
+  ]
+}

@@ -37,6 +37,13 @@ local SKILLCHAIN_ALIASES = {
     Darkness2   = { 'Darkness 2', 'Darkness II' }
 }
 
+local LOCKING_BUFFS = {
+    'Stun',
+    'Petrification',
+    'Terror',
+    'Sleep',
+}
+
 -----------------------------------------------------------------------------------------
 -- Returns the specified args, unless the first element is a table in 
 -- which case that table is returned
@@ -248,6 +255,22 @@ local function context_array_length(array)
     end
 
     return 0
+end
+
+-----------------------------------------------------------------------------------------
+-- Appends items at the end of an array
+local function context_array_append(array, ...)
+    if type(array) ~= 'table' then
+        return
+    end
+
+    for i, value in ipairs({...}) do
+        if value ~= nil then
+            table.insert(array, value)
+        end
+    end
+
+    return array
 end
 
 -----------------------------------------------------------------------------------------
@@ -1825,6 +1848,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         for i, message in pairs(messages) do
             if type(message) == 'boolean' then
                 message = context_iif(message, 'true', 'false')
+            elseif type(message) == 'table' then
+                if #message > 0 then
+                    message = table.concat(message, ', ')
+                else
+                    message = ''
+                end
             end
             output = output .. tostring(message or '') .. ' '
         end
@@ -2406,8 +2435,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.canUseItem = function(...)
-
-        if hasBuff(context.player, 'Sleep') then
+        -- Can't use items while in a mog house, or when afflicted with certain statuses
+        if
+            context.game_info.mog_house or
+            context.hasBuff(LOCKING_BUFFS)
+        then
+            context.item = nil
             return
         end
 
@@ -2685,6 +2718,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.canUseAbility = function (...)
+        -- Abilities cannot be used in the mog house
+        if
+            context.game_info.mog_house or
+            context.hasBuff(LOCKING_BUFFS)
+        then
+            context.ability = ability
+            context.ability_recast = recast
+            return
+        end
+
         local abilities = varargs({...}, context.ability and context.ability.name)
 
         if type(abilities) == 'table' then
@@ -2854,6 +2897,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.canUseSpell = function (...)
+        -- Spells cannot be used in the mog house
+        if
+            context.game_info.mog_house or
+            context.hasBuff(LOCKING_BUFFS)
+        then
+            context.spell = nil
+            context.spell_recast = nil
+            return
+        end
+
         local spells = varargs({...}, context.spell and context.spell.name)
         if type(spells) == 'table' and #spells > 0 then
             local player = windower.ffxi.get_player()
@@ -4198,6 +4251,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     -------------------------------------------------------------------------------------
+    -- Determine if the current zone is a battle zone
+    context.isBattleZone = function ()
+        local zone = context.zone
+        if not zone then
+            return
+        end
+
+        -- Battle zones are where pets can be summoned. Note that the Windower data incorrectly marks
+        -- the three PAST starting cities as pet-allowed zones, so we have to explicitly filter those out.
+        return zone.can_pet == true and
+            zone.id ~= 80 and   -- South San d'Oria [S]
+            zone.id ~= 87 and   -- Bastok Markets [S]
+            zone.id ~= 94       -- Windurst Waters [S]
+    end
+
+    -------------------------------------------------------------------------------------
+    -- Trust zones are the same as battle zones. We might be proven wrong at 
+    -- some point, but we'll refine that easily if needed.
+    context.isTrustZone = context.isBattleZone
+
+    -------------------------------------------------------------------------------------
     -- Ensure trusts are present. Finds the first trust in the list that is ready
     -- to be called (not at max trusts, not already summoned, not in a city etc...)
     -- and summons it.
@@ -4208,7 +4282,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             names and
             #names > 0 and 
             context.party.party1_count < 6 and
-            context.me.is_party_leader
+            context.me.is_party_leader and
+            context.isTrustZone()
         then
             local player = context.player
             local maxTrusts = getMaxTrusts(player)
@@ -5108,6 +5183,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             sendActionCommand('input /heal', context, 1)
         end
     end
+    context.stopResting = context.cancelRest
 
     --------------------------------------------------------------------------------------
     -- Count the number of arguments
@@ -5453,6 +5529,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.arrayLength = context_array_length
     context.arrayCount = context.arrayLength
     context.arrayMerge = context_array_merge
+    context.arrayAppend = context_array_append
     context.arrayAll = context_array_contains_all
     context.tableAll = context_table_contains_all
     context.arrayFirstMissing = context_array_first_missing

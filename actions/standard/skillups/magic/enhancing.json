@@ -1,27 +1,75 @@
 {
+  "about": {
+    "author": "@Kaiconure",
+    "description": [
+      "Standard set of gambits for skilling up your enhancing magic.",
+      "Best when used as RDM or /RDM for Refresh and Convert."
+    ]
+  },
   "vars": {
+    "configuration": {
+      "commands": [
+        "gbt config -d 5",
+        "gbt config -z 3",
+        "gbt config -strat nearest"
+      ]
+    },
     "use_convert": {
       "min_mp": 5
     },
-    "protect_spells": ["Protectra III", "Protectra II", "Protectra"],
-    "shell_spells": ["Shellra II", "Shellra"],
-    "barfire_spells": ["Barfira", "Barfire"],
-    "baraero_spells": ["Baraera", "Baraero"],
-    "barthunder_spells": ["Barthundra", "Barthunder"]
+    "ensure_trusts": {
+      "spells": []
+    },
+    "trust_spells": {
+      "tank": ["Valaineral", "AAEV", "Rahal"],
+      "healer": ["Yoran-Oran (UC)", "Kupipi", "Sylvie (UC)"],
+      "support": ["Koru-Moru", "Joachim", "Ulmia"]
+    },
+    "protect_spells": ["Protectra II", "Protect II", "Protectra", "Protect"],
+    "shell_spells": ["Shellra", "Shell"],
+    "bar_spells": [
+      "Barfira",
+      "Barfire",
+      "Baraera",
+      "Baraero",
+      "Barthundra",
+      "Barthunder"
+    ],
+    "en_spells": ["Enstone II", "Enwater II", "Enstone", "Enwater"]
   },
   "idle": [
     {
+      "import": "configuration"
+    },
+    {
       "commands": [
+        "-----------------------------------------------------------------------------------------------------------",
+        "-- Set up skill up spell list based on available spells",
+        "-----------------------------------------------------------------------------------------------------------",
         "setVar('vars.skillups.spells', {})",
         "hasSpell(vars.protect_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
         "hasSpell(vars.shell_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
-        "hasSpell(vars.barfire_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
-        "hasSpell(vars.baraero_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
-        "hasSpell(vars.barthunder_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.bar_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.en_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+
         "log('Queuing', arrayCount(vars.skillups.spells), 'skillup spell(s):')",
-        "log(vars.skillups.spells)"
+        "log(vars.skillups.spells)",
+
+        "-----------------------------------------------------------------------------------------------------------",
+        "-- Set up trust list based on available spells",
+        "-----------------------------------------------------------------------------------------------------------",
+        "hasSpell(vars.trust_spells.tank) and arrayAppend(vars.ensure_trusts.spells, spell.name)",
+        "hasSpell(vars.trust_spells.healer) and arrayAppend(vars.ensure_trusts.spells, spell.name)",
+        "hasSpell(vars.trust_spells.support) and arrayAppend(vars.ensure_trusts.spells, spell.name)",
+
+        "log('Using', arrayCount(vars.ensure_trusts.spells), 'trust(s):')",
+        "log(vars.ensure_trusts.spells)"
       ],
-      "frequency": "infinity"
+      "frequency": "infinity",
+      "delay": 0
+    },
+    {
+      "import": "ensure-trusts"
     },
     {
       "comment": [
@@ -36,6 +84,13 @@
       "import": "heals/main-cure-sequence"
     },
     {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": "me.mpp < 15 or me.mp < 50",
+      "commands": "rest()"
+    },
+    {
       "comment": [
         " This import ensures that you keep yourself hasted, to minimize recast timers on spells."
       ],
@@ -48,7 +103,18 @@
         "hasEffectOf(spell) and cancelBuff() and wait(1)",
         "useSpell(me)"
       ],
-      "frequency": 1
+      "delay": 2,
+      "frequency": 0
+    }
+  ],
+  "resting": [
+    {
+      "when": [
+        "me.mpp >= 99 \\",
+        " or (me.mpp <= 20 and me.mp > vars.use_convert.min_mp and canUse('Convert')) \\",
+        " or (me.mpp >= 75 and canUse('Refresh II', 'Refresh'))"
+      ],
+      "commands": ["stopResting()"]
     }
   ]
 }

@@ -198,17 +198,19 @@
       "frequency": 240
     },
     {
-      "import": "use-xp-cp-rings"
+      "import": "use-xp-cp-rings",
+      "disabled": false
     },
     {
       "import": "common-consumables",
-      "disable": true
+      "disabled": true
     },
     {
       "import": "abilities/use-convert"
     },
     {
-      "import": "waypoints-ex"
+      "import": "waypoints-ex",
+      "disabled": false
     }
   ],
   "dead": [

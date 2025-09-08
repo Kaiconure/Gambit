@@ -5,7 +5,7 @@
   },
   "vars": {
     "waypoints_ex": {
-      "data": {}
+      "data": null
     }
   },
   "actions": [
@@ -17,16 +17,27 @@
         "vars.waypoints_ex._latest.z and vars.waypoints_ex._latest.z ~= settings.z and sendCommand('gbt config -z %d', vars.waypoints_ex._latest.z) and wait(1)",
         "setVar('vars.waypoints_ex._latest', nil)"
       ],
+      "delay": 0,
       "frequency": "infinity",
       "scope": "battle"
     },
     {
       "when": [
+        "setVar('vars.waypoints_ex._current', nil) == nil",
         "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
-        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
-        "not vars.waypoints_ex._current.scoped",
-        "vars.waypoints_ex._current.mode ~= 'cycle'",
-        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "not vars.waypoints_ex.data[vars.waypoints_ex.active].zone or any(vars.waypoints_ex.data[vars.waypoints_ex.active].zone, zone_id, zone_name, zone_search)"
+      ],
+      "commands": [
+        "false and log('Setting current waypoints to:', vars.waypoints_ex.active)",
+        "setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "zone"
+    },
+    {
+      "when": [
+        "vars.waypoints_ex._current and not vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode ~= 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints_ex._current.points)",
         "result and not checkPosition(result)"
@@ -38,16 +49,13 @@
       ],
       "delay": 1,
       "frequency": 2,
+      "miss_frequency": 3,
       "scope": "zone",
       "scoped_enumerators": true
     },
     {
       "when": [
-        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
-        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
-        "not vars.waypoints_ex._current.scoped",
-        "vars.waypoints_ex._current.mode == 'cycle'",
-        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "vars.waypoints_ex._current and not vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode == 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints_ex._current.points)",
         "result and not checkPosition(result)"
@@ -59,16 +67,13 @@
       ],
       "delay": 1,
       "frequency": 2,
+      "miss_frequency": 3,
       "scope": "zone",
       "scoped_enumerators": true
     },
     {
       "when": [
-        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
-        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
-        "vars.waypoints_ex._current.scoped",
-        "vars.waypoints_ex._current.mode ~= 'cycle'",
-        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "vars.waypoints_ex._current and vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode ~= 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints_ex._current.points)",
         "result and not checkPosition(result)"
@@ -80,16 +85,13 @@
       ],
       "delay": 1,
       "frequency": 2,
+      "miss_frequency": 3,
       "scope": "battle",
       "scoped_enumerators": true
     },
     {
       "when": [
-        "vars.waypoints_ex.active and vars.waypoints_ex.data and vars.waypoints_ex.data[vars.waypoints_ex.active] and vars.waypoints_ex.data[vars.waypoints_ex.active].points",
-        "vars.waypoints_ex._current == vars.waypoints_ex.data[vars.waypoints_ex.active] or setVar('vars.waypoints_ex._current', vars.waypoints_ex.data[vars.waypoints_ex.active])",
-        "vars.waypoints_ex._current.scoped",
-        "vars.waypoints_ex._current.mode == 'cycle'",
-        "not vars.waypoints_ex._current.zone or any(vars.waypoints_ex._current.zone, zone_id, zone_name, zone_search)",
+        "vars.waypoints_ex._current and vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode == 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints_ex._current.points)",
         "result and not checkPosition(result)"
@@ -101,6 +103,7 @@
       ],
       "delay": 1,
       "frequency": 2,
+      "miss_frequency": 3,
       "scope": "battle",
       "scoped_enumerators": true
     }

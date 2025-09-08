@@ -12,6 +12,9 @@
       "import": "heals/remove-doom"
     },
     {
+      "import": "heals/remove-petrify"
+    },
+    {
       "when": [
         "canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
         "partyCount('hpp < 50 and distance <= 10') >= 3"

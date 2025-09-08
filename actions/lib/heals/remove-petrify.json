@@ -1,0 +1,19 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": [
+        "hasBuff('Petrification') and (canUseSpell('Stona') or canUseItem('Remedy'))"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 0.25
+    },
+    {
+      "when": "partyHasBuff('Petrification') and canUse('Stona')",
+      "commands": "removeEffect(member)",
+      "frequency": 0.25
+    }
+  ]
+}
