@@ -1,4 +1,4 @@
-__version = '0.96.0-beta10a'
+__version = '0.96.0-beta10b'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -76,7 +76,26 @@ globals = {
     cloud_panel = nil
 }
 
-globals.spells.trust = resources.spells:type('Trust')
+--------------------------------------------------------------------------------------
+-- Initialize trust data structures
+function initTrustData()
+    if not globals.spells.trust then
+        globals.spells.trust = resources.spells:type('Trust')
+    end
+
+    if not meta.trusts_by_party_name then
+        meta.trusts_by_party_name = { }
+        for id, trust in pairs(meta.trusts) do
+            if trust and trust.id and trust.party_name then
+                local lower_name = string.lower(trust.party_name)
+                if not meta.trusts_by_party_name[lower_name] then
+                    meta.trusts_by_party_name[lower_name] = { }
+                end
+                table.insert(meta.trusts_by_party_name[lower_name], trust)
+            end
+        end
+    end
+end
 
 --------------------------------------------------------------------------------------
 -- Make a command that can be run against this addon with an optional wait afterward
@@ -182,6 +201,8 @@ windower.register_event('load', function()
         return
     end
 
+    initTrustData()
+
     globals.cloud_panel = ux.cloud_panel.new()
 
     smartMove:setLogger(writeDebug, writeTrace)
@@ -251,6 +272,8 @@ windower.register_event('login', function ()
     end
 
     globals.suppress_logging = false
+
+    initTrustData()
 
     writeMessage('')
     writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)

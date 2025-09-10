@@ -250,11 +250,7 @@ end
 -----------------------------------------------------------------------------------------
 --
 local function context_array_length(array)
-    if type(array) == 'table' and array[1] then
-        return #array
-    end
-
-    return 0
+    return type(array) == 'table' and #array or 0
 end
 
 -----------------------------------------------------------------------------------------
@@ -265,7 +261,15 @@ local function context_array_append(array, ...)
     end
 
     for i, value in ipairs({...}) do
-        if value ~= nil then
+        if type(value) == 'table' then
+            -- For arrays, we'll append each element individually as long as it's not nil
+            for j, v in ipairs(value) do
+                if v ~= nil then
+                    table.insert(array, v)
+                end
+            end
+        elseif value ~= nil then
+            -- For anything else, we'll just append the element directly as long as it's not nil
             table.insert(array, value)
         end
     end
@@ -1642,6 +1646,7 @@ local function loadContextTargetSymbols(context, target)
     -- We'll store the list of trusts in our main party. Trusts can't be called in 
     -- an alliance, so this is all we need.
     context.party1_trusts = {}
+    context.party_trusts = context.party1_trusts
     context.pinfo = {}
 
     local cpi = actionStateManager:getCapacityPointInfo()
@@ -2590,6 +2595,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             true
         )
     end
+    context.useItemOn = context.useItem
 
     --------------------------------------------------------------------------------------
     -- Get the spell tier from a roman numeral-based spell name
@@ -3049,6 +3055,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
     end
+    context.useSpellOn = context.useSpell
 
     --------------------------------------------------------------------------------------
     -- Behaves as an aggregate of:
@@ -3116,6 +3123,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return context.useItem(target)
         end
     end
+    context.useOn = context.use
 
     --------------------------------------------------------------------------------------
     -- 

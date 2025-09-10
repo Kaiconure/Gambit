@@ -32,22 +32,29 @@
   },
   "actions": [
     {
+      "when": ["not vars.common_consumables.disabled"],
+      "commands": [
+        "setVar('vars.common_consumables.all_items', {})",
+        "not vars.common_consumables.escha_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.escha_items)",
+        "not vars.common_consumables.unm_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.unm_items)",
+        "not vars.common_consumables.woe_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.woe_items)",
+        "arrayCount(vars.common_consumables.all_items) == 0 and log('No common consumables were configured for use.')",
+        "arrayCount(vars.common_consumables.all_items) ~= 0 and log('Configured', arrayCount(vars.common_consumables.all_items), 'common consumable type(s) to use when present.')"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "miss_frequency": "infinity"
+    },
+    {
       "when": [
         "not vars.common_consumables.disabled",
         "freeInventorySlots() > 0",
-        "  (not vars.common_consumables.escha_items_disabled and canUseItem(vars.common_consumables.escha_items)) or \\",
-        "  (not vars.common_consumables.unm_items_disabled and canUseItem(vars.common_consumables.unm_items)) or \\",
-        "  (not vars.common_consumables.woe_items_disabled and canUseItem(vars.common_consumables.woe_items))"
+        "arrayCount(vars.common_consumables.all_items) > 0",
+        "canUseItem(vars.common_consumables.all_items)"
       ],
       "commands": ["useItem(me)"],
       "miss_frequency": 30,
-      "scope": "battle",
-      "comment": [
-        "The postpone function will always return nil. By placing it at the end of the OR sequence,",
-        "we guarantee it will only be run if none of the other conditions are met. In that case, it will",
-        "prevent the gambit from being checked again for a given amount of time (30 seconds) without changing",
-        "the false result of the when condition."
-      ]
+      "scope": "battle"
     }
   ]
 }

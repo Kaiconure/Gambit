@@ -1,0 +1,92 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": [
+      "Standard set of gambits for skilling up your enhancing magic.",
+      "Best when used as RDM or /RDM for Refresh and Convert."
+    ]
+  },
+  "vars": {
+    "configuration": {
+      "commands": [
+        "gbt config -d 5",
+        "gbt config -z 3",
+        "gbt config -strat nearest"
+      ]
+    },
+    "use_convert": {
+      "min_mp": 5
+    },
+    "ensure_trusts": {
+      "spells": []
+    },
+    "trust_spells": {
+      "tank": ["Valaineral", "AAEV", "Rahal"],
+      "healer": ["Yoran-Oran (UC)", "Kupipi", "Sylvie (UC)"],
+      "support": ["Koru-Moru", "Joachim", "Ulmia"]
+    },
+    "skillups": {
+      "spells": ["Indi-Regen", "Indi-Poison", "Indi-Voidance", "Indi-Precision"]
+    }
+  },
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep your best usable Refresh spell up, if any."
+      ],
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep yourself healed up, primarily for recovery from Convert."
+      ],
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": "me.mpp < 15 or me.mp < 50",
+      "commands": "rest()"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep yourself hasted, to minimize recast timers on spells."
+      ],
+      "import": "buffs/haste-cycle",
+      "disabled": true
+    },
+    {
+      "when": "not hasBuff('Food') and canUse('B.E.W. Pitaru')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": [
+        "iterate(vars.skillups.spells) and canUseSpell(result) and not hasEffectOf(spell)"
+      ],
+      "commands": [
+        "false and log('Skilling up with spell:', spell.name)",
+        "useSpell(me)"
+      ],
+      "delay": 2,
+      "frequency": 0
+    }
+  ],
+  "resting": [
+    {
+      "when": [
+        "me.mpp >= 99 \\",
+        " or (me.mpp <= 20 and me.mp > vars.use_convert.min_mp and canUse('Convert')) \\",
+        " or (me.mpp >= 75 and canUse('Refresh II', 'Refresh'))"
+      ],
+      "commands": ["stopResting()"]
+    }
+  ]
+}

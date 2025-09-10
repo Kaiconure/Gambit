@@ -47,9 +47,9 @@
         "is_new_result and log('Bouncing to', vars.waypoints_ex.active, 'location', result.x, result.y)",
         "move(result)"
       ],
-      "delay": 1,
-      "frequency": 2,
-      "miss_frequency": 3,
+      "delay": 0,
+      "frequency": 1,
+      "miss_frequency": 1,
       "scope": "zone",
       "scoped_enumerators": true
     },
@@ -65,9 +65,9 @@
         "is_new_result and log('Cycling to', vars.waypoints_ex.active, 'location', result.x, result.y)",
         "move(result)"
       ],
-      "delay": 1,
-      "frequency": 2,
-      "miss_frequency": 3,
+      "delay": 0,
+      "frequency": 1,
+      "miss_frequency": 1,
       "scope": "zone",
       "scoped_enumerators": true
     },
@@ -83,9 +83,9 @@
         "is_new_result and log('Bouncing to', vars.waypoints_ex.active, 'location', result.x, result.y)",
         "move(result)"
       ],
-      "delay": 1,
-      "frequency": 2,
-      "miss_frequency": 3,
+      "delay": 0,
+      "frequency": 1,
+      "miss_frequency": 1,
       "scope": "battle",
       "scoped_enumerators": true
     },
@@ -101,9 +101,9 @@
         "is_new_result and log('Cycling to', vars.waypoints_ex.active, 'location', result.x, result.y)",
         "move(result)"
       ],
-      "delay": 1,
-      "frequency": 2,
-      "miss_frequency": 3,
+      "delay": 0,
+      "frequency": 1,
+      "miss_frequency": 1,
       "scope": "battle",
       "scoped_enumerators": true
     }

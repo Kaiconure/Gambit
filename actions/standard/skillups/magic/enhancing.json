@@ -97,6 +97,11 @@
       "import": "buffs/haste-cycle"
     },
     {
+      "when": "not hasBuff('Food') and canUse('B.E.W. Pitaru')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
       "when": ["iterate(vars.skillups.spells) and canUseSpell(result)"],
       "commands": [
         "log('Skilling up with spell:', spell.name)",

@@ -522,8 +522,8 @@ local function getNextBattleAction(context)
             -- If this action is scoped to a battle -AND- it either has no scope yet or its scope does not
             -- match that of the current battle scope, then it is immediately reschedulable.
             if
-                (action.scope == 'battle' and (action.lastBattleScope == nil or action.lastBattleScope ~= context.battleScope)) or
-                (action.scope == 'zone' and (action.lastZoneTime == nil or action.lastZoneTime ~= globals.zoneEntryTime))
+                (action.scope == 'battle' and (not action.lastBattleScope or action.lastBattleScope ~= context.battleScope)) or
+                (action.scope == 'zone' and (not action.lastZoneTime or action.lastZoneTime ~= globals.zoneEntryTime))
             then
                 action.availableAt = 0
 
@@ -617,6 +617,21 @@ local function getNextBattleAction(context)
                     -- its next available time based on the configured miss frequency.
                     if action.miss_frequency > 0 then
                         action.availableAt = math.max(os.clock() + action.miss_frequency, action.availableAt)
+
+                        -- Set the scope here as well, since a miss is still considered an evaluation
+                        -- of the action in the current scope.
+                        action.lastBattleScope  = context.battleScope
+                        action.lastZoneTime     = globals.zoneEntryTime
+
+                        -- if action.miss_frequency > 1 then
+                        --     print('t=%.2f, f=%.2f, available at = %.2f, bs: %s, zt: %s':format(
+                        --         os.clock(),
+                        --         action.miss_frequency,
+                        --         action.availableAt,
+                        --         tostring(action.lastBattleScope) or 'nil',
+                        --         tostring(action.lastZoneTime) or 'nil'
+                        --     ))
+                        -- end
                     end
                 end
             end

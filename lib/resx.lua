@@ -704,31 +704,34 @@ TrustSearchModes = {
     usable = 'usable',  -- All usable matches
     all = 'all'         -- All matches
 }
+
 function getTrustSpellMeta(partyName, mode, player, party)
     if type(partyName) ~= 'string' then return end
 
-    local matches = {}
-
+    -- Find the mode, default to best, and bail if it's not valid
     mode = TrustSearchModes[string.lower(mode or TrustSearchModes.best)]
     if mode == nil then return end
+
+    partyName = string.lower(partyName)
+
+    -- Find all trusts that share this party name, bail if none are found
+    local candidate_trusts = meta.trusts_by_party_name[partyName]
+    if not candidate_trusts or #candidate_trusts == 0 then return end
 
     -- A flag that indicates whether the requested mode should be limited 
     -- to usable trust spells only
     local onlyUsable = mode == TrustSearchModes.best or mode == TrustSearchModes.usable
 
-    partyName = string.lower(partyName)
-
     if onlyUsable then
         player = player or windower.ffxi.get_player()
+        if not player then return end
     end
 
-    -- Iterate over the trust metadata. Store any entries that match the mode requirements.
-    for id, metadata in pairs(meta.trusts) do
-        if 
-            string.lower(metadata.party_name) == partyName and
-            (not onlyUsable or canUseSpell(player, metadata.id))
-        then
-            matches[#matches + 1] = metadata
+    -- Iterate over the trust candidates. Store any entries that match the mode requirements.
+    local matches = {}
+    for i, trust in pairs(candidate_trusts) do
+        if not onlyUsable or canUseSpell(player, trust.id) then
+            matches[#matches + 1] = trust
         end
     end
 
