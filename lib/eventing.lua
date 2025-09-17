@@ -133,7 +133,7 @@ ActionPacket.open_listener(function (act)
         local actorId = actionPacket:get_id()
         local actor = windower.ffxi.get_mob_by_id(actorId)
         local my_target = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('t')
-        local is_actor_allied = actor and actor.in_party or actor.in_alliance
+        local is_actor_allied = actor and (actor.in_party or actor.in_alliance)
 
         if
             actor and actor.id -- Require an actor

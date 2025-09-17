@@ -2,13 +2,16 @@
   "about": {
     "author": "@Kaiconure",
     "description": [
-      "Standard idler role that just sits in place, using XP/CP rings and common consumables.",
-      "Great for being power leveled in a safe spot."
+      "Standard leveler role that just sits in place, using XP/CP rings and common consumables.",
+      "Great for being power leveled in a safe spot. Can be configured to use Corsair's Roll."
     ]
   },
   "vars": {
     "configuration": {
       "commands": ["gbt config -strat manual"]
+    },
+    "use_rolls": {
+      "rolls": ["Corsair's Roll"]
     }
   },
   "idle": [
@@ -18,6 +21,19 @@
     {
       "import": "use-xp-cp-rings",
       "comment": "Uses the appropriate XP or CP rings based on current level and mastery."
+    },
+    {
+      "import": "abilities/use-rolls",
+      "disabled": true
+    },
+    {
+      "when": [
+        "me.level == 99 and not me.is_mastered",
+        "findUnequippedItem('Aptitude Mantle +1')"
+      ],
+      "commands": ["equip()"],
+      "frequency": 180,
+      "scope": "battle"
     },
     {
       "import": "common-consumables",

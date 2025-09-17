@@ -1,4 +1,4 @@
-__version = '0.96.0-beta10b'
+__version = '0.96.0-beta11'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -73,7 +73,9 @@ globals = {
     spells = {},
     action_processor_started = false,
     suppress_logging = true,
-    cloud_panel = nil
+    cloud_panel = nil,
+    ipc_positions = {},
+    last_broadcast_pos = nil
 }
 
 --------------------------------------------------------------------------------------
@@ -132,6 +134,7 @@ function reloadSettings(actionsName, bypassActions)
     writeMessage(text_green('Settings have been reloaded!', Colors.default))
 
     smartMove:applySettings(settings)
+    smartMove:setMobPositionTable(globals.ipc_positions)
 
     if globals.cloud_panel then
         globals.cloud_panel:configure(settings.cloudPanel)
@@ -253,6 +256,7 @@ windower.register_event('load', function()
 
         -- Kick off background threads
         coroutine.schedule(cr_actionProcessor, 0)
+        coroutine.schedule(cr_ipcSender, 0)
     else
         globals.suppress_logging = true
 
@@ -547,6 +551,78 @@ windower.register_event('addon command', function (command, ...)
     end
 
     commands.process(command, args)
+end)
+
+windower.register_event('ipc message', function (msg)
+    local info = windower.ffxi.get_info()
+    if 
+        not info or
+        not info.logged_in or
+        not info.zone or
+        info.zone <= 0
+    then
+        return
+    end
+
+    msg = string.lower(msg or '')
+
+    local split = msg:split(' ', string.encoding.shift_jis)
+    if #split < 1 then
+        return
+    end
+
+    local command = split[1]
+    local args = split--{table.unpack(split, 2)} -- Note: We don't need to actually extract the command name due to how we handle args below
+
+    -- print('IPC message received: [%s] with %d arg(s)':format(command or 'nil', #args))
+    -- for i = 1, #args do
+    --     print('  %d: [%s]':format(i, args[i]))
+    -- end
+
+    --print('command: %s':format(command or 'nil'))
+
+    if command == 'pos' then
+        -- Start by grabbing and validating the id
+        local id = tonumber(getArgValue(args, '-id'))
+        if id == nil or id <= 0 then
+            --print('id: %s':format(tostring(id) or 'nil'))
+            return
+        end
+
+        -- Now get the zone, x, y, and z positions
+        local zone = tonumber(getArgValue(args, '-zone'))
+        local x = tonumber(getArgValue(args, '-x'))
+        local y = tonumber(getArgValue(args, '-y'))
+        local z = nil-- tonumber(getArgValue(args, '-z'))
+
+        -- Invalid configs should result in a clearing of the stored values
+        if
+            not zone or
+            not x or
+            not y 
+        then
+            --print('id: %d, zone: %d, x: %.2f, y: %.2f, z: %.2f':format(id, zone, x, y , z))
+            globals.ipc_positions[id] = nil
+            return
+        end
+
+        if zone ~= info.zone then
+            globals.ipc_positions[id] = nil
+            return
+        end
+
+        --print('received %d: %.2f %.2f':format(id, x, y))
+
+        globals.ipc_positions[id] = {
+            id = id,
+            t = os.clock(),
+            zone = zone,
+            x = x,
+            y = y,
+            z = z
+        }
+    end
+
 end)
 
 -- Call from the incoming chunk event, with the data from event 0x076 (party buff update message)
@@ -1184,75 +1260,51 @@ windower.register_event('incoming chunk', function (id, data)
      end
 end)
 
---[[
-windower.register_event('outgoing chunk', function(id, data, modified, injected, blocked)
-    if id == 0x05B then
-        local packet = packets.parse('outgoing', data)
-        if packet then
-            local target = packet.Target and windower.ffxi.get_mob_by_id(packet.Target)
-            if not target or target.spawn_type ~= 2 then
-                return
-            end
+function cr_ipcSender()
+    local MIN_MOVEMENT = 0.33
 
-            local is_waypoint = target.name == "Waypoint"
-            local is_homepoint = not is_waypoint and string.sub(target.name, 1, 10) == 'Home Point'
+    while true do
+        local wait_time = 0.5
 
-            if is_waypoint or is_homepoint then
-                local me = windower.ffxi.get_mob_by_target('me')
-                if not me then
-                    return
+        local info = windower.ffxi.get_info()
+        if info and info.logged_in and info.zone then
+            local me = windower.ffxi.get_mob_by_target('me')
+            if me and me.valid_target then
+
+                -- Always send if we've never sent anything before
+                local should_send = globals.last_broadcast_pos == nil
+
+                -- Otherwise, we can send if we've moved more than a minimum amount
+                if not should_send then
+                    local delta_x = math.abs(globals.last_broadcast_pos.x - me.x)
+                    local delta_y = math.abs(globals.last_broadcast_pos.y - me.y)
+
+                    should_send = delta_x >= MIN_MOVEMENT or delta_y >= MIN_MOVEMENT
                 end
 
-                local option_index = tonumber(packet['Option Index']) or 0
-                local automated_message = packet['Automated Message']
-                local unknown1 = tonumber(packet['_unknown1']) or 0
-                local unknown2 = tonumber(packet['_unknown2']) or 0
-                local menu_id = tonumber(packet['Menu ID']) or 0
-                local zone = tonumber(packet['Zone']) or 0
-
-                if
-                    automated_message and option_index > 0 and unknown1 > 0
-                then
-                    sendSelfCommand('warp -by %d -m %d -o %d -z %d u1 %d':format(
+                if should_send then
+                    windower.send_ipc_message('pos -id %d -zone %d -x %.2f -y %.2f':format(
                         me.id,
-                        menu_id,
-                        option_index,
-                        zone,
-                        unknown1
+                        info.zone,
+                        me.x,
+                        me.y
                     ))
 
-                    -- {
-                    --     "Menu ID": 32762,
-                    --     "_name": "Dialog choice",
-                    --     "_dir": "outgoing",
-                    --     "_id": 91,
-                    --     "Option Index": 32800,
-                    --     "_unknown2": 0,
-                    --     "_description": "Chooses a dialog option.",
-                    --     "Zone": 230,
-                    --     "Automated Message": false,
-                    --     "Target Index": 101,
-                    --     "_size": 20,
-                    --     "Target": 17719397,
-                    --     "_unknown1": 0,
-                    --     "_sequence": 0
-                    -- }
+                    globals.last_broadcast_pos = {x = me.x, y = me.y}
 
-                    writeMessage(
-                        'Home point selection made:\n' ..
-                        ' Id: %s\n':format(text_number(target.id)) ..
-                        ' Index: %s\n':format(text_number(target.index)) ..
-                        ' Name: %s\n':format(text_green(target.name)) ..
-                        ' Menu ID: %s\n':format(text_number(menu_id)) ..
-                        ' Option Index: %s\n':format(text_number(option_index)) ..
-                        ' Zone: %s\n':format(text_number(zone)) ..
-                        ' Automated Message: %s\n':format(text_item(automated_message == true and 'true' or 'false')) ..
-                        ' _unknown1: %s\n':format(text_number(unknown1)) ..
-                        ' _unknown2: %s\n':format(text_number(zone))
-                    )
+                    --print('sending %d: %.2f, %.2f':format(me.id, me.x, me.y))
+                end
+            else
+                -- We'll only get here if we're logged in and able to obtain the 'me' mob, but
+                -- we're an invalid target. This could only occur while zoning AFAIK.
+                if me and me.id then
+                    windower.send_ipc_message('pos -id %d':format(me.id))
                 end
             end
+        else
+            wait_time = 2
         end
+
+        coroutine.sleep(wait_time)
     end
-end)
-]]
+end

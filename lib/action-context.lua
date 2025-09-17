@@ -4352,7 +4352,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     context.hasBuff = function(...)
         local args = {...}
-
         local start_index = 1
         local target = context.me
 

@@ -8,6 +8,16 @@ local ELVORSEAL_BACKGROUND_MOBS = {
     "Eschan Yovra",
 }
 
+local ELVORSEAL_MOBS = {
+    "Azi Dahaka",
+    "Azi Dahaka's Dragon",
+    "Naga Raja",
+    "Naga Raja's Lamia",
+    "Quetzalcoatl",
+    "Quetzalcoatl's Sibilus",
+    "Mireu"
+}
+
 --------------------------------------------------------------------------------------
 -- Determines if a mob should be ignored by the auto-engage algorithm.
 -- Note that this assumes the mob passes all other checks, and it just
@@ -67,8 +77,11 @@ local function setTargetMob(mob)
         text_number("%03Xh":format(mob.index))
     ))
 
-    -- Cancel any active movement job now that we have a target
-    smartMove:cancelJob()
+    -- Cancel any active movement job now that we have a target. As of v0.96.0-beta11, this cancellation
+    -- will only happen if the slowTargetTransitions setting is enabled (off by default).
+    if settings and settings.slowTargetTransitions then
+        smartMove:cancelJob()
+    end
 
     lockTarget(player, mob, true)
     resetCurrentMob(mob)
@@ -371,11 +384,13 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     end                    
                 end
 
-                writeVerbose('Target acquisition of %s has %s after %s':format(
-                    text_mob(mob.name, Colors.verbose),
-                    text_red('failed', Colors.verbose),
-                    text_number('%.1fs':format(duration), Colors.verbose)
-                ))
+                if mob then
+                    writeVerbose('Target acquisition of %s has %s after %s':format(
+                        text_mob(mob.name, Colors.verbose),
+                        text_red('failed', Colors.verbose),
+                        text_number('%.1fs':format(duration), Colors.verbose)
+                    ))
+                end
 
                 -- Pull out of first person view if we tabbed
                 if has_tabbed then
@@ -418,8 +433,11 @@ function resetCurrentMob(mob, force)
             context.vars.__suppress_weapon_skills = false
         end
         
-        -- Cancel any pending follow jobs
-        smartMove:cancelJob()
+        -- Cancel any pending follow jobs. As of v0.96.0-beta11, this cancellation will
+        -- only happen if the slowTargetTransitions setting is enabled (off by default).
+        if settings and settings.slowTargetTransitions then
+            smartMove:cancelJob()
+        end
 
         targetScope = targetScope + 1
 
@@ -569,6 +587,8 @@ function processTargeting(player, party)
     local nearestAggroingMob = nil
 
     local can_initiate = strategy == TargetStrategy.aggressor or strategy == TargetStrategy.puller
+
+    local hasElvorseal = hasBuff(player, BUFF_ELVORSEAL)
     
     for id, candidateMob in pairs(mobs) do
         local isValidCandidate = 
@@ -582,6 +602,7 @@ function processTargeting(player, party)
             and candidateMob.hpp > 0
             and math.abs(meMob.z - candidateMob.z) <= settings.maxDistanceZ
             and (candidateMob.status == STATUS_ENGAGED or can_initiate)
+            and (not hasElvorseal or arrayIndexOfStrI(ELVORSEAL_MOBS, candidateMob.name))   -- Don't target background stuff while in DI
 
 
         -- This ensures that the 'puller' strategy only tries to get mobs that are at full health,

@@ -697,21 +697,37 @@ end
 ----------------------------------------------------------------------------------------
 --
 local function loadDefaultActions(player, save)
-    local fileName = './actions/defaults/default-actions.json'
-    local defaults = loadActionsFromFile(player.name, fileName)
-    local saveAsFileName = fileName
 
-    if defaults and save then
-        local file = files.new(fileName)
-        local defaultJson = file:read()
+    local locations = 
+    {
+        './settings/%s/actions/defaults/default-actions.json':format(player.name),
+        './settings/actions/defaults/default-actions.json',
+        './actions/defaults/default-actions.json'
+    }
 
-        if save then
-            saveAsFileName = getActionsJobFileName(player)
-            writeStringToFile(saveAsFileName, defaultJson)
+    for i = 1, #locations do
+        local fileName = locations[i]
+        local defaults = loadActionsFromFile(player.name, fileName)
+        local saveAsFileName = fileName
+
+        print('Gambit: Looking for default actions in [%s]...':format(fileName))
+
+        if defaults then
+            if save then
+                local file = files.new(fileName)
+                local defaultJson = file:read()
+
+                if save then
+                    saveAsFileName = getActionsJobFileName(player)
+                    writeStringToFile(saveAsFileName, defaultJson)
+                end
+            end
+
+            print('Gambit: Default actions found!')
+
+            return defaults, saveAsFileName
         end
     end
-
-    return defaults, saveAsFileName
 end
 
 ----------------------------------------------------------------------------------------

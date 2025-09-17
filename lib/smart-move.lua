@@ -7,6 +7,7 @@ local smartMove = {
     previousJob = nil,
     current = nil,
     tolerance = 0.33,
+    mob_positions = {},
 
     log = null_log,
     debug = null_log
@@ -165,6 +166,39 @@ end
 -- ======================================================================================
 -- Private interface
 -- ======================================================================================
+
+local function sm_overrideMobPosition(mob)
+    if mob then
+        if smartMove.mob_positions then
+            local pos = smartMove.mob_positions[mob.id]
+            if pos then
+                local delta_x = math.abs(mob.x - pos.x)
+                local delta_y = math.abs(mob.y - pos.y)
+
+                if delta_x > smartMove.tolerance or delta_y > smartMove.tolerance then
+                    mob.x = pos.x
+                    mob.y = pos.y
+                    mob.z = pos.z or mob.z  -- Z position is optional, and we'll only use it if it was sent
+                    mob.distance = (delta_x * delta_x) + (delta_y * delta_y)
+                end
+            end
+        end
+    end
+end
+
+local function sm_getMobByIdWithOverrides(id)
+    local mob = windower.ffxi.get_mob_by_id(id)
+    sm_overrideMobPosition(mob)
+
+    return mob
+end
+
+local function sm_getMobByIndexWithOverrides(index)
+    local mob = windower.ffxi.get_mob_by_index(index)
+    sm_overrideMobPosition(mob)
+
+    return mob
+end
 
 local function sm_movement_exp(self, job)
     
@@ -856,6 +890,7 @@ end
 -- directly in front of the mob; an offset of PI will be directly behind the
 -- mob; and so on.
 function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
+    sm_overrideMobPosition(mob)
     return findMobOffset(mob, offsetAngle, offsetDistance)
 end
 
@@ -863,6 +898,8 @@ end
 -- Determines if the player is at the location represented by the specified
 -- offset angle and distance relative to the mob.
 function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
+    sm_overrideMobPosition(mob)
+
     local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
     local player = windower.ffxi.get_mob_by_target('me')
 
@@ -872,7 +909,7 @@ end
 -----------------------------------------------------------------------------------------
 -- Check if we're at the mob's rear
 function smartMove:atMobRear(index)
-    local mob = windower.ffxi.get_mob_by_index(index or 0)
+    local mob = sm_getMobByIndexWithOverrides(index or 0)--windower.ffxi.get_mob_by_index(index or 0)
     if mob == nil or not mob.valid_target then
         return false
     end
@@ -895,7 +932,7 @@ end
 -- Use atMobRear to determine if the movement completed successfully.
 function smartMove:moveBehindIndex(follow_index, maxDuration)
     -- Validate the target
-    local mob = windower.ffxi.get_mob_by_index(follow_index)
+    local mob = sm_getMobByIndexWithOverrides(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
         return
     end
@@ -928,7 +965,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
-        self.mob = windower.ffxi.get_mob_by_index(self.follow_index)
+        self.mob = sm_getMobByIndexWithOverrides(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
         return self:is_valid()
     end
 
@@ -966,8 +1003,19 @@ end
 
 function smartMove:followIndex(follow_index, distance)
     -- Validate the target
-    local mob = windower.ffxi.get_mob_by_index(follow_index)
+    local mob = sm_getMobByIndexWithOverrides(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
+        return
+    end
+
+    -- Validate ourself. This can be nil on zoning, we'll just try again later.
+    local _me = windower.ffxi.get_mob_by_target('me')
+    if
+        _me == nil or
+        not _me.valid_target or
+        not _me.x or
+        not _me.y
+    then
         return
     end
 
@@ -1040,7 +1088,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
-        self.mob = windower.ffxi.get_mob_by_index(self.follow_index)
+        self.mob = sm_getMobByIndexWithOverrides(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
 
         if 
             self.mob == nil or
@@ -1154,6 +1202,11 @@ end
 function smartMove:applySettings(settings)
     self.settings = settings or {}
     current_settings = self.settings
+end
+
+function smartMove:setMobPositionTable(mob_positions)
+    --print('positions: ' .. tostring(mob_positions))
+    self.mob_positions = mob_positions or {}
 end
 
 function smartMove:getJobInfo(jobId)

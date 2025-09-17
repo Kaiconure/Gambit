@@ -5,7 +5,8 @@
   "vars": {
     "use_convert": {
       "max_mpp": 20,
-      "min_mp": 15
+      "min_mp": 15,
+      "aggro_range": 0
     }
   },
   "actions": [
@@ -14,10 +15,12 @@
         "me.hp > me.mp",
         "me.mpp < vars.use_convert.max_mpp",
         "me.mp >= vars.use_convert.min_mp and me.mp > 0",
+        "vars.use_convert.aggro_range <= 0 or mobsInRange(vars.use_convert.aggro_range, true) == 0",
         "canUse('Convert')"
       ],
       "commands": ["log('WARNING: Using Convert!')", "use(me)"],
-      "frequency": 10
+      "frequency": 10,
+      "miss_frequency": 10
     }
   ]
 }

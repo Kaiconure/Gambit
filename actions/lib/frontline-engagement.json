@@ -13,7 +13,8 @@
         "max_duration": 10,
         "zone": null,
         "location": null,
-        "action_types": null
+        "action_types": null,
+        "wait": null
       }
     }
   },
@@ -37,7 +38,7 @@
       "commands": [
         "logf('[%s] Returning to camp location (%.1f, %.1f)', actionType, vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y)",
         "move(vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y, vars.frontline_engagement.camp.max_duration)",
-        "faceEnemy() and wait(1)"
+        "faceEnemy() and wait(vars.frontline_engagement.camp.wait or 1)"
       ],
       "comment": [
         "If we have an assigned camp location for this zone and we've moved too far from it, get back to it."

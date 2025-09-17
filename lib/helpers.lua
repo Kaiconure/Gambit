@@ -196,6 +196,19 @@ function arrayIndexOfStrI(array, search, start)
 end
 
 --------------------------------------------------------------------------------------
+-- Search a given argument list for the value associated with the specified argument
+function getArgValue(args, arg)
+    local i = arrayIndexOfStrI(args, arg)
+    return i and args[i + 1]
+end
+
+--------------------------------------------------------------------------------------
+-- Search a given argument list for the presence of the specified argument
+function hasArg(args, arg)
+    return arrayIndexOfStrI(args, arg)
+end
+
+--------------------------------------------------------------------------------------
 -- Search an array for any occurences of other items. If found, the matching
 -- item is returned; otherwise, returns nil.
 function arrayContainsAnyStrI(array, ...)

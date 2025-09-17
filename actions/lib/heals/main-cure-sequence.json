@@ -6,6 +6,9 @@
     "roles": {
       "main_healer": true,
       "backup_healer": false
+    },
+    "cure_sequence": {
+      "suppress_curaga": null
     }
   },
   "actions": [
@@ -14,7 +17,8 @@
     },
     {
       "when": [
-        "partyCount('hpp <= 75 and distance <= 10') >= 3 and canUse('Curaga III', 'Curaga II', 'Curaga')"
+        "not vars.cure_sequence.suppress_curaga",
+        "partyCount('hpp <= 60 and distance <= 10') >= 3 and canUse('Curaga III', 'Curaga II', 'Curaga')"
       ],
       "commands": "use(me)",
       "frequency": 10

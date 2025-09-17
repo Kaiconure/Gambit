@@ -1,0 +1,247 @@
+{
+  "vars": {
+    "configuration": {
+      "commands": []
+    },
+    "ensure_trusts": {
+      "spells": []
+    },
+    "frontline_engagement": {
+      "distance": null,
+      "angle": -20,
+      "comment": "Drives frontline engagement positioning. Use distance and/or angle (degrees) to set placement around the enemy."
+    },
+    "black_magic_burst": {
+      "max_tier": "III",
+      "low_hpp_max_tier": "III",
+      "low_hpp": 5
+    },
+    "use_aspir": {
+      "max_mpp": 75,
+      "frequency": 5,
+      "max_ws_mpp": 50
+    },
+    "haste_cycle": {
+      "targets": ["me"]
+    },
+    "setup": {
+      "mode": "melee",
+      "valid_modes": ["melee"],
+      "foods": ["Pear Crepe", "Chocolate Crepe"],
+      "indi_refresh_targets": ["Valaineral", "Koru-Moru", "Shantotto", "ArkEV"]
+    }
+  },
+  "imports": [],
+  "functions": [],
+  "pull": [
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "reactions/face-away"
+    },
+    {
+      "import": "heals/emergency-cure-sequence"
+    },
+    {
+      "import": "debuffs/keep-distract"
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "when": [
+        "bt.distance < 20",
+        "canUse('Dispel') and hasBuff(bt, 'Protect', 'Defense Boost', 'Evasion Boost', 'Phalanx', 'Shell', 'Magic Def. Boost')"
+      ],
+      "commands": "use(bt)",
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "canUseAbility('Entrust') and canUseSpell('Indi-Refresh')",
+        "partyByName(vars.setup.indi_refresh_targets)"
+      ],
+      "commands": ["useAbility(me)", "wait(1)", "useSpell(member)"]
+    },
+    {
+      "when": [
+        "me.mpp < 85",
+        "canUseWeaponSkill('Spirit Taker', 'Moonlight', 'Starlight')"
+      ],
+      "commands": ["useWeaponSkill()"]
+    },
+    { "import": "nukes/use-aspir" },
+    { "import": "buffs/haste-cycle" },
+    {
+      "comment": [
+        " ===================================================== ",
+        " BEGIN: ALL MODES",
+        " ===================================================== "
+      ]
+    },
+    {
+      "when": ["pet and pet.hpp < 50", "me.hpp > 50", "canUse('Life Cycle')"],
+      "commands": [
+        "log('Using ability', ability.name, 'with pet.hpp at', pet.hpp .. '%!')",
+        "use(me)"
+      ],
+      "frequency": 5
+    },
+    {
+      "when": [
+        "pet and pet.hpp >= 85",
+        "canUse('Ecliptic Attrition', 'Lasting Emanation')"
+      ],
+      "commands": [
+        "use(me)",
+        "any(ability.name, 'Ecliptic Attrition') and canUse('Dematerialize') and wait(1) and use(me)"
+      ],
+      "comment": [
+        "EA increases Luopan potency by 25% and decreases lifespan; LE increases lifespan. They stack, ",
+        "though they share a recast timer.",
+        "Dematerialize prevents the Luopan from taking damage. We'll use it when EA is used."
+      ]
+    },
+    {
+      "comment": [
+        " ===================================================== ",
+        " END: ALL MODES",
+        " ===================================================== "
+      ]
+    },
+    {
+      "comment": [
+        " ===================================================== ",
+        " BEGIN: MELEE MODE",
+        " ===================================================== "
+      ]
+    },
+    {
+      "when": [
+        "vars.setup.mode == 'melee'",
+        "canUse('Indi-Fury') and (not hasEffect('Attack Boost') or not hasEffect('Colure Active'))"
+      ],
+      "commands": [
+        "log('Preparing to cast', spell.name, '(Attack Boost)')",
+        "use(me)"
+      ],
+      "frequency": 5
+    },
+    {
+      "when": [
+        "vars.setup.mode == 'melee'",
+        "not pet",
+        "bt.hpp > 25",
+        "canUseAbility('Blaze of Glory') and canUseSpell('Geo-Frailty')"
+      ],
+      "commands": [
+        "log('Preparing to use', ability.name, 'with', spell.name, '(Defense Down)')",
+        "useAbility(me)",
+        "wait(1)",
+        "useSpell(bt)",
+        "canUse('Dematerialize') and wait(1) and use(me)"
+      ],
+      "comment": "BoG must be used BEFORE placing the Luopan.",
+      "frequency": 5
+    },
+    {
+      "when": [
+        "vars.setup.mode == 'melee'",
+        "not pet",
+        "canUse('Geo-Frailty')"
+      ],
+      "commands": [
+        "log('Preparing to cast', spell.name, 'on', bt.name, '(Defense Down)')",
+        "use(bt)"
+      ],
+      "frequency": 10
+    },
+    {
+      "comment": [
+        " ===================================================== ",
+        " END: MELEE MODE",
+        " ===================================================== "
+      ]
+    },
+    {
+      "comment": [
+        " ===================================================== ",
+        " BEGIN: BURST MODE",
+        " ===================================================== "
+      ]
+    },
+    {
+      "comment": [
+        " ===================================================== ",
+        " END: BURST MODE",
+        " ===================================================== "
+      ]
+    },
+    {
+      "import": "nukes/black-magic-burst"
+    },
+    {
+      "import": "debuffs/keep-frazzle",
+      "disabled": true
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": ["not hasBuff('Food') and canUseItem(vars.setup.food)"],
+      "frequency": 1,
+      "commands": ["useItem(me)"]
+    }
+  ],
+  "idle": [
+    {
+      "when": ["not any(vars.setup.mode, vars.setup.valid_modes)"],
+      "commands": [
+        "log('WARNING: Invalid vars.setup.mode value found:', vars.setup.mode or 'nil')"
+      ],
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
+      "when": ["any(vars.setup.mode, vars.setup.valid_modes)"],
+      "commands": [
+        "log('NOTE: Geomancer mode has been configured to:', vars.setup.mode)"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "import": "configuration"
+    },
+    {
+      "import": "follow-leader",
+      "comment": "Follows the party leader when idle. Does nothing if you are the party leader."
+    },
+    {
+      "import": "ensure-trusts",
+      "comment": "Calls trusts based on the spells configured in vars.ensure_trusts.spells. Recalls trusts on low HP/MP."
+    },
+    {
+      "import": "use-xp-cp-rings",
+      "comment": "Uses the appropriate XP or CP rings based on current level and mastery."
+    },
+    {
+      "import": "common-consumables",
+      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress).",
+      "disabled": true
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death",
+      "disabled": true
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
+  ]
+}

@@ -163,7 +163,7 @@ state_manager.setActionType = function (self, newType)
 
         -- Only reset time if we're changing state
         if mode ~= newMode then
-            writeVerbose(string.format(
+        writeVerbose(string.format(
                 'Transitioning from %s to %s after %s',
                 text_red(mode, Colors.verbose),
                 text_red(newMode, Colors.verbose),
@@ -187,6 +187,11 @@ state_manager.setActionType = function (self, newType)
                 --     self.actionTransitionCounter,
                 --     self.actionTransitionCounter + 1))
                 self.actionTransitionCounter = self.actionTransitionCounter + 1
+            end
+
+            if newMode == 'event' then
+                -- Cancel follow jobs upon entering event mode
+                smartMove:cancelJob()
             end
         end
 
@@ -481,6 +486,20 @@ state_manager.purgeSkillchains = function(self)
         for id, info in pairs(self.skillchains) do
             if type(info.time) ~= 'number' or (now - info.time) > 60 then
                 self.skillchains[id] = nil
+            end
+        end
+    end
+end
+
+state_manager.purgePositionUpdates = function(self)
+    local MAX_POSITION_AGE = 10
+
+    if globals.ipc_positions then
+        local now = os.clock()
+        for id, pos in pairs(globals.ipc_positions) do
+            local age = now - pos.t
+            if age > MAX_POSITION_AGE then
+                globals.ipc_positions[id] = nil
             end
         end
     end

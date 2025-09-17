@@ -910,6 +910,7 @@ function cr_actionProcessor()
                 actionStateManager:purgeStaleMobAbilities()
                 actionStateManager:purgeWeaponSkills()
                 actionStateManager:purgeSkillchains()
+                actionStateManager:purgePositionUpdates()
                 latestGarbageCollection = os.clock()
             end
 

@@ -15,6 +15,7 @@
       ]
     },
     "use_convert": {
+      "max_mpp": 10,
       "min_mp": 5
     },
     "ensure_trusts": {
@@ -37,22 +38,19 @@
       "import": "ensure-trusts"
     },
     {
-      "comment": [
-        " This import ensures that you keep your best usable Refresh spell up, if any."
-      ],
       "import": "buffs/refresh-cycle"
     },
     {
-      "comment": [
-        " This import ensures that you keep yourself healed up, primarily for recovery from Convert."
-      ],
       "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "use-xp-cp-rings"
     },
     {
       "import": "abilities/use-convert"
     },
     {
-      "when": "me.mpp < 15 or me.mp < 50",
+      "when": "me.mpp < vars.use_convert.max_mpp or me.mp < 50",
       "commands": "rest()"
     },
     {
@@ -83,7 +81,7 @@
     {
       "when": [
         "me.mpp >= 99 \\",
-        " or (me.mpp <= 20 and me.mp > vars.use_convert.min_mp and canUse('Convert')) \\",
+        " or (me.mpp <= vars.use_convert.max_mpp and me.mp > vars.use_convert.min_mp and canUse('Convert')) \\",
         " or (me.mpp >= 75 and canUse('Refresh II', 'Refresh'))"
       ],
       "commands": ["stopResting()"]
