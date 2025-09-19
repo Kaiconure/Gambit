@@ -1118,6 +1118,31 @@ handlers['equipment'] = function(args)
     end
 end
 
+handlers['cancelbuff'] = function(args)
+    local index = 
+        arrayIndexOfStrI(args, '-name') or
+        arrayIndexOfStrI(args, '-names') or
+        arrayIndexOfStrI(args, '-buff') or
+        arrayIndexOfStrI(args, '-buffs') or
+        arrayIndexOfStrI(args, '-n') or
+        arrayIndexOfStrI(args, '-b')
+    
+    local names = table.unpack(args, index + 1, #args)
+
+    if #names > 0 then
+        local context = actionStateManager:getContext()
+        local num_queued = context.cancelBuff(names)
+
+        if num_queued then
+            writeMessage('Successfully queued %s for cancellation!':format(pluralize(num_queued, 'buff', 'buffs')))
+            return
+        end
+    end
+
+    writeWarning('No buffs were queued for cancellation.')
+end
+handlers['cb'] = handlers['cancelbuff']
+
 local BagsById = 
 {
     [0] = { field = "inventory" },

@@ -99,7 +99,14 @@ local DefaultNoRearList = {
 -- Some mobs cannot be approached using the standard melee distance. These can be called
 -- out here, with the appropriate minimum distance override.
 local DefaultMinDistanceList = {
-    ['Bedrock Crag'] = 6
+    ['Amaranth Barrier'] = 4,
+    ['Bedrock Crag'] = 4,
+    ['Broadleaf Palm'] = 4,
+    ['Gnarled Rampart'] = 4,
+    ['Heliotrope Barrier'] = 4,
+    ['Icy Palisade'] = 4,
+    ['Knotted Root'] = 4,
+    ['Monolithic Boulder'] = 4
 }
 
 local defaultSettings = {
@@ -858,7 +865,15 @@ function loadSettings(actionsName, settingsOnly)
     local jobActionsName = nil
     local actionsFileName = nil
     local actions = nil
-    local defaultsLoaded = false    
+    local defaultsLoaded = false
+
+    -- Use the default min distance list settings
+    tempSettings.minDistanceList = tempSettings.minDistanceList or {}
+    for key, val in pairs(DefaultMinDistanceList) do
+        if not tempSettings.minDistanceList[key] then
+            tempSettings.minDistanceList[key] = val
+        end
+    end
 
     tempSettings.actions = {}
 

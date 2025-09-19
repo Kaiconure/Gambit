@@ -1,4 +1,4 @@
-__version = '0.96.0-beta11'
+__version = '0.96.0-beta12'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -61,7 +61,9 @@ globals = {
     enabled         = false,
     isSpellCasting  = false,
     target          = nil,
-    currentZone = nil,
+    currentZone     = nil,
+    player          = nil,  -- The most recent context-based player object
+    me              = nil,  -- The most recent context-based 'me' mob
     zoneEntryTime = 0,
     selfName = __name,
     selfShortName = __shortName,
@@ -75,8 +77,65 @@ globals = {
     suppress_logging = true,
     cloud_panel = nil,
     ipc_positions = {},
+    ipc_positions_by_index = {},
     last_broadcast_pos = nil
 }
+
+local MAX_MOB_OVERRIDE_DISTANCE_2   = (50 * 50)     -- Maximum mob override distance squared
+
+function applyMobOverrides(mob, force_refresh)
+    if mob and mob.id then
+        -- We won't re-override a mob unless the force flag was set
+        if force_refresh or not mob.has_overrides then
+            local data = globals.ipc_positions[mob.id]
+
+            -- Only perform ipc positioning overrides if we're in the same zone
+            if 
+                data and
+                data.zone and
+                data.zone > 0 and
+                globals.currentZone and
+                data.zone == globals.currentZone.id and
+                globals.me and
+                globals.me.valid_target
+            then
+                local delta_x = (data.x - globals.me.x)
+                local delta_y = (data.y - globals.me.y)
+                local distance_squared = (delta_x * delta_x) + (delta_y * delta_y)
+
+                if distance_squared <= MAX_MOB_OVERRIDE_DISTANCE_2 then
+                    mob.x = data.x
+                    mob.y = data.y
+                    mob.z = data.z or mob.z
+                    mob.distance = distance_squared
+                    mob.has_overrides = true
+                    -- mob.was_valid_target = mob.valid_target
+                    -- mob.valid_target = true
+                end
+            end
+        end
+    end
+
+    return mob
+end
+
+function getMobById(id, raw_only)
+    local mob = windower.ffxi.get_mob_by_id(id)
+    if not raw_only then
+        return applyMobOverrides(mob or globals.ipc_positions[id])
+    end
+
+    return mob, false
+end
+
+function getMobByIndex(index, raw_only)
+    local mob = windower.ffxi.get_mob_by_index(index)
+    if not raw_only then
+        return applyMobOverrides(mob or globals.ipc_positions_by_index[index])
+    end
+
+    return mob, false
+end
 
 --------------------------------------------------------------------------------------
 -- Initialize trust data structures
@@ -134,7 +193,7 @@ function reloadSettings(actionsName, bypassActions)
     writeMessage(text_green('Settings have been reloaded!', Colors.default))
 
     smartMove:applySettings(settings)
-    smartMove:setMobPositionTable(globals.ipc_positions)
+    smartMove:setMobLookupFunctions(getMobById, getMobByIndex)
 
     if globals.cloud_panel then
         globals.cloud_panel:configure(settings.cloudPanel)
@@ -594,6 +653,7 @@ windower.register_event('ipc message', function (msg)
         local x = tonumber(getArgValue(args, '-x'))
         local y = tonumber(getArgValue(args, '-y'))
         local z = nil-- tonumber(getArgValue(args, '-z'))
+        local index = tonumber(getArgValue(args, '-index'))
 
         -- Invalid configs should result in a clearing of the stored values
         if
@@ -606,21 +666,28 @@ windower.register_event('ipc message', function (msg)
             return
         end
 
-        if zone ~= info.zone then
-            globals.ipc_positions[id] = nil
-            return
-        end
+        -- Do not store data for positions out of this zone, and clear the table entry if present
+        -- if zone ~= info.zone then
+        --     globals.ipc_positions[id] = nil
+        --     return
+        -- end
 
         --print('received %d: %.2f %.2f':format(id, x, y))
 
         globals.ipc_positions[id] = {
             id = id,
+            index = index,
             t = os.clock(),
             zone = zone,
             x = x,
             y = y,
             z = z
         }
+
+        -- Update the index table
+        if index then
+            globals.ipc_positions_by_index[index] = globals.ipc_positions[id]
+        end
     end
 
 end)
@@ -1283,11 +1350,13 @@ function cr_ipcSender()
                 end
 
                 if should_send then
-                    windower.send_ipc_message('pos -id %d -zone %d -x %.2f -y %.2f':format(
+                    windower.send_ipc_message('pos -id %d -zone %d -x %.2f -y %.2f -z %.2f -index %d':format(
                         me.id,
                         info.zone,
                         me.x,
-                        me.y
+                        me.y,
+                        me.z,
+                        me.index
                     ))
 
                     globals.last_broadcast_pos = {x = me.x, y = me.y}

@@ -496,10 +496,29 @@ state_manager.purgePositionUpdates = function(self)
 
     if globals.ipc_positions then
         local now = os.clock()
+
+        -- Clear the id->position table
         for id, pos in pairs(globals.ipc_positions) do
             local age = now - pos.t
             if age > MAX_POSITION_AGE then
+                -- We'll clear the by-index table entry for this item if it all matches up. This has
+                -- a bit of fuzziness to it given that indexes might change by zone whereas id
+                -- values should remain the same forever.
+                local by_index = pos.index and globals.ipc_positions_by_index[pos.index]
+                if by_index and by_index.id == id and pos.t == by_index.t then
+                    globals.ipc_positions_by_index[pos.index] = nil
+                end
+
                 globals.ipc_positions[id] = nil
+            end
+        end
+
+        -- Clear the index->position table. Hopefully this cleanup has generally
+        -- happened already above in the id->index mapping.
+        for index, pos in pairs(globals.ipc_positions_by_index) do
+            local age = now - pos.t
+            if age > MAX_POSITION_AGE then
+                globals.ipc_positions_by_index[index] = nil
             end
         end
     end

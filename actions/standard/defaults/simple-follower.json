@@ -1,0 +1,31 @@
+{
+  "vars": {
+    "configuration": {
+      "commands": ["gbt config -strat manual"]
+    }
+  },
+  "pull": [],
+  "battle": [],
+  "idle": [
+    {
+      "import": "configuration",
+      "comment": [
+        "This import will run all commands in your vars.configuration.commands list exactly once per load."
+      ]
+    },
+    {
+      "import": "follow-leader",
+      "comment": [
+        "Follows the party leader when idle. Does nothing if you are the party leader."
+      ]
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader",
+      "comment": [
+        "Follows the party leader when mounted. Does nothing if you are the party leader."
+      ]
+    }
+  ]
+}

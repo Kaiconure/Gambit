@@ -1,4 +1,5 @@
 local function null_log() end
+local function passthrough(...) return ... end
 
 local smartMove = {
     started = false,
@@ -8,6 +9,9 @@ local smartMove = {
     current = nil,
     tolerance = 0.33,
     mob_positions = {},
+    mob_positions_by_index = {},
+    getMobById = windower.ffxi.get_mob_by_id,
+    getMobByIndex = windower.ffxi.get_mob_by_index,
 
     log = null_log,
     debug = null_log
@@ -137,11 +141,13 @@ local function findMobOffset(mob, angleOffset, distance)
             mob = windower.ffxi.get_mob_by_id(mob.id)
         end
 
-        local distance_offset = 
-            (player.model_size or 0) +      -- Player model size
-            (mob and mob.model_size or 0)   -- Mob model size
-        distance = 
-            distance + (distance_offset * 0.75)
+        if mob then
+            local distance_offset = 
+                (player.model_size or 0) +      -- Player model size
+                (mob and mob.model_size or 0)   -- Mob model size
+            distance = 
+                distance + (distance_offset * 0.75)
+        end
     end
 
     if type(angleOffset) == 'number' then
@@ -166,39 +172,6 @@ end
 -- ======================================================================================
 -- Private interface
 -- ======================================================================================
-
-local function sm_overrideMobPosition(mob)
-    if mob then
-        if smartMove.mob_positions then
-            local pos = smartMove.mob_positions[mob.id]
-            if pos then
-                local delta_x = math.abs(mob.x - pos.x)
-                local delta_y = math.abs(mob.y - pos.y)
-
-                if delta_x > smartMove.tolerance or delta_y > smartMove.tolerance then
-                    mob.x = pos.x
-                    mob.y = pos.y
-                    mob.z = pos.z or mob.z  -- Z position is optional, and we'll only use it if it was sent
-                    mob.distance = (delta_x * delta_x) + (delta_y * delta_y)
-                end
-            end
-        end
-    end
-end
-
-local function sm_getMobByIdWithOverrides(id)
-    local mob = windower.ffxi.get_mob_by_id(id)
-    sm_overrideMobPosition(mob)
-
-    return mob
-end
-
-local function sm_getMobByIndexWithOverrides(index)
-    local mob = windower.ffxi.get_mob_by_index(index)
-    sm_overrideMobPosition(mob)
-
-    return mob
-end
 
 local function sm_movement_exp(self, job)
     
@@ -443,234 +416,6 @@ local function sm_movement_exp(self, job)
     end
 end
 
-local function sm_movement_orig(self, job)
-    local player_mob = windower.ffxi.get_mob_by_target('me')
-    
-    local vpos = coordVector(player_mob)
-    local toTarget = job:pos():subtract(vpos)
-    local distance = toTarget:length()
-
-    -- Prepare to get started: Clear our follow target, movement, and target lock, if any
-    local player = windower.ffxi.get_player()
-    local target_locked = player.target_locked
-    local follow_index = player.follow_index
-
-    windower.ffxi.follow(-1)
-    windower.ffxi.run(false)
-    if target_locked then
-        windower.send_command('input /lockon;')
-        coroutine.sleep(0.5)
-    end
-
-    -- Start moving toward the target
-    local heading = vectorAngle(toTarget)
-    if tostring(heading) == 'nan' then
-        heading = 0 
-    else
-        windower.ffxi.run(heading)
-    end
-
-    local sleepDuration = 0
-    local velocity = 0
-    local isJittering = false
-    local wasJittering = false
-    local jitterStopTime = 0
-    local jitterPause = 0
-
-    local continue = true
-    local pausing = false
-    local zeroSpeedCycles = 0
-
-    local startTime = os.clock()
-    local endTime = (job.max_duration and (startTime + job.max_duration)) or nil
-
-    local previousPosition = vpos
-
-    while 
-        continue and
-        job:cycle() and
-        (endTime == nil or os.clock() < endTime) and
-        not self.cancel
-    do
-        local pos = job:pos()
-
-        -- We can't freely move if we're target locked
-        local player = windower.ffxi.get_player()
-        if player.target_locked then
-            windower.send_command('input /lockon;')
-            coroutine.sleep(0.5)
-        else
-            coroutine.sleep(0.25)
-        end
-
-        -- Refresh our vectors
-        player_mob = windower.ffxi.get_mob_by_target('me')
-        vpos = V({player_mob.x, player_mob.y})
-        toTarget = pos:subtract(vpos)
-
-        -- Calculate the new heading to target and distance
-        local newDistance = toTarget:length()
-        local newHeading = vectorAngle(toTarget)
-        
-        if tostring(newHeading) == 'nan' then newHeading = heading end
-
-        -- Essentially start over if we're paused and our distance has increased
-        if pausing then
-            if newDistance > 1.5 then
-                pausing = false
-                sleepDuration = 0
-
-                windower.ffxi.run(newHeading)
-            else
-                windower.ffxi.turn(newHeading)
-            end
-        end
-
-        -- Calculate our current and averaged velocity
-        if sleepDuration > 0 then
-            local movement = vpos:subtract(previousPosition)
-            velocity = movement:length() / sleepDuration
-
-            --velocity = currentVelocity
-        end
-
-        local t = os.clock()
-
-        wasJittering = isJittering
-        isJittering = t < jitterStopTime
-
-        if not isJittering then
-            jitterPause = math.max(jitterPause - 0.025, 0)
-
-            -- We'll re-point at the target if:
-            --      1. Our aim is off, or
-            --      2. If just came off a random jitter and need to get back on track
-            local headingDelta = math.abs(newHeading - heading)
-            if 
-                headingDelta > HEADING_TOLERANCE
-                or wasJittering
-            then
-                jitterStopTime = 0
-                if not pausing then
-                    if wasJittering then
-                        local adjustment = randomRange(-math.pi / 4, math.pi / 4)
-                        ---print('Adjusting heading by %.1f degrees':format(adjustment * 180 / math.pi))
-                        sleepDuration = 0.5
-                        windower.ffxi.run(newHeading + adjustment)
-                    else
-                        windower.ffxi.run(newHeading)
-                    end
-                end
-            end
-        else
-            -- local adjustment = randomRange(-math.pi, math.pi)
-            -- print('Adjusting heading by %.1f degrees':format(adjustment * 180 / math.pi))
-            -- windower.ffxi.run(player_mob.heading + adjustment)
-        end
-
-        if 
-            pausing
-        then
-            -- Use a slightly longer sleep if we're paused, and stop tracking zero speed
-            sleepDuration = 0.5
-            zeroSpeedCycles = 0
-        elseif 
-            ((not wasJittering and not sharesHalfspace(heading, newHeading)) and newDistance < 1.25) or
-            newDistance < self.tolerance
-        then
-            -- We've reached our target distance, it's time to stop moving
-            windower.ffxi.run(false)
-
-            -- Reset other traversal states
-            jitterStopTime = 0
-            jitterPause = 0
-            zeroSpeedCycles = 0
-
-            if job.autoComplete then
-                -- This job has been configured to auto-complete on reaching the target,
-                -- clear the continuation flag and prepare to exit
-                continue = false
-            else
-                -- This job has been configured to keep at it after reaching the target. 
-                -- Flag as paused, face the target, and wait for the next cycle.
-                pausing = true
-                sleepDuration = 0.5
-                windower.ffxi.turn(newHeading)
-            end            
-        else
-            local isZeroSpeed = ((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.25))
-            if isZeroSpeed then
-                zeroSpeedCycles = zeroSpeedCycles + 1
-            else
-                zeroSpeedCycles = math.max(0, zeroSpeedCycles - 0.125)
-            end
-
-
-            -- Initiate some obstacle avoidance jitter if we're not making any forward progress
-            local canJitter = 
-                JITTER_ENABLED and
-                job.canJitter and
-                (isZeroSpeed and zeroSpeedCycles > 8) and
-                --((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
-                distance > 2 and
-                sleepDuration > 0
-
-            if canJitter then
-                jitterPause = math.min(jitterPause + 0.5, MAX_JITTER)
-
-                self.log('Initiating obstacle avoidance measures with jitterPause=%.2f / zeroSpeed=%.2f':format(jitterPause, zeroSpeedCycles))
-
-                -- Apply a randomized escape angle based on our configured base value
-                local jitterAngle = JITTER_ANGLE * randomSign() * randomRange(0.95, 1.05)
-
-                -- Calculate our new heading, and start moving in that direction
-                newHeading = player_mob.heading + jitterAngle     -- Base new heading on the heading of the player. Which is better?
-                --newHeading = newHeading + jitterAngle               -- Base new heading on the trajectory to the mob. Which is better?
-                windower.ffxi.run(newHeading)
-
-                -- Give ourselves a bit of time to continue moving along
-                jitterStopTime = t + jitterPause
-            end
-
-            if newDistance < 3 then
-                sleepDuration = 0.125
-            else
-                sleepDuration = 0.25
-            end
-        end
-
-        -- Update our tracking info
-        heading = newHeading
-        distance = newDistance
-        previousPosition = vpos
-
-        -- local player = windower.ffxi.get_player()
-        -- if type(player.follow_index) == 'number' and player.follow_index > 0 then
-        --     print('follow index: %d':format(player.follow_index))
-        --     continue = false
-        -- end
-
-        -- Sleep a bit before continuing the next iteration
-        if continue and sleepDuration > 0 then
-            coroutine.sleep(sleepDuration)
-        end
-    end
-
-    -- Stop any follow more movement that may be active
-    windower.ffxi.follow(-1)
-    windower.ffxi.run(false)
-
-    if job:is_valid() then
-        -- If the job is still valid, we should make sure we're pointed at the target before exiting
-        vpos = V({player_mob.x, player_mob.y})
-        toTarget = job:pos():subtract(vpos)
-        windower.ffxi.turn(vectorAngle(toTarget))
-    end
-
-    -- We need to space this out a little bit
-    coroutine.sleep(0.25)
-end
-
 local sm_movement = sm_movement_exp
 
 function sm_coroutine(self)
@@ -890,7 +635,6 @@ end
 -- directly in front of the mob; an offset of PI will be directly behind the
 -- mob; and so on.
 function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
-    sm_overrideMobPosition(mob)
     return findMobOffset(mob, offsetAngle, offsetDistance)
 end
 
@@ -898,8 +642,6 @@ end
 -- Determines if the player is at the location represented by the specified
 -- offset angle and distance relative to the mob.
 function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
-    sm_overrideMobPosition(mob)
-
     local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
     local player = windower.ffxi.get_mob_by_target('me')
 
@@ -909,7 +651,7 @@ end
 -----------------------------------------------------------------------------------------
 -- Check if we're at the mob's rear
 function smartMove:atMobRear(index)
-    local mob = sm_getMobByIndexWithOverrides(index or 0)--windower.ffxi.get_mob_by_index(index or 0)
+    local mob = smartMove.getMobByIndex(index or 0)--windower.ffxi.get_mob_by_index(index or 0)
     if mob == nil or not mob.valid_target then
         return false
     end
@@ -932,7 +674,7 @@ end
 -- Use atMobRear to determine if the movement completed successfully.
 function smartMove:moveBehindIndex(follow_index, maxDuration)
     -- Validate the target
-    local mob = sm_getMobByIndexWithOverrides(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
+    local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
         return
     end
@@ -965,7 +707,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
-        self.mob = sm_getMobByIndexWithOverrides(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
+        self.mob = smartMove.getMobByIndex(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
         return self:is_valid()
     end
 
@@ -1003,7 +745,7 @@ end
 
 function smartMove:followIndex(follow_index, distance)
     -- Validate the target
-    local mob = sm_getMobByIndexWithOverrides(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
+    local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
         return
     end
@@ -1088,7 +830,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
-        self.mob = sm_getMobByIndexWithOverrides(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
+        self.mob = smartMove.getMobByIndex(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
 
         if 
             self.mob == nil or
@@ -1144,7 +886,13 @@ function smartMove:followIndex(follow_index, distance)
                 
                 local pos = vPlayer
                 local scale = 0
-                if distance > 0 then
+                if distance >= job.follow_distance + 2 then
+                    -- If we're further than the follow distance (by a certain margin),
+                    -- we will simply aim directly at the target. This gets us within
+                    -- the vicinity in a more direct way, and we'll worry about distance
+                    -- precision only when we're relatively close.
+                    scale = 1
+                elseif distance > 0 then
                     scale = (distance - job.follow_distance) / distance
                     if scale < 0 then
                         scale = 0.01
@@ -1204,9 +952,9 @@ function smartMove:applySettings(settings)
     current_settings = self.settings
 end
 
-function smartMove:setMobPositionTable(mob_positions)
-    --print('positions: ' .. tostring(mob_positions))
-    self.mob_positions = mob_positions or {}
+function smartMove:setMobLookupFunctions(byId, byIndex)
+    smartMove.getMobById = byId or windower.ffxi.get_mob_by_id
+    smartMove.getMobByIndex = byIndex or windower.ffxi.get_mob_by_index
 end
 
 function smartMove:getJobInfo(jobId)
@@ -1223,25 +971,6 @@ function smartMove:getJobInfo(jobId)
         end
     end
 end
-
--- smartMove:onZoneChange = function ()
---     -- Stop on zone change
---     smartMove:cancelJob()
--- end
-
--- smartMove:onStatusChange = function (newStatus)
---     -- Stop if we've changed to a status that doesn't make sense. We can't follow if dead, sitting, resting, etc
---     if 
---         newStatus ~= STATUS_IDLE and
---         newStatus ~= STATUS_ENGAGED and 
---         newStatus ~= 5 and  -- Riding a chocobo
---         newStatus ~= 85     -- Riding a mount other than a chocobo
---     then
---         smartMove:cancelJob()
---     end
--- end
-
-
 
 -- -------------------------------------------------------------------------------
 -- Starts the pipeline processor

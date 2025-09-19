@@ -887,6 +887,7 @@ function cr_actionProcessor()
         local sleepTimeSeconds = 0.5
 
         local player = windower and windower.ffxi and windower.ffxi.get_player and windower.ffxi.get_player()
+        globals.player = player
 
         if player then
             if actionStateManager.needsRecompile then
@@ -922,6 +923,7 @@ function cr_actionProcessor()
             -- We'll get the 'me' mob and verify it, because there are scenarios where
             -- it would come back as nil. Let's avoid that.
             local me = windower.ffxi.get_mob_by_target('me')
+            globals.me = me
 
             if 
                 globals.enabled and
@@ -948,16 +950,19 @@ function cr_actionProcessor()
 
                 -- Refresh the player and execute the next cycle
                 player = windower.ffxi.get_player()
-                doNextActionCycle(time, player, party)
+                globals.player = player
+                if player then
+                    doNextActionCycle(time, player, party)
 
-                -- If automation was disabled during this iteration, forcibly stop following. Note that
-                -- this could inadvertently stop a manual follow, but there's not a good way around
-                -- that as we don't really know how it started. This will ensure that we don't keep
-                -- trying to run to a mob after being disabled (dangerous for mobs that aggro).
-                if not globals.enabled then
-                    local existingJobId = smartMove:getJobId()
-                    if existingJobId then
-                        smartMove:cancelJob()
+                    -- If automation was disabled during this iteration, forcibly stop following. Note that
+                    -- this could inadvertently stop a manual follow, but there's not a good way around
+                    -- that as we don't really know how it started. This will ensure that we don't keep
+                    -- trying to run to a mob after being disabled (dangerous for mobs that aggro).
+                    if not globals.enabled then
+                        local existingJobId = smartMove:getJobId()
+                        if existingJobId then
+                            smartMove:cancelJob()
+                        end
                     end
                 end
 

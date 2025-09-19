@@ -191,7 +191,7 @@
       "import": "abilities/use-convert"
     },
     {
-      "when": ["not hasBuff('Food') and canUseItem(vars.setup.food)"],
+      "when": ["not hasBuff('Food') and canUseItem(vars.setup.foods)"],
       "frequency": 1,
       "commands": ["useItem(me)"]
     }

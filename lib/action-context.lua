@@ -1411,6 +1411,11 @@ local function initContextTargetSymbol(context, symbol, debug)
         Enemy = symbol.mob.spawn_type == SPAWN_TYPE_MOB
     }
 
+    -- We'll always put player mobs through the override filter
+    if symbol.mob.spawn_tpe == SPAWN_TYPE_PLAYER then
+        applyMobOverrides(symbol.mob)
+    end
+
     -- TODO: Figure out what pets show as under the targets flags
 
     if symbol.targets.Self then
@@ -1490,6 +1495,9 @@ local function initContextTargetSymbol(context, symbol, debug)
     symbol.spawn_type = symbol.mob.spawn_type
     symbol.status = symbol.mob.status
     symbol.target_index = symbol.mob.target_index
+
+    if symbol.is_player then
+    end
 
     if symbol.status == STATUS_RESTING then symbol.is_resting = true end
     if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
@@ -4525,15 +4533,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.cancelBuff = function(...)
         local names = varargs({...}, context.effect and context.effect.name)
         local cancelled = false
+        local num_cancelled = 0
         for i, name in ipairs(names) do
             local buff = hasBuff(nil, name)
             if buff then
                 windower.ffxi.cancel_buff(buff.id)
+                num_cancelled = num_cancelled + 1
                 cancelled = true
             end
         end
 
-        return cancelled
+        return num_cancelled > 0 and num_cancelled
     end
 
     --------------------------------------------------------------------------------------
