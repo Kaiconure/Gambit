@@ -1,3 +1,5 @@
+local settings_counter = 0
+
 ----------------------------------------------------------------------------------------
 -- Supported targeting strategies
 TargetStrategy = {
@@ -99,14 +101,14 @@ local DefaultNoRearList = {
 -- Some mobs cannot be approached using the standard melee distance. These can be called
 -- out here, with the appropriate minimum distance override.
 local DefaultMinDistanceList = {
-    ['Amaranth Barrier'] = 4,
-    ['Bedrock Crag'] = 4,
-    ['Broadleaf Palm'] = 4,
-    ['Gnarled Rampart'] = 4,
-    ['Heliotrope Barrier'] = 4,
-    ['Icy Palisade'] = 4,
-    ['Knotted Root'] = 4,
-    ['Monolithic Boulder'] = 4
+    ['Amaranth Barrier'] = 3,
+    ['Bedrock Crag'] = 3,
+    ['Broadleaf Palm'] = 3,
+    ['Gnarled Rampart'] = 3,
+    ['Heliotrope Barrier'] = 3,
+    ['Icy Palisade'] = 3,
+    ['Knotted Root'] = 3,
+    ['Monolithic Boulder'] = 3
 }
 
 local defaultSettings = {
@@ -943,6 +945,9 @@ function loadSettings(actionsName, settingsOnly)
             print('Gambit: Actions loaded from [%s]':format(actionsFileName or 'n/a'))
         end
     end
+    
+    settings_counter = settings_counter + 1
+    tempSettings.settings_counter = settings_counter
 
     return tempSettings
 end

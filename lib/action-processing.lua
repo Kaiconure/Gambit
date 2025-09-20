@@ -404,6 +404,23 @@ local function compileActions(actionType, parent, rawActions)
 
                     -- Clamp the delay to (0, inf)
                     action.delay = math.max(tonumber(action.delay) or 0, 0)
+
+                    ---------------------------------------------------------------------
+                    -- Collapse multi-line commands
+                    local output_commands = {}
+                    local j = 1
+                    while j <= #action.commands do
+                        local command = trimString(action.commands[j])
+                        while command[#command] == '\\' and j <= #action.commands do
+                            j = j + 1
+                            command = string.sub(command, 1, #command - 1) .. ' '
+                            command = command .. (action.commands[j] or '')
+                        end
+
+                        table.insert(output_commands, command)
+                        j = j + 1
+                    end
+                    action.commands = output_commands
                     
                     local hasErrors = type(action._whenFn) ~= 'function'
                     if not hasErrors then

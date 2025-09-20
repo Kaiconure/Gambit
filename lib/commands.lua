@@ -413,21 +413,12 @@ handlers['config'] = function(args)
 end
 
 handlers['function'] = function(args)
-    local name = arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n')
+    local name = getArgValue(args, '-name') or getArgValue(args, '-n')
     local list = arrayIndexOfStrI(args, '-list') or arrayIndexOfStrI(args, '-l')
     local silent = arrayIndexOfStrI(args, '-silent')
     local max_iterations = arrayIndexOfStrI(args, '-max')
 
-    if max_iterations then
-        max_iterations = tonumber(args[max_iterations + 1])
-        if max_iterations then
-            max_iterations = math.max(max_iterations, 1)
-        end
-    end
-
-    if not max_iterations then
-        max_iterations = 20
-    end
+    local max_iterations = getArgValue(args, '-max')
 
     if list or not name then
         local count = 0
@@ -451,17 +442,46 @@ handlers['function'] = function(args)
         return
     end
 
-    if name then
-        name = args[name + 1]
-    end
-
     if not name then
         writeMessage('A function name must be specified.')
         return
     end
 
+    local settings_counter = settings.settings_counter
+
     local action = actionStateManager.functions[name]
     if action then
+        max_iterations = max_iterations or action.max_iterations or math.huge
+
+        --------------------------------------------------------------------
+        -- Handle stop commands
+        if
+            hasArg(args, '-stop') or
+            hasArg(args, '-cancel') or
+            hasArg(args, '-exit')
+        then
+            if not action._running then
+                writeMessage('  %s: The function is not running, so cannot be stopped.':format(text_green(action.name)))
+            else
+                action._fn_exiting = true
+            end
+            return
+        end
+
+        -- If this function is already running and it allows re-entry, we will give it
+        -- a certain amount of time to exit before we proceed and try to retart it.
+        if action._running and action.allow_reentry then
+            action._fn_exiting = true
+            local reentry_time = tonumber(action.reentry_time) or 2
+            if reentry_time > 0 then
+                local t0 = os.clock()
+                coroutine.sleep(math.min(reentry_time, 0.5))
+                while (os.clock() - t0) <= reentry_time do
+                    coroutine.sleep(0.5)
+                end
+            end
+        end
+
         if not action._running then
             if not silent then
                 writeMessage('  %s: Beginning execution.':format(text_green(action.name)))
@@ -471,34 +491,82 @@ handlers['function'] = function(args)
             action._fn_exiting = false
             action._fn_iteration = 0
 
+            local start = os.clock()
             local done = false
+
+            local arg_params = {}
+            for i = 1, #args do
+                local arg = args[i]
+                local split = arg and
+                    arg[1] ~= '-' and
+                    string.find(arg, ':')
+
+                if split then
+                    local name = trimString(string.sub(arg, 1, split - 1))
+                    local value = trimString(string.sub(arg, split + 1))
+
+                    if name ~= '' and value ~= '' then
+                        local lower_value = string.lower(value)
+                        if lower_value == 'true' then 
+                            value = true
+                        elseif lower_value == 'false' then
+                            value = false
+                        else
+                            value = tonumber(value) or value 
+                        end
+
+                        arg_params[name] = value
+                    end
+                end
+            end
+
             while not done do
                 if action._fn_iteration >= max_iterations then
-                    writeMessage('  %s: The maximum iteration count of %d has been reached!':format(text_green(action.name), text_number(action._fn_iteration)))
+                    writeMessage('  %s: The maximum iteration count of %s has been reached!':format(text_green(action.name), text_number(action._fn_iteration)))
+                    done = true
                 end
 
-                action._fn_iteration = action._fn_iteration + 1
+                if settings.settings_counter ~= settings_counter then
+                    writeMessage('  %s: Settings have been reloaded, functions will exit.':format(text_green(action.name)))
+                    done = true
+                end
 
-                local context = actionStateManager:getContext()
-                if context then
-                    context.action = action
-                    context.actionType = action.type
+                if not done then
 
-                    setfenv(action._whenFn, context)
-                    if not action._fn_exiting and action._whenFn() then
-                        for i, command in ipairs(action.commands) do
-                            setfenv(command._commandFn, context)
-                            command._commandFn()
+                    action._fn_iteration = action._fn_iteration + 1
+
+                    local context = ActionContext.create(
+                        'function',                 -- Action type
+                        os.clock() - start,         -- Current time
+                        globals.target:mob(),       -- Target mob
+                        0,                          -- Amount of time engaged with target mob. Not valid for functions.
+                        -1,                         -- Battle scope. Not valid for functions.
+                        windower.ffxi.get_party()   -- The current party
+                    )
+
+                    if context then
+                        context.action = action
+                        context.params = arg_params
+                        context.params._iter = action._fn_iteration
+                        context.params._runtime = context.time
+                        context.params._fn = name
+
+                        setfenv(action._whenFn, context)
+                        if not action._fn_exiting and action._whenFn() then
+                            for i, command in ipairs(action.commands) do
+                                setfenv(command._commandFn, context)
+                                command._commandFn()
+                            end
+                        else
+                            if not silent then
+                                writeMessage('  %s: Execution completed!':format(text_green(action.name)))
+                            end
+                            done = true
                         end
                     else
-                        if not silent then
-                            writeMessage('  %s: Execution completed!':format(text_green(action.name)))
-                        end
+                        writeMessage('  %s: Context is unavailable, exiting.':format(text_green(action.name)))
                         done = true
                     end
-                else
-                    writeMessage('  %s: Context is unavailable, exiting.':format(text_green(action.name)))
-                    done = true
                 end
 
                 if not done then
@@ -508,6 +576,11 @@ handlers['function'] = function(args)
 
             action._running = false
             action._fn_exiting = false
+
+            if action.on_exit then
+                local command = 'wait 1; gbtfn %s;':format(action.on_exit)
+                windower.send_command(command)
+            end
         else
             writeMessage('  %s: The function is already running.':format(text_green(action.name)))
         end

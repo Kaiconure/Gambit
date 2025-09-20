@@ -50,6 +50,34 @@
         "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")')"
       ],
       "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
+    },
+    {
+      "name": "follow",
+      "when": [
+        "not gambit.enabled",
+        "params.player or params.name or (log('No player parameter was specified. Use player:<player-name>.') and false)"
+      ],
+      "commands": [
+        "findPlayer(params.player or params.name)",
+        "player_result and params._iter == 1 and \\",
+        "  logf('Following player %s at distance=%.2f', player_result.name, params.distance or params.d or 1.0)",
+        "(me.is_idle or me.is_mounted) and \\",
+        "  (not bt and player_result) and \\",
+        "  ((params._iter > 1 and following(player_result)) or follow(player_result, params.distance or params.d or 1.0))",
+        "not (me.is_idle or me.is_mounted) and player_result and following(player_result) and cancelFollow()",
+        "wait(1)"
+      ],
+      "on_exit": "cancel_follow -silent",
+      "allow_reentry": true,
+      "reentry_time": 2
+    },
+    {
+      "name": "cancel_follow",
+      "when": ["params._iter == 1"],
+      "commands": [
+        "cancelFollow()",
+        "log('Your follow operation has been cancelled.')"
+      ]
     }
   ]
 }

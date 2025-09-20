@@ -1771,7 +1771,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         time = time,
         game_info = windower.ffxi.get_info(),
         strategy = settings.strategy,
-        settings = {
+        gambit = {
+            enabled = globals.enabled,
             strategy = settings.strategy,
             distance = settings.maxDistance,
             z = settings.maxDistanceZ
@@ -1782,6 +1783,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
         vars = actionStateManager.vars
     }
+
+    -- Alias the 'gambit' context var as 'settings' (for backcompat)
+    context.settings = context.gambit
 
     context.skillchain_trigger_time = 
         (context.skillchain and context.skillchain.time) or 
