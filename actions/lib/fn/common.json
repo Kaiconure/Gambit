@@ -55,7 +55,12 @@
       "name": "follow",
       "when": [
         "not gambit.enabled",
-        "params.player or params.name or (log('No player parameter was specified. Use player:<player-name>.') and false)"
+        "-- ==============================================================",
+        "-- Ensure we have a valid target ",
+        "params.player or params.name or (log('No player parameter was specified. Use player:<player-name>.') and false)",
+        "-- ==============================================================",
+        "-- Ensure we're not following ourself",
+        "not any(me.name, params.player or params.name) or (log('Cannot follow yourself.') and false)"
       ],
       "commands": [
         "findPlayer(params.player or params.name)",
@@ -64,12 +69,13 @@
         "(me.is_idle or me.is_mounted) and \\",
         "  (not bt and player_result) and \\",
         "  ((params._iter > 1 and following(player_result)) or follow(player_result, params.distance or params.d or 1.0))",
-        "not (me.is_idle or me.is_mounted) and player_result and following(player_result) and cancelFollow()",
-        "wait(1)"
+        "not (me.is_idle or me.is_mounted) and player_result and following(player_result) and cancelFollow()"
       ],
       "on_exit": "cancel_follow -silent",
       "allow_reentry": true,
-      "reentry_time": 2
+      "reentry_time": 2,
+      "frequency": 1.0,
+      "silent": true
     },
     {
       "name": "cancel_follow",
@@ -77,7 +83,8 @@
       "commands": [
         "cancelFollow()",
         "log('Your follow operation has been cancelled.')"
-      ]
+      ],
+      "silent": true
     }
   ]
 }

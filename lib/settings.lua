@@ -576,7 +576,7 @@ local function _expandActionMacrosToArray(macros, array)
     end
 
     -- Now, expand all macros into their respective actions
-    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'functions'}
+    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'functions', "imports"}
     for i, actionType in ipairs(actionTypes) do
         local actions = loadedData and loadedData[actionType]
         if type(actions) == 'table' then

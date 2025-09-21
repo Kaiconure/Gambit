@@ -451,7 +451,12 @@ handlers['function'] = function(args)
 
     local action = actionStateManager.functions[name]
     if action then
+        -- Allow the function to configure some of its own settings
         max_iterations = max_iterations or action.max_iterations or math.huge
+        silent = silent or action.silent
+        
+        -- Functions have a maximum frequency of 0.5 seconds, but they can override themselves to higher than that
+        local fn_frequency = math.max(0.5, action.frequency or 0)
 
         --------------------------------------------------------------------
         -- Handle stop commands
@@ -570,7 +575,7 @@ handlers['function'] = function(args)
                 end
 
                 if not done then
-                    coroutine.sleep(0.5)
+                    coroutine.sleep(fn_frequency)
                 end
             end
 

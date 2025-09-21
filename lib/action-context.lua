@@ -3895,24 +3895,38 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.player_result = nil
 
         if type(name) == 'string' then
-            local mobs = windower.ffxi.get_mob_array()
-            if mobs then
-                name = string.lower(name)
-                for key, mob in pairs(mobs) do
-                    if mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == 1 then
-                        if string.lower(mob.name) == name then
-                            local _mob = windower.ffxi.get_mob_by_id(mob.id)
-                            if _mob and _mob.valid_target then
-                                local p = { symbol = _mob.name, mob = _mob }
-                                initContextTargetSymbol(context, p)
+            local mob = windower.ffxi.get_mob_by_name(name)
+            if mob then
+                if mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == 1 then
+                    local _mob = windower.ffxi.get_mob_by_id(mob.id)
+                    if _mob and _mob.valid_target then
+                        local p = { symbol = _mob.name, mob = _mob }
+                        initContextTargetSymbol(context, p)
 
-                                context.player_result = p
-                                return context.player_result
-                            end
-                        end
+                        context.player_result = p
+                        return context.player_result
                     end
                 end
             end
+            
+            -- local mobs = windower.ffxi.get_mob_array()
+            -- if mobs then
+            --     name = string.lower(name)
+            --     for key, mob in pairs(mobs) do
+            --         if mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == 1 then
+            --             if string.lower(mob.name) == name then
+            --                 local _mob = windower.ffxi.get_mob_by_id(mob.id)
+            --                 if _mob and _mob.valid_target then
+            --                     local p = { symbol = _mob.name, mob = _mob }
+            --                     initContextTargetSymbol(context, p)
+
+            --                     context.player_result = p
+            --                     return context.player_result
+            --                 end
+            --             end
+            --         end
+            --     end
+            -- end
         end
     end
 
