@@ -1771,6 +1771,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         time = time,
         game_info = windower.ffxi.get_info(),
         strategy = settings.strategy,
+        is_casting = globals.isSpellCasting,
+        is_ranged_attacking = globals.isRangedAttacking,
         gambit = {
             enabled = globals.enabled,
             strategy = settings.strategy,
@@ -3894,6 +3896,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.findPlayer = function(name)
         context.player_result = nil
 
+        name = makePlayerName(name)
         if type(name) == 'string' then
             local mob = windower.ffxi.get_mob_by_name(name)
             if mob then

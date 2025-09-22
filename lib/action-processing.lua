@@ -900,13 +900,14 @@ function cr_actionProcessor()
     local startTime = 0 --os.clock()
     local latestGarbageCollection = os.clock()
 
-    while true do
+    -- We will run forever, until we receive a shutdown notification
+    while not globals.shutting_down do
         local sleepTimeSeconds = 0.5
 
         local player = windower and windower.ffxi and windower.ffxi.get_player and windower.ffxi.get_player()
         globals.player = player
 
-        if player then
+        if player and globals.logged_in then
             if actionStateManager.needsRecompile then
                 compileAllActions()
             end
@@ -945,8 +946,8 @@ function cr_actionProcessor()
             if 
                 globals.enabled and
                 player and
-                --player.status ~= STATUS_EVENT and
                 me and
+                me.valid_target and
                 zoneTime >= 5
             then
                 local playerStatus = player.status
@@ -1035,4 +1036,6 @@ function cr_actionProcessor()
         
         coroutine.sleep(sleepTimeSeconds)
     end
+
+    print('Gambit: The action processor co-routine is exiting due to addon unload!')
 end

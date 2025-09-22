@@ -356,3 +356,24 @@ function fieldsearch(message)
     end
     return fieldarr
 end
+
+-------------------------------------------------------------------------------
+-- Turns an identifier string into a properly formatted player name. That is,
+-- trimmed with the first letter in caps and the remainder lower case.
+function makePlayerName(s)
+  if type(s) ~= 'string' then
+    return nil
+  end
+  
+  s = trimString(s)
+  local len = #s
+  if len == 0 then
+    return nil
+  elseif #s == 1 then
+    return string.upper(s)
+  else  
+    return 
+        string.upper(string.sub(s, 1, 1)) ..
+        string.lower(string.sub(s, 2))
+  end
+end

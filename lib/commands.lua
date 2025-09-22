@@ -525,7 +525,11 @@ handlers['function'] = function(args)
                 end
             end
 
-            while not done do
+            while
+                not done and
+                globals.logged_in and
+                not globals.shutting_down 
+            do
                 if action._fn_iteration >= max_iterations then
                     writeMessage('  %s: The maximum iteration count of %s has been reached!':format(text_green(action.name), text_number(action._fn_iteration)))
                     done = true
@@ -582,9 +586,16 @@ handlers['function'] = function(args)
             action._running = false
             action._fn_exiting = false
 
-            if action.on_exit then
-                local command = 'wait 1; gbtfn %s;':format(action.on_exit)
-                windower.send_command(command)
+            if 
+                not globals.logged_in or
+                globals.shutting_down 
+            then
+                print('Gambit: Function [%s] is exiting due to logout or addon unload.':format(name))
+            else
+                if action.on_exit then
+                    local command = 'wait 1; gbtfn %s;':format(action.on_exit)
+                    windower.send_command(command)
+                end
             end
         else
             writeMessage('  %s: The function is already running.':format(text_green(action.name)))

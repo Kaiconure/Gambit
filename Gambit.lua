@@ -1,4 +1,4 @@
-__version = '0.96.0-beta12a'
+__version = '0.96.0-beta12b'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -58,13 +58,16 @@ partyInfo = require('./lib/party-info')
 ActionContext = require('./lib/action-context')
 
 globals = {
-    enabled         = false,
-    isSpellCasting  = false,
-    target          = nil,
-    currentZone     = nil,
-    player          = nil,  -- The most recent context-based player object
-    me              = nil,  -- The most recent context-based 'me' mob
-    zoneEntryTime = 0,
+    enabled             = false,
+    isSpellCasting      = false,
+    isRangedAttacking   = false,
+    target              = nil,
+    currentZone         = nil,
+    player              = nil,      -- The most recent context-based player object
+    me                  = nil,      -- The most recent context-based 'me' mob,
+    logged_in           = false,
+    shutting_down       = false,
+    zoneEntryTime       = 0,
     selfName = __name,
     selfShortName = __shortName,
     selfCommand = __commands[1],
@@ -292,6 +295,7 @@ windower.register_event('load', function()
     -- Store the current zone
     local info = windower.ffxi.get_info()
     if info and info.logged_in then
+        globals.logged_in = true
         globals.suppress_logging = false
 
         writeMessage('')
@@ -334,6 +338,7 @@ windower.register_event('login', function ()
         return
     end
 
+    globals.logged_in = true
     globals.suppress_logging = false
 
     initTrustData()
@@ -368,6 +373,7 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    globals.logged_in = false
     globals.suppress_logging = true
 
     globals.me_id = nil
@@ -380,8 +386,15 @@ end)
 ---------------------------------------------------------------------
 -- Addon unloaded
 windower.register_event('unload', function()
+    print('Gambit: Shutdown notification received.')
+    
+    globals.logged_in = false
+    globals.shutting_down = true
+
     resetCurrentMob(nil, true)
     windower.send_command('unbind !~G;')    -- Unbind the automation toggle key
+
+    coroutine.sleep(1.0)
 end)
 
 
@@ -561,8 +574,10 @@ windower.register_event('action', function(action)
         -- NOTE: For now, ranged tracking is only for self
         if isSelf then
             if isRangedStart then
+                globals.isRangedAttacking = true
                 actionStateManager:markRangedAttackStart()
             elseif isRangedComplete then
+                globals.isRangedAttacking = false
                 actionStateManager:markRangedAttackCompleted(isRangedSuccessful)
             end
         end
@@ -1330,7 +1345,7 @@ end)
 function cr_ipcSender()
     local MIN_MOVEMENT = 0.33
 
-    while true do
+    while not globals.shutting_down do
         local wait_time = 0.5
 
         local info = windower.ffxi.get_info()
