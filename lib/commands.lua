@@ -418,8 +418,31 @@ handlers['function'] = function(args)
     local silent = arrayIndexOfStrI(args, '-silent')
     local max_iterations = arrayIndexOfStrI(args, '-max')
 
-    local max_iterations = getArgValue(args, '-max')
+    local send = arrayIndexOfStrI(args, '-send')
+    if send then
+        local target = string.lower(args[send + 1])
+        if send then
+            -- Remove the -send and its value from the arguments list
+            table.remove(args, send)
+            table.remove(args, send)
 
+            local command = 'send %s gbt function %s':format(
+                target,
+                trimString(replaceTokens(table.concat(args, ' ')))
+            )
+
+            --print('Sending: [%s]':format(command))
+            windower.send_command(command)
+        else
+            writeWarning('Invalid function send target specified.')
+        end
+
+        return
+    end
+
+    --print('Running: [gbt function %s]':format(trimString(table.concat(args, ' '))))
+
+    local max_iterations = getArgValue(args, '-max')
     if list or not name then
         local count = 0
         writeMessage('Registered function list:')
@@ -457,6 +480,10 @@ handlers['function'] = function(args)
         
         -- Functions have a maximum frequency of 0.5 seconds, but they can override themselves to higher than that
         local fn_frequency = math.max(0.5, action.frequency or 0)
+
+        -- for i = 1, #args do
+        --     print(' %d: [%s]':format(i, args[i]))
+        -- end
 
         --------------------------------------------------------------------
         -- Handle stop commands
@@ -507,8 +534,8 @@ handlers['function'] = function(args)
                     string.find(arg, ':')
 
                 if split then
-                    local name = trimString(string.sub(arg, 1, split - 1))
-                    local value = trimString(string.sub(arg, split + 1))
+                    local name = replaceTokens(trimString(string.sub(arg, 1, split - 1)))
+                    local value = replaceTokens(trimString(string.sub(arg, split + 1)))
 
                     if name ~= '' and value ~= '' then
                         local lower_value = string.lower(value)

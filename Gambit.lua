@@ -1,4 +1,4 @@
-__version = '0.96.0-beta12b'
+__version = '0.96.0-beta12c'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -355,6 +355,7 @@ windower.register_event('login', function ()
 
     -- Store self info
     local me = windower.ffxi.get_mob_by_target('me')
+    globals.me = me
     if me then
         globals.me_id = me.id
         globals.me_name = me.name
@@ -387,7 +388,7 @@ end)
 -- Addon unloaded
 windower.register_event('unload', function()
     print('Gambit: Shutdown notification received.')
-    
+
     globals.logged_in = false
     globals.shutting_down = true
 

@@ -196,10 +196,24 @@ function arrayIndexOfStrI(array, search, start)
 end
 
 --------------------------------------------------------------------------------------
+-- Replaces command line tokens with their respective value when possible
+function replaceTokens(value)
+    if value and type(value) == 'string' then
+        local context = actionStateManager:getContext()
+        if context then
+            value = string.gsub(value, '$%(me%)', context.me and context.me.name or value)
+            value = string.gsub(value, '$%(leader%)', context.party_leader and context.party_leader.name or value)
+        end
+    end
+
+    return value
+end
+
+--------------------------------------------------------------------------------------
 -- Search a given argument list for the value associated with the specified argument
 function getArgValue(args, arg)
     local i = arrayIndexOfStrI(args, arg)
-    return i and args[i + 1]
+    return replaceTokens(i and args[i + 1])
 end
 
 --------------------------------------------------------------------------------------
