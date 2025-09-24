@@ -1406,13 +1406,13 @@ local function initContextTargetSymbol(context, symbol, debug)
         Self = symbol.mob.id == context.player.id,
         Party = symbol.mob.in_party,
         NPC = symbol.mob.is_npc,
-        Player = symbol.mob.spawn_type == SPAWN_TYPE_PLAYER,
+        Player = isMobPlayer(symbol.mob),
         Ally = symbol.mob.in_alliance,
         Enemy = symbol.mob.spawn_type == SPAWN_TYPE_MOB
     }
 
     -- We'll always put player mobs through the override filter
-    if symbol.mob.spawn_tpe == SPAWN_TYPE_PLAYER then
+    if symbol.targets.Player then
         applyMobOverrides(symbol.mob)
     end
 
@@ -1461,7 +1461,7 @@ local function initContextTargetSymbol(context, symbol, debug)
         symbol.tp = symbol.member.tp
 
         -- Active buffs
-        if symbol.mob.spawn_type == SPAWN_TYPE_PLAYER then
+        if symbol.targets.Player then
             -- For player party members and allies, we'll use the global state manager driven by party buffs
             symbol.buffs = actionStateManager:getMemberBuffsFor(symbol.mob)
         elseif symbol.mob.spawn_type == SPAWN_TYPE_TRUST then
@@ -1484,7 +1484,7 @@ local function initContextTargetSymbol(context, symbol, debug)
     symbol.model_scale = symbol.mob.model_scale
 
     symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
-    symbol.is_player = (symbol.mob.spawn_type == SPAWN_TYPE_PLAYER)
+    symbol.is_player = symbol.targets.Player
     symbol.is_me = (symbol.id == context.player.id)
     symbol.is_mob = (symbol.mob.spawn_type == SPAWN_TYPE_MOB)
     symbol.x = symbol.mob.x
@@ -1751,7 +1751,7 @@ local function loadContextTargetSymbols(context, target)
         if leader_t and leader_t.valid_target then
             leader_t.distance = math.sqrt(leader_t.distance)
             leader_t.buffs = 
-                leader_t.spawn_type == SPAWN_TYPE_PLAYER and
+                isMobPlayer(leader_t) and
                     actionStateManager:getMemberBuffsFor(leader_t) or
                     actionStateManager:getBuffsForMob(leader_t)
             if leader.is_engaged then            
@@ -1761,6 +1761,8 @@ local function loadContextTargetSymbols(context, target)
             end
         end
     end
+
+    context.num_trusts = context.party1_trusts and #context.party1_trusts or 0
 end
 
 -----------------------------------------------------------------------------------------
@@ -2743,8 +2745,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             context.game_info.mog_house or
             context.hasBuff(LOCKING_BUFFS)
         then
-            context.ability = ability
-            context.ability_recast = recast
+            context.ability = nil
+            context.ability_recast = nil
             return
         end
 
@@ -2853,7 +2855,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             elseif 
                 FAST_JOB_ABILITIES[ability.name]
             then
-                waitTime = 0.5
+                waitTime = 0.25
                 stopWalk = false
             end
 
@@ -3092,6 +3094,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.spell = nil
         context.ability = nil
         context.item = nil
+
+        context.spell_recast = nil
+        context.ability_recast = nil
+        context.item_recast = nil
 
         -- Now, we get to find the first hit in the set (if any) and return based on that
         if names and #names > 0 then
@@ -3903,10 +3909,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local _mob = windower.ffxi.get_mob_by_id(mob.id)
                 if 
                     _mob and 
-                    _mob.valid_target and 
-                    (_mob.spawn_type == SPAWN_TYPE_PLAYER or _mob.spawn_type == 1)
+                    _mob.valid_target and
+                    isMobPlayer(_mob)
                 then
-                    mob.spawn_type = SPAWN_TYPE_PLAYER  -- Force this to the uniform player spawn type
                     local p = { symbol = _mob.name, mob = _mob }
                     initContextTargetSymbol(context, p)
 
@@ -5491,7 +5496,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if mob and mob.valid_target then
             mob.distance = math.sqrt(mob.distance)
             
-            if mob.spawn_tpe == SPAWN_TYPE_PLAYER then
+            if isMobPlayer(mob) then
                 mob.buffs   = actionStateManager:getMemberBuffsFor(mob.id)
                 mob.symbol  = mob.name
                 mob.symbol2 = target

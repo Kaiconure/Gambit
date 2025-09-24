@@ -9,7 +9,17 @@
       "recall_on_mpp": 20,
       "recall_on_hpp": 40,
       "mob_safety_range": 10,
-      "recall_on_effects": ["Petrification"],
+      "recall_on_effects": [
+        "Petrification",
+        "Terror",
+        "Amnesia",
+        "Doom",
+        "Charm",
+        "Sleep",
+        "Stun",
+        "Bind",
+        "Weight"
+      ],
       "recall_blacklist": [],
       "min_idle": 4
     }
@@ -45,9 +55,9 @@
       ],
       "commands": [
         "log('Release/recall trust', result.name, 'due to debuff', effect.name)",
-        "vars.ensure_trusts.stationary or result.distance <= 5 or move(result.x, result.y, 5, -1)",
+        "num_trusts > 1 and (vars.ensure_trusts.stationary or result.distance <= 5 or move(result.x, result.y, 5, -1))",
         "state_time > vars.ensure_trusts.min_idle or wait(state_time - vars.ensure_trusts.min_idle)",
-        "releaseTrust(result.name)",
+        "num_trusts > 1 and sendCommand('input /refa all') or releaseTrust(result.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
@@ -69,9 +79,9 @@
       ],
       "commands": [
         "log('Release/recall trust', result.name, 'due to mpp at', result.mpp, '%')",
-        "vars.ensure_trusts.stationary or result.distance <= 5 or move(result.x, result.y, 5, -1)",
+        "num_trusts > 1 and (vars.ensure_trusts.stationary or result.distance <= 5 or move(result.x, result.y, 5, -1))",
         "state_time > vars.ensure_trusts.min_idle or wait(state_time - vars.ensure_trusts.min_idle)",
-        "releaseTrust(result.name)",
+        "num_trusts > 1 and sendCommand('input /refa all') or releaseTrust(result.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
         "useSpell(me)"
@@ -93,9 +103,9 @@
       ],
       "commands": [
         "log('Release/recall trust', result.name, 'due to HPP at', result.hpp, '%')",
-        "vars.ensure_trusts.stationary or result.distance <= 5 or move(result.x, result.y, 5, -1)",
+        "num_trusts > 1 and (vars.ensure_trusts.stationary or result.distance <= 5 or move(result.x, result.y, 5, -1))",
         "state_time > vars.ensure_trusts.min_idle or wait(state_time - vars.ensure_trusts.min_idle)",
-        "releaseTrust(result.name)",
+        "num_trusts > 1 and sendCommand('input /refa all') or releaseTrust(result.name)",
         "wait(1)",
         "log('Recalling trust', spell.name)",
         "useSpell(me)",

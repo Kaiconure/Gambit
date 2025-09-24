@@ -1,4 +1,4 @@
-__version = '0.96.0-beta12c'
+__version = '0.96.0-beta12d'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -90,7 +90,8 @@ function applyMobOverrides(mob, force_refresh)
     if mob and mob.id then
         -- We won't re-override a mob unless the force flag was set
         if force_refresh or not mob.has_overrides then
-            local data = globals.ipc_positions[mob.id]
+            local key = tostring(mob.id)
+            local data = globals.ipc_positions[key]
 
             -- Only perform ipc positioning overrides if we're in the same zone
             if 
@@ -125,7 +126,7 @@ end
 function getMobById(id, raw_only)
     local mob = windower.ffxi.get_mob_by_id(id)
     if not raw_only then
-        return applyMobOverrides(mob or globals.ipc_positions[id])
+        return applyMobOverrides(mob or globals.ipc_positions[tostring(id)])
     end
 
     return mob, false
@@ -134,7 +135,7 @@ end
 function getMobByIndex(index, raw_only)
     local mob = windower.ffxi.get_mob_by_index(index)
     if not raw_only then
-        return applyMobOverrides(mob or globals.ipc_positions_by_index[index])
+        return applyMobOverrides(mob or globals.ipc_positions_by_index[tostring(index)])
     end
 
     return mob, false
@@ -629,6 +630,7 @@ windower.register_event('addon command', function (command, ...)
 end)
 
 windower.register_event('ipc message', function (msg)
+    --print('in ipc message with msg: %s':format(tostring(msg) or 'nil'))
     local info = windower.ffxi.get_info()
     if 
         not info or
@@ -668,7 +670,7 @@ windower.register_event('ipc message', function (msg)
         local zone = tonumber(getArgValue(args, '-zone'))
         local x = tonumber(getArgValue(args, '-x'))
         local y = tonumber(getArgValue(args, '-y'))
-        local z = nil-- tonumber(getArgValue(args, '-z'))
+        local z = tonumber(getArgValue(args, '-z'))
         local index = tonumber(getArgValue(args, '-index'))
 
         -- Invalid configs should result in a clearing of the stored values
@@ -677,7 +679,6 @@ windower.register_event('ipc message', function (msg)
             not x or
             not y 
         then
-            --print('id: %d, zone: %d, x: %.2f, y: %.2f, z: %.2f':format(id, zone, x, y , z))
             globals.ipc_positions[id] = nil
             return
         end
@@ -689,8 +690,8 @@ windower.register_event('ipc message', function (msg)
         -- end
 
         --print('received %d: %.2f %.2f':format(id, x, y))
-
-        globals.ipc_positions[id] = {
+        local key = tostring(id)
+        globals.ipc_positions[tostring(key)] = {
             id = id,
             index = index,
             t = os.clock(),
@@ -702,7 +703,7 @@ windower.register_event('ipc message', function (msg)
 
         -- Update the index table
         if index then
-            globals.ipc_positions_by_index[index] = globals.ipc_positions[id]
+            globals.ipc_positions_by_index[tostring(index)] = globals.ipc_positions[key]
         end
     end
 
@@ -1376,8 +1377,6 @@ function cr_ipcSender()
                     ))
 
                     globals.last_broadcast_pos = {x = me.x, y = me.y}
-
-                    --print('sending %d: %.2f, %.2f':format(me.id, me.x, me.y))
                 end
             else
                 -- We'll only get here if we're logged in and able to obtain the 'me' mob, but

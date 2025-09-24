@@ -1136,7 +1136,7 @@ handlers['mobbuffs'] = function(args)
                 local mob = data.mob
                 local mobcol = mob.spawn_type == SPAWN_TYPE_MOB and text_magenta or text_green
                 local type = 
-                    ((mob.spawn_type == SPAWN_TYPE_PLAYER) and 'Player') or
+                    (isMobPlayer(mob) and 'Player') or
                     ((mob.spawn_type == SPAWN_TYPE_TRUST) and 'Trust')
                     or 'Mob'
                 local t = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('t')
@@ -1163,12 +1163,12 @@ handlers['mobbuffs'] = function(args)
                     for buffId, info in pairs(data.details) do
                         local buff = resources.buffs[buffId]
                         local actor = info.actor
-                        local actorcol = (actor and (actor.spawn_type == SPAWN_TYPE_PLAYER or actor.spawn_type == SPAWN_TYPE_TRUST or actor.spawn_type == SPAWN_TYPE_PET)) and text_green or text_magenta
+                        local actorcol = (actor and (isMobPlayer(actor) or actor.spawn_type == SPAWN_TYPE_TRUST or actor.spawn_type == SPAWN_TYPE_PET)) and text_green or text_magenta
                         local actortype = '???'
                         if info.byMe then
                             actortype = 'Me'
                         elseif actor then
-                            if actor.spawn_type == SPAWN_TYPE_PLAYER then actortype = 'Player'
+                            if isMobPlayer(actor) then actortype = 'Player'
                             elseif actor.spawn_type == SPAWN_TYPE_PET then actortype = 'Pet'
                             elseif actor.spawn_type == SPAWN_TYPE_TRUST then actortype = 'Trust'
                             elseif actor.spawn_type == SPAWN_TYPE_MOB then actortype = 'Mob'

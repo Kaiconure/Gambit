@@ -1,7 +1,8 @@
 -------------------------------------------------------------------------------
 -- Known spawn types
+SPAWN_TYPE_PLAYER2  = 1     -- Seems to be for players not in your party/alliance
 SPAWN_TYPE_PET      = 2
-SPAWN_TYPE_PLAYER   = 13
+SPAWN_TYPE_PLAYER   = 13    -- Seems to be for players in your party/alliance
 SPAWN_TYPE_TRUST    = 14
 SPAWN_TYPE_MOB      = 16
 SPAWN_TYPE_DOOR     = 34

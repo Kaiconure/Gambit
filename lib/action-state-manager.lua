@@ -731,7 +731,7 @@ state_manager.validateBuffsForMob = function (self, id)
             mob == nil or
             not mob.valid_target or
             mob.hpp == 0 or
-            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB and (mob.spawn_type ~= SPAWN_TYPE_PLAYER or mob.in_alliance)) or
+            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB and (not isMobPlayer(mob) or mob.in_alliance)) or
             mob.index ~= value.index or
             mob.name ~= value.name
         then

@@ -841,7 +841,7 @@ function smartMove:followIndex(follow_index, distance)
             if self.lost_mob_time == nil then
                 if 
                     self.last_mob and
-                    (self.last_mob.spawn_type == SPAWN_TYPE_PLAYER or self.last_mob.spawn_type == 1) and
+                    (self.last_mob.spawn_type == 13 or self.last_mob.spawn_type == 1) and   -- 13 = Player in party/alliance, 1 = Player out of party/alliance
                     self.last_mob.x and
                     self.last_mob.y and
                     self.last_mob.heading

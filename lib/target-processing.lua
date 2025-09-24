@@ -215,11 +215,22 @@ function lockTarget(player, mob, battleTarget, noTabs)
             local tabs_remaining = 0
             local forced_tabbing = false
             local fail_fast = false
+
+            -- Bail early for players, since we can target them by name
+            if
+                isMobPlayer(mob)
+            then
+                windower.send_command('input /target %s;':format(mob.name))
+                coroutine.sleep(0.5)
+
+                local t = windower.ffxi.get_mob_by_target('t')
+                return t and t.id == mob.id and t.valid_target
+            end
             
             if
                 mob.spawn_type == SPAWN_TYPE_TRUST or
                 mob.spawn_type == SPAWN_TYPE_MOB or
-                mob.spawn_type == SPAWN_TYPE_PLAYER
+                isMobPlayer(mob)    -- This should no longer be necessary due to the early bail above
             then
                 if settings.debugging then
                     writeMessage('DBG: lockTarget called from ' .. debug.traceback())
@@ -244,9 +255,15 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     then
                         if not t.valid_target then
                             fail_fast = true
+                            break
                         end
 
-                        break
+                        -- writeVerbose('Direct target acquisition of %s was %s!':format(
+                        --     text_mob(mob.name, Colors.verbose),
+                        --     text_green('successful', Colors.verbose)
+                        -- ))
+
+                        return true
                     end
                 end
             else
@@ -345,18 +362,36 @@ function lockTarget(player, mob, battleTarget, noTabs)
                                             writeVerbose('Falling back to tab-basted targeting...')
                                         end
 
-                                        local targeting_key = mob.spawn_type == SPAWN_TYPE_PLAYER and 'f9' or 'f8'
+                                        local targeting_key = isMobPlayer(mob) and 'f9' or 'f8'
+
+                                        -- Enter first-person view
+                                        command = command .. 
+                                                'setkey numpad5 down; wait 0.1; setkey numpad5 up; wait 0.2;'
+                                        sleep_duration = sleep_duration + 0.3
+
+                                        local info = windower.ffxi.get_info()
+                                        if info.menu_open then
+                                            -- When the menu is open, we need to send several escapes to close it out
+                                            command = command ..
+                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
+                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
+                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
+                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
+                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.2;'
+
+                                            sleep_duration = sleep_duration + 1.3
+                                        elseif info.chat_open then
+                                            -- When the chat is open, we need to send a single escape to close it out
+                                            command = command ..
+                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;'
+
+                                            sleep_duration = sleep_duration + 0.25
+                                        end
 
                                         command = command .. 
-                                            'setkey numpad5 down; wait 0.2; setkey numpad5 up; wait 0.3;' ..
-                                            'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                            'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                            'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                            'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                            'setkey escape down;  wait 0.1; setkey escape up;  wait 0.2;' ..
                                             'setkey %s down; wait 0.1; setkey %s up; wait 0.2;':format(targeting_key, targeting_key)
-                                            
-                                        sleep_duration = sleep_duration + 2.2
+
+                                        sleep_duration = sleep_duration + 0.3
                                         has_tabbed = true
                                     else
                                         -- Construct and send the tab press command

@@ -774,3 +774,9 @@ function getTrustSpellMeta(partyName, mode, player, party)
     -- that if we found no matches, this will just return nil as expected.
     return matches[1]
 end
+
+--------------------------------------------------------------------------------------
+-- Determine if the specified mob is a player character
+function isMobPlayer(mob)
+    return mob and (mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == SPAWN_TYPE_PLAYER2)
+end
