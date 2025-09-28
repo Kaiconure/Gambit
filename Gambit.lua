@@ -1,4 +1,4 @@
-__version = '0.96.0-beta12d'
+__version = '0.96.0-beta12e'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -89,9 +89,9 @@ local MAX_MOB_OVERRIDE_DISTANCE_2   = (50 * 50)     -- Maximum mob override dist
 function applyMobOverrides(mob, force_refresh)
     if mob and mob.id then
         -- We won't re-override a mob unless the force flag was set
-        if force_refresh or not mob.has_overrides then
+        if true then --force_refresh or not mob.has_overrides then
             local key = tostring(mob.id)
-            local data = globals.ipc_positions[key]
+            local data = key and globals.ipc_positions[key]
 
             -- Only perform ipc positioning overrides if we're in the same zone
             if 
@@ -113,9 +113,14 @@ function applyMobOverrides(mob, force_refresh)
                     mob.z = data.z or mob.z
                     mob.distance = distance_squared
                     mob.has_overrides = true
+                    mob.heading = data.heading or mob.heading
                     -- mob.was_valid_target = mob.valid_target
                     -- mob.valid_target = true
                 end
+            end
+
+            if data then
+                mob.last_updated = data.t
             end
         end
     end
@@ -129,7 +134,7 @@ function getMobById(id, raw_only)
         return applyMobOverrides(mob or globals.ipc_positions[tostring(id)])
     end
 
-    return mob, false
+    return mob
 end
 
 function getMobByIndex(index, raw_only)
@@ -138,7 +143,7 @@ function getMobByIndex(index, raw_only)
         return applyMobOverrides(mob or globals.ipc_positions_by_index[tostring(index)])
     end
 
-    return mob, false
+    return mob
 end
 
 --------------------------------------------------------------------------------------
@@ -320,13 +325,14 @@ windower.register_event('load', function()
 
         -- Kick off background threads
         coroutine.schedule(cr_actionProcessor, 0)
-        coroutine.schedule(cr_ipcSender, 0)
     else
         globals.suppress_logging = true
 
         -- The loadSettings function properly handles stubbed out defaults when no user is logged in
         settings = loadSettings()
     end
+
+    coroutine.schedule(cr_ipcSender, 0)
 end)
 
 ---------------------------------------------------------------------
@@ -631,12 +637,10 @@ end)
 
 windower.register_event('ipc message', function (msg)
     --print('in ipc message with msg: %s':format(tostring(msg) or 'nil'))
-    local info = windower.ffxi.get_info()
-    if 
-        not info or
-        not info.logged_in or
-        not info.zone or
-        info.zone <= 0
+    if
+        not globals.logged_in or
+        not globals.currentZone or
+        globals.currentZone.id <= 0
     then
         return
     end
@@ -651,7 +655,7 @@ windower.register_event('ipc message', function (msg)
     local command = split[1]
     local args = split--{table.unpack(split, 2)} -- Note: We don't need to actually extract the command name due to how we handle args below
 
-    -- print('IPC message received: [%s] with %d arg(s)':format(command or 'nil', #args))
+    --print('IPC message received: [%s] with %d arg(s)':format(command or 'nil', #args))
     -- for i = 1, #args do
     --     print('  %d: [%s]':format(i, args[i]))
     -- end
@@ -662,15 +666,17 @@ windower.register_event('ipc message', function (msg)
         -- Start by grabbing and validating the id
         local id = tonumber(getArgValue(args, '-id'))
         if id == nil or id <= 0 then
-            --print('id: %s':format(tostring(id) or 'nil'))
             return
         end
+
+        local key = tostring(id)
 
         -- Now get the zone, x, y, and z positions
         local zone = tonumber(getArgValue(args, '-zone'))
         local x = tonumber(getArgValue(args, '-x'))
         local y = tonumber(getArgValue(args, '-y'))
         local z = tonumber(getArgValue(args, '-z'))
+        local heading = tonumber(getArgValue(args, '-h'))
         local index = tonumber(getArgValue(args, '-index'))
 
         -- Invalid configs should result in a clearing of the stored values
@@ -679,18 +685,25 @@ windower.register_event('ipc message', function (msg)
             not x or
             not y 
         then
-            globals.ipc_positions[id] = nil
+            globals.ipc_positions[key] = nil
+            if index then
+                local index_key = tostring(index)
+                local by_index = index_key and globals.ipc_positions_by_index[index_key]
+                if by_index and by_index.id == id then
+                    globals.ipc_positions_by_index[index_key] = nil
+                end
+            end
             return
         end
 
         -- Do not store data for positions out of this zone, and clear the table entry if present
-        -- if zone ~= info.zone then
+        -- if zone ~= globals.currentZone.id then
         --     globals.ipc_positions[id] = nil
         --     return
         -- end
 
         --print('received %d: %.2f %.2f':format(id, x, y))
-        local key = tostring(id)
+        
         globals.ipc_positions[tostring(key)] = {
             id = id,
             index = index,
@@ -698,7 +711,8 @@ windower.register_event('ipc message', function (msg)
             zone = zone,
             x = x,
             y = y,
-            z = z
+            z = z,
+            heading = heading
         }
 
         -- Update the index table
@@ -1349,14 +1363,20 @@ function cr_ipcSender()
 
     while not globals.shutting_down do
         local wait_time = 0.5
+        local zone = globals.currentZone
+        local logged_in = globals.logged_in
 
-        local info = windower.ffxi.get_info()
-        if info and info.logged_in and info.zone then
+        if zone and zone.id > 0 and logged_in then
             local me = windower.ffxi.get_mob_by_target('me')
             if me and me.valid_target then
 
-                -- Always send if we've never sent anything before
-                local should_send = globals.last_broadcast_pos == nil
+                local should_send = 
+                    globals.last_broadcast_pos == nil or        -- Force send if we have no prior position
+                    -- (
+                    --     globals.last_broadcast_pos.zone ~= zone.id and
+                    --     os.clock() - globals.zoneEntryTime >= 5.0
+                    -- )
+                    globals.last_broadcast_pos.zone ~= zone.id  -- Force send if we've changed zones
 
                 -- Otherwise, we can send if we've moved more than a minimum amount
                 if not should_send then
@@ -1367,22 +1387,33 @@ function cr_ipcSender()
                 end
 
                 if should_send then
-                    windower.send_ipc_message('pos -id %d -zone %d -x %.2f -y %.2f -z %.2f -index %d':format(
+                    local command = 'pos -id %d -zone %d -x %.2f -y %.2f -z %.2f -h %f -index %d':format(
                         me.id,
-                        info.zone,
+                        zone.id,
                         me.x,
                         me.y,
                         me.z,
+                        me.heading,
                         me.index
-                    ))
+                    )
+                    --print('sending: %s':format(command))
+                    windower.send_ipc_message(command)
 
-                    globals.last_broadcast_pos = {x = me.x, y = me.y}
+                    globals.last_broadcast_pos = {
+                        id = me.id,
+                        zone = zone.id,
+                        x = me.x,
+                        y = me.y,
+                        z = me.z,
+                        heading = me.heading,
+                        index = me.index
+                    }
                 end
             else
                 -- We'll only get here if we're logged in and able to obtain the 'me' mob, but
                 -- we're an invalid target. This could only occur while zoning AFAIK.
                 if me and me.id then
-                    windower.send_ipc_message('pos -id %d':format(me.id))
+                    windower.send_ipc_message('pos -id %d -index %d':format(me.id, me.index or -1))
                 end
             end
         else

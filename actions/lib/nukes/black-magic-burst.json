@@ -5,8 +5,9 @@
   "macros": {
     "check_magic_burst": [
       "bt and bt.distance < 20",
+      "me.mpp >= vars.black_magic_burst.min_mpp",
       "not hasBuff('Immanence')",
-      "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp",
+      "skillchaining(vars.black_magic_burst.skillchains)",
       "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
     ],
     "exec_magic_burst": [
@@ -68,6 +69,7 @@
         "casting": [],
         "battle": []
       },
+      "skillchains": null,
       "Darkness": [
         "Blizzard VI",
         "Water VI",

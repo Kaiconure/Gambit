@@ -169,6 +169,52 @@ local function findMobRear(mob, distance)
     return findMobOffset(mob, math.pi, distance)
 end
 
+local teleporter_matches = {
+    '^Home Point #%d+$',        -- Home points
+    '^Ethereal Ingress #%d+$',  -- Eschan ingresses
+    '^Survival Guide$',         -- Survival guides
+    '^Waypoint$',               -- Adoulin Waypoints
+    '^Dimensional Portal$',     -- Eschan entry points
+    '^Veridical Conflux$',      -- Walk of Echoes
+    '^Veridical Conflux #%d+$', -- Walk of Echoes (numbered)
+    '^Affi$',                   -- Escha - Zi'tah NPC
+    '^Dremi$',                  -- Escha - Ru'Aun NPC
+    '^Shiftrix$',               -- Reisenjima NPC
+
+    '^Urbiolaine$',             -- Unity (San d'Oria)
+    '^Igsli$',                  -- Unity (Bastok)
+    '^Teldro%-Kesdrodo$',       -- Unity (Windurst)
+    '^Yonolala$',               -- Unity (Windurst)
+    '^Nunaarl Bthtrogg$',       -- Unity (Adoulin)
+
+    '^Horst$',      -- Abyssea
+    '^Ernst$',      -- Abyssea
+    '^Willis$',     -- Abyssea
+    '^Ivan$',       -- Abyssea
+    '^Vincent$',    -- Abyssea
+    '^Cyril$',      -- Abyssea
+    '^Kierron$',    -- Abyssea
+}
+
+local function isNearTeleporter(mobArray)
+    mobArray = mobArray or windower.ffxi.get_mob_array()
+    if type(mobArray) == 'table' then
+        for id, mob in pairs(mobArray) do
+            if
+                mob.valid_target and
+                mob.distance < 36 and
+                (mob.spawn_type == 2 or mob.spawn_type == 34)
+            then
+                for i, pattern in ipairs(teleporter_matches) do
+                    if mob.name:match(pattern) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- ======================================================================================
 -- Private interface
 -- ======================================================================================
@@ -852,7 +898,27 @@ function smartMove:followIndex(follow_index, distance)
                     local vMob = V({self.last_mob.x, self.last_mob.y})
                     local vMobForward = vector.from_radian(self.last_mob.heading)
 
-                    self.lost_mob_pos = vMob:add(vMobForward:scale(2))
+                    local delta_t = self.last_mob.last_updated and (os.clock() - self.last_mob.last_updated) or 0
+
+                    --print('Lost player mob: %s (%d) with delta_t=%.2f':format(self.last_mob.name, self.last_mob.id, delta_t))
+
+                    if 
+                        delta_t <= 3 or
+                        not isNearTeleporter()
+                    then
+                        -- Don't try to follow the target if we're near a teleporter, or if they
+                        -- haven't moved in 2 seconds or more. We'll just stay put in those cases.
+                        self.lost_mob_pos = vMob:add(vMobForward:scale(2))
+                    else
+                        local player = windower.ffxi.get_mob_by_target('me')
+                        if player and player.valid_target then
+                            -- Use our own current position if available
+                            self.lost_mob_pos = V({player.x, player.y})
+                        else
+                            -- Otherwise just use the last known position of the mob
+                            self.lost_mob_pos = vMob
+                        end
+                    end
                 end
             end
         else

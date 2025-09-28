@@ -501,15 +501,18 @@ state_manager.purgePositionUpdates = function(self)
         for id, pos in pairs(globals.ipc_positions) do
             local age = now - pos.t
             if age > MAX_POSITION_AGE then
+                local id_key = tostring(id)
+
                 -- We'll clear the by-index table entry for this item if it all matches up. This has
                 -- a bit of fuzziness to it given that indexes might change by zone whereas id
                 -- values should remain the same forever.
-                local by_index = pos.index and globals.ipc_positions_by_index[pos.index]
-                if by_index and by_index.id == id and pos.t == by_index.t then
-                    globals.ipc_positions_by_index[pos.index] = nil
+                local index_key = tostring(pos.index)
+                local by_index = index_key and globals.ipc_positions_by_index[index_key]
+                if by_index and by_index.id == id then
+                    globals.ipc_positions_by_index[index_key] = nil
                 end
 
-                globals.ipc_positions[id] = nil
+                globals.ipc_positions[id_key] = nil
             end
         end
 
@@ -518,7 +521,7 @@ state_manager.purgePositionUpdates = function(self)
         for index, pos in pairs(globals.ipc_positions_by_index) do
             local age = now - pos.t
             if age > MAX_POSITION_AGE then
-                globals.ipc_positions_by_index[index] = nil
+                globals.ipc_positions_by_index[tostring(index)] = nil
             end
         end
     end
