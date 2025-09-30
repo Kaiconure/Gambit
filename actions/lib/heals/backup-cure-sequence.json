@@ -5,6 +5,10 @@
   "vars": {
     "roles": {
       "backup_healer": true
+    },
+    "cure_sequence": {
+      "suppress_curaga": null,
+      "gear": null
     }
   },
   "actions": [
@@ -14,10 +18,15 @@
     {
       "when": [
         "vars.roles.main_healer or (not skillchaining() and not partyUsingWeaponSkill())",
-        "canUse('Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 60')",
-        "member.distance <= constants.spell_distance"
+        "partyByMinField('hpp', 60)",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": ["use()"],
+      "commands": [
+        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
+        "useSpell(member)",
+        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
+      ],
       "frequency": 1
     },
     {

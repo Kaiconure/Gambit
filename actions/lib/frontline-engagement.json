@@ -9,7 +9,8 @@
       "distance": null,
       "engage_trusts": null,
       "camp": {
-        "max_distance": 4,
+        "min_distance": 4,
+        "max_distance": 20,
         "max_duration": 10,
         "zone": null,
         "location": null,
@@ -30,10 +31,12 @@
     {
       "when": [
         "vars.frontline_engagement.camp",
-        "vars.frontline_engagement.camp.max_distance and vars.frontline_engagement.camp.location",
+        "vars.frontline_engagement.camp.location",
         "vars.frontline_engagement.camp.zone and any(vars.frontline_engagement.camp.zone, zone_id, zone_name, zone_search)",
         "arrayCount(vars.frontline_engagement.camp.action_types) == 0 or any(actionType, vars.frontline_engagement.camp.action_types)",
-        "distanceTo(vars.frontline_engagement.camp.location) > vars.frontline_engagement.camp.max_distance"
+        "-------------------------------------------------------------------------------------",
+        "-- We'll only return to camp if we're within the configured range ",
+        "distanceInRange(vars.frontline_engagement.camp.location, vars.frontline_engagement.camp.min_distance or 5, vars.frontline_engagement.camp.max_distance or 20)"
       ],
       "commands": [
         "logf('[%s] Returning to camp location (%.1f, %.1f)', actionType, vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y)",

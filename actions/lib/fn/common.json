@@ -65,7 +65,7 @@
       "commands": [
         "findPlayer(params.player or params.name)",
         "player_result and params._iter == 1 and \\",
-        "  logf('Following player %s at distance=%.2f', player_result.name, params.distance or params.d or 1.0)",
+        "  logf('Following player %s at distance=%.2f', player_result.name, params.distance or params.d or gambit.follow_distance)",
         "-- =================================================================================================",
         "-- We'll try to cancel the follow temporarily if we're casting or shooting",
         "(is_casting or is_ranged_attacking) and \\",
@@ -76,7 +76,7 @@
         "  (me.is_idle or me.is_mounted) and \\",
         "  (not is_casting and not is_ranged_attacking) and \\",
         "  (not bt and player_result) and \\",
-        "  ((params._iter > 1 and following(player_result)) or follow(player_result, params.distance or params.d or 1.0))",
+        "  ((params._iter > 1 and following(player_result)) or follow(player_result, params.distance or params.d or gambit.follow_distance))",
         "-- =================================================================================================",
         "-- If we're not idle or mounted, we will ",
         "not (me.is_idle or me.is_mounted) and player_result and \\",

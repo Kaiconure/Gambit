@@ -11,8 +11,8 @@
       "frequency": 0.25
     },
     {
-      "when": "partyHasBuff('Petrification') and canUse('Stona')",
-      "commands": "removeEffect(member)",
+      "when": ["partyHasBuff('Petrification') and canUse('Stona')"],
+      "commands": ["removeEffect(member)"],
       "frequency": 0.25
     }
   ]

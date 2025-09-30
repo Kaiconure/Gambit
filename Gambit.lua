@@ -1,4 +1,4 @@
-__version = '0.96.0-beta12e'
+__version = '0.96.0-beta13'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -77,6 +77,7 @@ globals = {
     latest_npc_activation = 0,
     spells = {},
     action_processor_started = false,
+    ipc_sender_started = false,
     suppress_logging = true,
     cloud_panel = nil,
     ipc_positions = {},
@@ -298,6 +299,9 @@ windower.register_event('load', function()
     windower.send_command('alias gbtfn gbt func -n')
     windower.send_command('alias gbtta gbt target -n')
 
+    windower.send_command('alias varget gbt varget')
+    windower.send_command('alias varset gbt varset')
+
     -- Store the current zone
     local info = windower.ffxi.get_info()
     if info and info.logged_in then
@@ -314,17 +318,12 @@ windower.register_event('load', function()
 
         -- Store self info
         local me = windower.ffxi.get_mob_by_target('me')
-        if me then
-            globals.me_id = me.id
-            globals.me_name = me.name
-        end
+        globals.me_id = me and me.id
+        globals.me_name = me and me.name
 
         -- Reload all settings
         resetCurrentMob(nil, true)
         reloadSettings()
-
-        -- Kick off background threads
-        coroutine.schedule(cr_actionProcessor, 0)
     else
         globals.suppress_logging = true
 
@@ -332,6 +331,8 @@ windower.register_event('load', function()
         settings = loadSettings()
     end
 
+    -- Kick off background threads
+    coroutine.schedule(cr_actionProcessor, 0)
     coroutine.schedule(cr_ipcSender, 0)
 end)
 
@@ -363,32 +364,23 @@ windower.register_event('login', function ()
     -- Store self info
     local me = windower.ffxi.get_mob_by_target('me')
     globals.me = me
-    if me then
-        globals.me_id = me.id
-        globals.me_name = me.name
-    end
+    globals.me_id = me and me.id
+    globals.me_name = me and me.name
 
     sendSelfCommand('disable')
     
     -- Reload all settings
     resetCurrentMob(nil, true)
     reloadSettings()
-
-    if not globals.action_processor_started then
-        -- Kick off background threads
-        coroutine.schedule(cr_actionProcessor, 0)
-    end
 end)
 
 windower.register_event('logout', function()
     globals.logged_in = false
     globals.suppress_logging = true
 
+    globals.me = nil
     globals.me_id = nil
     globals.me_name = nil
-    
-    -- This may cause a crash...?
-    -- sendSelfCommand('disable')
 end)
 
 ---------------------------------------------------------------------
@@ -968,12 +960,11 @@ local _handle_actionChunk = function(id, data)
     local count = tonumber(packet['Target Count']) or 0
     if count < 1 then return end
 
-    local me = windower.ffxi.get_mob_by_target('me')
+    --local me = windower.ffxi.get_mob_by_target('me')
 
     -- Note: For now, we can only reliably track buffs on trusts if they were set by ourselves. This is
     -- because trusts don't send us messages when they lose effects we weren't responsible for.
     local actorId = tonumber(packet['Actor']) or 0
-    --if actorId <= 0 or actorId ~= me.id then return end
     if actorId <= 0 then return end
 
     local actionId = tonumber(packet['Param']) or 0
@@ -1011,16 +1002,15 @@ local _handle_actionChunk = function(id, data)
             -- Try to identify whether this is a weapon skill-like spell
             if
                 actor and
-                actor.id and
-                actor.in_party
+                partyInfo:canShareClaim(actor.id)
             then
                 local context = actionStateManager:getContext()
                 if
                     context and
-                    context.party1_by_id and
-                    context.party1_by_id[actor.id]
+                    context.alliance_by_id and
+                    context.alliance_by_id[actor.id]
                 then
-                    local member = context.party1_by_id[actor.id]
+                    local member = context.alliance_by_id[actor.id]
                     if
                         member and
                         type(member.hasBuff) == 'function'
@@ -1028,8 +1018,8 @@ local _handle_actionChunk = function(id, data)
                         local chain_ability = nil
                         local ws_action = action
                         if
-                            member.hasBuff(470) and
-                            action.type == 'BlackMagic'
+                            action.type == 'BlackMagic' and
+                            member.hasBuff(470) -- Immanence buff (SCH)                            
                         then
                             local category = meta.immanence:category_of(action.name)
                             if category then
@@ -1038,15 +1028,19 @@ local _handle_actionChunk = function(id, data)
                                     ws_action = base_spell
                                 end
 
-                                chain_ability = resources.job_abilities[317] -- Immanence (SCH)
+                                chain_ability = resources.job_abilities[317] -- Immanence ability (SCH)
                             end
-                        elseif member.hasBuff(164) and action.type == 'BlueMagic' and action.element then
-                            chain_ability = resources.job_abilities[94] -- Chain Affinity (BLU)
+                        elseif 
+                            action.type == 'BlueMagic' and
+                            action.element and
+                            member.hasBuff(164) -- Chain Affinity buff (BLU)
+                        then
+                            chain_ability = resources.job_abilities[94] -- Chain Affinity ability (BLU)
                         end
 
                         if chain_ability then
-                            local targetId = tonumber(packet['Target 1 ID':format(i)]) or 0
-                            local target = windower.ffxi.get_mob_by_id(targetId)
+                            local targetId = tonumber(packet['Target 1 ID'])
+                            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
 
                             if 
                                 target and
@@ -1141,7 +1135,11 @@ local _handle_actionChunk = function(id, data)
                 target.valid_target
             then
                 -- Store the first target
-                firstTarget = firstTarget or target
+                if not firstTarget then
+                    firstTarget = target
+                end
+
+                -- Bump the total valid target count
                 targetCount = targetCount + 1
 
                 if
@@ -1186,18 +1184,24 @@ local _handle_actionChunk = function(id, data)
         category == 14      -- Unblinkable job ability
     then
         local ability = resources.job_abilities[actionId]
-        if ability then
+        local context = actionStateManager:getContext()
+
+        if 
+            ability and
+            context
+        then
             if 
-                ability.type == 'CorsairRoll'
+                ability.type == 'CorsairRoll' and
+                context.player
             then
-                local player = windower.ffxi.get_player()
-                local targetNumber = findPacketTargetNumber(packet, player.id)
+                local targetNumber = findPacketTargetNumber(packet, context.player.id)
                 local count = targetNumber and tonumber(packet['Target %d Action 1 Param':format(targetNumber)])
 
                 if 
                     count and
                     actor and
-                    (actor.in_party or actor.id == player.id)
+                    context.alliance_by_id and
+                    context.alliance_by_id[actor.id]
                 then
                     writeMessage('%s: %s %s %s':format(
                         text_player(actor.name),
@@ -1209,32 +1213,34 @@ local _handle_actionChunk = function(id, data)
                     actionStateManager:setRollCount(ability.id, count)
                 end
             elseif
-                ability.id == 177   -- Snake Eye
+                ability.id == 177       -- Snake Eye
             then
                 actionStateManager:applySnakeEye()
             elseif
                 ability.id == 209 or    -- Wild Flourish
                 ability.id == 320       -- Konzen-ittai
             then
-                if 
-                    actor and 
-                    actor.in_alliance and
-                    firstTarget
-                then
-                    -- These are abilities that act as skillchain openers.
-                    setPartyWeaponSkill(actor, ability, firstTarget)
+                if firstTarget and actor then
+                    if
+                        context.alliance_by_id and
+                        context.alliance_by_id[actor.id]
+                    then
+                        -- These are abilities that act as skillchain openers.
+                        setPartyWeaponSkill(actor, ability, firstTarget)
 
-                    writeVerbose('%s: %s %s %s %s':format(
-                        text_player(actor.name, Colors.verbose),
-                        text_weapon_skill(ability.name, Colors.verbose),
-                        CHAR_RIGHT_ARROW,
-                        text_mob(firstTarget.name),
-                        text_red('Chainbound!', Colors.verbose)
-                    ))
+                        writeVerbose('%s: %s %s %s %s':format(
+                            text_player(actor.name, Colors.verbose),
+                            text_weapon_skill(ability.name, Colors.verbose),
+                            CHAR_RIGHT_ARROW,
+                            text_mob(firstTarget.name),
+                            text_red('Chainbound!', Colors.verbose)
+                        ))
+                    end
                 end
             elseif
                 actor and
-                actor.id == me.id and (
+                context.me and
+                actor.id == context.me.id and (
                     ability.id == 233   -- Sublimation
                 )
             then
@@ -1361,6 +1367,14 @@ end)
 function cr_ipcSender()
     local MIN_MOVEMENT = 0.33
 
+    if globals.ipc_sender_started then
+        print('Gambit: Warning: Double-entry of IPC sender co-routine detected!')
+        return
+    end
+
+    globals.ipc_sender_started = true
+    print('Gambit: The IPC sender co-routine has started!')
+
     while not globals.shutting_down do
         local wait_time = 0.5
         local zone = globals.currentZone
@@ -1422,4 +1436,6 @@ function cr_ipcSender()
 
         coroutine.sleep(wait_time)
     end
+
+    print('Gambit: The IPC sender co-routine is exiting!')
 end

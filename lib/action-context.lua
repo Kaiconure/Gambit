@@ -820,6 +820,7 @@ local function getNextMemberEnumerator(context)
                     mob.valid_target
                 then
                     context.member = member
+                    context.member_count = #enumerator.data
                     return context.member
                 end
             end
@@ -827,6 +828,7 @@ local function getNextMemberEnumerator(context)
     end
 
     context.member = nil
+    context.member_count = 0
     context.action.enumerators.member = nil
     return nil
 end
@@ -911,6 +913,7 @@ local function setPartyEnumerators(context)
         
         context.member = results[1]
         context.members = results
+        context.member_count = #results
         context.action.enumerators.member = context.member and { data = results, at = 1}
         
         return context.member
@@ -939,6 +942,7 @@ local function setPartyEnumerators(context)
 
         context.member = results[1]
         context.members = results
+        context.member_count = #results
         context.action.enumerators.member = context.member and { data = results, at = 1}
 
         return context.member
@@ -1679,6 +1683,9 @@ local function loadContextTargetSymbols(context, target)
             context.party1_by_id[mob.id] = context[p]
             context.party1_by_index[mob.index] = context[p]
 
+            context.alliance_by_id[mob.id] = context[p]
+            context.alliance_by_index[mob.index] = context[p]
+
             -- Store party leader info as well
             if context.party.party1_leader == mob.id then
                 context[p].is_party_leader = true
@@ -1709,14 +1716,22 @@ local function loadContextTargetSymbols(context, target)
         if context.party[a1] then
             local mob = context.party[a1].mob
             context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, in_party = false, in_alliance = true }
+
             initContextTargetSymbol(context, context[a1])
+
+            context.alliance_by_id[mob.id] = context[a1]
+            context.alliance_by_index[mob.index] = context[a1]
         end
 
         context[a2] = nil
         if context.party[a2] then
             local mob = context.party[a2].mob
             context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, in_party = false, in_alliance = true }
+
             initContextTargetSymbol(context, context[a2])
+
+            context.alliance_by_id[mob.id] = context[a2]
+            context.alliance_by_index[mob.index] = context[a2]
         end
     end
 
@@ -1779,7 +1794,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             enabled = globals.enabled,
             strategy = settings.strategy,
             distance = settings.maxDistance,
-            z = settings.maxDistanceZ
+            distance_z = settings.maxDistanceZ,
+            follow_distance = settings.followCommandDistance,
         },
         mobTime = mobEngagedTime or 0,
         battleScope = battleScope,
@@ -1847,6 +1863,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Store a mapping of id->member and index->member for the party
     context.party1_by_id = {}
     context.party1_by_index = {}
+
+    context.alliance_by_id = {}
+    context.alliance_by_index = {}
     -- if context.party then
     --     for i = 0, 5 do
     --         local key = 'p' .. i
@@ -3778,6 +3797,33 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     ---------------------------------------------------------------------------
     --
+    context.distanceInRange = function (point, min, max)
+        if 
+            type(point) == 'table' and
+            type(point.x) == 'number' and
+            type(point.y) == 'number'
+        then
+            local me = windower.ffxi.get_mob_by_target('me')
+            if me then
+                local delta_x = math.abs(me.x - point.x)
+                local delta_y = math.abs(me.y - point.y)
+
+                min = tonumber(min) or 0
+                max = tonumber(max) or 50
+
+                local distance_squared = (delta_x * delta_x) + (delta_y * delta_y)
+                local min_squared = min * min
+                local max_squared = max * max
+
+                return distance_squared >= min_squared and distance_squared <= max_squared
+            end
+        end
+
+        return false
+    end
+
+    ---------------------------------------------------------------------------
+    --
     context.checkPosition = function(...)
         local d = context.distanceTo(...)
         --writeVerbose('cp.distance: %.2f':format(d))
@@ -5536,6 +5582,84 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find the party member with the lowest value for the given field,
+    -- provided that the value is less than the given minimum.
+    context.partyByMinField = function(field, min)
+        context.member_count = 0
+        context.member = nil
+
+        if type(field) ~= 'string' then
+            return
+        end
+
+        local count = 0
+        local result = nil
+        min = tonumber(min) or math.huge
+
+        for i = 0, 5 do
+            local member = context['p' .. i]
+            if not member then
+                -- The first party slot that's empty means we've maxed out on the party
+                break
+            end
+
+            local value = member[field]
+            if type(value) == 'number' then
+                if value <= min then
+                    if result == nil or value < result[field] then
+                        count = count + 1
+                        result = member
+                    end
+                end
+            end
+        end
+
+        context.member = result
+        context.member_count = count
+
+        return result
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Find the party member with the highest value for the given field,
+    -- provided that the value is less than the given maximum.
+    context.partyByMaxField = function(field, max)
+        context.member_count = 0
+        context.member = nil
+        
+        if type(field) ~= 'string' then
+            return
+        end
+
+        local count = 0
+        local result = nil
+        max = tonumber(max) or -math.huge
+
+        for i = 0, 5 do
+            local member = context['p' .. i]
+            if not member then
+                -- The first party slot that's empty means we've maxed out on the party
+                break
+            end
+
+            local value = member[field]
+            if type(value) == 'number' then
+                if value >= max then
+                    if result == nil or value > result[field] then
+                        count = count + 1
+                        result = member
+                    end
+                end
+            end
+        end
+
+        context.member = result
+        context.member_count = count
+
+        return result
     end
 
     --------------------------------------------------------------------------------------

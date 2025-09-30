@@ -98,6 +98,92 @@ handlers['enable'] = function (args)
     smartMove:cancelJob()
 end
 
+handlers['varget'] = function(args)
+    local context = actionStateManager:getContext()
+    if not context then
+        writeMessage('No valid context is available to set a variable.')
+        return
+    end
+
+    local name = trimString(args[1])
+    if type(name) ~= 'string' then
+        writeMessage('A variable name must be specified.')
+        return
+    end
+
+    local value = context.getVar(name)
+    writeMessage(text_gray('Variable %s value:':format(text_yellow(type(value), Colors.gray))))
+
+    if type(value) == 'boolean' then
+        writeMessage('  %s: %s':format(
+            text_blue(name),
+            value and text_green('true') or text_red('false')
+        ))
+    elseif type(value) == 'string' then
+        writeMessage('  %s: %s':format(
+            text_blue(name),
+            text_yellow('"%s"':format(value))
+        ))
+    elseif type(value) == 'number' then
+        writeMessage('  %s: %s':format(
+            text_blue(name),
+            text_number(tostring(value))
+        ))
+    elseif type(value) == 'nil' then
+        writeMessage('  %s: %s':format(
+            text_blue(name),
+            text_gray('nil')
+        ))
+    else
+        writeMessage('  %s: %s':format(
+            text_blue(name),
+            text_gray(tostring(value))
+        ))
+    end
+end
+
+handlers['varset'] = function(args)
+    local context = actionStateManager:getContext()
+    if not context then
+        writeMessage('No valid context is available to set a variable.')
+        return
+    end
+
+    local name = args[1]
+    if type(name) ~= 'string' then
+        writeMessage('A variable name must be specified.')
+        return
+    end
+    
+    local value = args[2]
+
+    if value == nil then
+        writeMessage('A variable value must be specified.')
+    end
+
+    local value_lower = string.lower(value)
+
+    if value_lower == 'true' then
+        -- Boolean true
+        value = true
+    elseif value_lower == 'false' then
+        -- Boolean false
+        value = false
+    elseif value_lower == 'nil' then
+        -- Nil
+        value = nil
+    else
+        local num_value = tonumber(value)
+        if num_value then
+            value = num_value
+        end
+    end
+
+    context.setVar(name, value)
+
+    handlers['varget']({name})
+end
+
 -------------------------------------------------------------------------------
 -- toggle
 handlers['toggle'] = function (args)

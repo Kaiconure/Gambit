@@ -569,6 +569,7 @@ local function getNextBattleAction(context)
                 context.effect                  = nil   -- Current buff/effect
                 context.effect_count            = 0     -- Current buff/effect count (e.g. you could have multiple Ballad effects at once)
                 context.member                  = nil   -- The result of a targeting enumerator
+                context.member_count            = 0     -- The count of members in the current search enumerator
                 context.mob                     = nil   -- The result of a mob search iterator
                 context.mob_by_target           = nil   -- The result of a successful getMobByTarget operation
                 context.point                   = nil   -- The result of a position lookup
@@ -1027,6 +1028,7 @@ function cr_actionProcessor()
                 sleepTimeSeconds = 2
             end
         else
+            globals.me = nil
             sleepTimeSeconds = 2
         end
 
@@ -1037,5 +1039,5 @@ function cr_actionProcessor()
         coroutine.sleep(sleepTimeSeconds)
     end
 
-    print('Gambit: The action processor co-routine is exiting due to addon unload!')
+    print('Gambit: The action processor co-routine is exiting!')
 end

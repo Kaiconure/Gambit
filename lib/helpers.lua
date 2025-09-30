@@ -127,7 +127,7 @@ end
 -------------------------------------------------------------------------------
 -- Append an item to an array
 function arrayAppend(array, item)
-    array[#array + 1] = item
+    table.insert(array, item)
 end
 
 --------------------------------------------------------------------------------------

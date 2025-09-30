@@ -393,26 +393,37 @@ end
 state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
     local mobId = tonumber(type(mob) == 'table' and mob.id)
     if mobId then
-        if actor and skill then            
-            local skillchains = {}
-            if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
-            if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
-            if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
+        if actor and skill then
+            if isMobPlayer(actor) then  
 
-            -- Clear SC on this mob if we're using a new WS. The SC created by this WS (if any) will
-            -- come as a subsequent event message.
-            self:clearSkillchain(mob)
+                -- writeMessage('Adding WS tracking of %s\'s %s on %s':format(
+                --     text_mob(actor.name, Colors.verbose),
+                --     text_weapon_skill(skill.name, Colors.verbose),
+                --     text_mob(mob.name, Colors.verbose)
+                -- ))
 
-            self.weaponSkills[mobId] = {
-                time = os.clock(),
-                skill = skill,
-                name = skill.name,
-                actor = actor,
-                mob = mob,
-                skillchains = skillchains
-            }
+                local skillchains = {}
+                if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
+                if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
+                if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
+
+                -- Clear SC on this mob if we're using a new WS. The SC created by this WS (if any) will
+                -- come as a subsequent event message.
+                self:clearSkillchain(mob)
+
+                self.weaponSkills[mobId] = {
+                    time = os.clock(),
+                    skill = skill,
+                    name = skill.name,
+                    actor = actor,
+                    mob = mob,
+                    skillchains = skillchains
+                }
+            end
         else
-            self.weaponSkills[mobId] = nil
+            if not skill then
+                self.weaponSkills[mobId] = nil
+            end
         end
     end
 end
