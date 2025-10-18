@@ -52,14 +52,6 @@
       "bar_element_spell": "Baraera",
       "bar_effect_spell": "Barpoisonra",
       "devotion_targets": [],
-      "dispel_buffs": [
-        "Defense Boost",
-        "Evasion Boost",
-        "Magic Def. Boost",
-        "Phalanx",
-        "Protect",
-        "Shell"
-      ],
       "use_foods": ["Pear Crepe", "Grape Daifuku"]
     }
   },
@@ -154,10 +146,9 @@
       "import": "abilities/use-convert"
     },
     {
-      "when": "not hasBuff('Food') and canUse('Pear Crepe', 'Crab Sushi')",
+      "when": "not hasBuff('Food') and canUse(vars.setup.use_foods)",
       "commands": "use(me)",
-      "frequency": 1,
-      "disabled": false
+      "frequency": 1
     },
     {
       "when": "not hasEffectOf('Stoneskin') and canUse('Stoneskin')",
@@ -171,15 +162,15 @@
     },
     {
       "when": [
-        "allyAny('(hpp == 0 or is_dead) and distance < 20')",
+        "allyAny('can_raise and distance < 20')",
         "canUseSpell('Arise', 'Raise III', 'Raise II', 'Raise')"
       ],
       "commands": [
         "logf('Raising knocked out member %s with %s...', member.name, spell.name)",
         "useSpell(member)"
       ],
-      "frequency": 5,
-      "miss_frequency": 10
+      "frequency": 10,
+      "miss_frequency": 5
     },
     {
       "import": "ensure-trusts"
