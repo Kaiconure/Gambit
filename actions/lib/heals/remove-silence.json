@@ -1,0 +1,17 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": ["hasEffect('Silence') and canUseItem('Echo Drops', 'Remedy')"],
+      "commands": ["use(me)"],
+      "frequency": 1
+    },
+    {
+      "when": ["partyHasBuff('Silence') and canUse('Silena')"],
+      "commands": ["removeEffect(member)"],
+      "frequency": 5
+    }
+  ]
+}

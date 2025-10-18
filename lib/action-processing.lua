@@ -297,6 +297,16 @@ function string_trim(s)
  end
 
  --------------------------------------------------------------------------------------
+ -- Constructs a new scope for use in actions. It's got the proper structure for
+ -- a scope that has not yet been assigned any values.
+local function newActionScopes()
+    return {
+        execution = {},
+        iteration = {}
+    }
+end
+
+ --------------------------------------------------------------------------------------
 -- Recompiles the specified action type
 local function compileActions(actionType, parent, rawActions)
     --writeMessage(string.format('Recompiling [%s] actions...', actionType))
@@ -451,6 +461,8 @@ local function compileActions(actionType, parent, rawActions)
             if shouldAdd then
                 _temp[#_temp + 1] = action
 
+                action.scopes = newActionScopes()
+
                 if actionType == 'functions' or type(action.name) == 'string' then
                     if type(action.name) == 'string' then
                         --writeMessage(text_gray('  Adding action function: %s'):format(text_green(action.name, Colors.gray)))
@@ -488,8 +500,9 @@ local function compileAllActions()
 
     local actions = settingsCopy.actions
 
+    compileActions('loading',       actions, actions and actions.loading or {})
     compileActions('battle',        actions, actions and actions.battle or {})
-    compileActions('idle_battle',    actions, actions and actions.idle_battle or {})
+    compileActions('idle_battle',   actions, actions and actions.idle_battle or {})
     compileActions('pull',          actions, actions and actions.pull or {})
     compileActions('idle',          actions, actions and actions.idle or {})
     compileActions('resting',       actions, actions and actions.resting or {})
@@ -536,18 +549,23 @@ local function getNextBattleAction(context)
 
     if actions then
         for i, action in ipairs(actions) do
-            -- If this action is scoped to a battle -AND- it either has no scope yet or its scope does not
-            -- match that of the current battle scope, then it is immediately reschedulable.
-            if
-                (action.scope == 'battle' and (not action.lastBattleScope or action.lastBattleScope ~= context.battleScope)) or
-                (action.scope == 'zone' and (not action.lastZoneTime or action.lastZoneTime ~= globals.zoneEntryTime))
-            then
-                action.availableAt = 0
 
-                -- If the action uses the scoped_enumerators setting, then its enumerators
-                -- will also be cleared when a scope change is detected.
-                if action.scoped_enumerators == true then
-                    action.enumerators = { }
+            if action.scope == 'battle' or action.scope == 'zone' then
+                --
+                -- Handle execution scoping. This is updated only when the action conditions are met.
+                local last_scope = action.scopes.execution[action.scope]
+                local context_scope = context.scopes[action.scope]
+                if not last_scope or last_scope ~= context_scope then
+                    action.availableAt = 0
+                end
+
+                --
+                -- Handle iteration scoping. This is updated anytime the action is evaluated.
+                if action.scoped_enumerators then
+                    last_scope = action.scopes.iteration[action.scope]
+                    if not last_scope or last_scope ~= context_scope then
+                        action.enumerators = { }
+                    end
                 end
             end
 
@@ -585,6 +603,10 @@ local function getNextBattleAction(context)
                 context.enemy_spell             = nil   -- The current mob spell
                 context.enemy_spell_target      = nil   -- The current mob spell's target
                 context.weapon_skill            = nil   -- The weapon skill you're trying to use
+
+                -- Save the iteration scope. This is done anytime the action is evaluated.
+                action.scopes.iteration.battle  = context.scopes.battle
+                action.scopes.iteration.zone   = context.scopes.zone
                 
                 -- Reload the enumerator data
                 if 
@@ -609,15 +631,9 @@ local function getNextBattleAction(context)
                 setfenv(action._whenFn, context)
 
                 if action._whenFn() then
-                    --writeMessage('action scope: %s, context scope: %s':format(action.lastBattleScope or 'n/a', context.battleScope or 'n/a'))
-
                     -- If this action will get run, we'll need to schedule the next run time. We'll actually
                     -- update this later, after the actions are executed, based on the time they complete.
                     action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
-
-                    -- Save the scope that was present when this action was triggered.
-                    action.lastBattleScope  = context.battleScope
-                    action.lastZoneTime     = globals.zoneEntryTime
 
                     if settings.verbosity >= VERBOSITY_DEBUG then
                         writeDebug('Condition met %s %s [scope: %s]':format(
@@ -627,7 +643,10 @@ local function getNextBattleAction(context)
                         ))
                     end
 
-                    --print(action.when)
+                    -- Save the execution scope. This is done anytime the action is triggered, or if it uses a miss_frequency
+                    -- value as that controls execution scheduling.
+                    action.scopes.execution.battle  = context.scopes.battle
+                    action.scopes.execution.zone   = context.scopes.zone
 
                     return action
                 else
@@ -636,20 +655,10 @@ local function getNextBattleAction(context)
                     if action.miss_frequency > 0 then
                         action.availableAt = math.max(os.clock() + action.miss_frequency, action.availableAt)
 
-                        -- Set the scope here as well, since a miss is still considered an evaluation
-                        -- of the action in the current scope.
-                        action.lastBattleScope  = context.battleScope
-                        action.lastZoneTime     = globals.zoneEntryTime
-
-                        -- if action.miss_frequency > 1 then
-                        --     print('t=%.2f, f=%.2f, available at = %.2f, bs: %s, zt: %s':format(
-                        --         os.clock(),
-                        --         action.miss_frequency,
-                        --         action.availableAt,
-                        --         tostring(action.lastBattleScope) or 'nil',
-                        --         tostring(action.lastZoneTime) or 'nil'
-                        --     ))
-                        -- end
+                        -- Save the execution scope. This is done anytime the action is triggered, or if it uses a miss_frequency
+                        -- value as that controls execution scheduling.
+                        action.scopes.execution.battle  = context.scopes.battle
+                        action.scopes.execution.zone   = context.scopes.zone
                     end
                 end
             end
@@ -684,7 +693,9 @@ local function executeBattleAction(context, action)
         if action.incomplete then
             writeDebug('Action was flagged as incomplete, allowing rapid reschedule.')
 
-            action.lastBattleScope = nil
+            -- We'll force a re-scoping of the action if it didn't actually fire. This ensures that
+            -- we can run again promptly when we detect interruptions.
+            action.scopes = newActionScopes()
             action.availableAt = math.min(os.clock() + 1, action.availableAt)
 
             action.incomplete = nil
@@ -901,6 +912,8 @@ function cr_actionProcessor()
     local startTime = 0 --os.clock()
     local latestGarbageCollection = os.clock()
 
+    local needs_load = false
+
     -- We will run forever, until we receive a shutdown notification
     while not globals.shutting_down do
         local sleepTimeSeconds = 0.5
@@ -911,6 +924,7 @@ function cr_actionProcessor()
         if player and globals.logged_in then
             if actionStateManager.needsRecompile then
                 compileAllActions()
+                needs_load = true
             end
 
             local party = windower.ffxi.get_party()
@@ -958,6 +972,36 @@ function cr_actionProcessor()
                 local isDead = player.vitals.hp <= 0                            -- Dead
 
                 actionStateManager:tick(time)
+
+                -------------------------------------------------------------------------------------------
+                -- Inject the loading actions. These are special, and shouldn't do anything complicated.
+                -- Unlike other states, *all* loading actions are evaluated/executed in order exactly
+                -- once in a single pass. They are meant to be short, bite-sized initialization steps.
+                if needs_load then
+                    needs_load = false
+                    
+                    local context = ActionContext.create('loading', time, nil, 0, -1, party)
+                    local loading_actions = actionStateManager.actions and actionStateManager.actions.loading or {}
+
+                    if #loading_actions > 0 then
+                        for i, action in ipairs(loading_actions) do
+                            actionStateManager:setActionType(context.actionType)
+                            
+                            if type(action._whenFn) == 'function' then
+                                setfenv(action._whenFn, context)
+                                if action._whenFn() then
+                                    if action.commands and #action.commands > 0 then
+                                        for j, command in ipairs(action.commands) do
+                                            -- Make the context visible to the command function, and execute it
+                                            setfenv(command._commandFn, context)
+                                            command._commandFn()
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end               
 
                 -- As long as we're not dead or resting, we can process targeting info
                 if 

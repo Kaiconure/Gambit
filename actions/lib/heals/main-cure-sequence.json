@@ -19,7 +19,7 @@
     {
       "when": [
         "not vars.cure_sequence.suppress_curaga",
-        "partyByMinField('hpp', 60) and member_count >= 3",
+        "partyByMinField('hpp', 70) and member_count >= 3",
         "member.distance <= constants.spell_distance",
         "canUseSpell('Curaga III', 'Curaga II', 'Curaga')"
       ],

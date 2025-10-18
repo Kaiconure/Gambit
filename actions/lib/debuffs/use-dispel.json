@@ -1,0 +1,22 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "use_dispel": {
+      "buffs": null
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "canUse('Dispel')",
+        "arrayCount(vars.use_dispel.buffs) > 0",
+        "partyHasEffect(vars.use_dispel.buffs)"
+      ],
+      "commands": "use(member)",
+      "frequency": 1,
+      "miss_frequency": 1
+    }
+  ]
+}

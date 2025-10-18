@@ -4,7 +4,8 @@
   },
   "vars": {
     "use_provoke": {
-      "except_members": ["Valaineral", "ArkEV"],
+      "disabled": null,
+      "except_members": ["Valaineral", "ArkEV", "August"],
       "min_hpp": 25,
       "allow_flourish": true,
       "allow_flash": true,
@@ -14,6 +15,7 @@
   "actions": [
     {
       "when": [
+        "not vars.use_provoke.disabled",
         "me.is_party_leader or not vars.use_provoke.leader_only",
         "bt.distance <= 15 and bt.hpp >= vars.use_provoke.min_hpp",
         "canUse('Provoke')",
@@ -27,6 +29,7 @@
     },
     {
       "when": [
+        "not vars.use_provoke.disabled",
         "me.is_party_leader or not vars.use_provoke.leader_only",
         "vars.use_provoke.allow_flourish",
         "bt.distance <= 15 and bt.hpp >= vars.use_provoke.min_hpp",
@@ -42,6 +45,7 @@
     },
     {
       "when": [
+        "not vars.use_provoke.disabled",
         "vars.use_provoke.allow_flash",
         "bt.distance <= 20 and bt.hpp >= vars.use_provoke.min_hpp",
         "not partyUsingWeaponSkill()",

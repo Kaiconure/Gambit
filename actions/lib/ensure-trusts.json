@@ -30,6 +30,7 @@
       "when": [
         "me.is_party_leader and not a10 and not a20",
         "isTrustZone()",
+        "-- Handle Walk of Echoes (182) differently so we don't call trusts while outside of a battle instance.",
         "not any(zone_id, 182) or hasBuff('Battlefield')",
         "needsTrust(vars.ensure_trusts.spells)"
       ],
@@ -39,7 +40,7 @@
         "wait(1.5)"
       ],
       "delay": 0,
-      "miss_frequency": 3,
+      "miss_frequency": 0,
       "scope": "battle"
     },
     {

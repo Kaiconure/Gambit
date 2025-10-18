@@ -365,6 +365,7 @@ handlers['config'] = function(args)
     local tabs = tonumber(arrayIndexOfStrI(args, '-tabs') or 0)
     local targetingDuration = tonumber(arrayIndexOfStrI(args, '-targetingduration') or arrayIndexOfStrI(args, '-td') or 0)
     local useRawDistance = tonumber(arrayIndexOfStrI(args, '-rawdistance') or arrayIndexOfStrI(args, '-rd') or 0)
+    local partyTarget = tonumber(arrayIndexOfStrI(args, '-partytarget') or arrayIndexOfStrI(args, '-pt') or 0)
     local debugging = tonumber(arrayIndexOfStrI(args, '-debugging') or 0)
     
     local hasChanges = false
@@ -400,6 +401,24 @@ handlers['config'] = function(args)
         end
 
         writeMessage('Follow command distance: %s':format(text_number('%.1f':format(settings.followCommandDistance))))
+    end
+
+    -- NOTE: This is not actually used for anything at this point
+    if partyTarget > 0 then
+        partyTarget = string.lower(tostring(args[partyTarget + 1]))
+        if partyTarget then
+            if partyTarget == 'true' or partyTarget == 'on' or partyTarget == 'enable' or partyTarget == 'enabled' then
+                settings.partyTargeting = true
+                hasChanges = true
+            elseif partyTarget == 'false' or partyTarget == 'off' or partyTarget == 'disable' or partyTarget == 'disabled' then
+                settings.partyTargeting = false
+                hasChanges = true
+            end
+        end
+
+        writeMessage('Party targeting: %s':format(
+            settings.partyTargeting and text_green('on') or text_red('off')
+        ))
     end
 
     if strat > 0 then

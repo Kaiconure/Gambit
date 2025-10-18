@@ -5,6 +5,7 @@
   "macros": {
     "check_magic_burst": [
       "bt and bt.distance < 20",
+      "not vars.black_magic_burst.targets or vars.black_magic_burst.targets[bt.name]",
       "me.mpp >= vars.black_magic_burst.min_mpp",
       "not hasBuff('Immanence')",
       "skillchaining(vars.black_magic_burst.skillchains)",
@@ -62,6 +63,7 @@
       "max_tier": "III",
       "min_mpp": 25,
       "abilities": ["Elemental Seal", "Manawell"],
+      "targets": null,
       "abilities_blacklist": {
         "Warder of Courage": true
       },

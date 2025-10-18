@@ -138,6 +138,7 @@ state_manager.setActionType = function (self, newType)
         local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull' or self.actionType == 'idle_battle')
         local isBattle = (self.actionType == 'battle')
         local isMounted = (self.actionType == 'mounted')
+        local isLoading = self.actionType == 'loading'
 
         local isNewTypeResting = newType == 'resting'
         local isNewTypeEvent = newType == 'event'
@@ -145,6 +146,7 @@ state_manager.setActionType = function (self, newType)
         local isNewTypeIdlePull = newType == 'idle' or newType == 'pull' or newType == 'idle_battle'
         local isNewTypeBattle = newType == 'battle'
         local isNewTypeMounted = newType == 'mounted'
+        local isNewTypeLoading = newType == 'loading'
 
         local mode = (isInit and 'init')
             or (isResting and 'resting')
@@ -153,6 +155,7 @@ state_manager.setActionType = function (self, newType)
             or (isIdlePull and 'idle/pull')
             or (isBattle and 'battle')
             or (isMounted and 'mounted')
+            or (isLoading and 'loading')
 
         local newMode = (isNewTypeResting and 'resting')
             or (isNewTypeEvent and 'event')
@@ -160,15 +163,16 @@ state_manager.setActionType = function (self, newType)
             or (isNewTypeIdlePull and 'idle/pull')
             or (isNewTypeBattle and 'battle')
             or (isNewTypeMounted and 'mounted')
+            or (isNewTypeLoading and 'loading')
 
         -- Only reset time if we're changing state
         if mode ~= newMode then
-        writeVerbose(string.format(
-                'Transitioning from %s to %s after %s',
-                text_red(mode, Colors.verbose),
-                text_red(newMode, Colors.verbose),
-                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.verbose)
-            ))
+            writeVerbose(string.format(
+                    'Transitioning from %s to %s after %s',
+                    text_red(mode, Colors.verbose),
+                    text_red(newMode, Colors.verbose),
+                    pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.verbose)
+                ))
 
             -- Sync up the latest mob state on mode change
             self:validateBuffsForMobs()

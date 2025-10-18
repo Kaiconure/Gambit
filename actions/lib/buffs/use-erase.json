@@ -1,0 +1,41 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "use_erase": {
+      "debuffs": null,
+      "targets": null
+    }
+  },
+  "actions": [
+    {
+      "comments": [
+        "This gambit is executed when Erase can be applied to SPECIFIC members in the party."
+      ],
+      "when": [
+        "canUse('Erase')",
+        "arrayCount(vars.use_erase.targets) > 0",
+        "arrayCount(vars.use_erase.debuffs) > 0",
+        "partyByName(vars.use_erase.targets) and hasEffect(member, vars.use_erase.debuffs)"
+      ],
+      "commands": ["use(member)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    },
+    {
+      "comments": [
+        "This gambit is executed when Erase can be applied to ANY member in the party."
+      ],
+      "when": [
+        "canUse('Erase')",
+        "arrayCount(vars.use_erase.targets) == 0",
+        "arrayCount(vars.use_erase.debuffs) > 0",
+        "partyHasEffect(vars.use_erase.debuffs)"
+      ],
+      "commands": ["use(member)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    }
+  ]
+}

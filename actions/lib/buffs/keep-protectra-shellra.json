@@ -4,17 +4,20 @@
   },
   "vars": {
     "keep_protectra_shellra": {
-      "align_leader": true
+      "align_leader": true,
+      "check_members": null
     }
   },
   "actions": [
     {
       "when": [
-        "not hasBuff('Protect') and hasSpell('Protectra V', 'Protectra IV', 'Protectra III', 'Protectra II', 'Protectra')",
+        "not hasBuff('Protect') or \\",
+        "  (arrayCount(vars.keep_protectra_shellra.check_members) > 0 and partyByName(vars.keep_protectra_shellra.check_members) and not hasBuff(member, 'Protect'))",
+        "hasSpell('Protectra V', 'Protectra IV', 'Protectra III', 'Protectra II', 'Protectra')",
         "canUseSpell(spell.name)"
       ],
       "commands": [
-        "log('Preparing to apply buff:', spell.name)",
+        "log('Preparing to apply', spell.name)",
         "not vars.keep_protectra_shellra.align_leader or me.is_party_leader or party_leader.distance < 5 or align(party_leader, nil, 2, 5)",
         "useSpell(me)"
       ],
@@ -23,11 +26,13 @@
     },
     {
       "when": [
-        "not hasBuff('Shell') and hasSpell('Shellra V', 'Shellra IV', 'Shellra III', 'Shellra II', 'Shellra')",
+        "not hasBuff('Shell') or \\",
+        "  (arrayCount(vars.keep_protectra_shellra.check_members) > 0 and partyByName(vars.keep_protectra_shellra.check_members) and not hasBuff(member, 'Shell'))",
+        "hasSpell('Shellra V', 'Shellra IV', 'Shellra III', 'Shellra II', 'Shellra')",
         "canUseSpell(spell.name)"
       ],
       "commands": [
-        "log('Preparing to apply buff:', spell.name)",
+        "log('Preparing to apply', spell.name)",
         "not vars.keep_protectra_shellra.align_leader or me.is_party_leader or party_leader.distance < 5 or align(party_leader, nil, 2, 5)",
         "useSpell(me)"
       ],

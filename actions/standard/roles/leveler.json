@@ -23,8 +23,7 @@
       "comment": "Uses the appropriate XP or CP rings based on current level and mastery."
     },
     {
-      "import": "abilities/use-rolls",
-      "disabled": true
+      "import": "abilities/use-rolls"
     },
     {
       "when": [

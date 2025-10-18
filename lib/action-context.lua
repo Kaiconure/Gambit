@@ -839,7 +839,7 @@ end
 local function createMemberNamesExpression(context, names)
     local expression = ''
 
-    if type(names) ~= 'table' or #names == 0 then
+    if type(names) ~= 'table' or #names == 0 or names == "*" then
         expression = 'true'
     else
         local first = true
@@ -1798,6 +1798,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             follow_distance = settings.followCommandDistance,
         },
         mobTime = mobEngagedTime or 0,
+        scopes = {
+            battle = battleScope,
+            zone = globals.zoneEntryTime
+        },
         battleScope = battleScope,
         skillchain = actionStateManager:getSkillchain(target),
         party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
@@ -1866,16 +1870,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     context.alliance_by_id = {}
     context.alliance_by_index = {}
-    -- if context.party then
-    --     for i = 0, 5 do
-    --         local key = 'p' .. i
-    --         local member = context.party[key]
-    --         if member and member.mob then
-    --             context.party1_by_id[member.mob.id] = member
-    --             context.party1_by_index[member.mob.index] = member
-    --         end
-    --     end
-    -- end
 
     -- Must be called after the player and party have been assigned
     loadContextTargetSymbols(context, target)    

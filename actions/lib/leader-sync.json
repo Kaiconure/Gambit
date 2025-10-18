@@ -20,13 +20,15 @@
       "when": [
         "bt and bt.id",
         "not me.is_party_leader and settings.strategy == 'leader'",
+        "party_leader and not party_leader.is_dead and party_leader.valid_target and party_leader.distance <= 50",
         "(not party_leader_bt and vars.leader_sync.idle_disengage) or (party_leader_bt and party_leader_bt.id ~= bt.id)"
       ],
       "commands": [
         "not party_leader_bt and (disengage() and logf('Disengaging from [%s] as party leader has no target!', bt.name))",
         "party_leader_bt and setBattleTarget(party_leader_bt) and logf('Acquiring leader target %s!', party_leader_bt.name) and wait(1)"
       ],
-      "frequency": 5
+      "frequency": 5,
+      "miss_frequency": 5
     }
   ]
 }

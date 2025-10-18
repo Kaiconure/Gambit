@@ -1,31 +1,68 @@
 {
   "vars": {
+    "configuration": {
+      "commands": ["gbt config -strat leader", "gbt config -d 20"]
+    },
     "haste_cycle": {
-      "targets": null
+      "targets": ["me"]
     },
     "ensure_trusts": {
-      "spells": null
+      "spells": []
     },
     "refresh_cycle": {
-      "targets": null
+      "targets": ["me"]
     },
     "regen_cycle": {
-      "targets": null
+      "targets": ["Valaineral", "AAEV", "August", "Rahal", "Trion"]
+    },
+    "keep_protectra_shellra": {
+      "check_members": ["Valaineral", "AAEV", "August", "Rahal", "Trion"]
     },
     "frontline_engagement": {
-      "angle": null,
-      "distance_offset": null,
-      "engage_trusts": true
+      "angle": 150,
+      "distance_offset": null
     },
     "use_convert": {
-      "min_mp": 200
+      "disabled": false,
+      "min_mp": 150
     },
-    "waypoints_ex": {
-      "active": null
+    "use_dispel": {
+      "buffs": [
+        "Defense Boost",
+        "Evasion Boost",
+        "Magic Def. Boost",
+        "Phalanx",
+        "Protect",
+        "Shell"
+      ]
+    },
+    "use_erase": {
+      "targets": [],
+      "debuffs": [
+        "Attack Down",
+        "Bind",
+        "Max HP Down",
+        "Max MP Down",
+        "Slow",
+        "STR Down",
+        "Weight"
+      ]
+    },
+    "setup": {
+      "bar_element_spell": "Baraera",
+      "bar_effect_spell": "Barpoisonra",
+      "devotion_targets": [],
+      "dispel_buffs": [
+        "Defense Boost",
+        "Evasion Boost",
+        "Magic Def. Boost",
+        "Phalanx",
+        "Protect",
+        "Shell"
+      ],
+      "use_foods": ["Pear Crepe", "Grape Daifuku"]
     }
   },
-  "imports": [],
-  "functions": [],
   "pull": [
     {
       "import": "heals/main-cure-sequence"
@@ -36,12 +73,20 @@
   ],
   "battle": [
     {
-      "import": "heals/main-cure-sequence"
+      "when": [
+        "bt.hpp >= 5 and me.tp >= 1000 and me.mpp <= 60",
+        "(bt.distance <= 5 and canUseWeaponSkill('Spirit Taker')) or \\",
+        "  canUseWeaponSkill('Myrkr', 'Moonlight', 'Starlight')"
+      ],
+      "commands": [
+        "facingEnemy() or (faceEnemy() and wait(0.5))",
+        "useWeaponSkill()"
+      ],
+      "scope": "battle",
+      "frequency": 5
     },
     {
-      "when": ["hasEffectOf('Silence') and canUseItem('Echo Drops')"],
-      "commands": ["use(me)"],
-      "frequency": 3
+      "import": "heals/main-cure-sequence"
     },
     {
       "import": "reactions/face-away"
@@ -50,60 +95,30 @@
       "import": "reactions/use-stun"
     },
     {
+      "import": "leader-sync"
+    },
+    {
       "import": "frontline-engagement"
     },
     {
-      "when": [
-        "bt.in_spell_range",
-        "canUse('Dispel') and hasBuff(bt, 'Protect', 'Defense Boost', 'Evasion Boost', 'Phalanx', 'Shell', 'Magic Def. Boost')"
-      ],
-      "commands": "use(bt)",
-      "scope": "battle"
-    },
-    {
-      "when": ["partyHasBuff('Paralysis') and canUse('Paralyna')"],
-      "commands": ["removeEffect(member)"],
-      "frequency": 7
-    },
-    {
-      "import": "debuffs/keep-slow",
-      "disabled": true
-    },
-    {
-      "import": "debuffs/keep-paralyze",
-      "disabled": true
-    },
-    {
-      "import": "debuffs/keep-distract",
-      "disabled": true
-    },
-    {
-      "import": "debuffs/keep-dia",
-      "disabled": true
-    },
-    {
-      "import": "debuffs/keep-addle",
-      "disabled": true
-    },
-    {
-      "import": "debuffs/keep-frazzle",
-      "disabled": true
-    },
-    {
-      "import": "buffs/boost-dex-cycle",
-      "disabled": true
-    },
-    {
-      "when": "partyHasBuff('Bind', 'Slow', 'Max MP Down', 'Max HP Down', 'Weight') and canUse('Erase')",
-      "commands": "use(member)",
-      "frequency": 3
-    },
-    {
-      "when": "bt.hpp > 5 and me.tp > 1000 and me.mpp < 85 and canUseWeaponSkill('Spirit Taker')",
-      "commands": "useWeaponSkill()"
+      "import": "debuffs/use-dispel"
     },
     {
       "import": "buffs/refresh-cycle"
+    },
+    {
+      "import": "buffs/keep-protectra-shellra"
+    },
+    {
+      "import": "buffs/use-erase"
+    },
+    {
+      "when": [
+        "canUse('Devotion')",
+        "partyByName(vars.setup.devotion_targets) and member.mp < 700"
+      ],
+      "commands": "use(member)",
+      "frequency": 15
     },
     {
       "import": "buffs/haste-cycle"
@@ -113,12 +128,20 @@
       "commands": "use(me)"
     },
     {
-      "when": "not hasEffectOf('Barstonra') and canUse('Barstonra')",
-      "commands": "use(me)",
-      "disabled": true
+      "when": [
+        "vars.setup.bar_element_spell",
+        "not hasEffectOf(vars.setup.bar_element_spell) and canUseSpell(vars.setup.bar_element_spell)"
+      ],
+      "commands": ["useSpell(me)"],
+      "frequency": 3
     },
     {
-      "import": "buffs/keep-protectra-shellra"
+      "when": [
+        "vars.setup.bar_effect_spell",
+        "not hasEffectOf(vars.setup.bar_effect_spell) and canUseSpell(vars.setup.bar_effect_spell)"
+      ],
+      "commands": ["useSpell(me)"],
+      "frequency": 3
     },
     {
       "import": "buffs/regen-cycle"
@@ -129,16 +152,6 @@
     },
     {
       "import": "abilities/use-convert"
-    },
-    {
-      "when": "partyHasBuff('Petrification') and canUse('Stona')",
-      "commands": "removeEffect(member)",
-      "frequency": 5
-    },
-    {
-      "when": "partyHasBuff('Poison') and canUse('Poisona')",
-      "commands": "removeEffect(member)",
-      "frequency": 5
     },
     {
       "when": "not hasBuff('Food') and canUse('Pear Crepe', 'Crab Sushi')",
@@ -153,6 +166,21 @@
     }
   ],
   "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "when": [
+        "allyAny('(hpp == 0 or is_dead) and distance < 20')",
+        "canUseSpell('Arise', 'Raise III', 'Raise II', 'Raise')"
+      ],
+      "commands": [
+        "logf('Raising knocked out member %s with %s...', member.name, spell.name)",
+        "useSpell(member)"
+      ],
+      "frequency": 5,
+      "miss_frequency": 10
+    },
     {
       "import": "ensure-trusts"
     },
@@ -169,34 +197,11 @@
       "import": "abilities/use-convert"
     },
     {
-      "when": [
-        "partyHasBuff('Bind', 'Slow', 'Max MP Down', 'Max HP Down', 'Weight') or postpone(5)",
-        "canUse('Erase')"
-      ],
-      "commands": "use(member)",
-      "delay": 2,
-      "frequency": 2
-    },
-    {
-      "import": "common-consumables",
-      "disabled": true
-    },
-    {
-      "import": "waypoints-ex"
+      "import": "buffs/use-erase"
     }
   ],
-  "resting": [
-    {
-      "when": "bt or me.mpp > 95",
-      "commands": ["cancelRest()", "wake()"]
-    }
-  ],
-  "dead": [
-    {
-      "import": "homepoint-on-death",
-      "disabled": true
-    }
-  ],
+  "resting": [],
+  "dead": [],
   "mounted": [
     {
       "import": "follow-leader"

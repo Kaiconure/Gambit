@@ -4,8 +4,20 @@
   },
   "vars": {
     "homepoint_on_death": {
-      "block_on_buffs": ["Battlefield", "Voidwatcher"],
-      "block_on_zones": [183, 287]
+      "block_on_buffs": [
+        "Battlefield",
+        "Voidwatcher",
+        "Level Restriction",
+        "Confrontation"
+      ],
+      "block_on_zones": [
+        "-- Maquette Abdhaljs-LegionA",
+        183,
+        "-- Maquette Abdhaljs-LegionB",
+        287,
+        "-- Reisenjima Henge",
+        292
+      ]
     }
   },
   "macros": {
@@ -26,8 +38,8 @@
     },
     {
       "when": ["me.hpp <= 0", "$macro:can_death_warp"],
-      "commands": "log('Death has occurred. Disable automation within 20 seconds to avoid automatically returning to your homepoint.')",
-      "frequency": 60
+      "commands": "log('Death has occurred. Disable automation within 5 minutes to avoid automatically returning to your homepoint.')",
+      "frequency": 330
     },
     {
       "when": ["me.hpp <= 0", "$macro:can_death_warp"],
@@ -37,7 +49,7 @@
         "deathWarp()"
       ],
       "name": "death_warp",
-      "delay": 20,
+      "delay": 300,
       "comment": "This action can only be used if you're dead. Import this gambit into the [dead] actions section if you want to return to homepoint on death."
     }
   ]
