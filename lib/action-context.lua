@@ -1669,6 +1669,8 @@ local function loadContextTargetSymbols(context, target)
 
     context.waiting_for_trusts = false
 
+    context.vars.last_raise = context.vars.last_raise or {}
+
     for i = 0, 5 do
         local p = 'p' .. i
         local a1 = 'a1' .. i
@@ -1705,7 +1707,16 @@ local function loadContextTargetSymbols(context, target)
                     mob.status == STATUS_IDLE
                 then
                     context.waiting_for_trusts = true
-                end                                        
+                end
+            else
+                if not context[p].is_dead then
+                    -- Clear raise info if the mob is dead
+                    context.vars.last_raise[mob.id] = nil
+                    context.can_raise = false
+                else
+                    -- Allow raise attempts every 5 minutes by default
+                    context[p].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+                end                        
             end
 
             -- Save an array of members by name
@@ -1721,6 +1732,15 @@ local function loadContextTargetSymbols(context, target)
 
             context.alliance_by_id[mob.id] = context[a1]
             context.alliance_by_index[mob.index] = context[a1]
+
+            if not context[a1].is_dead then
+                -- Clear raise info if the mob is dead
+                context.vars.last_raise[mob.id] = nil
+                context.can_raise = false
+            else
+                -- Allow raise attempts every 5 minutes by default
+                context[a1].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+            end
         end
 
         context[a2] = nil
@@ -1732,6 +1752,15 @@ local function loadContextTargetSymbols(context, target)
 
             context.alliance_by_id[mob.id] = context[a2]
             context.alliance_by_index[mob.index] = context[a2]
+
+            if not context[a2].is_dead then
+                -- Clear raise info if the mob is dead
+                context.vars.last_raise[mob.id] = nil
+                context.can_raise = false
+            else
+                -- Allow raise attempts every 5 minutes by default
+                context[a2].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+            end
         end
     end
 
@@ -3006,7 +3035,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         if spell == nil then spell = context.spell end
         if type(spell) == 'string' then spell = findSpell(spell) end
-        
+
         if spell ~= nil then
 
             -- Bail if we cannot use the spell
@@ -3026,6 +3055,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if target == nil then
                 target = context.me
             end
+
+            local is_raise = 
+                spell.id == 12 or       -- Raise
+                spell.id == 13 or       -- Raise II
+                spell.id == 140 or     -- Raise III
+                spell.id == 494         -- Arise
 
             if target ~= nil and target.symbol then
                 if not bypass_target_check and target.targets then
@@ -3054,12 +3089,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         --     text_spell(spell.name)
                         -- ))
                     else
-                        if not hasAnyFlagMatch(target.targets, spell.targets) then
-                            target = context.me
+                        --print(json.stringify(target.targets))
+                        --print(json.stringify(spell.targets))
+
+                        if spell.targets.Corpse and target.is_dead then
+                            -- Allow corpse targeted spells on the dead
+                        else
                             if not hasAnyFlagMatch(target.targets, spell.targets) then
-                                -- At this point, if we still don't have a target then we're out of targeting options
-                                writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
-                                return
+                                target = context.me
+                                if not hasAnyFlagMatch(target.targets, spell.targets) then
+                                    -- At this point, if we still don't have a target then we're out of targeting options
+                                    writeDebug(' **A valid target for [%s] could not be identified.':format(text_spell(spell.name, Colors.debug)))
+                                    return
+                                end
                             end
                         end
                     end
@@ -3070,17 +3112,25 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     context.effect_count    = original_effect_count
                 end
 
-               -- NOTE: Spell usage is handled generally via the 'action' event handler
-               --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
+                -- NOTE: Spell usage is handled generally via the 'action' event handler
+                --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
 
-               -- This is the newer spell casting implementation. As ooposed to the normal
-               -- sendActionCommand function, this one performs a sleeping loop that will
-               -- detect when spell casting has completed (for any reason) and will exit
-               -- sooner. This allows us to spend a little time as possible waiting for
-               -- spells to complete (fast cast, interruption, and so on can impact this).
+                -- This is the newer spell casting implementation. As ooposed to the normal
+                -- sendActionCommand function, this one performs a sleeping loop that will
+                -- detect when spell casting has completed (for any reason) and will exit
+                -- sooner. This allows us to spend a little time as possible waiting for
+                -- spells to complete (fast cast, interruption, and so on can impact this).
 
-               -- Returns a flag indicating whether the action completed successfully
-               return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+                -- Raise doesn't have a special status, so we'll track it manually
+                if target.id and isMobPlayer(target) then
+                    if is_raise then
+                        context.vars.last_raise = context.vars.last_raise or {}
+                        context.vars.last_raise[target.id] = context.time
+                    end
+                end
+
+                -- Returns a flag indicating whether the action completed successfully
+                return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
             end
         end
     end
