@@ -9,6 +9,9 @@
   },
   "actions": [
     {
+      "comments": [
+        "NOTE: Phalax II can be cast on others, but this gambit doesn't handle that. It's self-only for now."
+      ],
       "when": [
         "hasSpell(vars.keep_phalanx.spells) and not hasEffectOf(spell) and canUse(spell)"
       ],

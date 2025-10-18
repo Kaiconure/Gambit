@@ -12,6 +12,24 @@
       ]
     },
     {
+      "name": "invis_self",
+      "when": [
+        "not hasBuff('Invisible') and canUse('Invisible', 'Spectral Jig')"
+      ],
+      "commands": [
+        "use(me) or log('Failed to use', (spell or ability).name)",
+        "stopFunction()"
+      ]
+    },
+    {
+      "name": "sneak_self",
+      "when": ["not hasBuff('Sneak') and canUse('Sneak', 'Spectral Jig')"],
+      "commands": [
+        "use(me) or log('Failed to use', (spell or ability).name)",
+        "stopFunction()"
+      ]
+    },
+    {
       "name": "sneak_all",
       "when": [
         "not bt",
@@ -50,6 +68,19 @@
         "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")')"
       ],
       "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
+    },
+    {
+      "name": "use_ambu_ws",
+      "when": "bt and canUseWeaponSkill('Tachi: Kasha', 'Savage Blade', 'Steel Cyclone')",
+      "commands": ["facingEnemy() or faceEnemy()", "useWeaponSkill()"]
+    },
+    {
+      "name": "use_ws",
+      "when": [
+        "bt and vars.use_ws and arrayCount(vars.use_ws.with) > 0",
+        "canUseWeaponSkill(vars.use_ws.with)"
+      ],
+      "commands": ["facingEnemy() or faceEnemy()", "useWeaponSkill()"]
     },
     {
       "name": "follow",

@@ -26,6 +26,7 @@
     {
       "when": [
         "bt and bt.distance < 20 and bt.mob_time >= vars.black_magic_nuke.delay",
+        "not vars.black_magic_nuke.targets or vars.black_magic_nuke.targets[bt.name]",
         "me.mpp >= vars.black_magic_nuke.min_mpp",
         "bt.hpp <= vars.black_magic_nuke.max_hpp and bt.hpp >= vars.black_magic_nuke.min_hpp",
         "not partyUsingWeaponSkill()",
@@ -53,6 +54,7 @@
       "max_hpp": 100,
       "min_hpp": 0,
       "delay": 0,
+      "targets": null,
       "gear": {
         "casting": [],
         "battle": [],

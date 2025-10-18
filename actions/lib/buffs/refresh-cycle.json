@@ -13,6 +13,7 @@
   "actions": [
     {
       "when": [
+        "arrayCount(vars.refresh_cycle.targets) > 0",
         "hasSpell(vars.refresh_cycle.spells) and canUse(spell)",
         "partyByName(vars.refresh_cycle.targets)",
         "not hasEffectOf(member, spell) and not hasEffectOf(member, 'Sublimation')",

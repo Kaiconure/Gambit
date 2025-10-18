@@ -96,7 +96,12 @@ local function shouldAquireNewTarget(player, party)
     local currentTarget = globals.target
     local currentMob = currentTarget:mob()
     if settings.strategy ~= TargetStrategy.manual then
-        if currentMob and current_t and current_t.id == currentMob.id then
+        if 
+            currentMob and (
+                (current_t and current_t.id == currentMob.id) or
+                (not partyInfo:canShareClaim(currentMob.claim_id))
+            )
+        then
             checkEngagement = false
 
             local runtime = currentTarget:runtime()
@@ -291,14 +296,22 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     local target = windower.ffxi.get_mob_by_target('t')
                     if 
                         target and 
-                        target.id == mob.id and
-                        target.index == mob.index
+                        (
+                            (target.id == mob.id and target.index == mob.index) or
+                            (
+                                mob.spawn_type == SPAWN_TYPE_MOB and mob.status == STATUS_IDLE and (
+                                    (settings.selection_mode == 'any_aggressive' and target.spawn_type == mob.spawn_type and target.status == STATUS_ENGAGED and target.distance <= (settings.maxDistance ^ 2)) or
+                                    (settings.selection_mode == 'any' and target.spawn_type == mob.spawn_type and target.distance <= (settings.maxDistance ^ 2))
+                                )
+                            )
+                        )
                     then
-                        if duration >= 2 then
-                            writeVerbose('Target acquisition of %s was %s after %s':format(
+                        if duration >= 2 or target.id ~= mob.id then
+                            writeVerbose('Target acquisition of %s was %s after %s%s':format(
                                 text_mob(mob.name, Colors.verbose),
                                 text_green('successful', Colors.verbose),
-                                text_number('%.1fs':format(duration), Colors.verbose)
+                                text_number('%.1fs':format(duration), Colors.verbose),
+                                target.id == mob.id and '' or text_yellow(' (overridden)')
                             ))
                         end
 

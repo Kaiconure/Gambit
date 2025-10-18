@@ -237,7 +237,7 @@ local IMPORT_GLOBAL_LIB     = "^$%(GlobalLib%)"
 -- true if new actions were imported as part of this pass.
 local function _loadActionImportsInternal(playerName, baseActions, actionType, pass, player)
     local imported = false
-    local actions = baseActions and baseActions[actionType]
+    local actions = baseActions and baseActions[actionType] or {}
     if actions then
         if baseActions.vars == nil then
             baseActions.vars = {}
@@ -281,12 +281,12 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                 local has_sub_job_match = require_job_match and require_sub_job_match and arrayIndexOf(useArray(action.filter.sub_jobs), player.sub_job)
 
                 if
-                    -- If you require both and have neither
-                    (require_main_job_match and require_sub_job_match and not has_main_job_match and not has_sub_job_match) or                    
-                    -- Require only the main job, and you don't have it
+                    -- If you look at either main or sub, and neither matches
+                    (require_main_job_match and require_sub_job_match and not has_main_job_match and not has_sub_job_match) or
+                    -- If you require only the main job, and you don't have it
                     (require_main_job_match and not require_sub_job_match and not has_main_job_match) or
-                    -- Require only the sub job, and you don't have it
-                    (require_sub_job_match and not require_main_job_match and not has_subn_job_match) 
+                    -- If you require only the sub job, and you don't have it
+                    (require_sub_job_match and not require_main_job_match and not has_sub_job_match) 
                 then
                     disable = true
                 end
@@ -301,98 +301,103 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                 action.disabled = disable
             end
 
-            -- Import any items that have an import reference and which aren't marked as disabled
-            if type(action.import) == 'string' and not action.disabled then
-                local file = nil
-                local fileName = nil
+            if not action.disabled then
+                -- Import any items that have an import reference and which aren't marked as disabled
+                if type(action.import) == 'string' then
+                    local file = nil
+                    local fileName = nil
 
-                if action.import:find(IMPORT_PLAYER_LIB) then
-                    fileName = action.import:gsub(IMPORT_PLAYER_LIB, './settings/%s/actions/lib':format(playerName)) .. '.json'
-                    -- print('Referenced player-level import: ' .. fileName)
-                    file = files.new(fileName)
-                elseif action.import:find(IMPORT_SETTINGS_LIB) then
-                    fileName = action.import:gsub(IMPORT_SETTINGS_LIB, './settings/actions/lib') .. '.json'
-                    -- print('Referenced Settings-level import: ' .. fileName)
-                    file = files.new(fileName)
-                elseif action.import:find(IMPORT_GLOBAL_LIB) then
-                    fileName = action.import:gsub(IMPORT_GLOBAL_LIB, './actions/lib') .. '.json'
-                    --print('Referenced Global-level import: ' .. fileName)
-                    file = files.new(fileName)
-                else                
-                    -- First, try the character-level actions libs folder
-                    fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
-                    file = files.new(fileName)
-
-                    -- If the import doesn't exist there, try the user-level actions lib folder
-                    if not file:exists() then
-                        fileName = './settings/actions/lib/%s.json':format(action.import)
+                    if action.import:find(IMPORT_PLAYER_LIB) then
+                        fileName = action.import:gsub(IMPORT_PLAYER_LIB, './settings/%s/actions/lib':format(playerName)) .. '.json'
+                        -- print('Referenced player-level import: ' .. fileName)
                         file = files.new(fileName)
-                    end
-
-                    -- If the import doesn't exist there, use the standard actions lib folder
-                    if not file:exists() then
-                        fileName = './actions/lib/%s.json':format(action.import)
+                    elseif action.import:find(IMPORT_SETTINGS_LIB) then
+                        fileName = action.import:gsub(IMPORT_SETTINGS_LIB, './settings/actions/lib') .. '.json'
+                        -- print('Referenced Settings-level import: ' .. fileName)
                         file = files.new(fileName)
-                    end
-                end
+                    elseif action.import:find(IMPORT_GLOBAL_LIB) then
+                        fileName = action.import:gsub(IMPORT_GLOBAL_LIB, './actions/lib') .. '.json'
+                        --print('Referenced Global-level import: ' .. fileName)
+                        file = files.new(fileName)
+                    else                
+                        -- First, try the character-level actions libs folder
+                        fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
+                        file = files.new(fileName)
 
-                if file and file:exists() then
-                    import = json.parse(file:read())
-
-                    if import then
-                        -- if type(import.imports) == 'table' and import.imports[1] then
-                        --     for ii_index, ii_ref in ipairs(import.imports) do
-                        --         local 
-                        --         if not baseActions.importedImports[string.lower(ii_ref.import)] then
-                        --             baseActions.importedImports[string.lower(ii_ref.import)] = { import = string.lower(ii_ref.import) }
-                        --         end
-                        --     end
-                        -- end
-
-                        -- Remove the import reference from the calling action
-                        table.remove(actions, i)
-
-                        --
-                        -- Pull in any variables defined in this import. Existing values are not overwritten.
-                        if import.vars then
-                            loadVars(baseActions.vars, import.vars)
+                        -- If the import doesn't exist there, try the user-level actions lib folder
+                        if not file:exists() then
+                            fileName = './settings/actions/lib/%s.json':format(action.import)
+                            file = files.new(fileName)
                         end
 
-                        -- Pull in the macros
-                        if type(import.macros) == 'table' then
-                            local macros = type(import.macros) == 'table' and import.macros or { }
+                        -- If the import doesn't exist there, use the standard actions lib folder
+                        if not file:exists() then
+                            fileName = './actions/lib/%s.json':format(action.import)
+                            file = files.new(fileName)
+                        end
+                    end
 
-                            for name, macro in pairs(macros) do
-                                if baseActions.macros[name] == nil then
-                                    baseActions.macros[name] = macro
+                    if file and file:exists() then
+                        import = json.parse(file:read())
+
+                        if import then
+
+                            -- Remove the import reference from the calling action
+                            table.remove(actions, i)
+
+                            --
+                            -- Pull in any variables defined in this import. Existing values are not overwritten.
+                            if import.vars then
+                                loadVars(baseActions.vars, import.vars)
+                            end
+
+                            -- Pull in the macros
+                            if type(import.macros) == 'table' then
+                                local macros = type(import.macros) == 'table' and import.macros or { }
+
+                                for name, macro in pairs(macros) do
+                                    if baseActions.macros[name] == nil then
+                                        baseActions.macros[name] = macro
+                                    end
+                                end
+                            end                        
+                            import.macros = nil
+
+                            -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
+                            -- then the originating import action will simply be removed.
+                            if 
+                                import.actions and
+                                #import.actions > 0
+                            then
+                                for j = #import.actions, 1, -1 do
+                                    local importedAction = import.actions[j]
+                                    if importedAction then
+                                        imported = true
+                                        importedAction.importedFrom = action.import
+
+                                        table.insert(actions, i, importedAction)
+                                    end
                                 end
                             end
-                        end                        
-                        import.macros = nil
-
-                        -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
-                        -- then the originating import action will simply be removed.
-                        if 
-                            import.actions and
-                            #import.actions > 0
-                        then
-                            for j = #import.actions, 1, -1 do
-                                local importedAction = import.actions[j]
-                                if importedAction then
-                                    imported = true
-                                    importedAction.importedFrom = action.import
-
-                                    table.insert(actions, i, importedAction)
-                                end
-                            end
+                        end
+                    else
+                        if not action.silent then
+                            writeMessage('Warning: Referenced %s action import [%s] could not be found.':format(
+                                text_action(actionType),
+                                text_gold(action.import)
+                            ))
                         end
                     end
                 else
-                    if not action.silent then
-                        writeMessage('Warning: Referenced %s action import [%s] could not be found.':format(
-                            text_action(actionType),
-                            text_gold(action.import)
-                        ))
+                    if actionType ~= 'loading' then
+                        -- Move any "on_load" actions from non-loading action types to the end of the
+                        -- list of configured loading actions.
+                        if
+                            action.on_load == true
+                        then
+                            table.remove(actions, i)
+                            table.insert(baseActions.loading, action)
+                        end
                     end
                 end
             end
@@ -576,7 +581,7 @@ local function _expandActionMacrosToArray(macros, array)
     end
 
     -- Now, expand all macros into their respective actions
-    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'functions', "imports"}
+    local actionTypes = {'loading', 'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'functions', 'imports'}
     for i, actionType in ipairs(actionTypes) do
         local actions = loadedData and loadedData[actionType]
         if type(actions) == 'table' then
@@ -595,7 +600,7 @@ local function loadActionImports(playerName, actions, player)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'imports', 'functions'}
+        local types = {'loading', 'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'imports', 'functions'}
 
         -- Force macros and imports to an object, even if empty
         actions.macros = type(actions.macros) == 'table' and actions.macros or { }
@@ -609,8 +614,15 @@ local function loadActionImports(playerName, actions, player)
         table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/%s":format(player.main_job) })
         table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/common" })
 
-        for i = 1, #types do
-            local actionType = types[i]
+        -- Ensure that all action types have at least an empty array. We do this in a pre-pass step
+        -- to ensure that no action types are built until all action types are prepared.
+        for i, actionType in ipairs(types) do
+            if not actions[actionType] then
+                actions[actionType] = {}
+            end
+        end
+
+        for i, actionType in ipairs(types) do
             local passes = 0
 
             -- Prevent runaway, infinite imports. Most likely caused if an include references 

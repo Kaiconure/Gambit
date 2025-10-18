@@ -5,6 +5,7 @@
   },
   "vars": {
     "waypoints_ex": {
+      "leader_only": null,
       "data": null
     }
   },
@@ -14,7 +15,7 @@
       "commands": [
         "vars.waypoints_ex._latest.strategy and not any(vars.waypoints_ex._latest.strategy, settings.strategy) and sendCommand('gbt config -strat %s', vars.waypoints_ex._latest.strategy) and wait(1)",
         "vars.waypoints_ex._latest.distance and vars.waypoints_ex._latest.distance ~= settings.distance and sendCommand('gbt config -d %d', vars.waypoints_ex._latest.distance) and wait(1)",
-        "vars.waypoints_ex._latest.z and vars.waypoints_ex._latest.z ~= settings.z and sendCommand('gbt config -z %d', vars.waypoints_ex._latest.z) and wait(1)",
+        "vars.waypoints_ex._latest.z and vars.waypoints_ex._latest.z ~= settings.distance_z and sendCommand('gbt config -z %d', vars.waypoints_ex._latest.z) and wait(1)",
         "setVar('vars.waypoints_ex._latest', nil)"
       ],
       "delay": 0,
@@ -37,6 +38,7 @@
     },
     {
       "when": [
+        "not vars.waypoints_ex.leader_only or me.is_party_leader",
         "vars.waypoints_ex._current and not vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode ~= 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints_ex._current.points)",
@@ -55,6 +57,7 @@
     },
     {
       "when": [
+        "not vars.waypoints_ex.leader_only or me.is_party_leader",
         "vars.waypoints_ex._current and not vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode == 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints_ex._current.points)",
@@ -73,6 +76,7 @@
     },
     {
       "when": [
+        "not vars.waypoints_ex.leader_only or me.is_party_leader",
         "vars.waypoints_ex._current and vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode ~= 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or bounceNearest(result or vars.waypoints_ex._current.points)",
@@ -91,6 +95,7 @@
     },
     {
       "when": [
+        "not vars.waypoints_ex.leader_only or me.is_party_leader",
         "vars.waypoints_ex._current and vars.waypoints_ex._current.scoped and vars.waypoints_ex._current.mode == 'cycle'",
         "mobsInRange(vars.waypoints_ex._current.max_aggro_range or 0, true) < (vars.waypoints_ex._current.max_aggro or 0) or (actionType == 'idle' and not bt)",
         "(result and not checkPosition(result)) or cycleNearest(result or vars.waypoints_ex._current.points)",
