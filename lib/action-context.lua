@@ -5645,17 +5645,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         for i = 0, 5 do
             local member = context['p' .. i]
-            if not member then
-                -- The first party slot that's empty means we've maxed out on the party
-                break
-            end
-
-            local value = member[field]
-            if type(value) == 'number' then
-                if value <= min then
-                    if result == nil or value < result[field] then
-                        count = count + 1
-                        result = member
+            if member and member.valid_target then
+                local value = member[field]
+                if type(value) == 'number' then
+                    if value <= min then
+                        if result == nil or value < result[field] then
+                            count = count + 1
+                            result = member
+                        end
                     end
                 end
             end
