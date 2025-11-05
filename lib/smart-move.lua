@@ -268,7 +268,7 @@ local function sm_movement_exp(self, job)
     windower.ffxi.run(false)
 
     local me = windower.ffxi.get_mob_by_target('me')
-    if not me then return end
+    if not me or not me.x or not me.y then return end
     
     local vme = coordVector(me)
     local vto = job:pos():subtract(vme) -- to = target - me
@@ -299,6 +299,7 @@ local function sm_movement_exp(self, job)
 
         -- Update the 'me' mob
         me = windower.ffxi.get_mob_by_target('me')
+        if not me or not me.x or not me.y then return end
         
         -- Get the new vectors
         local vme2 = coordVector(me)
@@ -587,21 +588,23 @@ local function sm_createBaseJob(self, mode, skipcancel)
             end
 
             if point then
-                local vme = coordVector(me)
-                local vto = point:subtract(vme)
+                if me and me.x and me.y then
+                    local vme = coordVector(me)
+                    local vto = point:subtract(vme)
 
-                if vto:length() > 0 then
-                    local heading = vectorAngle(vto)
-                    
-                    -- All of this is necessary because of some weirdness in the game actually honoring the
-                    -- heading change request. TODO: Investigate why.
-                    windower.ffxi.turn(heading)
-                    coroutine.sleep(0.125)
+                    if vto:length() > 0 then
+                        local heading = vectorAngle(vto)
+                        
+                        -- All of this is necessary because of some weirdness in the game actually honoring the
+                        -- heading change request. TODO: Investigate why.
+                        windower.ffxi.turn(heading)
+                        coroutine.sleep(0.125)
 
-                    -- windower.ffxi.turn(heading)
-                    -- coroutine.sleep(0.125)
-                    -- windower.ffxi.turn(heading)
-                    -- coroutine.sleep(0.125)                
+                        -- windower.ffxi.turn(heading)
+                        -- coroutine.sleep(0.125)
+                        -- windower.ffxi.turn(heading)
+                        -- coroutine.sleep(0.125)                
+                    end
                 end
             end
         end
@@ -722,9 +725,12 @@ end
 -- offset angle and distance relative to the mob.
 function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
     local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
-    local player = windower.ffxi.get_mob_by_target('me')
+    local me = windower.ffxi.get_mob_by_target('me')
 
-    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
+    -- Cannot proceed if our own target is invalid
+    if not me or not me.x or not me.y then return end
+
+    return target:subtract(V({me.x, me.y})):length() <= self.tolerance
 end
 
 -----------------------------------------------------------------------------------------
@@ -736,9 +742,12 @@ function smartMove:atMobRear(index)
     end
 
     local target = findMobRear(mob, 2)
-    local player = windower.ffxi.get_mob_by_target('me')
+    local me = windower.ffxi.get_mob_by_target('me')
 
-    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
+    -- Cannot proceed if our own target is invalid
+    if not me or not me.x or not me.y then return end
+
+    return target:subtract(V({me.x, me.y})):length() <= self.tolerance
 end
 
 -----------------------------------------------------------------------------------------
@@ -976,7 +985,7 @@ function smartMove:followIndex(follow_index, distance)
         if job.follow_distance > 0 then
             local player = windower.ffxi.get_mob_by_target('me')
 
-            if player then
+            if player and player.x and player.y then
                 local vPlayer = V({player.x, player.y})
                 local vMob = V({self.mob.x, self.mob.y})
 

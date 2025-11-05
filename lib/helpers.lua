@@ -39,6 +39,8 @@ STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
 STATUS_EVENT          = 4
 STATUS_RESTING        = 33
+STATUS_MOUNT          = 85  -- See STATUS_CHOCOBO, which applies to a purchased chocobo and certain personal mounts (Noble Chocobo, etc)
+STATUS_CHOCOBO        = 5   -- See STATUS_MOUNT, which applies to most personal mounts
 
 -------------------------------------------------------------------------------
 -- Known packet id's

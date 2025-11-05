@@ -13,14 +13,18 @@ _addon.commands = __commands
 ---------------------------------------------------------------------------------------------------
 -- Print a formatted message to the Windower console
 function printDebug(format, ...)
-    print('GBT: ' .. string.format(tostring(format) or '', ...))
+    if settings and settings.debugging then
+        print('GBT: ' .. string.format(tostring(format) or '', ...))
+    end
 end
 
 ---------------------------------------------------------------------------------------------------
 -- Print a formatted message to the Windower console, with stack trace included
 function printDebugST(format, ...)
-    printDebug(format, ...)
-    printDebug('%s', debug.traceback())
+    if settings and settings.debugging then
+        printDebug(format, ...)
+        printDebug('%s', debug.traceback())
+    end
 end
 
 require('sets')
@@ -978,6 +982,72 @@ local _handle_partyBuffsChunk = function (id, data)
     actionStateManager:setMemberBuffs(partyBuffs)
 end
 
+local _handle_lockTargetChunk = function(id, data, modified_data, injected, blocked)
+    -- We won't mess with these packets if we're not enabled
+    if not globals.enabled then
+        return
+    end
+
+    -- If we get a target lock packet that was injected, we'll crosscheck it against the
+    -- latest injected targeting info and block if this is not it.
+    if injected then
+        -- printDebug('Received targeting packet %03X: injected=%s, blocked=%s':format(
+        --     id,
+        --     injected and 'true' or 'false',
+        --     blocked and 'true' or 'false'
+        -- ))
+
+        local packet = packets.parse('incoming', data)
+        local target_id = packet and packet.Target
+
+        -- If we couldn't get a target id, we'll just return. This shouldn't happen, but
+        -- if so we will just let Windower/FFXI do what it does.
+        if not target_id then
+            printDebug('Forwarding injected targeting packet due to no corresponding target id being found.')
+            return
+        end
+
+        -- If no lock target id has been saved, we will ignore this packet
+        if not globals.last_lock_target_id then
+            printDebug('Ignoring injected targeting packet due to no prior target id being found.')
+            return false
+        end
+
+        -- If the target id from this packet does not match up
+        if target_id ~= globals.last_lock_target_id then
+            printDebug('Ignoring injected targeting packet due to mismatching target id values.')
+            return false
+        end
+
+        -- If we're already targeting the mob represented by the packet, then we'll ignore
+        -- the packet due to the work already being done.
+        local current_t = windower.ffxi.get_mob_by_target('t')
+        if current_t and current_t.id == target_id then
+            printDebug('Ignoring injected targeting packet because the requested mob is already targeted.')
+            return false
+        end
+
+        -- If we're not in a valid targeting state, bail
+        local player = windower.ffxi.get_player()
+        if 
+            player and
+            player.status and (
+                player.status ~= STATUS_IDLE and
+                player.status ~= STATUS_RESTING and
+                player.status ~= STATUS_MOUNT and
+                player.status ~= STATUS_CHOCOBO
+            )
+        then
+            local status = resources.statuses[player.status]
+            printDebug('Ignoring injected targeting packet due to invalid player status [%s] / %d.':format(
+                status and status.name or 'n/a',
+                status and status.id or '-1'
+            ))
+            return false
+        end
+    end
+end
+
 local _handle_actionChunk = function(id, data)
     local packet = packets.parse('incoming', data)
 
@@ -1359,7 +1429,12 @@ local NPC_ACTIVATION_PACKETS =
 
 ---------------------------------------------------------------------
 -- Incoming chunks (chunks are individual pieces of a packet)
-windower.register_event('incoming chunk', function (id, data)
+windower.register_event('incoming chunk', function (id, data, modified_data, injected, blocked)
+    -- NOTES:
+    --  - Returning false from this handler will result in the packet being BLOCKED
+    --  - Returning nil from this handler will allow it to be forwarded on to the game and other handlers
+    --  - Returning a string from this handler will modify the packet before forwarding it on
+
     if
         id == 0x076     -- Party buffs update
     then
@@ -1373,6 +1448,10 @@ windower.register_event('incoming chunk', function (id, data)
     then
         _handle_actionMessageChunk(id, data)
     elseif
+        id == PACKET_TARGET_LOCK
+    then
+        _handle_lockTargetChunk(id, data, modified_data, injected, blocked)
+    elseif
         id == 0x063     -- Limit Point and Capacity Point updates
     then
         _handle_limitCapacityChunk(id, data)
@@ -1385,7 +1464,7 @@ windower.register_event('incoming chunk', function (id, data)
     --     if id ~= 0x00D and id ~= 0x00E and id ~= 0x037 and id ~= 0x067 and id ~= 0x0DF then
     --         print('packet received: %d (0x%03X)':format(id, id))
     --     end
-     end
+    end
 end)
 
 function cr_ipcSender()

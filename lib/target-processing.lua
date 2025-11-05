@@ -263,6 +263,9 @@ function lockTarget(player, mob, battleTarget, noTabs)
     local id = lock_target_id
     lock_target_id = lock_target_id + 1
 
+    -- We will store the id of the most recent mob we tried to lock onto
+    globals.last_lock_target_id = mob and type(mob.id) == 'number' and mob.id
+
     -- if battleTarget and player and player.status == STATUS_ENGAGED then
     --     writeMessage('WARN: Attempting to acquire mob %s/%s while already engaged!':format(
     --         text_number(mob and mob.id or -1),
@@ -296,7 +299,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 isMobPlayer(mob)
             then
                 windower.send_command('input /target %s;':format(mob.name))
-                coroutine.sleep(0.5)
+                coroutine.sleep(1)
 
                 local t = windower.ffxi.get_mob_by_target('t')
                 return t and t.id == mob.id and t.valid_target, nil
@@ -304,15 +307,17 @@ function lockTarget(player, mob, battleTarget, noTabs)
             
             if
                 mob.spawn_type == SPAWN_TYPE_TRUST or
-                (mob.spawn_type == SPAWN_TYPE_MOB and max_tabs <= 0) or
-                isMobPlayer(mob)    -- This should no longer be necessary due to the early bail above
+                mob.spawn_type == SPAWN_TYPE_MOB
+                --(mob.spawn_type == SPAWN_TYPE_MOB and max_tabs <= 0)
             then
-                if settings.debugging then
-                    writeMessage('DBG: lockTarget called from ' .. debug.traceback())
-                end
+                -- if settings.debugging then
+                --     writeMessage('DBG: lockTarget called from ' .. debug.traceback())
+                -- end
+
+                local loop_start_t = os.clock()
 
                 -- We'll try a few times to establish our target directly
-                for i = 1, 3 do
+                for i = 1, 5 do
                     packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
                         ['Player'] = player.id,
                         ['Target'] = mob.id,
@@ -320,7 +325,18 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     }))
 
                     -- Give it a moment to target
-                    coroutine.sleep((0.5 * (i - 1)) + 0.125)
+                    --coroutine.sleep((0.5 * (i - 1)) + 0.5)
+
+                    -- Exponentially increase the sleep time. Sample values include:
+                    --  - i=1:  0.5s
+                    --  - i=2:  0.6s    ~1.1s total
+                    --  - i=3:  0.7s    ~1.8s total
+                    --  - i=4:  0.8s    ~2.6s total
+                    --  - i=5:  1.0     ~3.6s total
+                    --  - i=6  (1.0)    ~4.6s total
+                    coroutine.sleep(
+                        math.min(math.pow(1.1, i - 1) - 0.5, 1.0)  -- Don't allow sleeps of longer than 1 second at a time
+                    )
 
                     local t = windower.ffxi.get_mob_by_target('t')
                     if 
@@ -333,6 +349,13 @@ function lockTarget(player, mob, battleTarget, noTabs)
                             break
                         end
 
+                        printDebug('Direct acquisition of [%s] / %d was successful after %.1fs and %d attempt(s)!':format(
+                            t.name,
+                            t.id,
+                            os.clock() - loop_start_t,
+                            i
+                        ))
+
                         -- writeVerbose('Direct target acquisition of %s was %s!':format(
                         --     text_mob(mob.name, Colors.verbose),
                         --     text_green('successful', Colors.verbose)
@@ -341,6 +364,12 @@ function lockTarget(player, mob, battleTarget, noTabs)
                         return true, nil
                     end
                 end
+
+                printDebug('Direct acquisition of [%s] / %d was UNSUCCESSFUL after %.1fs!':format(
+                    mob.name,
+                    mob.id,
+                    os.clock() - loop_start_t
+                ))
             else
                 -- We always need to go back to tabbing if we're going after a target of this spawn type (not a trust, mob, or player)
                 max_tabs = 10

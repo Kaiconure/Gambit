@@ -732,8 +732,28 @@ function context_randomize(...)
     end
 
     return args
+end
 
-    --return args[math.random(1, count)]
+-----------------------------------------------------------------------------------------
+-- Similar to context_randomize, but a bunch of the checks are done and it
+-- will only ever do a single pass.
+function context_fast_randomize(array)
+
+    -- Copy the array so we don't mess with something that may not expect it
+    array = { unpack(array) }
+
+    local count = #array
+    for index = 1, count do
+        local dest = math.random(1, count)
+        if dest ~= index then
+            local val = args[index]
+
+            args[index] = args[dest]
+            args[dest] = args[index]
+        end
+    end
+
+    return array
 end
 
 -----------------------------------------------------------------------------------------
@@ -850,19 +870,19 @@ local function enumerateContextByExpression(context, keys, expression, ...)
     
     local fn = loadstring('return ' .. expression)
     if type(fn) == 'function' then
-        for i, key in ipairs(keys) do
+
+        -- We'll always start at a random location in the key array, and iterate around from there.
+        -- This means order will always be the same, but the start point will be random.
+        local num_keys = #keys
+        local index = math.random(1, num_keys)
+
+        for i = 1, num_keys do
+            local key = keys[index]
             local field = context[key]
             
             if field then
                 local fenv = field
                 fenv.vars = context.vars
-
-                -- Add all fields for this party member to the context
-                -- for field, value in pairs(field) do
-                --     if type(value) ~= 'table' then
-                --         fenv[field] = value
-                --     end
-                -- end
 
                 -- Apply the env to the function, and execute it. Return this member if it evaluates successfully.
                 setfenv(fn, fenv)
@@ -871,10 +891,11 @@ local function enumerateContextByExpression(context, keys, expression, ...)
                 fenv.vars = nil
 
                 if result then
-                    --writeDebug('Evaluation passed!')
                     retVal[#retVal + 1] = fenv
                 end
             end
+
+            index = (index % num_keys) + 1
         end
     end
 
