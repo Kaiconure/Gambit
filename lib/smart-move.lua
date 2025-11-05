@@ -10,6 +10,7 @@ local smartMove = {
     tolerance = 0.33,
     mob_positions = {},
     mob_positions_by_index = {},
+    h_offset = 0,
     getMobById = windower.ffxi.get_mob_by_id,
     getMobByIndex = windower.ffxi.get_mob_by_index,
 
@@ -100,7 +101,19 @@ local function vectorAngle(v, from)
     if len == 0 then return 0 end
 
     v = v:normalize()
-    from = (from or FORWARD):normalize()
+
+    -- If a from vector was provided, we'll try to normalize it. We will
+    -- treat a zero-length from vector as if no vector was provided.
+    if from then
+        local fromLen = from:length()
+        if fromLen == 0 then
+            from = FORWARD
+        else
+            from = from:scale(1 / fromLen)
+        end
+    else
+        from = FORWARD
+    end
 
     local dot = vector.dot(from, v)
     local det = (from[1] * v[2]) - (from[2] * v[1])
@@ -146,7 +159,7 @@ local function findMobOffset(mob, angleOffset, distance)
                 (player.model_size or 0) +      -- Player model size
                 (mob and mob.model_size or 0)   -- Mob model size
             distance = 
-                distance + (distance_offset * 0.75)
+                distance + (distance_offset * 0.5)
         end
     end
 
@@ -159,14 +172,34 @@ local function findMobOffset(mob, angleOffset, distance)
         -- Calculate the vector from the mob to me. This is the line we should take.
         -- Normalize it and scale by the travel distance, and added to the mob position
         -- that will give us the target location we're aiming for.
-        local vOffset = vPlayer:subtract(vMob):normalize():scale(distance)
-        return vMob:add(vOffset)
+        local vOffset = vPlayer:subtract(vMob)
+        local length = vOffset:length()
+        if length > 0 then
+            -- The following operation is the same as normalizing the vector and multiplying by the desired distance
+            -- This was previously: 
+            --    local vOffset = vPlayer:subtract(vMob):normalize():scale(distance)
+            --
+            vOffset = vOffset:scale(distance / length)
+            return vMob:add(vOffset)
+        end
+
+        -- For zero-length vectors, just keep the player in their current spot
+        return vPlayer
     end
 end
 
 -- Find the point at the given distance behind the specified mob
 local function findMobRear(mob, distance)
     return findMobOffset(mob, math.pi, distance)
+end
+
+-- h_offset > 0: right, h_offset < 0: left (we pass the sign via angle)
+local function findLateralOffset(mob, h_offset)
+    if h_offset == 0 then
+        return V({mob.x, mob.y})
+    end
+    local angle = (h_offset > 0) and (math.pi / 2) or (-math.pi / 2)
+    return findMobOffset(mob, angle, math.abs(h_offset))
 end
 
 local teleporter_matches = {
@@ -947,19 +980,36 @@ function smartMove:followIndex(follow_index, distance)
                 local vPlayer = V({player.x, player.y})
                 local vMob = V({self.mob.x, self.mob.y})
 
+                local follow_distance = job.follow_distance
+                local h_offset = smartMove.h_offset
+                
+                -- If the player is mounted, we'll increase the distances a bit to account
+                -- for the large mount model sizes and greater movement speed.
+                if player.status == 85 or player.status == 5 then
+                    -- Note: Status 85 is mount, 5 is chocobo
+                    follow_distance = follow_distance + 3
+                    h_offset = smartMove.h_offset_mounted
+                end
+
+                -- For players, we'll apply the horizontal offset if one is configured. This is a left or
+                -- right offset relative to the mob's heading.
+                if self.mob.spawn_type == 13 or self.mob.spawn_type == 1 then
+                    vMob = findLateralOffset(self.mob, h_offset)
+                end
+
                 local toTarget = vMob:subtract(vPlayer)
                 local distance = toTarget:length()
                 
                 local pos = vPlayer
                 local scale = 0
-                if distance >= job.follow_distance + 2 then
+                if distance >= follow_distance + 2 then
                     -- If we're further than the follow distance (by a certain margin),
                     -- we will simply aim directly at the target. This gets us within
                     -- the vicinity in a more direct way, and we'll worry about distance
                     -- precision only when we're relatively close.
                     scale = 1
                 elseif distance > 0 then
-                    scale = (distance - job.follow_distance) / distance
+                    scale = (distance - follow_distance) / distance
                     if scale < 0 then
                         scale = 0.01
                     end
@@ -1016,6 +1066,23 @@ end
 function smartMove:applySettings(settings)
     self.settings = settings or {}
     current_settings = self.settings
+
+    local h_offset_range = type(current_settings.followOffset) == 'number' and math.abs(current_settings.followOffset) or 1.0
+
+    -- NOTE: We'll set a random horizontal offset for follows. It will be within h_offset_range,
+    -- and will make the follow behavior a little less robotic. We will eventualy make this
+    -- configurable, but we're sticking it here for now because it'll make the future config
+    -- change thing seamless (just comment out this line at that point).
+    if h_offset_range > 0 then
+        smartMove.h_offset = (math.random() * h_offset_range * 2.0) - h_offset_range
+        smartMove.h_offset_mounted = smartMove.h_offset * 1.5
+            -- (math.random() * (h_offset_range + 2) * 2.0) - (h_offset_range + 2)
+    else
+        smartMove.h_offset = 0.0
+        smartMove.h_offset_mounted = 0
+    end
+
+    --print('h_off: %.2f':format(smartMove.h_offset))
 end
 
 function smartMove:setMobLookupFunctions(byId, byIndex)

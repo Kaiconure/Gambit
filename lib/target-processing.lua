@@ -72,10 +72,14 @@ local function setTargetMob(mob)
         return
     end
 
-    writeMessage('Identified %s as the next best target...':format(
-        text_mob(mob.name),
-        text_number("%03Xh":format(mob.index))
-    ))
+    -- Don't message if we're just re-targeting the same mob
+    --local currentTarget = globals.target
+    --if not currentTarget or not currentTarget.id or currentTarget.id ~= mob.id then
+        writeMessage('Identified %s %s as the next best target...':format(
+            text_mob(mob.name),
+            text_number(tostring(mob.id))
+        ))
+    --end
 
     -- Cancel any active movement job now that we have a target. As of v0.96.0-beta11, this cancellation
     -- will only happen if the slowTargetTransitions setting is enabled (off by default).
@@ -83,23 +87,54 @@ local function setTargetMob(mob)
         smartMove:cancelJob()
     end
 
-    lockTarget(player, mob, true)
-    resetCurrentMob(mob)
+    local result, overridden = lockTarget(player, mob, true)
+    if result then
+        if overridden then
+            printDebug('Was looking for %d, identified %d':format(mob.id, overridden.id))
+        end
+        
+        resetCurrentMob(overridden or mob)
+    end
+
+    -- if lockTarget(player, mob, true) then
+    --     resetCurrentMob(mob)
+    -- end
 end
 
 local function shouldAquireNewTarget(player, party)
     local checkEngagement = true
 
-    local current_t = windower.ffxi.get_mob_by_target('t') -- or windower.ffxi.get_mob_by_target('bt')
+    local current_t = windower.ffxi.get_mob_by_target('t')
+    local current_bt = windower.ffxi.get_mob_by_target('bt')
+
+    current_t = (current_t and current_t.spawn_type == SPAWN_TYPE_MOB and current_t) or current_bt
 
     -- Make sure we don't fixate on a mob we can't actually engage
     local currentTarget = globals.target
     local currentMob = currentTarget:mob()
+
+    -- if 
+    --     current_t and 
+    --     current_t.status == STATUS_ENGAGED and
+    --     player.status == STATUS_ENGAGED and
+    --     --(currentMob and currentMob.id == current_t.id) and
+    --     partyInfo:canShareClaim(current_t.claim_id)
+    -- then
+    --     if currentMob == nil or currentMob.id ~= current_t.id then
+    --         print('GBT: Early sync unregistered with %d/%s':format(current_t.id, current_t.name))
+    --         print(debug.traceback())
+    --         writeVerbose('GBT: Early syncing with unregistered engagement target: %s':format(text_mob(current_t.name)))
+    --         resetCurrentMob(current_t)
+    --     end
+
+    --     return false
+    -- end
+    
     if settings.strategy ~= TargetStrategy.manual then
         if 
             currentMob and (
-                (current_t and current_t.id == currentMob.id) or
-                (not partyInfo:canShareClaim(currentMob.claim_id))
+                (current_t and current_t.id == currentMob.id) or    -- Our current target is the same as the tracked mob    -OR-
+                (not partyInfo:canShareClaim(currentMob.claim_id))  -- The current target is not something we can claim
             )
         then
             checkEngagement = false
@@ -107,21 +142,39 @@ local function shouldAquireNewTarget(player, party)
             local runtime = currentTarget:runtime()
 
             -- Don't swap off the current mob if you have an Elvorseal (multi-party mobs)
-            local mobClaimed = currentMob.claim_id > 0
-            local mobClaimedByParty = partyInfo:canShareClaim(currentMob.claim_id)
+            local mobClaimed = partyInfo:isClaimedMob(currentMob)
+            local partyCanClaim = partyInfo:canShareClaimOnMob(currentMob)
+
+            -- If the mob is claimed and the party can claim it, we'll mark the mob as having been claimed
+            if mobClaimed and partyCanClaim then
+                currentTarget:markClaim()
+            end
 
             local refDistance = settings.maxDistance + 2
             local maxDistanceSquared = refDistance * refDistance
 
             local claimStolen = 
                 mobClaimed and
-                not mobClaimedByParty
+                not partyCanClaim
             local claimTimedOut = 
-                not mobClaimed and
-                runtime >= settings.maxChaseTime
+                not mobClaimed and                  -- Not current claimed -AND-
+                not currentTarget:hadClaim() and    -- Has not BEEN claimed -AND-
+                runtime >= settings.maxChaseTime    -- The max chasedown time has ellapsed
             local claimOutOfRange = 
                 not mobClaimed and
                 currentMob.distance > maxDistanceSquared
+
+
+            if not mobClaimed and currentTarget:hadClaim() then
+                printDebug('Detected lost claim on %d/%s':format(currentMob.id, currentMob.name))
+            end
+
+            -- if not claimStolen and not claimOutOfRange then
+            --     if claimTimedOut and current_t.hpp > 99 then
+            --         claimTimedOut = false
+            --         print('GBT: Bypassing potentially fake timeout call.')
+            --     end
+            -- end
 
             if 
                 claimStolen or
@@ -210,6 +263,18 @@ function lockTarget(player, mob, battleTarget, noTabs)
     local id = lock_target_id
     lock_target_id = lock_target_id + 1
 
+    -- if battleTarget and player and player.status == STATUS_ENGAGED then
+    --     writeMessage('WARN: Attempting to acquire mob %s/%s while already engaged!':format(
+    --         text_number(mob and mob.id or -1),
+    --         text_mob(mob and mob.name or 'unknown')
+    --     ))
+    --     printDebug('WARN: Attempting to acquire mob %d/%s while already engaged!':format(
+    --         mob and mob.id or -1,
+    --         mob and mob.name or 'unknown'
+    --     ))
+    --     return false, nil
+    -- end
+
     if player and mob then
         if 
             mob.valid_target and
@@ -221,6 +286,11 @@ function lockTarget(player, mob, battleTarget, noTabs)
             local forced_tabbing = false
             local fail_fast = false
 
+            -- NEW: Mobs require tabs at this point
+            if mob.spawn_type == SPAWN_TYPE_MOB then
+                max_tabs = math.max(max_tabs, 5)
+            end
+
             -- Bail early for players, since we can target them by name
             if
                 isMobPlayer(mob)
@@ -229,12 +299,12 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 coroutine.sleep(0.5)
 
                 local t = windower.ffxi.get_mob_by_target('t')
-                return t and t.id == mob.id and t.valid_target
+                return t and t.id == mob.id and t.valid_target, nil
             end
             
             if
                 mob.spawn_type == SPAWN_TYPE_TRUST or
-                mob.spawn_type == SPAWN_TYPE_MOB or
+                (mob.spawn_type == SPAWN_TYPE_MOB and max_tabs <= 0) or
                 isMobPlayer(mob)    -- This should no longer be necessary due to the early bail above
             then
                 if settings.debugging then
@@ -268,7 +338,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                         --     text_green('successful', Colors.verbose)
                         -- ))
 
-                        return true
+                        return true, nil
                     end
                 end
             else
@@ -299,20 +369,29 @@ function lockTarget(player, mob, battleTarget, noTabs)
                         (
                             (target.id == mob.id and target.index == mob.index) or
                             (
-                                mob.spawn_type == SPAWN_TYPE_MOB and mob.status == STATUS_IDLE and (
+                                mob.spawn_type == SPAWN_TYPE_MOB and mob.valid_target and mob.hpp > 0 and (
                                     (settings.selection_mode == 'any_aggressive' and target.spawn_type == mob.spawn_type and target.status == STATUS_ENGAGED and target.distance <= (settings.maxDistance ^ 2)) or
                                     (settings.selection_mode == 'any' and target.spawn_type == mob.spawn_type and target.distance <= (settings.maxDistance ^ 2))
-                                )
+                                ) and
+                                partyInfo:canShareClaim(target.claim_id)
                             )
-                        )
+                        ) 
                     then
-                        if duration >= 2 or target.id ~= mob.id then
-                            writeVerbose('Target acquisition of %s was %s after %s%s':format(
+                        local overridden = target.id ~= mob.id and target or nil
+
+                        if 
+                            --duration >= 2 or
+                            duration >= 0 or
+                            target.id ~= mob.id
+                        then
+                            writeVerbose('Target acquisition of %s (%s) was %s after %s%s':format(
                                 text_mob(mob.name, Colors.verbose),
+                                text_number(tostring(mob.id), Colors.verbose),
                                 text_green('successful', Colors.verbose),
                                 text_number('%.1fs':format(duration), Colors.verbose),
-                                target.id == mob.id and '' or text_yellow(' (overridden)')
+                                overridden and text_yellow(' (overridden)') or ''
                             ))
+                            
                         end
 
                         -- Pull out of first person view if we tabbed
@@ -325,8 +404,8 @@ function lockTarget(player, mob, battleTarget, noTabs)
                         --     writeMessage('DBG: lockTarget exiting with %s':format(text_green('success')))
                         -- end
                         
-                        return true
-                    end                    
+                        return true, overridden
+                    end
 
                     local now = os.clock()
                     duration = now - start
@@ -365,7 +444,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                                 
                                 if tabs_remaining > 0 then
                                     tabs_remaining = tabs_remaining - 1
-                                    sleep_duration = 0.25
+                                    sleep_duration = 0.3
                                     
                                     local command = ''
 
@@ -392,13 +471,13 @@ function lockTarget(player, mob, battleTarget, noTabs)
                                                 'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
                                                 'setkey escape down;  wait 0.1; setkey escape up;  wait 0.2;'
 
-                                            sleep_duration = sleep_duration + 1.3
+                                            sleep_duration = sleep_duration + 1.2
                                         elseif info.chat_open then
                                             -- When the chat is open, we need to send a single escape to close it out
                                             command = command ..
                                                 'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;'
 
-                                            sleep_duration = sleep_duration + 0.25
+                                            sleep_duration = sleep_duration + 0.2
                                         end
 
                                         command = command .. 
@@ -409,6 +488,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                                     else
                                         -- Construct and send the tab press command
                                         command = command .. 'setkey tab down; wait 0.1; setkey tab up;'
+                                        sleep_duration = sleep_duration + 0.1
                                     end
                                     
                                     windower.send_command(command)                                
@@ -422,9 +502,8 @@ function lockTarget(player, mob, battleTarget, noTabs)
                             end
                         end
 
-                        if duration < settings.targetingDuration then
-                            coroutine.sleep(sleep_duration)
-                        else
+                        coroutine.sleep(sleep_duration)
+                        if duration >= settings.targetingDuration then
                             looping = false
                         end
                     else
@@ -459,10 +538,14 @@ local targetScope = 0
 --------------------------------------------------------------------------------------
 --
 function resetCurrentMob(mob, force)
+    --printDebug('Entering resetCurrentMob (%d) with force=%s':format(mob and mob.id or -1, force and 'true' or 'false'))
+
     -- local info = windower.ffxi.get_info()
     -- if not info or not info.logged_in then
     --     return
     -- end
+
+    --print('resetCurrentMob: %s':format(debug.traceback()))
 
     -- We're setting the same mob if both old and new are nil, or both old and new share the same mob id
     local isSameMob = globals.target and (
@@ -492,7 +575,10 @@ function resetCurrentMob(mob, force)
         local _temp = {
             _scopeId = targetScope,
             _mob = mob,
-            _start = os.clock(),            
+            _start = os.clock(),
+            _claim_mark = false,
+
+            id = mob and mob.id,
 
             --------------------------------------------------------------------------------------
             -- Gets the mob, as it was originally set when found
@@ -515,10 +601,22 @@ function resetCurrentMob(mob, force)
                         return mob
                     else
                         -- TODO: Is this dangerous? Resetting the mob on a fetch?
-                        resetCurrentMob(nil, true)
+                        --resetCurrentMob(nil, true)
                         return nil
                     end
                 end
+            end,
+
+            --------------------------------------------------------------------------------------
+            -- Marks the mob as having been claimed
+            markClaim = function(self)
+                self._claim_mark = true
+            end,
+
+            --------------------------------------------------------------------------------------
+            -- Determine whether the mob had received the claim mark
+            hadClaim = function(self)
+                return self._claim_mark
             end,
 
             runtime = function (self)
@@ -554,7 +652,7 @@ function processTargeting(player, party)
             smartMove:cancelJob()
             windower.send_command('input /attack off')
             coroutine.sleep(1)
-            setTargetMob(mob)
+            setTargetMob(mob)   -- Only on explicit set
 
             return
         end
@@ -605,10 +703,6 @@ function processTargeting(player, party)
                     (target.claim_id and target.claim_id > 0) and
                     partyInfo:canShareClaim(target.claim_id)
                 then
-                    -- If the party leader is engaged with the target -AND- the target is engaged, then this is
-                    -- the mob we're looking for. Move along, move along.
-                    --setTargetMob(target)
-
                     -- Let's just try a /assist command here and let it do its thing
                     windower.send_command('input /assist "%s";':format(leaderMob.name))
                     coroutine.sleep(0.5)
@@ -621,7 +715,7 @@ function processTargeting(player, party)
                         t.id == target.id and
                         t.index == target.index
                     then
-                        setTargetMob(t)
+                        setTargetMob(t) -- Match up with the party leader's target, which we've already acquired
                     end
                 end
             end
@@ -761,6 +855,6 @@ function processTargeting(player, party)
     -- At this point, we'll take the nearest aggroing mob or the best match we found via strategy
     local mobToTarget = nearestAggroingMob or bestMatchingMob
     if mobToTarget ~= nil then
-        setTargetMob(mobToTarget)
+        setTargetMob(mobToTarget)   -- Set the mob that was selected based on strategy, ignore list, and other settings
     end
 end

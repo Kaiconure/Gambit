@@ -119,9 +119,12 @@ function sendActionCommand(
         smartMove:resetJitter()
     end
 
-    -- TODO: Maybe see if there's a better way to figure this out dynamically?
+    -- Maybe see if there's a better way to figure this out dynamically? In either case, spell casting
+    -- and ranged attacks have their own dedicated functions which handle this better.
     local complete = true
 
+    -- If the action was interrupted, we'll mark it as incomplete so it can be rescheduled. Refer to
+    -- the executeBattleAction function to see how action.incomplete is handled.
     if context and context.action then
         complete = true
         context.action.complete = true
@@ -174,15 +177,21 @@ function sendRangedAttackCommand(target, context, waitFor)
 
     local endTime = os.clock()
 
+    -- If the attack was interrupted, we'll mark it as incomplete so it can be rescheduled. Refer to
+    -- the executeBattleAction function to see how action.incomplete is handled.
     if context and context.action then
         context.action.complete = complete
         context.action.incomplete = not complete
     end
 
-    writeDebug('Ranged attack observer has completed with %s after %s!':format(
-        complete and text_green('success') or text_red('interruption'),
-        pluralize('%.1f':format(endTime - startTime), 'second', 'seconds')
-    ))
+    -- In debug mode, let's log that we've finished our work here. Note that we don't technically need the
+    -- verbosity level check here, but it's more efficient to avoid the string formatting if we don't need it.
+    if settings.verbosity >= VERBOSITY_DEBUG then
+        writeDebug('Ranged attack observer has completed with %s after %s!':format(
+            complete and text_green('success', Colors.debug) or text_red('interruption', Colors.debug),
+            pluralize('%.1f':format(endTime - startTime), 'second', 'seconds', Colors.debug)
+        ))
+    end
 
     return complete
 end
@@ -204,7 +213,7 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     -- Calculate the maximum amount of time we will wait for spell casting to complete. It's
     -- safer for this to err on the slightly longer side, as we will exit early as soon as we
     -- detect that casting has completed.
-    local endTime = os.clock() + (math.max(spell.cast_time, 1) * 1.5) + 1
+    local endTime = os.clock() + (math.max(spell.cast_time, 1) * 1.5) + 2
 
     -- Construct the actual spell casting command
     local command = 'input %s "%s" <%s>':format(
@@ -235,7 +244,7 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
             interrupted = currentSpell.interrupted
         else
             isFirstCycle = false
-            coroutine.sleep(0.25)
+            coroutine.sleep(0.5)
         end
     end
 
@@ -243,7 +252,7 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
 
     -- We need to pad the casting time a bit, because spell casting fires its completion event before
     -- it's actually fully done casting.
-    local paddingTime = 2.0
+    local paddingTime = 3.0
 
     coroutine.sleep(paddingTime)
 
@@ -256,32 +265,20 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     local castingTime = castingEndedAt - castingStartedAt
     local totalTime = wokeAt - castingStartedAt
 
-    local complete = not interrupted
-
-    -- If the spell was interrupted, we'll adjust scheduling to allow it to be tried again
-    if
-        interrupted and
-        context and
-        context.action and
-        ignoreIncomplete ~= true
-    then
-        context.action.complete = false
-        context.action.incomplete = true
-    elseif 
-        not interrupted and
-        context and 
-        context.action 
-    then
-        context.action.complete = true
-        context.action.incomplete = false
+    -- If the spell was interrupted, we'll mark it as incomplete so it can be rescheduled. Refer to
+    -- the executeBattleAction function to see how action.incomplete is handled.
+    local complete = not interrupted or ignoreIncomplete == true
+    if context and context.action then
+        context.action.complete = complete
+        context.action.incomplete = not complete
     end
 
-    -- In trace mode, let's log that we've finished our work here
-    if settings.verbosity >= VERBOSITY_TRACE then
-        writeTrace('%s: Cast time %s / Observer time %s':format(
-            text_spell(spell.name, Colors.trace),
-            pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.trace),
-            pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.trace)        
+    -- In debug mode, let's log that we've finished our work here
+    if settings.verbosity >= VERBOSITY_DEBUG then
+        writeDebug('%s: Cast time %s / Observer time %s':format(
+            text_spell(spell.name, Colors.debug),
+            pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.debug),
+            pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.debug)        
         ))
     end
 
@@ -549,116 +546,117 @@ local function getNextBattleAction(context)
 
     if actions then
         for i, action in ipairs(actions) do
-
-            if action.scope == 'battle' or action.scope == 'zone' then
-                --
-                -- Handle execution scoping. This is updated only when the action conditions are met.
-                local last_scope = action.scopes.execution[action.scope]
-                local context_scope = context.scopes[action.scope]
-                if not last_scope or last_scope ~= context_scope then
-                    action.availableAt = 0
-                end
-
-                --
-                -- Handle iteration scoping. This is updated anytime the action is evaluated.
-                if action.scoped_enumerators then
-                    last_scope = action.scopes.iteration[action.scope]
+            if not action.as_function then
+                if action.scope == 'battle' or action.scope == 'zone' then
+                    --
+                    -- Handle execution scoping. This is updated only when the action conditions are met.
+                    local last_scope = action.scopes.execution[action.scope]
+                    local context_scope = context.scopes[action.scope]
                     if not last_scope or last_scope ~= context_scope then
-                        action.enumerators = { }
+                        action.availableAt = 0
+                    end
+
+                    --
+                    -- Handle iteration scoping. This is updated anytime the action is evaluated.
+                    if action.scoped_enumerators then
+                        last_scope = action.scopes.iteration[action.scope]
+                        if not last_scope or last_scope ~= context_scope then
+                            action.enumerators = { }
+                        end
                     end
                 end
-            end
 
-            if 
-                context.time >= action.availableAt and
-                delayReference >= action.delay
-            then 
-                -- When we evaluate a new action, we need to clear the state left behind by any previous actions
-                context.spell                   = nil   -- Current spell
-                context.spell_recast            = nil   -- Recast (in seconds) of the current spell
-                context.ability                 = nil   -- Current ability
-                context.ability_recast          = nil   -- Recast (in seconds) of the current ability
-                context.ability_face_away       = nil   -- The currently triggered ability face away
-                context.spell_face_away         = nil   -- The currently triggered spell face away
-                context.ability_face_away_start = nil   -- The currently triggered bracketed ability face away starter
-                context.ability_face_away_end   = nil   -- The currently triggered bracketed ability face away closer
-                context.item                    = nil   -- Current item info [Item resource is at context.item.item]
-                context.ranged                  = nil   -- Current ranged attack equipment and ammo info
-                context.effect                  = nil   -- Current buff/effect
-                context.effect_count            = 0     -- Current buff/effect count (e.g. you could have multiple Ballad effects at once)
-                context.member                  = nil   -- The result of a targeting enumerator
-                context.member_count            = 0     -- The count of members in the current search enumerator
-                context.mob                     = nil   -- The result of a mob search iterator
-                context.mob_by_target           = nil   -- The result of a successful getMobByTarget operation
-                context.point                   = nil   -- The result of a position lookup
-                context.result                  = nil   -- The result of the latest arrayiterator operation
-                context.player_result           = nil   -- The result of the latest find player operation
-                context.find_result             = nil   -- The result of a general find by name operation
-                context.nearest_result          = nil   -- The result of a nearest operation
-                context.farthest_result         = nil   -- The result of a farthest/furthest operation
-                context.furthest_result         = nil   -- The (alternate) result of a farthest/furthest operation
-                context.results                 = { }   -- The results of all current array iterator operations
-                context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
-                context.enemy_ability           = nil   -- The current mob ability
-                context.enemy_spell             = nil   -- The current mob spell
-                context.enemy_spell_target      = nil   -- The current mob spell's target
-                context.weapon_skill            = nil   -- The weapon skill you're trying to use
-
-                -- Save the iteration scope. This is done anytime the action is evaluated.
-                action.scopes.iteration.battle  = context.scopes.battle
-                action.scopes.iteration.zone   = context.scopes.zone
-                
-                -- Reload the enumerator data
                 if 
-                    action.enumerators and
-                    action.enumerators.array
-                then
-                    for name, enumerator in pairs(action.enumerators.array) do
-                        if enumerator.data and enumerator.at then
-                            context.results[name] = enumerator.data[enumerator.at]
+                    context.time >= action.availableAt and
+                    delayReference >= action.delay
+                then 
+                    -- When we evaluate a new action, we need to clear the state left behind by any previous actions
+                    context.spell                   = nil   -- Current spell
+                    context.spell_recast            = nil   -- Recast (in seconds) of the current spell
+                    context.ability                 = nil   -- Current ability
+                    context.ability_recast          = nil   -- Recast (in seconds) of the current ability
+                    context.ability_face_away       = nil   -- The currently triggered ability face away
+                    context.spell_face_away         = nil   -- The currently triggered spell face away
+                    context.ability_face_away_start = nil   -- The currently triggered bracketed ability face away starter
+                    context.ability_face_away_end   = nil   -- The currently triggered bracketed ability face away closer
+                    context.item                    = nil   -- Current item info [Item resource is at context.item.item]
+                    context.ranged                  = nil   -- Current ranged attack equipment and ammo info
+                    context.effect                  = nil   -- Current buff/effect
+                    context.effect_count            = 0     -- Current buff/effect count (e.g. you could have multiple Ballad effects at once)
+                    context.member                  = nil   -- The result of a targeting enumerator
+                    context.member_count            = 0     -- The count of members in the current search enumerator
+                    context.mob                     = nil   -- The result of a mob search iterator
+                    context.mob_by_target           = nil   -- The result of a successful getMobByTarget operation
+                    context.point                   = nil   -- The result of a position lookup
+                    context.result                  = nil   -- The result of the latest arrayiterator operation
+                    context.player_result           = nil   -- The result of the latest find player operation
+                    context.find_result             = nil   -- The result of a general find by name operation
+                    context.nearest_result          = nil   -- The result of a nearest operation
+                    context.farthest_result         = nil   -- The result of a farthest/furthest operation
+                    context.furthest_result         = nil   -- The (alternate) result of a farthest/furthest operation
+                    context.results                 = { }   -- The results of all current array iterator operations
+                    context.is_new_result           = nil   -- An indicator that the latest array iterator value is new this cycle
+                    context.enemy_ability           = nil   -- The current mob ability
+                    context.enemy_spell             = nil   -- The current mob spell
+                    context.enemy_spell_target      = nil   -- The current mob spell's target
+                    context.weapon_skill            = nil   -- The weapon skill you're trying to use
+
+                    -- Save the iteration scope. This is done anytime the action is evaluated.
+                    action.scopes.iteration.battle  = context.scopes.battle
+                    action.scopes.iteration.zone   = context.scopes.zone
+                    
+                    -- Reload the enumerator data
+                    if 
+                        action.enumerators and
+                        action.enumerators.array
+                    then
+                        for name, enumerator in pairs(action.enumerators.array) do
+                            if enumerator.data and enumerator.at then
+                                context.results[name] = enumerator.data[enumerator.at]
+                            end
+                        end
+
+                        if action.enumerators.array_name then
+                            context.result = context.results[action.enumerators.array_name]
                         end
                     end
 
-                    if action.enumerators.array_name then
-                        context.result = context.results[action.enumerators.array_name]
-                    end
-                end
+                    -- Store the current action to the context
+                    context.action = action
 
-                -- Store the current action to the context
-                context.action = action
+                    -- Make the context visible to the action function
+                    setfenv(action._whenFn, context)
 
-                -- Make the context visible to the action function
-                setfenv(action._whenFn, context)
+                    if action._whenFn() then
+                        -- If this action will get run, we'll need to schedule the next run time. We'll actually
+                        -- update this later, after the actions are executed, based on the time they complete.
+                        action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
 
-                if action._whenFn() then
-                    -- If this action will get run, we'll need to schedule the next run time. We'll actually
-                    -- update this later, after the actions are executed, based on the time they complete.
-                    action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
-
-                    if settings.verbosity >= VERBOSITY_DEBUG then
-                        writeDebug('Condition met %s %s [scope: %s]':format(
-                            text_action(context.actionType .. '.' .. i, Colors.debug),
-                            text_green(action.when, Colors.debug),
-                            text_gray(tostring(action.scope) or 'none', Colors.debug)
-                        ))
-                    end
-
-                    -- Save the execution scope. This is done anytime the action is triggered, or if it uses a miss_frequency
-                    -- value as that controls execution scheduling.
-                    action.scopes.execution.battle  = context.scopes.battle
-                    action.scopes.execution.zone   = context.scopes.zone
-
-                    return action
-                else
-                    -- When an action is "missed" (the when condition is not met), we may still need to push out
-                    -- its next available time based on the configured miss frequency.
-                    if action.miss_frequency > 0 then
-                        action.availableAt = math.max(os.clock() + action.miss_frequency, action.availableAt)
+                        if settings.verbosity >= VERBOSITY_DEBUG then
+                            writeDebug('Condition met %s %s [scope: %s]':format(
+                                text_action(context.actionType .. '.' .. i, Colors.debug),
+                                text_green(action.when, Colors.debug),
+                                text_gray(tostring(action.scope) or 'none', Colors.debug)
+                            ))
+                        end
 
                         -- Save the execution scope. This is done anytime the action is triggered, or if it uses a miss_frequency
                         -- value as that controls execution scheduling.
                         action.scopes.execution.battle  = context.scopes.battle
                         action.scopes.execution.zone   = context.scopes.zone
+
+                        return action
+                    else
+                        -- When an action is "missed" (the when condition is not met), we may still need to push out
+                        -- its next available time based on the configured miss frequency.
+                        if action.miss_frequency > 0 then
+                            action.availableAt = math.max(os.clock() + action.miss_frequency, action.availableAt)
+
+                            -- Save the execution scope. This is done anytime the action is triggered, or if it uses a miss_frequency
+                            -- value as that controls execution scheduling.
+                            action.scopes.execution.battle  = context.scopes.battle
+                            action.scopes.execution.zone   = context.scopes.zone
+                        end
                     end
                 end
             end
@@ -860,8 +858,14 @@ local function doNextActionCycle(time, player, party)
                     local hasCommand = false
 
                     -- Lock on if necessary
-                    if player.target_index ~= mob.index then
+                    local target = windower.ffxi.get_mob_by_target('t')
+                    --if player.target_index ~= mob.index then
+                    if target == nil or target.id ~= mob.id then
+                        
+                        --printDebug('Pull targeting start')
                         lockTarget(player, mob, true)
+                        --printDebug('Pull targeting completed')
+
                         --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
                         --hasCommand = true
                     end
@@ -985,16 +989,18 @@ function cr_actionProcessor()
 
                     if #loading_actions > 0 then
                         for i, action in ipairs(loading_actions) do
-                            actionStateManager:setActionType(context.actionType)
-                            
-                            if type(action._whenFn) == 'function' then
-                                setfenv(action._whenFn, context)
-                                if action._whenFn() then
-                                    if action.commands and #action.commands > 0 then
-                                        for j, command in ipairs(action.commands) do
-                                            -- Make the context visible to the command function, and execute it
-                                            setfenv(command._commandFn, context)
-                                            command._commandFn()
+                            if not action.as_function then
+                                actionStateManager:setActionType(context.actionType)
+                                
+                                if type(action._whenFn) == 'function' then
+                                    setfenv(action._whenFn, context)
+                                    if action._whenFn() then
+                                        if action.commands and #action.commands > 0 then
+                                            for j, command in ipairs(action.commands) do
+                                                -- Make the context visible to the command function, and execute it
+                                                setfenv(command._commandFn, context)
+                                                command._commandFn()
+                                            end
                                         end
                                     end
                                 end

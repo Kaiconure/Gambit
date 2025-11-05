@@ -1,0 +1,30 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {
+    "blue_alert": {
+      "learnable_spell_used": false
+    }
+  },
+  "actions": [
+    {
+      "commands": ["setVar('vars.blue_alert.learnable_spell_used', false)"],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "enemyUsedAbility() and isSpell(enemy_ability.name) and spell.type == 'BlueMagic'"
+      ],
+      "commands": [
+        "(knowsSpell(enemy_ability.name) and logf(_tgray('Known BLU spell [%s] detected.'), spell.name)) or (\\",
+        "  logf(_tblue('Unknown BLU spell [%s] detected!'), spell.name) and setVar('vars.learnable_spell_used', true)\\",
+        ")"
+      ],
+      "frequency": 1,
+      "scope": "battle"
+    }
+  ]
+}

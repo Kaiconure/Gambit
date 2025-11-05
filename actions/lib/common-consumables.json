@@ -1,4 +1,7 @@
 {
+  "about": {
+    "author": "@Kaiconure"
+  },
   "vars": {
     "common_consumables": {
       "disabled": null,
@@ -48,6 +51,7 @@
     {
       "when": [
         "not vars.common_consumables.disabled",
+        "not bt or not bt.is_engaged",
         "freeInventorySlots() > 0",
         "arrayCount(vars.common_consumables.all_items) > 0",
         "canUseItem(vars.common_consumables.all_items)"

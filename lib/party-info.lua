@@ -95,6 +95,8 @@ party_info.isMember = function(self, id)
     return self:isParty(id) or self:isAlliance1(id) or self:isAlliance2(id)
 end
 
+--------------------------------------------------------------------------------------
+-- Determine if you can share claim with the id of the specified claimer
 party_info.canShareClaim = function(self, id)
     return 
         (id or 0) == 0 or
@@ -102,6 +104,22 @@ party_info.canShareClaim = function(self, id)
         hasBuff(player, BUFF_ELVORSEAL) or
         hasBuff(player, BUFF_BATTLEFIELD) or
         hasBuff(player, BUFF_REIVE)
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if you can share claim on the specified mob
+party_info.canShareClaimOnMob = function(self, mob)
+    return mob and self:canShareClaim(mob.claim_id)
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if the specified mob is a claimed mob
+party_info.isClaimedMob = function(self, mob)
+    return
+        mob and
+        mob.spawn_type == SPAWN_TYPE_MOB and
+        (mob.claim_id or 0) > 0
+
 end
 
 return party_info

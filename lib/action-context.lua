@@ -309,6 +309,49 @@ local function context_array_merge(...)
 end
 
 -----------------------------------------------------------------------------------------
+-- Merge values from multiple tables into a new table
+local function context_table_merge(...)
+    local tables = {...}
+    local result = { }
+
+    for i = 1, #tables do
+        local current = tables[i]
+        if type(current) == 'table' then
+            for key, value in pairs(current) do
+                if value ~= nil then
+                    result[key] = value
+                end
+            end
+        end
+    end
+
+    return result
+end
+
+-----------------------------------------------------------------------------------------
+-- Inherits values from multiple tables into a target table. Only fields that do not
+-- already exist in the target will be copied over.
+local function context_table_inherit(target, ...)
+    local tables = {...}
+    if type(target) ~= 'table' then
+        target = { }
+    end
+
+    for i = 1, #tables do
+        local current = tables[i]
+        if type(current) == 'table' then
+            for key, value in pairs(current) do
+                if target[key] == nil and value ~= nil then
+                    target[key] = value
+                end
+            end
+        end
+    end
+
+    return target
+end
+
+-----------------------------------------------------------------------------------------
 --
 local function context_is_array(array)
     return context_array_length(array) > 0
@@ -332,6 +375,34 @@ local function context_array_contains_all(array, all)
         end
 
         return true
+    end
+end
+
+-----------------------------------------------------------------------------------------
+-- Determine if an array contains a specific value.
+--  - array:    The array to check.
+--  - value:    The value to search for.
+-- Returns the index of the value if found, or nil if not found.
+local function context_array_contains(array, value)
+    if 
+        type(array) == 'table' and
+        array[1]
+    then
+        return arrayIndexOf(array, value)
+    end
+end
+
+------------------------------------------------------------------------------------------
+-- Determine if a table contains a specific field.
+--  - table:    The table to check.
+--  - field:    The field name to search for.
+-- Returns the field value if found, or nil if not found.
+local function context_table_contains(table, field)
+    if 
+        type(table) == 'table' and
+        type(field) == 'string'
+    then
+        return table[field]
     end
 end
 
@@ -571,6 +642,22 @@ local function context_iif(condition, ifYes, ifNo)
     end
 
     return ifNo
+end
+
+-----------------------------------------------------------------------------------------
+-- Converts a value to its string equivalent. Returns the original value if
+-- it is already a string (no conversion is attempted). If the value is nil,
+-- the default value is returned instead.
+local function context_string(value, default)
+    if type(value) == 'string' then
+        return value
+    elseif type(value) == 'boolean' then
+        return value and 'true' or 'false'
+    elseif value ~= nil then
+        return tostring(value)
+    end
+
+    return default
 end
 
 -----------------------------------------------------------------------------------------
@@ -839,14 +926,19 @@ end
 local function createMemberNamesExpression(context, names)
     local expression = ''
 
-    if type(names) ~= 'table' or #names == 0 or names == "*" then
+    if type(names) ~= 'table' or #names == 0 or names == "*" or names[1] == '*' then
         expression = 'true'
     else
         local first = true
         for i, name in ipairs(names) do
             if type(name) == 'string' then
                 name = string.lower(name)
-                expression = expression .. (first and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
+                if name == '*' then
+                    expression = 'true'
+                    break
+                else
+                    expression = expression .. (first and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
+                end
                 first = false
             end
         end
@@ -966,6 +1058,21 @@ local function setPartyEnumerators(context)
 end
 
 local function setArrayEnumerators(context)
+    context.resetEnumerators = function (message)
+        if context.action then
+            context.action.enumerators = { }
+            if context.action.scopes and context.action.scopes.iteration then
+                context.action.scopes.iteration = { }
+            end
+
+            if type(message) == 'string' and message ~= '' then
+                writeMessage('Resetting enumerators: %s':format(message))
+            end
+
+            return true
+        end
+    end
+
     -- Iterate through an array
     context.iterate = function(name, ...)
         if name == nil then
@@ -1901,7 +2008,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.alliance_by_index = {}
 
     -- Must be called after the player and party have been assigned
-    loadContextTargetSymbols(context, target)    
+    loadContextTargetSymbols(context, target)
 
     --------------------------------------------------------------------------------------
     -- Writes a concatenation of all arguments to the action log
@@ -1934,6 +2041,24 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.logf = function(fmt, ...)
         if type(fmt) == 'string' then
             return context.log(fmt:format(...))
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Writes all array elements, line by line, to the action log
+    context.logArray = function(...)
+        local args = {...}
+
+        if type(args[1]) == 'table' then
+            args = args[1]
+        end
+        
+        if #args > 0 then
+            for i = 1, #args do
+                context.log('  %d. %s':format(i, tostring(args[i] or 'nil')))
+            end
+        else
+            context.log('  (no results)')
         end
     end
 
@@ -2151,6 +2276,28 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             return key
                         end
                     end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if the player has any of the specified weapon skills, regardless of
+    -- whether they can be used at the given time.
+    context.hasWeaponSkill = function(...)
+        local weaponSkills = varargs({...})
+        local abilities = windower.ffxi.get_abilities()
+
+        for key, _weaponSkill in ipairs(weaponSkills) do
+            weaponSkill = findWeaponSkill(_weaponSkill)
+            if weaponSkill then
+                if hasWeaponSkill(
+                    context.player,
+                    weaponSkill,
+                    abilities) 
+                then
+                    context.weapon_skill = weaponSkill
+                    return key
                 end
             end
         end
@@ -2901,8 +3048,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 stopWalk = false
             end
 
-            local command = string.format('input %s "%s" <%s>',
-                ability.prefix, -- /jobability, /pet
+            local command = 'input %s "%s" <%s>':format(
+                ability.prefix, -- /jobability, /pet, etc.
                 ability.name,
                 target.symbol
             )
@@ -2956,6 +3103,54 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Determine if the specified spell is available
     context.hasSpell = function(...)
         return context.spellRecast(...) ~= nil
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if you know the specified spell
+    context.knowsSpell = function(...)
+        local spells = varargs({...}, context.spell and context.spell.name)
+
+        if #spells > 0 then
+            local known = windower.ffxi.get_spells()
+
+            for i, _spell in ipairs(spells) do
+                local spell = findSpell(_spell)
+                if spell then
+                    --print('Examining spell: %s (%d)':format(spell.name, spell.id))
+                    if known[spell.id] then
+                        context.spell = spell
+                        return spell
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if the specified name is that of a spell
+    context.isSpell = function(...)
+        local spells = varargs({...}, context.spell and context.spell.name)
+        for i, _spell in ipairs(spells) do
+            --print('Spell %d: %s':format(i, _spell))
+            spell = findSpell(_spell)
+            if spell then
+                context.spell = spell
+                return spell
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if the specified name is that of a job ability
+    context.isAbility = function(...)
+        local abilities = varargs({...}, context.ability and context.ability.name)
+        for i, _ability in ipairs(abilities) do
+            ability = findJobAbility(_ability)
+            if ability then
+                context.ability = ability
+                return ability
+            end
+        end
     end
 
     --------------------------------------------------------------------------------------
@@ -3115,7 +3310,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- NOTE: Spell usage is handled generally via the 'action' event handler
                 --writeVerbose('Using spell: %s':format(text_spell(spell.name)))
 
-                -- This is the newer spell casting implementation. As ooposed to the normal
+                -- This is the newer spell casting implementation. As opposed to the normal
                 -- sendActionCommand function, this one performs a sleeping loop that will
                 -- detect when spell casting has completed (for any reason) and will exit
                 -- sooner. This allows us to spend a little time as possible waiting for
@@ -4271,6 +4466,61 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Returns the number of mobs within [distance] of the specified point
+    context.mobsInRangeOf = function(point, distance, withAggro)
+        local count = 0
+
+        -- If no point is specified, we'll assume we're measuring from ourself (default mobsInRange behavior)
+        if point == nil then
+            return context.mobsInRange(distance, withAggro)
+        end
+
+        if point and type(point.x) == 'number' and type(point.y) == 'number' then
+            if type(distance) == 'number' and distance > 0 then
+                local mobs = windower.ffxi.get_mob_array()
+                local distanceSquared = distance * distance
+                
+                local nearest = nil
+
+                for key, mob in pairs(mobs) do
+                    if 
+                        mob.spawn_type == SPAWN_TYPE_MOB and
+                        mob.valid_target and
+                        mob.hpp > 0
+                    then
+
+                        local xoff = (mob.x - point.x)
+                        local yoff = (mob.y - point.y)
+
+                        local distanceToSquared = (xoff * xoff) + (yoff * yoff)
+
+                        if distanceToSquared <= distanceSquared then
+                            local hasAggro = mob.status == STATUS_ENGAGED and (
+                                mob.claim_id == 0 or
+                                context.party1_by_id[mob.claim_id] or
+                                context.party1_by_index[mob.target_index or 0]
+                            )
+
+                            if 
+                                not withAggro or
+                                hasAggro
+                            then
+                                mob.distanceTo = distanceToSquared
+                                if nearest == nil or mob.distanceTo < nearest.distanceTo then
+                                    nearest = mob
+                                end
+                                count = count + 1
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
+        return count
+    end
+
+    --------------------------------------------------------------------------------------
     -- Returns all mobs with the given name(s) within the specified distance. If the 
     -- first argument is a number, it will be treated as the search radius; otherwise,
     -- a distance value of 50 will be used by default.
@@ -5249,6 +5499,27 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Schedule the current action to execute in the given number of seconds. This
+    -- differs from postpone in that it sets the next execution time to the specified
+    -- time in the future, rather than taking the later of the current time or the
+    -- existing scheduled time. It could cause the actin to be executed earlier than
+    -- what would have been the case previously.
+    context.schedule = function(s)
+        if type(s) == 'number' then
+            if s > 0 then
+                if settings.verbosity >= VERBOSITY_DEBUG then
+                    writeDebug('Rescheduling next action execution in %s':format(
+                        text_number('%.1fs':format(s), Colors.debug)
+                    ))
+                end
+                context.action.availableAt = os.clock() + s
+            end
+        end
+
+        return context.action.availableAt
+    end
+
+    --------------------------------------------------------------------------------------
     -- Stay in the idle state for the given number of seconds
     context.idle = function (s, actionMessage)
         local s = math.max(tonumber(s) or 0, 2)
@@ -5645,7 +5916,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         for i = 0, 5 do
             local member = context['p' .. i]
-            if member and member.valid_target then
+            if member and member.valid_target and not member.is_dead and member.distance <= 20 then
                 local value = member[field]
                 if type(value) == 'number' then
                     if value <= min then
@@ -5723,6 +5994,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.iif = context_iif
     context.bool = context_boolean
     context.number = context_number
+    context.string = context_string
     context.recastTime = context_recastTime
     context.recastReady = context_recastReady
     context.noop = context_noop
@@ -5740,6 +6012,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.arrayLength = context_array_length
     context.arrayCount = context.arrayLength
     context.arrayMerge = context_array_merge
+    context.tableMerge = context_table_merge
+    context.tableInherit = context_table_inherit
+    context.arrayContains = context_array_contains
+    context.tableContains = context_table_contains
     context.arrayAppend = context_array_append
     context.arrayAll = context_array_contains_all
     context.tableAll = context_table_contains_all
@@ -5761,6 +6037,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.varDecrement = context_var_decrement
     context.varCycleUp = context_var_cycle_up
     context.varCycleDown = context_var_cycle_down
+
+    context._tred = function(text) return colorize(Colors.red, text, Colors.cornsilk) end
+    context._tgreen = function(text) return colorize(Colors.green, text, Colors.cornsilk) end
+    context._tblue = function(text) return colorize(Colors.blue, text, Colors.cornsilk) end
+    context._tgray = function(text) return colorize(Colors.gray, text, Colors.cornsilk) end
+    context._tgold = function(text) return colorize(Colors.gold, text, Colors.cornsilk) end
 
     -- Final setup
     setEnumerators(context)

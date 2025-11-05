@@ -986,6 +986,10 @@ state_manager.keybindFunctions = function(self, unbind)
 
             if #unbinds > 0 then
                 windower.send_command(table.concat(unbinds, ';'))
+                
+                -- We need to give Windower a moment to complete this command, or we run the risk of re-binds
+                -- happening out of sync and being left in an unbound state.
+                coroutine.sleep(1)
             end
         else
             -- Bind all functions to their keys

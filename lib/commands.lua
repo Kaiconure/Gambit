@@ -360,6 +360,7 @@ handlers['config'] = function(args)
     local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
     local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
     local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
+    local h_offset = tonumber(arrayIndexOfStrI(args, '-follow-offset') or arrayIndexOfStrI(args, '-foff') or 0)
     local ct = tonumber(arrayIndexOfStrI(args, '-chasetime') or arrayIndexOfStrI(args, '-ct') or 0)
     local scd = tonumber(arrayIndexOfStrI(args, '-skillchaindelay') or arrayIndexOfStrI(args, '-scdelay') or arrayIndexOfStrI(args, '-scd') or 0)
     local tabs = tonumber(arrayIndexOfStrI(args, '-tabs') or 0)
@@ -395,12 +396,25 @@ handlers['config'] = function(args)
     if fcd > 0 then
         fcd = tonumber(args[fcd + 1])
         if fcd and fcd > 0 then
-            fcd = math.clamp(fcd, 1.0, 10.0)
+            fcd = math.clamp(fcd, 0.25, 10.0)
             settings.followCommandDistance = fcd
             hasChanges = true
         end
 
         writeMessage('Follow command distance: %s':format(text_number('%.1f':format(settings.followCommandDistance))))
+    end
+
+    if h_offset > 0 then
+        h_offset = tonumber(args[h_offset + 1])
+        if h_offset and h_offset > 0 then
+            h_offset = math.min(h_offset, 0)
+            settings.followOffset = h_offset
+            hasChanges = true
+        end
+
+        writeMessage('Horizontal follow offset: %s':format(
+            settings.followOffset and text_number('%.1f':format(settings.followOffset)) or text_magenta('n/a')
+        ))
     end
 
     -- NOTE: This is not actually used for anything at this point
@@ -684,6 +698,26 @@ handlers['function'] = function(args)
                         -1,                         -- Battle scope. Not valid for functions.
                         windower.ffxi.get_party()   -- The current party
                     )
+
+                    -- Pull enumerator data into the new context
+                    if context then
+                        context.results = {}
+
+                        if 
+                            action.enumerators and
+                            action.enumerators.array
+                        then
+                            for name, enumerator in pairs(action.enumerators.array) do
+                                if enumerator.data and enumerator.at then
+                                    context.results[name] = enumerator.data[enumerator.at]
+                                end
+                            end
+
+                            if action.enumerators.array_name then
+                                context.result = context.results[action.enumerators.array_name]
+                            end
+                        end
+                    end
 
                     if context then
                         context.action = action

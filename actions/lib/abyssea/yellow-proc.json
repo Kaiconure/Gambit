@@ -30,6 +30,91 @@
     },
     "abyssea": {
       "yellow_proc": {
+        "bypass_auto_init": null,
+        "days_by_id": {
+          "0": "Firesday",
+          "1": "Earthsday",
+          "2": "Watersday",
+          "3": "Windsday",
+          "4": "Iceday",
+          "5": "Lightningday",
+          "6": "Lightsday",
+          "7": "Darksday"
+        },
+        "spells_by_day": {
+          "Firesday": [
+            "Fire III",
+            "Fire IV",
+            "Firaga III",
+            "Flare",
+            "Katon: Ni",
+            "Ice Threnody",
+            "Heat Breath"
+          ],
+          "Earthsday": [
+            "Stone III",
+            "Stone IV",
+            "Stonega III",
+            "Quake",
+            "Doton: Ni",
+            "Ltng. Threnody",
+            "Magnetite Cloud"
+          ],
+          "Watersday": [
+            "Water III",
+            "Water IV",
+            "Waterga III",
+            "Flood",
+            "Suiton: Ni",
+            "Fire Threnody",
+            "Maelstrom"
+          ],
+          "Windsday": [
+            "Aero III",
+            "Aero IV",
+            "Aeroga III",
+            "Tornado",
+            "Huton: Ni",
+            "Earth Threnody",
+            "Mysterious Light"
+          ],
+          "Iceday": [
+            "Blizzard III",
+            "Blizzard IV",
+            "Blizzaga III",
+            "Freeze",
+            "Hyoton: Ni",
+            "Wind Threnody",
+            "Ice Break"
+          ],
+          "Lightningday": [
+            "Thunder III",
+            "Thunder IV",
+            "Thundaga III",
+            "Burst",
+            "Raiton: Ni",
+            "Water Threnody",
+            "Mind Blast"
+          ],
+          "Lightsday": [
+            "Banish II",
+            "Banish III",
+            "Banishga II",
+            "Holy",
+            "Flash",
+            "Dark Threnody",
+            "Radiant Breath"
+          ],
+          "Darksday": [
+            "Drain",
+            "Aspir",
+            "Dispel",
+            "Bio II",
+            "Kurayami: Ni",
+            "Light Threnody",
+            "Eyes On Me"
+          ]
+        },
         "day_order": [
           "Firesday",
           "Earthsday",
@@ -39,80 +124,6 @@
           "Lightningday",
           "Lightsday",
           "Darksday"
-        ],
-        "day_spells": [
-          [
-            "Fire III",
-            "Fire IV",
-            "Firaga III",
-            "Flare",
-            "Katon: Ni",
-            "Ice Threnody",
-            "Heat Breath"
-          ],
-          [
-            "Stone III",
-            "Stone IV",
-            "Stonega III",
-            "Quake",
-            "Doton: Ni",
-            "Lightning Threnody",
-            "Magnetite Cloud"
-          ],
-          [
-            "Water III",
-            "Water IV",
-            "Waterga III",
-            "Flood",
-            "Suiton: Ni",
-            "Fire Threnody",
-            "Maelstrom"
-          ],
-          [
-            "Aero III",
-            "Aero IV",
-            "Aeroga III",
-            "Tornado",
-            "Huton: Ni",
-            "Earth Threnody",
-            "Mysterious Light"
-          ],
-          [
-            "Blizzard III",
-            "Blizzard IV",
-            "Blizzaga III",
-            "Freeze",
-            "Hyoton: Ni",
-            "Wind Threnody",
-            "Ice Break"
-          ],
-          [
-            "Thunder III",
-            "Thunder IV",
-            "Thundaga III",
-            "Burst",
-            "Raiton: Ni",
-            "Water Threnody",
-            "Mind Blast"
-          ],
-          [
-            "Banish II",
-            "Banish III",
-            "Banishga II",
-            "Holy",
-            "Flash",
-            "Dark Threnody",
-            "Radiant Breath"
-          ],
-          [
-            "Drain",
-            "Aspir",
-            "Dispel",
-            "Bio II",
-            "Kurayami: Ni",
-            "Light Threnody",
-            "Eyes On Me"
-          ]
         ],
         "functions": {
           "Kurayami: Ni": "keep_kurayami",
@@ -135,7 +146,7 @@
         "setVar('vars.abyssea.yellow_proc.usable_count', 0)",
         "setVar('vars.abyssea.yellow_proc.all_spells', {})",
         "setVar('vars.abyssea.yellow_proc.usable_spells', {})",
-        "log('Resetting yellow')"
+        "log('Resetting yellow proc state.')"
       ],
       "delay": 0,
       "frequency": "infinity",
@@ -143,16 +154,25 @@
       "comment": "This clears the list of already-tried spells at the start of any fight."
     },
     {
+      "when": [
+        "not vars.abyssea.yellow_proc.bypass_auto_init or runningAsFunction()"
+      ],
       "commands": [
-        "setVar('vars.abyssea.yellow_proc.all_spells', arrayMerge(vars.abyssea.yellow_proc.day_spells[game_time.day + 1], vars.abyssea.yellow_proc.day_spells[game_time.yesterday + 1], vars.abyssea.yellow_proc.day_spells[game_time.tomorrow + 1]))",
+        "setVar('vars.abyssea.yellow_proc.all_spells', randomize(arrayMerge(\\",
+        "    vars.abyssea.yellow_proc.spells_by_day[vars.abyssea.yellow_proc.days_by_id[string(game_time.day)]], \\",
+        "    vars.abyssea.yellow_proc.spells_by_day[vars.abyssea.yellow_proc.days_by_id[string(game_time.yesterday)]], \\",
+        "    vars.abyssea.yellow_proc.spells_by_day[vars.abyssea.yellow_proc.days_by_id[string(game_time.tomorrow)]] \\",
+        ")))",
         "setVar('vars.abyssea.yellow_proc.usable_spells', usableSpells(vars.abyssea.yellow_proc.all_spells))",
         "setVar('vars.abyssea.yellow_proc.usable_count', arrayCount(vars.abyssea.yellow_proc.usable_spells))",
-        "log('Identified', vars.abyssea.yellow_proc.usable_count, 'usable YELLOW PROC', game_time.day_name, 'spell(s)!')",
-        "vars.abyssea.yellow_proc.usable_count > 0 and log(vars.abyssea.yellow_proc.usable_spells)"
+        "log('Identified', vars.abyssea.yellow_proc.usable_count, 'usable YELLOW PROC', game_time.day_name, 'spells.')",
+        "vars.abyssea.yellow_proc.usable_count > 0 and logArray(vars.abyssea.yellow_proc.usable_spells)"
       ],
+      "name": "abyssea/yellow/show",
       "delay": 0,
       "frequency": "infinity",
       "scope": "battle",
+      "max_iterations": 1,
       "comment": "Resets the current spell pool based on the day of the week."
     },
     {
@@ -242,6 +262,65 @@
         "main_jobs": ["NIN"],
         "sub_jobs": ["NIN"]
       }
+    }
+  ],
+  "functions": [
+    {
+      "comments": [
+        " ================================================================================ ",
+        "  Identifies and prepares the usable YELLOW PROC spells for TODAY.",
+        " ================================================================================ "
+      ],
+      "commands": [
+        "setVar('vars.abyssea.yellow_proc.used_spells', {})",
+        "setVar('vars.abyssea.yellow_proc.all_spells', randomize(arrayMerge(\\",
+        "    vars.abyssea.yellow_proc.spells_by_day[vars.abyssea.yellow_proc.days_by_id[string(game_time.day)]]\\",
+        ")))",
+        "setVar('vars.abyssea.yellow_proc.usable_spells', usableSpells(vars.abyssea.yellow_proc.all_spells))",
+        "setVar('vars.abyssea.yellow_proc.usable_count', arrayCount(vars.abyssea.yellow_proc.usable_spells))",
+        "log('Identified', vars.abyssea.yellow_proc.usable_count, 'usable YELLOW PROC', vars.abyssea.yellow_proc.days_by_id[string(game_time.day)], 'spells for today.')",
+        "vars.abyssea.yellow_proc.usable_count > 0 and logArray(vars.abyssea.yellow_proc.usable_spells)"
+      ],
+      "name": "abyssea/yellow/use-today",
+      "max_iterations": 1
+    },
+    {
+      "comments": [
+        " ================================================================================ ",
+        "  Identifies and prepares the usable YELLOW PROC spells for YESTERDAY.",
+        " ================================================================================ "
+      ],
+      "commands": [
+        "setVar('vars.abyssea.yellow_proc.used_spells', {})",
+        "setVar('vars.abyssea.yellow_proc.all_spells', randomize(arrayMerge(\\",
+        "    vars.abyssea.yellow_proc.spells_by_day[vars.abyssea.yellow_proc.days_by_id[string(game_time.yesterday)]]\\",
+        ")))",
+        "setVar('vars.abyssea.yellow_proc.usable_spells', usableSpells(vars.abyssea.yellow_proc.all_spells))",
+        "setVar('vars.abyssea.yellow_proc.usable_count', arrayCount(vars.abyssea.yellow_proc.usable_spells))",
+        "log('Identified', vars.abyssea.yellow_proc.usable_count, 'usable YELLOW PROC', vars.abyssea.yellow_proc.days_by_id[string(game_time.yesterday)], 'spells for yesterday.')",
+        "vars.abyssea.yellow_proc.usable_count > 0 and logArray(vars.abyssea.yellow_proc.usable_spells)"
+      ],
+      "name": "abyssea/yellow/use-yesterday",
+      "max_iterations": 1
+    },
+    {
+      "comments": [
+        " ================================================================================ ",
+        "  Identifies and prepares the usable YELLOW PROC spells for TOMORROW.",
+        " ================================================================================ "
+      ],
+      "commands": [
+        "setVar('vars.abyssea.yellow_proc.used_spells', {})",
+        "setVar('vars.abyssea.yellow_proc.all_spells', randomize(arrayMerge(\\",
+        "    vars.abyssea.yellow_proc.spells_by_day[vars.abyssea.yellow_proc.days_by_id[string(game_time.tomorrow)]]\\",
+        ")))",
+        "setVar('vars.abyssea.yellow_proc.usable_spells', usableSpells(vars.abyssea.yellow_proc.all_spells))",
+        "setVar('vars.abyssea.yellow_proc.usable_count', arrayCount(vars.abyssea.yellow_proc.usable_spells))",
+        "log('Identified', vars.abyssea.yellow_proc.usable_count, 'usable YELLOW PROC', vars.abyssea.yellow_proc.days_by_id[string(game_time.tomorrow)], 'spells for tomorrow.')",
+        "vars.abyssea.yellow_proc.usable_count > 0 and logArray(vars.abyssea.yellow_proc.usable_spells)"
+      ],
+      "name": "abyssea/yellow/use-tomorrow",
+      "max_iterations": 1
     }
   ]
 }

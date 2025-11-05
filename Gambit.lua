@@ -1,4 +1,4 @@
-__version = '0.96.0-beta15b'
+__version = '0.96.0-beta16'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -9,6 +9,19 @@ _addon.name = __name
 _addon.shortName = __shortName
 _addon.author = __author
 _addon.commands = __commands
+
+---------------------------------------------------------------------------------------------------
+-- Print a formatted message to the Windower console
+function printDebug(format, ...)
+    print('GBT: ' .. string.format(tostring(format) or '', ...))
+end
+
+---------------------------------------------------------------------------------------------------
+-- Print a formatted message to the Windower console, with stack trace included
+function printDebugST(format, ...)
+    printDebug(format, ...)
+    printDebug('%s', debug.traceback())
+end
 
 require('sets')
 require('vectors')
@@ -212,11 +225,22 @@ end
 
 -- Player status change
 windower.register_event('status change', function(new_id, previous_id)
+
+    local previous_status   = previous_id and resources.statuses[previous_id]
+    local new_status        = new_id and resources.statuses[new_id]
+
+    -- printDebug('Status change: %d (%s) to %d (%s)':format(
+    --     previous_id or -1, 
+    --     previous_status and previous_status.name or 'n/a/',
+    --     new_id or -1,
+    --     new_status and new_status.name or 'n/a/'
+    -- ))
+
     if
-        --new_id == STATUS_IDLE
         new_id and
         new_id ~= STATUS_ENGAGED
     then
+        --printDebug('Resetting mob due to status change.')
         resetCurrentMob(nil, true)
 
         -- We'll unfollow once battle has ended to avoid the possibility of running

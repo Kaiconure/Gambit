@@ -353,7 +353,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
 
                             -- Pull in the macros
                             if type(import.macros) == 'table' then
-                                local macros = type(import.macros) == 'table' and import.macros or { }
+                                local macros = import.macros or {}
 
                                 for name, macro in pairs(macros) do
                                     if baseActions.macros[name] == nil then
@@ -362,6 +362,18 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                 end
                             end                        
                             import.macros = nil
+
+                            -- Pull in functions
+                            if type(import.functions) == 'table' then
+                                local functions = #import.functions > 0 and import.functions or {}
+                                
+                                baseActions.functions = baseActions.functions or {}
+
+                                -- Append functions to the end of the base action function list
+                                for i, fn in ipairs(import.functions) do
+                                    table.insert(baseActions.functions, fn)
+                                end
+                            end
 
                             -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
                             -- then the originating import action will simply be removed.
@@ -389,15 +401,21 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                         end
                     end
                 else
-                    if actionType ~= 'loading' then
-                        -- Move any "on_load" actions from non-loading action types to the end of the
-                        -- list of configured loading actions.
-                        if
-                            action.on_load == true
-                        then
-                            table.remove(actions, i)
-                            table.insert(baseActions.loading, action)
-                        end
+                    if
+                        (action.when == nil or (type(action.when) == 'table' and #action.when == 0)) and
+                        (action.commands == nil or (type(action.commands) == 'table' and #action.commands == 0))
+                    then
+                        -- Actions without missing both the when and commands properties will be filtered out. Nothing will
+                        -- actually be done here, so there's no point wasting cycles on them.
+                        table.remove(actions, i)
+                    elseif action.on_load == true and actionType ~= 'loading' then
+                        -- If on_load is true, this action will be moved to the end of the loading list
+                        table.remove(actions, i)
+                        table.insert(baseActions.loading, action)
+                    elseif action.as_function == true and actionType ~= 'functions' then
+                        -- If as_function is true, this action will be moved to the end of the functions list
+                        table.remove(actions, i)
+                        table.insert(baseActions.functions, action)
                     end
                 end
             end
@@ -847,7 +865,11 @@ function loadSettings(actionsName, settingsOnly)
     tempSettings.maxDistanceZ = math.max(tempSettings.maxDistanceZ or 0, 1)
 
     -- The default distance that the follow command will use if none is specified
-    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 1.0, 10.0)
+    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 0.25, 10.0)
+
+    -- We will leave the horizontal follow offset unassigned if it is not a valid number. Otherwise, we will
+    -- ensure it is a non-negative number.
+    tempSettings.followOffset = type(tempSettings.followOffset) == 'number' and math.max(tempSettings.followOffset, 0) or nil
 
     -- The maximum amount of time to wait (in seconds) before assuming an unengaged target
     -- is unreachable. This prevents you from getting into infinite wall-running ruts.
@@ -867,10 +889,10 @@ function loadSettings(actionsName, settingsOnly)
         MAX_SKILLCHAIN_TIME)
 
     -- The maximum number of tabs to press when having trouble acquiring targets
-    tempSettings.maxTabs = math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 0, 0, 20))
+    tempSettings.maxTabs = math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 5, 0, 20))
 
     -- The maximum length of targeting attempts
-    tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 1, 20)
+    tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 2, 20)
 
     if not tempSettings.cloudPanel then
         tempSettings.cloudPanel = json.parse(json.stringify(defaultSettings.cloudPanel))

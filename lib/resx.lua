@@ -131,9 +131,27 @@ function findWeaponSkill(name)
     return findResourceByName(resources.weapon_skills, name)
 end
 
+-- Some monster abilities that are learnable blue magic spells have different names
+-- between ability and spell. This maps them across.
+local monster_abilities_to_spells = 
+{
+    ["Atramentous Libations"] = "Atra. Libations",
+    ["Everyone's Grudge"]     = "Evryone. Grudge",
+    ["Nature's Meditation"]   = "Nat. Meditation",
+    ["Orcish Counterstance"]  = "O. Counterstance",
+    ["Quadratic Continuum"]   = "Quad. Continuum",
+    ["Tempestuous Upheaval"]  = "Tem. Upheaval",    
+    ["Winds of Promyvion"]    = "Winds of Promy."
+}
+
+
 --------------------------------------------------------------------------------------
 --
 function findSpell(name)
+
+    -- Perform the name mapping if this is a blue magic monster ability name that requires it
+    name = (type(name) == 'string' and monster_abilities_to_spells[name]) or name
+
     return findResourceByName(resources.spells, name)
 end
 
@@ -539,6 +557,29 @@ function canUseAbility(player, ability, recasts)
                 recast = recast / 60
                 return recast <= 0, recast
             end
+        end
+    end
+
+    return false
+end
+
+--------------------------------------------------------------------------------------
+-- 
+function hasWeaponSkill(player, weaponSkill, abilities)
+    player = player or windower.ffxi.get_player()
+
+    weaponSkill = getWeaponSkillResource(weaponSkill)
+    if weaponSkill == nil then
+        return false
+    end
+
+    abilities = abilities or windower.ffxi.get_abilities() or {}
+    local knownWeaponSkills = abilities.weapon_skills or {}
+
+    -- Only return true if the weapon skill we're checking is in the collection of available weapon skills
+    for i, knownWeaponSkillId in pairs(knownWeaponSkills) do
+        if knownWeaponSkillId == weaponSkill.id then
+            return true
         end
     end
 

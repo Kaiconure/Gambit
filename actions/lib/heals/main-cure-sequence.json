@@ -41,7 +41,7 @@
         "useSpell(member)",
         "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
       ],
-      "frequency": 1
+      "frequency": 3
     }
   ]
 }
