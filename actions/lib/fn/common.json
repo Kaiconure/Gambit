@@ -34,7 +34,7 @@
       "when": [
         "not bt",
         "hasSpell('Sneak')",
-        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")') or (me and not hasBuff('Sneak'))"
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")') or (me and not hasBuff('Sneak'))"
       ],
       "commands": [
         "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
@@ -45,7 +45,7 @@
       "when": [
         "not bt",
         "hasSpell('Invisible')",
-        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")') or (me and not hasBuff('Invisible'))"
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")') or (me and not hasBuff('Invisible'))"
       ],
       "commands": [
         "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
@@ -56,7 +56,7 @@
       "when": [
         "not bt",
         "hasSpell('Sneak')",
-        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")')"
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")')"
       ],
       "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
     },
@@ -65,7 +65,7 @@
       "when": [
         "not bt",
         "hasSpell('Invisible')",
-        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")')"
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")')"
       ],
       "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
     },

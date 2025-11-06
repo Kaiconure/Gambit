@@ -315,9 +315,12 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 -- end
 
                 local loop_start_t = os.clock()
+                local num_attempted = 0
 
                 -- We'll try a few times to establish our target directly
-                for i = 1, 5 do
+                for i = 1, 6 do
+                    num_attempted = num_attempted + 1
+
                     packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
                         ['Player'] = player.id,
                         ['Target'] = mob.id,
@@ -334,26 +337,27 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     --  - i=4:  0.8s    ~2.6s total
                     --  - i=5:  1.0     ~3.6s total
                     --  - i=6  (1.0)    ~4.6s total
-                    coroutine.sleep(
-                        math.min(math.pow(1.1, i - 1) - 0.5, 1.0)  -- Don't allow sleeps of longer than 1 second at a time
-                    )
+                    -- coroutine.sleep(
+                    --     math.min(math.pow(1.1, i - 1) - 0.5, 1.0)  -- Don't allow sleeps of longer than 1 second at a time
+                    -- )
+
+                    coroutine.sleep(0.5)
 
                     local t = windower.ffxi.get_mob_by_target('t')
                     if 
                         t and
-                        t.id == mob.id and
-                        (not mob.index or t.index == mob.index)
+                        t.id == mob.id
                     then
                         if not t.valid_target then
                             fail_fast = true
                             break
                         end
 
-                        printDebug('Direct acquisition of [%s] / %d was successful after %.1fs and %d attempt(s)!':format(
+                        printDebug('Direct target of [%s] / %d was successful after %.1fs and %d attempt(s)!':format(
                             t.name,
                             t.id,
                             os.clock() - loop_start_t,
-                            i
+                            num_attempted
                         ))
 
                         -- writeVerbose('Direct target acquisition of %s was %s!':format(
@@ -365,10 +369,11 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     end
                 end
 
-                printDebug('Direct acquisition of [%s] / %d was UNSUCCESSFUL after %.1fs!':format(
+                printDebug('Direct target of [%s] / %d was UNSUCCESSFUL after %.1fs and %d attempt(s)!':format(
                     mob.name,
                     mob.id,
-                    os.clock() - loop_start_t
+                    os.clock() - loop_start_t,
+                    num_attempted
                 ))
             else
                 -- We always need to go back to tabbing if we're going after a target of this spawn type (not a trust, mob, or player)

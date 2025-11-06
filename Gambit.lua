@@ -991,12 +991,6 @@ local _handle_lockTargetChunk = function(id, data, modified_data, injected, bloc
     -- If we get a target lock packet that was injected, we'll crosscheck it against the
     -- latest injected targeting info and block if this is not it.
     if injected then
-        -- printDebug('Received targeting packet %03X: injected=%s, blocked=%s':format(
-        --     id,
-        --     injected and 'true' or 'false',
-        --     blocked and 'true' or 'false'
-        -- ))
-
         local packet = packets.parse('incoming', data)
         local target_id = packet and packet.Target
 
@@ -1006,6 +1000,13 @@ local _handle_lockTargetChunk = function(id, data, modified_data, injected, bloc
             printDebug('Forwarding injected targeting packet due to no corresponding target id being found.')
             return
         end
+
+        -- printDebug('Received targeting packet %03X: mob.id=%d, injected=%s, blocked=%s':format(
+        --     id,
+        --     target_id,
+        --     injected and 'true' or 'false',
+        --     blocked and 'true' or 'false'
+        -- ))
 
         -- If no lock target id has been saved, we will ignore this packet
         if not globals.last_lock_target_id then
