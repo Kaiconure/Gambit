@@ -267,6 +267,50 @@ local BATTLE_ONLY_MOBS = {
     ['Turul'] = true
 }
 
+local function sendKeys(...)
+    for i, key in ipairs({...}) do
+        windower.send_command('setkey %s down; wait 0.1; setkey %s up; wait 0.1;':format(key, key))
+        coroutine.sleep(0.25)
+    end
+end
+local sendKey = sendKeys
+
+local function closeUx(max_seconds)
+    local info = windower.ffxi.get_info()
+
+    if not info.logged_in then
+        return
+    end
+
+    max_seconds = tonumber(max_seconds) or 5
+
+    local start_t = os.clock()
+    
+    -- Back out of the menu
+    while info.menu_open do
+        local age = os.clock() - start_t
+        if age >= max_seconds then
+            return
+        end
+
+        sendKeys('escape')
+        info = windower.ffxi.get_info()
+    end
+
+    -- Back out of the chat box
+    while info.chat_open do
+        local age = os.clock() - start_t
+        if age >= max_seconds then
+            return
+        end
+        
+        sendKeys('escape')
+        info = windower.ffxi.get_info()
+    end
+
+    return os.clock() - start_t
+end
+
 --------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
 local lock_target_id = 1
@@ -295,40 +339,42 @@ function lockTarget(player, mob, battleTarget, noTabs)
             (not BATTLE_ONLY_MOBS[mob.name] or mob.status == STATUS_ENGAGED) and
             mob.hpp > 0
         then
-            local max_tabs = (noTabs and 0) or settings.maxTabs
-            local tabs_remaining = 0
-            local forced_tabbing = false
+            local max_tabs = math.huge -- NOTE: Tabbing is now a requirement. Targeting time is the only limiter.
             local fail_fast = false
 
-            -- NEW: Mobs require tabs at this point
-            if mob.spawn_type == SPAWN_TYPE_MOB then
-                max_tabs = math.max(max_tabs, 5)
-            end
-
-            -- Bail early for players, since we can target them by name
+            -- For players, we can shortcut targeting by simply using their name
             if
                 isMobPlayer(mob)
             then
                 windower.send_command('input /target %s;':format(mob.name))
-                coroutine.sleep(1)
+                coroutine.sleep(0.5)
 
                 local t = windower.ffxi.get_mob_by_target('t')
                 return t and t.id == mob.id and t.valid_target, nil
+            end
+
+            -- For trusts, we'll shortcut targeting by going directly after their party member symbol
+            if
+                mob.spawn_type == SPAWN_TYPE_TRUST
+            then
+                local target_symbol = partyInfo:memberSymbolById(mob.id)
+                if target_symbol then
+                    windower.send_command('input /target %s;':format(target_symbol))
+                    coroutine.sleep(0.5)
+
+                    local t = windower.ffxi.get_mob_by_target('t')
+                    return t and t.id == mob.id and t.valid_target, nil
+                end
             end
             
             if
                 mob.spawn_type == SPAWN_TYPE_TRUST or
                 mob.spawn_type == SPAWN_TYPE_MOB
-                --(mob.spawn_type == SPAWN_TYPE_MOB and max_tabs <= 0)
             then
-                -- if settings.debugging then
-                --     writeMessage('DBG: lockTarget called from ' .. debug.traceback())
-                -- end
-
                 local loop_start_t = os.clock()
                 local num_attempted = 0
 
-                local max_attempts = 5
+                local max_attempts = 1--5
 
                 -- We'll try a few times to establish our target directly
                 for i = 1, max_attempts do
@@ -354,7 +400,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     --     math.min(math.pow(1.1, i - 1) - 0.5, 1.0)  -- Don't allow sleeps of longer than 1 second at a time
                     -- )
 
-                    coroutine.sleep(i == 1 and 0.25 or 0.75)
+                    coroutine.sleep(0.5)
 
                     local t = windower.ffxi.get_mob_by_target('t')
                     if 
@@ -366,7 +412,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                             break
                         end
 
-                        printDebug('Direct target of %s/%d was successful after %.2fs (%d/%d).':format(
+                        printDebug('Direct target of %s/%d was successful after %.2fs (%d/%d)':format(
                             t.name,
                             t.id,
                             os.clock() - loop_start_t,
@@ -383,7 +429,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     end
                 end
 
-                printDebug('Direct target of %s/%d failed after %.2fs and %d attempts.':format(
+                printDebug('Direct target of %s/%d failed after %.2fs and %d attempt(s)':format(
                     mob.name,
                     mob.id,
                     os.clock() - loop_start_t,
@@ -391,195 +437,134 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 ))
             else
                 -- We always need to go back to tabbing if we're going after a target of this spawn type (not a trust, mob, or player)
-                max_tabs = 10
-                tabs_remaining = max_tabs
-                forced_tabbing = true
+                max_tabs = math.max(math.huge, max_tabs)
             end
 
             -- In laggy situations, it can take a while for the target to be acquired. This gives us 
             -- some time to try and ensure we can get the target.
             if not fail_fast then
                 local start = os.clock()
-                local duration = 0
-                
-                local has_tabbed = false
-                local last_tab = start
                 local looping = true
-                local tried_bt = false
-                
-                while looping and (not battleTarget or globals.enabled) do
-                    local sleep_duration = 0.25
 
-                    -- We're done if the target was acquired
-                    local target = windower.ffxi.get_mob_by_target('t')
-                    if 
-                        target and 
-                        (
-                            (target.id == mob.id and target.index == mob.index) or
-                            (
-                                mob.spawn_type == SPAWN_TYPE_MOB and mob.valid_target and mob.hpp > 0 and (
-                                    (settings.selection_mode == 'any_aggressive' and target.spawn_type == mob.spawn_type and target.status == STATUS_ENGAGED and target.distance <= (settings.maxDistance ^ 2)) or
-                                    (settings.selection_mode == 'any' and target.spawn_type == mob.spawn_type and target.distance <= (settings.maxDistance ^ 2))
-                                ) and
-                                partyInfo:canShareClaim(target.claim_id)
-                            )
-                        ) 
-                    then
-                        local overridden = target.id ~= mob.id and target or nil
+                local has_st    = false
+                local has_fps   = false
+                local is_trust = mob.spawn_type == SPAWN_TYPE_TRUST
 
-                        if 
-                            --duration >= 2 or
-                            duration >= 0 or
-                            target.id ~= mob.id
-                        then
-                            writeVerbose('Target acquisition of %s (%s) was %s after %s%s':format(
-                                text_mob(mob.name, Colors.verbose),
-                                text_number(tostring(mob.id), Colors.verbose),
-                                text_green('successful', Colors.verbose),
-                                text_number('%.1fs':format(duration), Colors.verbose),
-                                overridden and text_yellow(' (overridden)') or ''
-                            ))
-                            
-                        end
+                local num_tabs = 0
+                local tabs_remaining = max_tabs
 
-                        -- Pull out of first person view if we tabbed
-                        if has_tabbed then
-                            windower.send_command('setkey numpad5 down; wait 0.2; setkey numpad5 up; wait 0.3;')
-                            coroutine.sleep(0.5)
-                        end
+                -- Toggle whether we will ignore trusts in targeting or not
+                --windower.send_command('input /ignorefaith %s':format(is_trust and 'off' or 'on'))
+                --coroutine.sleep(0.15)
 
-                        -- if settings.debugging then
-                        --     writeMessage('DBG: lockTarget exiting with %s':format(text_green('success')))
-                        -- end
-                        
-                        return true, overridden
-                    end
+                if closeUx() then
+                    while looping and (not battleTarget or globals.enabled) do
+                        local mob = windower.ffxi.get_mob_by_id(mob.id)
+                        if mob and mob.valid_target then
 
-                    local now = os.clock()
-                    duration = now - start
+                            -- Face toward our target. It's important that we do this before sending the FPS view
+                            -- mode command, because even if we're out of sync (already in FPS) this will ensure
+                            -- that our camera is always facing the mob.
+                            directionality.faceTarget(mob)
 
-                    -- We will always re-acquire the mob at this point. If it's moved while retrying, we want to
-                    -- set ourselves back up for its new position.
-                    mob = windower.ffxi.get_mob_by_id(mob.id)
-                    if mob and mob.valid_target then
-                        -- If tabs are allowed, we'll occasionally revert to direct tab presses
-                        -- when we've been unable to get a lock in a reasonable time.
-                        if 
-                            duration > 1.5 or max_tabs > 0
-                        then
-                            local bt = battleTarget and windower.ffxi.get_mob_by_target('bt')
-                            local just_tried_bt = false
-                            if bt and bt.valid_target and bt.hpp > 0 then
-                                if tabs_remaining <= 0 and mob.spawn_type == SPAWN_TYPE_MOB then
-                                    -- If the current battle target id matches that of our intended target, we will try
-                                    -- try exactly once to use that for direct client-side targeting.
-                                    if 
-                                        bt and
-                                        bt.id == mob.id and
-                                        bt.has_claim and
-                                        bt.status == STATUS_ENGAGED
-                                    then
-                                        windower.send_command('input /ta <bt>;')
-                                        tried_bt = true
-                                        just_tried_bt = true
-                                        sleep_duration = 0.5
-                                    end                            
-                                end
-                            elseif
-                                not just_tried_bt and max_tabs > 0 
-                            then
-                                directionality.faceTarget(mob)
-                                
-                                if tabs_remaining > 0 then
-                                    tabs_remaining = tabs_remaining - 1
-                                    sleep_duration = 0.3
-                                    
-                                    local command = ''
-
-                                    -- If we haven't tabbed yet, we'll send a few escapes to close out menus and chat
-                                    if not has_tabbed then
-                                        if not forced_tabbing then
-                                            writeVerbose('Falling back to tab-basted targeting...')
-                                        end
-
-                                        -- NOTE: This will never be a player at this point, due to logic further up above
-                                        local targeting_key = 'f8' --isMobPlayer(mob) and 'f9' or 'f8'
-
-                                        -- Enter first-person view
-                                        command = command .. 
-                                                'setkey numpad5 down; wait 0.1; setkey numpad5 up; wait 0.2;'
-                                        sleep_duration = sleep_duration + 0.3
-
-                                        local info = windower.ffxi.get_info()
-                                        if info.menu_open then
-                                            -- When the menu is open, we need to send several escapes to close it out
-                                            command = command ..
-                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;' ..
-                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.2;'
-
-                                            sleep_duration = sleep_duration + 1.2
-                                        elseif info.chat_open then
-                                            -- When the chat is open, we need to send a single escape to close it out
-                                            command = command ..
-                                                'setkey escape down;  wait 0.1; setkey escape up;  wait 0.1;'
-
-                                            sleep_duration = sleep_duration + 0.2
-                                        end
-
-                                        command = command .. 
-                                            'setkey %s down; wait 0.1; setkey %s up; wait 0.2;':format(targeting_key, targeting_key)
-
-                                        sleep_duration = sleep_duration + 0.3
-                                        has_tabbed = true
-                                    else
-                                        -- Construct and send the tab press command
-                                        command = command .. 'setkey tab down; wait 0.1; setkey tab up;'
-                                        sleep_duration = sleep_duration + 0.1
-                                    end
-                                    
-                                    windower.send_command(command)                                
-                                    
-                                    -- Mark the last tab time, and also use it to update the current duration
-                                    last_tab = os.clock()
-                                    duration = last_tab - start
-                                elseif now - last_tab > 1 then
-                                    tabs_remaining = max_tabs
-                                end
+                            -- Enter fps view. This ensures that the camera is facing toward the mob we want, so
+                            -- that our tabbing stays in the general vicinity of our desired target.
+                            if not has_fps then
+                                sendKey('numpad5')
+                                has_fps = true
                             end
-                        end
 
-                        coroutine.sleep(sleep_duration)
-                        if duration >= settings.targetingDuration then
+                            -- Start selecting NPC's.
+                            if not has_st then
+                                has_st = true
+                                windower.send_command('input /ta <stnpc>;')
+                                coroutine.sleep(0.15)                                
+                            end
+
+                            local st = windower.ffxi.get_mob_by_target('st')
+                            if st then
+                                if st.id == mob.id then
+                                    -- When our st matches our target, commit it using the enter key. We'll then clear
+                                    -- the has_st flag, and indicate that we should exit the loop.
+                                    sendKey('enter')
+                                    has_st = false
+                                    looping = false
+
+                                    printDebug('Command-based target of %s/%d was successful after %.2fs with %d tab(s)':format(
+                                        st.name,
+                                        st.id,
+                                        os.clock() - start,
+                                        num_tabs
+                                    ))
+                                else
+                                    sendKey('tab')
+
+                                    num_tabs = num_tabs + 1
+                                    tabs_remaining = tabs_remaining - 1
+
+                                    coroutine.sleep(0.15)
+                                end
+                            else
+                                -- If we have no st, clear the flag and we can try again
+                                has_st = false
+                                coroutine.sleep(0.15)
+                            end
+                        else
                             looping = false
                         end
+
+                        -- Detect our external end conditions
+                        if looping then
+                            if
+                                tabs_remaining <= 0 or
+                                os.clock() - start >= settings.targetingDuration 
+                            then
+                                looping = false
+                            end
+                        end
+                    end
+                end
+
+                -- Really make sure we're out of the target selection cursor
+                for i = 1, 5 do
+                    local st = windower.ffxi.get_mob_by_target('st')
+                    if st then
+                        --printDebug('Post-exiting of target selection cursor...')
+                        sendKey(st.valid_target and st.id == mob.id and 'enter' or 'escape')
+                        coroutine.sleep(0.1)
                     else
-                        looping = false
-                    end                    
+                        break
+                    end
+                end
+
+                -- Exit from fps camera view
+                if has_fps then
+                    --printDebug('Post-exiting of first-person view...')
+                    sendKey('numpad5')
+                end
+
+                local t = windower.ffxi.get_mob_by_target('t')
+                if t and t.valid_target and t.id == mob.id then
+                    writeVerbose('Target acquisition of %s (%s) was %s after %s%s':format(
+                        text_mob(t.name, Colors.verbose),
+                        text_number(tostring(t.id), Colors.verbose),
+                        text_green('successful', Colors.verbose),
+                        text_number('%.2fs':format(os.clock() - start), Colors.verbose),
+                        overridden and text_yellow(' (overridden)') or ''
+                    ))
+                    return true, nil
                 end
 
                 if mob then
                     writeVerbose('Target acquisition of %s has %s after %s':format(
                         text_mob(mob.name, Colors.verbose),
                         text_red('failed', Colors.verbose),
-                        text_number('%.1fs':format(duration), Colors.verbose)
+                        text_number('%.2fs':format(os.clock() - start), Colors.verbose)
                     ))
-                end
-
-                -- Pull out of first person view if we tabbed
-                if has_tabbed then
-                    windower.send_command('setkey numpad5 down; wait 0.2; setkey numpad5 up; wait 0.1;')
-                    coroutine.sleep(0.5)
                 end
             end
         end
     end
-
-    -- if settings.debugging then
-    --     writeMessage('DBG: lockTarget exiting with %s':format(text_red('failure')))
-    -- end
 end
 
 

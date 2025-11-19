@@ -36,17 +36,25 @@ party_info.refresh = function(self, player, party, force)
         local sorted_a1_names = {}
         local sorted_a2_names = {}
 
+        local target_symbols_by_id = {}
+
         -- We've got slots 0-5 for parties and alliances. Go through them in parallel.
         for i = 0, 5 do
-            local p  = party['p' .. i]
-            local a1 = party['a1' .. i]
-            local a2 = party['a2' .. i]
+            local p_symbol  = 'p' .. i
+            local a1_symbol = 'a1' .. i 
+            local a2_symbol = 'a2' .. i
+
+            local p  = party[p_symbol]
+            local a1 = party[a1_symbol]
+            local a2 = party[a2_symbol]
 
             -- Party members
             if p and p.mob and p.mob.id then
                 p_by_id[p.mob.id] = p
                 p_names[i] = p.name
+
                 table.insert(sorted_p_names, p.name)
+                target_symbols_by_id[p.mob.id] = p_symbol
             else
                 p_names[i] = nil
             end
@@ -55,7 +63,9 @@ party_info.refresh = function(self, player, party, force)
             if a1 and a1.mob and a1.mob.id then
                 a1_by_id[a1.mob.id] = a1
                 a1_names[i] = a1.name
+
                 table.insert(sorted_a1_names, a1.name)
+                target_symbols_by_id[a1.mob.id] = a1_symbol
             else
                 a1_names[i] = nil
             end
@@ -64,7 +74,9 @@ party_info.refresh = function(self, player, party, force)
             if a2 and a2.mob and a2.mob.id then
                 a2_by_id[a2.mob.id] = a2
                 a2_names[i] = a2.name
+
                 table.insert(sorted_a2_names, a2.name)
+                target_symbols_by_id[a2.mob.id] = a2_symbol
             else
                 a2_names[i] = nil
             end
@@ -87,6 +99,8 @@ party_info.refresh = function(self, player, party, force)
         self.sorted_p_names = sorted_p_names
         self.sorted_a1_names = sorted_a1_names
         self.sorted_a2_names = sorted_a2_names
+
+        self.target_symbols_by_id = target_symbols_by_id
 
         self.last_refreshed = os.clock()
 
@@ -140,6 +154,13 @@ end
 -- Gets an array of all party member names, in alphabetical order
 party_info.sortedPartyNames = function(self)
     return self.sorted_p_names
+end
+
+--------------------------------------------------------------------------------------
+-- Get the targeting symbol for the member with the specified id. This will
+-- be something like p3, a12, or a25.
+party_info.memberSymbolById = function(self, id)
+    return id and self.self.target_symbols_by_id[id]
 end
 
 return party_info

@@ -1014,16 +1014,24 @@ end
 handlers['target'] = function(args)
     local id = arrayIndexOfStrI(args, '-id')
     local index = arrayIndexOfStrI(args, '-index')
-    local name = arrayIndexOfStrI(args, '-name')
+    local name = arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n')
 
-    id = id and tonumber(args[id + 1]) or 0
-    index = index and tonumber(args[index + 1]) or 0
-    name = name and args[name + 1] and tostring(args[name + 1])
+    -- If none of the known arguments were provided, we'll just treat the entire
+    -- argument list as if it were a mob name
+    if not id and not index and not name then
+        if args and #args > 0 then
+            name = table.concat(args, ' ')
+        end
+    else
+        id = id and tonumber(args[id + 1]) or 0
+        index = index and tonumber(args[index + 1]) or 0
+        name = name and args[name + 1] and tostring(args[name + 1])
+    end
 
-    local _mob = nil
-    if id > 0 then
+    local mob = nil
+    if id and id > 0 then
         mob = windower.ffxi.get_mob_by_id(id)
-    elseif index > 0 then
+    elseif index and index > 0 then
         mob = windower.ffxi.get_mob_by_index(index)
     elseif name then
         local context = actionStateManager and actionStateManager:getContext()
@@ -1033,8 +1041,15 @@ handlers['target'] = function(args)
     if mob then
         local player = windower.ffxi.get_player()
         lockTarget(player, mob)
+    else
+        writeMessage(text_gray(
+            'The specified mob [%s] could not be found.':format(
+                text_yellow(id or index or name or '<unknown>', Colors.gray)
+            )
+        ))
     end
 end
+handlers['ta'] = handlers['target']
 
 handlers['touch'] = function(args)
     local name = arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n')
