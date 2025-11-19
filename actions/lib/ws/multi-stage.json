@@ -1,0 +1,65 @@
+{
+  "vars": {
+    "ws": {
+      "multi_stage": {
+        "stages": null,
+        "overrides": null
+      }
+    }
+  },
+  "actions": [
+    {
+      "import": "ws/terminal-reset"
+    },
+    {
+      "import": "macros/skillchaining"
+    },
+    {
+      "when": ["arrayCount(vars.ws.multi_stage.overrides) > 0"],
+      "commands": [
+        "-----The first thing we'll do is apply any stage overrides. This includes the possibility of actually creating the",
+        "-----stages themselves using nothing but the overrides.",
+        "logf('Applying overrides for %s weapon skill stages!', _tblue(arrayCount(vars.ws.multi_stage.overrides)))",
+        "arrayCount(vars.ws.multi_stage.stages) > 0 or setVar('vars.ws.multi_stage.stages', {})",
+        "arrayInherit(vars.ws.multi_stage.stages, vars.ws.multi_stage.overrides, true)"
+      ],
+      "on_load": true
+    },
+    {
+      "when": ["arrayCount(vars.ws.multi_stage.stages) == 0"],
+      "commands": [
+        "-----If there are no stages defined, we'll null out the stage variables and log that fact.",
+        "setVar('vars.ws.multi_stage.stages', nil)",
+        "log(_tgray('No weapon skill stages were defined!'))",
+
+        "vars.ws.multi_stage.stages and \\",
+        "  logf('Identified %s weapon skill stages!', _tblue(arrayCount(vars.ws.multi_stage.stages))) or \\",
+        "  log(_tgray('No weapon skill stages were defined!'))"
+      ],
+      "on_load": true
+    },
+    {
+      "when": ["vars.ws.multi_stage.stages"],
+      "commands": [
+        "-----There are stages, so log how many we've got defined.",
+        "logf('Identified %s weapon skill stages!', _tblue(arrayCount(vars.ws.multi_stage.stages)))"
+      ],
+      "on_load": true
+    },
+    {
+      "when": [
+        "vars.ws.multi_stage.stages and not vars.ws.multi_stage.stages_disabled",
+        "isNextMultiStageCloser(vars.ws.multi_stage.stages)"
+      ],
+      "commands": ["$macro:close_skillchain"]
+    },
+    {
+      "when": [
+        "vars.ws.multi_stage.stages and not vars.ws.multi_stage.stages_disabled",
+        "$macro:can_open_sc",
+        "isNextMultiStageOpener(vars.ws.multi_stage.stages)"
+      ],
+      "commands": ["$macro:open_skillchain"]
+    }
+  ]
+}

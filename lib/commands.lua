@@ -134,11 +134,38 @@ handlers['varget'] = function(args)
             text_blue(name),
             text_gray('nil')
         ))
-    else
-        writeMessage('  %s: %s':format(
+    elseif type(value) == 'table' and #value > 0 then
+        writeMessage('  %s %s:':format(
             text_blue(name),
-            text_gray(tostring(value))
+            text_yellow('array')
         ))
+
+        for i, v in ipairs(value) do
+            writeMessage('    %s: %s':format(
+                text_number(i),
+                    (type(v) == 'number' and text_number(v)) or
+                    (type(v) == 'string' and text_yellow('"%s"':format(v))) or
+                    (type(v) == 'boolean' and (v and text_green('true') or text_red('false'))) or
+                    (type(v) == 'nil' and text_gray('nil')) or
+                    text_gray(tostring(v))
+            ))
+        end
+    else
+        writeMessage('  %s %s:':format(
+            text_blue(name),
+            text_yellow('table')
+        ))
+
+        for key, v in pairs(value) do
+            writeMessage('    %s: %s':format(
+                text_yellow(key),
+                    (type(v) == 'number' and text_number(v)) or
+                    (type(v) == 'string' and text_yellow('"%s"':format(v))) or
+                    (type(v) == 'boolean' and (v and text_green('true') or text_red('false'))) or
+                    (type(v) == 'nil' and text_gray('nil')) or
+                    text_gray(tostring(v))
+            ))
+        end
     end
 end
 
@@ -368,6 +395,7 @@ handlers['config'] = function(args)
     local useRawDistance = tonumber(arrayIndexOfStrI(args, '-rawdistance') or arrayIndexOfStrI(args, '-rd') or 0)
     local partyTarget = tonumber(arrayIndexOfStrI(args, '-partytarget') or arrayIndexOfStrI(args, '-pt') or 0)
     local debugging = tonumber(arrayIndexOfStrI(args, '-debugging') or 0)
+    local slowTargetTransitions = tonumber(arrayIndexOfStrI(args, '-stt') or 0)
     
     local hasChanges = false
 
@@ -510,6 +538,21 @@ handlers['config'] = function(args)
 
         writeMessage('Additional debugging details: %s':format(
             settings.debugging and text_green('on') or text_red('off')
+        ))
+    end
+
+    if slowTargetTransitions > 0 then
+        slowTargetTransitions = args[slowTargetTransitions + 1]
+        if slowTargetTransitions == 'on' then
+            settings.slowTargetTransitions = true
+            hasChanges = true
+        elseif slowTargetTransitions == 'off' then
+            settings.slowTargetTransitions = false
+            hasChanges = true
+        end
+
+        writeMessage('Use slower target transitions: %s':format(
+            settings.slowTargetTransitions and text_green('on') or text_red('off')
         ))
     end
 

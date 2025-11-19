@@ -87,7 +87,13 @@ local function get_action_variable_path(s)
             match ~= '' and
             (match ~= 'vars' or #result > 0)
         then
-            result[#result + 1] = match
+            local num_match = tonumber(match)
+            if num_match and math.floor(num_match) == num_match then
+                -- This allows numeric indexes for arrays to be obtained
+                result[#result + 1] = num_match
+            else
+                result[#result + 1] = match
+            end
         end
     end
     return result;
@@ -158,8 +164,8 @@ end
 local function context_any(search, ...)
     local cmp = __context_compare
     if type(search) == 'string' then
-        search = string.lower(search)
         cmp = __context_compare_strings_fast
+        search = string.lower(search)
     end
 
     local _set = varargs({...})
@@ -352,6 +358,34 @@ local function context_table_inherit(target, ...)
 end
 
 -----------------------------------------------------------------------------------------
+-- Iterates over the target array. Examine the source array at the same index. Any
+-- fields present in the source entry but not in the target are copied into the 
+-- corresponding target entry. If the force flag is set, overwrites will always
+-- occur regardless of whether the target already has a value.
+local function context_array_inherit(target, source, force)
+    local num_applied = 0
+
+    if type(target) == 'table' and type(source) == 'table' then
+        for i = 1, #target do
+            local current_target = target[i]
+            local current_source = source[i]
+            
+            if current_target and current_source then
+                for key, value in pairs(current_source) do
+                    if force or current_target[key] == nil then
+                        current_target[key] = current_source[key]
+                    end
+                end
+
+                num_applied = num_applied + 1
+            end
+        end
+    end
+
+    return num_applied > 0 and num_applied
+end
+
+-----------------------------------------------------------------------------------------
 --
 local function context_is_array(array)
     return context_array_length(array) > 0
@@ -497,6 +531,12 @@ end
 local function context_set_var(name, value)
     local levels = get_action_variable_path(name)
 
+    -- Bail if we're trying to set a computed field
+    local last_level = levels[#levels]
+    if last_level == '$length' or last_level == '$type' then
+        return nil
+    end
+
     -- If only one level is necessary, we'll just set it now and be done
     if #levels == 1 then
         actionStateManager.vars[levels[1]] = value
@@ -550,6 +590,16 @@ local function context_get_var(name)
         end
 
         ref = cur
+    end
+
+    -- Allow for array length to be queried
+    local last_level = levels[#levels]
+    if last_level == '$length' then
+        if type(ref) == 'table' then
+            return #ref
+        end
+    elseif last_level == '$type' then
+        return type(ref)
     end
 
     -- Return the final level
@@ -2297,6 +2347,168 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             return key
                         end
                     end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    --
+    context.isNextSkillchainer = function(threshold, ...)
+        local participants = nil
+
+        if type(threshold) == 'table' then
+            -- When the threshold is a table, assume it is the participant list and default the tp threshold
+            participants = threshold
+            threshold = 800
+        elseif type(threshold) == 'string' then
+            -- When the threshold is a string, assume it is the first participant in a list and default the tp threshold
+            participants = varargs({...})
+            table.insert(participants, 1, threshold)
+            threshold = 800
+        else
+            -- Otherwise, take the treshold (or use the default) and treat the remaining args as the participant list
+            threshold = math.max(0, tonumber(threshold) or 800)
+            participants = varargs({...})
+        end        
+
+        if type(participants) == 'table' then
+            for i = 1, #participants do
+                local participant = makePlayerName(participants[i])
+                if participant then
+                    local member = context.pinfo[participant]
+                    if member and member.valid_target and member.is_engaged and member.distance < 20 then
+                        -- If this member is at or above the tp threshold, we will always end here.
+                        -- We will return true if and only if the member is yourself.
+                        if member.tp >= threshold then
+                            return member.is_me and member.tp >= 1000
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- 
+    context.onWeaponSkills = function(on_ws_array)
+        if type(on_ws_array) == 'table' and #on_ws_array > 0 then
+            if not context.skillchaining() then
+                for i = 1, #on_ws_array do
+                    local entry = on_ws_array[i]
+                    if 
+                        type(entry) == 'table' and
+                        type(entry.use) == 'table' and
+                        context.partyUsingWeaponSkill2(entry.party_using)
+                    then
+                        return context.canUseWeaponSkill(entry.use)
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if you are the multistage opener and are ready to go.
+    context.isNextMultiStageOpener = function(stage_meta)
+        if not context.partyUsingWeaponSkill() then
+            local stage = context.isNextMultiStager(stage_meta)
+            return stage == 1
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if you are the next multistage closer and are ready to go.
+    context.isNextMultiStageCloser = function(stage_meta)
+        if context.partyUsingWeaponSkill2() then
+            local stage = context.isNextMultiStager(stage_meta)
+            return stage and stage > 1
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determine if you are the next multistage participant and are ready to go.
+    context.isNextMultiStager = function (stage_meta, max_stage)
+        local party_using_weapon_skill = context.partyUsingWeaponSkill()
+        local skillchaining = context.skillchaining()
+
+        local max_stage = tonumber(max_stage) or math.huge
+        max_stage = math.max(max_stage, 1)
+
+        if type(stage_meta) == 'table' and #stage_meta > 0 then
+
+            local stage = nil
+
+            -- Stage 1: Always return if no weapon skills are being used. This is an early exit to prevent us from continuing
+            -- through all the other stage checks if a WS is not active. If a WS *is* in effect, we will return success iff
+            -- we can use a stage weapon skill and we are the next participant up.
+            if not party_using_weapon_skill then
+                stage = stage_meta[1]
+
+                return 
+                    stage and 
+                    context.canUseWeaponSkill(stage.use) and 
+                    context.isNextSkillchainer(stage.threshold, stage.participants) and
+                    1
+            end
+
+            -- Stop here if our max stage is 1
+            if max_stage == 1 then return end
+
+            -- Stage 2: Always return if a weapon skill is in effect but there's no skillchain. This is an early exit to prevent
+            -- us from continuing through the other stage checks if a SC is not active. We return success iff we are the next
+            -- participant up and can use an appropriate closing weapon skill.
+            --
+            -- Note that stage 2 is special, simply due to the fact that it's the only one that looks for WS combos rather than
+            -- SC reactions. This is why we have a sequence of different opener WS's and how to close them.            
+            if party_using_weapon_skill and not skillchaining then
+                stage = stage_meta[2]
+
+                -- We allow direct party_using/use values to be set directly in the stage, rather than in an on_ws array.
+                -- To do so, we promote the direct fields into an array of our creation with the single defined entry
+                -- from the stage. This is purely for usability's sake.
+                if stage and not stage.on_ws and stage.use then
+                    stage.on_ws = {
+                        party_using = stage.party_using,
+                        use = stage.use
+                    }
+
+                    stage.use = nil
+                    stage.party_using = nil
+                end
+
+                return 
+                    stage and
+                    context.onWeaponSkills(stage.on_ws) and
+                    context.isNextSkillchainer(stage.threshold, stage.participants) and                    
+                    2
+            end
+
+            -- Stop here if our max stage is 1
+            if max_stage == 2 then return end
+
+            -- Stage 3+: If we're skillchaining, we'll check for the first stage defined to handle that specific SC.
+            -- We'll always return if we find a stage that handles it, regardless of whether we are the one responsible
+            -- for handling it.
+            if skillchaining then
+                for stage_number = 3, #stage_meta do
+                    stage = stage_meta[stage_number]
+                    if 
+                        type(stage) == 'table' and (
+                            (type(stage.on_sc) == 'table' and #stage.on_sc > 0) or
+                            (type(stage.on_sc) == 'string' and stage.on_sc ~= '')
+                        )
+                    then
+                        if context.skillchaining2(stage.on_sc) then
+                            return 
+                                context.canUseWeaponSkill(stage.use) and 
+                                context.isNextSkillchainer(stage.threshold, stage.participants) and
+                                stage_number
+                        end
+                    end
+
+                    -- Stop here if this was our max stage
+                    if max_stage == stage_number then return end
                 end
             end
         end
@@ -5021,16 +5233,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             context.party_weapon_skill and
             skillchain and
             skillchain.name ~= nil and  (
-                names[1] == nil or 
+                names[1] == nil or
+                names[skillchain.name] or
                 arrayIndexOfStrI(names, skillchain.name) or
                 (skillchain.name == 'Light' and
-                    not arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Light') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Light1)) or         -- Light 1 (explicit)
+                    not arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Light') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Light1)) or         -- Explicit Light 1: The ws DOES NOT have the Light attribute, and we're looknig for Light I
                 (skillchain.name == 'Light' and 
-                    arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Light') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Light2)) or             -- Light 2
+                    arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Light') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Light2)) or             -- Explicit Light 2: The ws DOES have the Light attribute, and we're looking for Light 2
                 (skillchain.name == 'Darkness' and 
-                    not arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Darkness') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Darkness1)) or   -- Darkness 1 (explicit)
+                    not arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Darkness') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Darkness1)) or   -- Explicit Darkness 1: The ws DOES NOT have the Darkness attribute, and we're looknig for Darkness I
                 (skillchain.name == 'Darkness' and 
-                    arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Darkness') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Darkness2))          -- Darkness 2
+                    arrayIndexOfStrI(context.party_weapon_skill.skillchains, 'Darkness') and arrayContainsAnyStrI(names, SKILLCHAIN_ALIASES.Darkness2))          -- Explicit Darkness 2: The ws DOES have the Light attribute, and we're looking for Light 2
             )
         then
             context.skillchain_age = os.clock() - skillchain.time
@@ -6033,6 +6246,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.arrayLength = context_array_length
     context.arrayCount = context.arrayLength
     context.arrayMerge = context_array_merge
+    context.arrayInherit = context_array_inherit
     context.tableMerge = context_table_merge
     context.tableInherit = context_table_inherit
     context.arrayContains = context_array_contains
@@ -6059,11 +6273,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.varCycleUp = context_var_cycle_up
     context.varCycleDown = context_var_cycle_down
 
-    context._tred = function(text) return colorize(Colors.red, text, Colors.cornsilk) end
-    context._tgreen = function(text) return colorize(Colors.green, text, Colors.cornsilk) end
-    context._tblue = function(text) return colorize(Colors.blue, text, Colors.cornsilk) end
-    context._tgray = function(text) return colorize(Colors.gray, text, Colors.cornsilk) end
-    context._tgold = function(text) return colorize(Colors.gold, text, Colors.cornsilk) end
+    context._tred       = function(text) return colorize(Colors.red, text, Colors.cornsilk) end
+    context._tgreen     = function(text) return colorize(Colors.green, text, Colors.cornsilk) end
+    context._tblue      = function(text) return colorize(Colors.blue, text, Colors.cornsilk) end
+    context._tgray      = function(text) return colorize(Colors.gray, text, Colors.cornsilk) end
+    context._tgold      = function(text) return colorize(Colors.gold, text, Colors.cornsilk) end
+    context._tmagenta   = function(text) return colorize(Colors.magenta, text, Colors.cornsilk) end
+    context._tdefault   = function(text) return colorize(Colors.cornsilk, text, Colors.cornsilk) end
 
     -- Final setup
     setEnumerators(context)

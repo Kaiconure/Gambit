@@ -1,4 +1,4 @@
-__version = '0.96.0-beta16'
+__version = '0.96.0-beta17'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -14,7 +14,7 @@ _addon.commands = __commands
 -- Print a formatted message to the Windower console
 function printDebug(format, ...)
     if settings and settings.debugging then
-        print('GBT: ' .. string.format(tostring(format) or '', ...))
+        print('[%s] GBT: ':format(os.date("%X")) .. string.format(tostring(format) or '', ...))
     end
 end
 
@@ -433,6 +433,10 @@ local CATEGORY_SPELL_END            = 4
 local CATEGORY_RANGED_START         = 12     -- action.category=12, action.param = 24931
 local CATEGORY_RANGED_INTERRUPT     = 12     -- action.category=12, action.param = 24931
 local CATEGORY_RANGED_END           = 2
+
+local CATEGORY_JOB_ABILITY_1        = 6     -- Most job abilities fall into this category
+local CATEGORY_JOB_ABILITY_2        = 3     -- Many direct-damage abilities such as WS or Jumps
+local CATEGORY_JOB_ABILITY_3        = 14    -- Non-blinkable abilities such as jigs/sambas/flourishes
 
 local PARAM_STARTED                 = 24931 -- Normal start
 local PARAM_INTERRUPTED             = 28787 -- Interrupted before completion
@@ -994,11 +998,47 @@ local _handle_lockTargetChunk = function(id, data, modified_data, injected, bloc
         local packet = packets.parse('incoming', data)
         local target_id = packet and packet.Target
 
+        -- print('Targeting packet intercepted: id=%d, injected=%s, blocked=%s':format(
+        --     target_id or -1,
+        --     injected and 'true' or 'false',
+        --     blocked and 'true' or 'false'
+        -- ))
+
         -- If we couldn't get a target id, we'll just return. This shouldn't happen, but
         -- if so we will just let Windower/FFXI do what it does.
         if not target_id then
             printDebug('Forwarding injected targeting packet due to no corresponding target id being found.')
             return
+        end
+
+        -- If the mob in the packet is invalid or not a normal mob, we will let things proceed as normal
+        local target_mob = windower.ffxi.get_mob_by_target(target_id)
+        if 
+            target_mob == nil or 
+            not target_mob.valid_target or 
+            target_mob.spawn_type ~= SPAWN_TYPE_MOB 
+        then
+            return
+        end
+
+        -- If we're not in a valid targeting state, bail
+        local player = windower.ffxi.get_player()
+        if
+            injected and 
+            player and
+            player.status and (
+                player.status ~= STATUS_IDLE and
+                player.status ~= STATUS_RESTING and
+                player.status ~= STATUS_MOUNT and
+                player.status ~= STATUS_CHOCOBO
+            )
+        then
+            local status = resources.statuses[player.status]
+            printDebug('Ignoring injected targeting packet due to invalid player status [%s] / %d.':format(
+                status and status.name or 'n/a',
+                status and status.id or '-1'
+            ))
+            return false
         end
 
         -- printDebug('Received targeting packet %03X: mob.id=%d, injected=%s, blocked=%s':format(
@@ -1025,25 +1065,6 @@ local _handle_lockTargetChunk = function(id, data, modified_data, injected, bloc
         local current_t = windower.ffxi.get_mob_by_target('t')
         if current_t and current_t.id == target_id then
             printDebug('Ignoring injected targeting packet because the requested mob is already targeted.')
-            return false
-        end
-
-        -- If we're not in a valid targeting state, bail
-        local player = windower.ffxi.get_player()
-        if 
-            player and
-            player.status and (
-                player.status ~= STATUS_IDLE and
-                player.status ~= STATUS_RESTING and
-                player.status ~= STATUS_MOUNT and
-                player.status ~= STATUS_CHOCOBO
-            )
-        then
-            local status = resources.statuses[player.status]
-            printDebug('Ignoring injected targeting packet due to invalid player status [%s] / %d.':format(
-                status and status.name or 'n/a',
-                status and status.id or '-1'
-            ))
             return false
         end
     end

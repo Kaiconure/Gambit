@@ -191,7 +191,18 @@ local function shouldAquireNewTarget(player, party)
                 ))
 
                 smartMove:cancelJob()
+                
                 windower.send_command('input /attack off')
+                coroutine.sleep(0.25)
+
+                -- Unlock from the target if necessary
+                player = windower.ffxi.get_player()
+                if player and player.target_locked then
+                    printDebug('Unlocking from lost target %s/%d':format(currentMob.name, currentMob.id))
+                    
+                    windower.send_command('input /lockon')
+                    coroutine.sleep(0.25)
+                end
 
                 resetCurrentMob(nil)
             else
@@ -317,8 +328,10 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 local loop_start_t = os.clock()
                 local num_attempted = 0
 
+                local max_attempts = 5
+
                 -- We'll try a few times to establish our target directly
-                for i = 1, 6 do
+                for i = 1, max_attempts do
                     num_attempted = num_attempted + 1
 
                     packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
@@ -341,7 +354,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     --     math.min(math.pow(1.1, i - 1) - 0.5, 1.0)  -- Don't allow sleeps of longer than 1 second at a time
                     -- )
 
-                    coroutine.sleep(0.5)
+                    coroutine.sleep(i == 1 and 0.25 or 0.75)
 
                     local t = windower.ffxi.get_mob_by_target('t')
                     if 
@@ -353,11 +366,12 @@ function lockTarget(player, mob, battleTarget, noTabs)
                             break
                         end
 
-                        printDebug('Direct target of [%s] / %d was successful after %.1fs and %d attempt(s)!':format(
+                        printDebug('Direct target of %s/%d was successful after %.2fs (%d/%d).':format(
                             t.name,
                             t.id,
                             os.clock() - loop_start_t,
-                            num_attempted
+                            num_attempted,
+                            max_attempts
                         ))
 
                         -- writeVerbose('Direct target acquisition of %s was %s!':format(
@@ -369,7 +383,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     end
                 end
 
-                printDebug('Direct target of [%s] / %d was UNSUCCESSFUL after %.1fs and %d attempt(s)!':format(
+                printDebug('Direct target of %s/%d failed after %.2fs and %d attempts.':format(
                     mob.name,
                     mob.id,
                     os.clock() - loop_start_t,
@@ -488,7 +502,8 @@ function lockTarget(player, mob, battleTarget, noTabs)
                                             writeVerbose('Falling back to tab-basted targeting...')
                                         end
 
-                                        local targeting_key = isMobPlayer(mob) and 'f9' or 'f8'
+                                        -- NOTE: This will never be a player at this point, due to logic further up above
+                                        local targeting_key = 'f8' --isMobPlayer(mob) and 'f9' or 'f8'
 
                                         -- Enter first-person view
                                         command = command .. 

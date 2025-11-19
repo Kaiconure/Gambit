@@ -32,6 +32,10 @@ party_info.refresh = function(self, player, party, force)
         local a1_names = {}
         local a2_names = {}
 
+        local sorted_p_names = {}
+        local sorted_a1_names = {}
+        local sorted_a2_names = {}
+
         -- We've got slots 0-5 for parties and alliances. Go through them in parallel.
         for i = 0, 5 do
             local p  = party['p' .. i]
@@ -42,6 +46,7 @@ party_info.refresh = function(self, player, party, force)
             if p and p.mob and p.mob.id then
                 p_by_id[p.mob.id] = p
                 p_names[i] = p.name
+                table.insert(sorted_p_names, p.name)
             else
                 p_names[i] = nil
             end
@@ -50,6 +55,7 @@ party_info.refresh = function(self, player, party, force)
             if a1 and a1.mob and a1.mob.id then
                 a1_by_id[a1.mob.id] = a1
                 a1_names[i] = a1.name
+                table.insert(sorted_a1_names, a1.name)
             else
                 a1_names[i] = nil
             end
@@ -58,6 +64,7 @@ party_info.refresh = function(self, player, party, force)
             if a2 and a2.mob and a2.mob.id then
                 a2_by_id[a2.mob.id] = a2
                 a2_names[i] = a2.name
+                table.insert(sorted_a2_names, a2.name)
             else
                 a2_names[i] = nil
             end
@@ -72,6 +79,14 @@ party_info.refresh = function(self, player, party, force)
         self.p_names  = p_names
         self.a1_names = a1_names
         self.a2_names = a2_names
+
+        table.sort(sorted_p_names)
+        table.sort(sorted_a1_names)
+        table.sort(sorted_a2_names)
+
+        self.sorted_p_names = sorted_p_names
+        self.sorted_a1_names = sorted_a1_names
+        self.sorted_a2_names = sorted_a2_names
 
         self.last_refreshed = os.clock()
 
@@ -119,7 +134,12 @@ party_info.isClaimedMob = function(self, mob)
         mob and
         mob.spawn_type == SPAWN_TYPE_MOB and
         (mob.claim_id or 0) > 0
+end
 
+--------------------------------------------------------------------------------------
+-- Gets an array of all party member names, in alphabetical order
+party_info.sortedPartyNames = function(self)
+    return self.sorted_p_names
 end
 
 return party_info
