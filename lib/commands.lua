@@ -380,6 +380,56 @@ handlers['verbosity'] = function (args)
     end
 end
 
+handlers['sendkey'] = function(args)
+    if #args > 0 then
+        local all_keys = table.concat(args, ' ')
+        writeMessage('Preparing to send key sequence: %s':format(text_yellow(all_keys)))
+        for i, key in ipairs(args) do
+            local command = 'setkey %s down; wait 0.1; setkey %s up; wait 0.1;':format(key, key)
+            windower.send_command(command)
+            coroutine.sleep(0.25)
+        end
+    end
+end
+handlers['sk'] = handlers['sendkey']
+
+handlers['iteminfo'] = function(args)
+    local bag_info = windower.ffxi.get_bag_info()
+    local inventory = bag_info and bag_info.inventory or bag_info
+
+    writeMessage(text_green('Item Information:'))
+
+    if inventory and inventory.enabled then
+        writeMessage('  %s: %s / %s':format(
+            text_yellow('Inventory'),
+            text_number(inventory.count or '--'),
+            text_number(inventory.max or '--')
+        ))
+    end
+
+    local gil = windower.ffxi.get_items('gil')
+    if gil then
+        -- The following makes a nice, formatted number with commas. This should be moved to a helper...
+        local gil_str = gil > 0 and '' or '0'
+        while gil > 0 do
+            local sub_amount = gil % 1000
+            gil = math.floor(gil / 1000)
+
+            if gil > 0 then
+                gil_str = ',%03d':format(sub_amount) .. gil_str
+            else
+                gil_str = sub_amount .. gil_str
+            end
+        end
+
+        writeMessage('  %s: %s':format(
+            text_yellow('Gil'),
+            text_number(gil_str)
+        ))
+    end
+end
+handlers['ii'] = handlers['item_info']
+
 -------------------------------------------------------------------------------
 -- distance
 handlers['config'] = function(args)
