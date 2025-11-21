@@ -486,14 +486,16 @@ handlers['config'] = function(args)
 
     if h_offset > 0 then
         h_offset = tonumber(args[h_offset + 1])
-        if h_offset and h_offset > 0 then
-            h_offset = math.min(h_offset, 0)
+        if h_offset and h_offset >= 0 then
+            h_offset = math.max(h_offset, 0)
             settings.followOffset = h_offset
             hasChanges = true
+
+            smartMove:applySettings(settings)
         end
 
         writeMessage('Horizontal follow offset: %s':format(
-            settings.followOffset and text_number('%.1f':format(settings.followOffset)) or text_magenta('n/a')
+            settings.followOffset and text_number('%.2f':format(settings.followOffset)) or text_magenta('n/a')
         ))
     end
 
