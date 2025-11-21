@@ -446,6 +446,8 @@ handlers['config'] = function(args)
     local partyTarget = tonumber(arrayIndexOfStrI(args, '-partytarget') or arrayIndexOfStrI(args, '-pt') or 0)
     local debugging = tonumber(arrayIndexOfStrI(args, '-debugging') or 0)
     local slowTargetTransitions = tonumber(arrayIndexOfStrI(args, '-stt') or 0)
+
+    local cp = tonumber(arrayIndexOfStrI(args, '-cloudpanel') or arrayIndexOfStrI(args, '-cp') or 0)
     
     local hasChanges = false
 
@@ -588,6 +590,33 @@ handlers['config'] = function(args)
 
         writeMessage('Additional debugging details: %s':format(
             settings.debugging and text_green('on') or text_red('off')
+        ))
+    end
+
+    if cp > 0 then
+        local hasCpChanges = false
+
+        cp = args[cp + 1]
+        settings.cloudPanel = settings.cloudPanel or {}
+
+        if cp == 'on' then
+            settings.cloudPanel.enabled = true
+            hasChanges = true
+            hasCpChanges = true
+        elseif cp == 'off' then
+            settings.cloudPanel.enabled = false
+            hasChanges = true
+            hasCpChanges = true 
+        end
+
+        if hasCpChanges then
+            if globals.cloud_panel then
+                globals.cloud_panel:configure(settings.cloudPanel)
+            end
+        end
+
+        writeMessage('Cloud panel display: %s':format(
+            settings.cloudPanel.enabled and text_green('on') or text_red('off')
         ))
     end
 
