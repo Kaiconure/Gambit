@@ -409,26 +409,72 @@ handlers['iteminfo'] = function(args)
 
     local gil = windower.ffxi.get_items('gil')
     if gil then
-        -- The following makes a nice, formatted number with commas. This should be moved to a helper...
-        local gil_str = gil > 0 and '' or '0'
-        while gil > 0 do
-            local sub_amount = gil % 1000
-            gil = math.floor(gil / 1000)
-
-            if gil > 0 then
-                gil_str = ',%03d':format(sub_amount) .. gil_str
-            else
-                gil_str = sub_amount .. gil_str
-            end
-        end
-
         writeMessage('  %s: %s':format(
             text_yellow('Gil'),
-            text_number(gil_str)
+            text_number(format_number(gil))
         ))
     end
 end
-handlers['ii'] = handlers['item_info']
+handlers['ii'] = handlers['iteminfo']
+
+handlers['jobinfo'] = function(args)
+
+    local send = hasArg(args, '-send')
+    if send then
+        writeMessage('Sending job info to other alts...')
+        sendJobInfoIpc()
+        return
+    end
+
+    local name = makePlayerName(getArgValue(args, '-name') or getArgValue(args, '-n'))
+
+    local main_job = nil
+    local main_job_level = nil
+    local sub_job = nil    
+    local sub_job_level = nil
+
+    if name == nil or name == globals.me_name then
+        local player = windower.ffxi.get_player()
+        if player then
+            name = player.name
+            main_job = player.main_job
+            main_job_level = player.main_job_level or 0
+            sub_job = player.sub_job
+            sub_job_level = player.sub_job_level or 0
+        end
+    elseif globals.ipc_job_info[name] then
+        local jobInfo = globals.ipc_job_info[name]
+        main_job = jobInfo.main_job
+        main_job_level = jobInfo.main_job_level or 0
+        sub_job = jobInfo.sub_job
+        sub_job_level = jobInfo.sub_job_level or 0
+    end
+
+    if name and main_job then
+        if sub_job then
+            writeMessage('Job Info: %s is %s':format(
+                text_player(name),
+                text_cornsilk('%s%d/%s%d':format(
+                    main_job,
+                    main_job_level,
+                    sub_job,
+                    sub_job_level))
+            ))
+        else
+            writeMessage('Job Info: %s is %s':format(
+                text_player(name),
+                text_cornsilk('%s%d':format(
+                    main_job,
+                    main_job_level))
+            ))
+        end
+    else
+        writeMessage('No job information is available for %s.':format(
+            text_player(name or globals.me_name)
+        ))
+    end
+end
+handlers['ji'] = handlers['jobinfo']
 
 -------------------------------------------------------------------------------
 -- distance

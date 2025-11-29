@@ -97,8 +97,12 @@ globals = {
     ipc_sender_started = false,
     suppress_logging = true,
     cloud_panel = nil,
+
     ipc_positions = {},
     ipc_positions_by_index = {},
+
+    ipc_job_info = {},
+
     last_broadcast_pos = nil
 }
 
@@ -203,6 +207,21 @@ end
 -- Run a command against this addon
 function sendSelfCommand(command, wait)
     windower.send_command(makeSelfCommand(command, wait))
+end
+
+--------------------------------------------------------------------------------------
+-- Broadcasts your job info to other alts on the IPC channel
+function sendJobInfoIpc(player)
+    player = player or windower.ffxi.get_player()
+    if player and player.name and player.main_job and player.main_job_level then
+        windower.send_ipc_message('job -n %s -main %s -main-l %d -sub %s -sub-l %d':format(
+            player.name,
+            player.main_job,
+            player.main_job_level or 0,
+            player.sub_job or 'n/a',
+            player.sub_job_level or 0
+        ))
+    end
 end
 
 function reloadSettings(actionsName, bypassActions)
@@ -352,6 +371,12 @@ windower.register_event('load', function()
         -- Reload all settings
         resetCurrentMob(nil, true)
         reloadSettings()
+
+        -- Send our job info to other alts on the system via IPC. We'll wait a moment here, to handle the case where
+        -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
+        coroutine.schedule(function()
+            sendJobInfoIpc()
+        end, 3.0)
     else
         globals.suppress_logging = true
 
@@ -367,6 +392,8 @@ end)
 ---------------------------------------------------------------------
 -- Login
 windower.register_event('login', function ()
+    actionStateManager:setConquestInfo()
+
     if 
         not windower or
         not windower.ffxi
@@ -400,6 +427,8 @@ windower.register_event('login', function ()
     -- Reload all settings
     resetCurrentMob(nil, true)
     reloadSettings()
+
+    sendJobInfoIpc()
 end)
 
 windower.register_event('logout', function()
@@ -626,6 +655,8 @@ windower.register_event('job change', function()
         return
     end
 
+    sendJobInfoIpc()
+
     actionStateManager:setMeritPointInfo(0, 0, 0)
     actionStateManager:setCapacityPointInfo(0, 0)
 
@@ -669,7 +700,7 @@ windower.register_event('ipc message', function (msg)
         return
     end
 
-    msg = string.lower(msg or '')
+    msg = msg or ''--string.lower(msg or '')
 
     local split = msg:split(' ', string.encoding.shift_jis)
     if #split < 1 then
@@ -742,6 +773,34 @@ windower.register_event('ipc message', function (msg)
         -- Update the index table
         if index then
             globals.ipc_positions_by_index[tostring(index)] = globals.ipc_positions[key]
+        end
+    elseif command == 'job' then
+        local name = getArgValue(args, '-n')
+        local main_job = getArgValue(args, '-main')
+        local main_level = tonumber(getArgValue(args, '-main-l')) or 0
+        local sub_job = getArgValue(args, '-sub')
+        local sub_level = tonumber(getArgValue(args, '-sub-l')) or 0
+
+        if 
+            name and
+            main_job and
+            main_level > 0
+        then
+            globals.ipc_job_info[name] = {
+                t = os.clock(),
+                main_job = main_job,
+                main_job_level = main_level,
+                sub_job = sub_job,
+                sub_job_level = sub_level
+            }
+            printDebug('IPC job info updated for %s: %s%d/%s%d':format(
+                name,
+                main_job,
+                main_level,
+                sub_job,
+                sub_level
+            ))
+            --partyInfo:updateMemberJobInfo(name, main_job, main_level, sub_job, sub_level)
         end
     end
 
@@ -1407,6 +1466,32 @@ local _handle_actionMessageChunk = function(id, data)
     end
 end
 
+local function _handle_conquestInfoChunk(id, data)
+    local player = windower.ffxi.get_player()
+    if not player then return end   
+
+    local byte3 = string.byte(data[0x94])
+    local byte2 = string.byte(data[0x93])
+    local byte1 = string.byte(data[0x92])
+    local byte0 = string.byte(data[0x91])
+
+    local conquest_points = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216)
+
+    byte3 = string.byte(data[0xB4])
+    byte2 = string.byte(data[0xB3])
+    byte1 = string.byte(data[0xB2])
+    byte0 = string.byte(data[0xB1])
+
+    local imperial_standing = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216)
+
+    -- printDebug('Conquest Points updated: cp=%d, is=%d':format(
+    --     tonumber(conquest_points) or -1,
+    --     tonumber(imperial_standing) or -1
+    -- ))
+
+    actionStateManager:setConquestInfo(conquest_points, imperial_standing)
+end
+
 local _handle_limitCapacityChunk = function(id, data)
     local packet = packets.parse('incoming', data)
 
@@ -1473,6 +1558,10 @@ windower.register_event('incoming chunk', function (id, data, modified_data, inj
         id == PACKET_TARGET_LOCK
     then
         _handle_lockTargetChunk(id, data, modified_data, injected, blocked)
+    elseif
+        id == 0x05E     -- Conquest/Beseiged info
+    then
+        _handle_conquestInfoChunk(id, data)
     elseif
         id == 0x063     -- Limit Point and Capacity Point updates
     then

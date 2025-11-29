@@ -5,6 +5,7 @@
   },
   "vars": {
     "leader_sync": {
+      "disabled": null,
       "idle_disengage": true
     }
   },
@@ -18,6 +19,7 @@
         " re-engage you with the proper target to stay in sync with the leader."
       ],
       "when": [
+        "not vars.leader_sync.disabled",
         "bt and bt.id",
         "not me.is_party_leader and settings.strategy == 'leader'",
         "party_leader and not party_leader.is_dead and party_leader.valid_target and party_leader.distance <= 50",

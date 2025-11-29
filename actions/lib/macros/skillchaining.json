@@ -18,7 +18,9 @@
       "default_scd": null,
       "fast_scd": null,
       "free_for_all": null,
-      "anarchy_for_all": null
+      "anarchy_for_all": null,
+      "min_open_tp": null,
+      "open_delay": null
     }
   },
   "macros": {
@@ -50,7 +52,10 @@
     ],
     "check_using_ws": ["(partyUsingWeaponSkill2)"],
     "check_skillchaining": ["(skillchaining2)"],
-    "can_open_sc": ["me.tp >= (vars.ws.min_open_tp or 1000)"],
+    "can_open_sc": [
+      "me.tp >= (vars.ws.min_open_tp or 1000)",
+      "bt and bt.mob_time >= (vars.ws.open_delay or 2)"
+    ],
     "ws_partners_deferring": [
       "not vars.ws.anarchy_for_all or (not party_weapon_skill and not skillchain) or resetSkillchain()",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",

@@ -113,6 +113,55 @@ local function is_known_targeting_symbol(symbol)
         symbol == 'scan'
 end
 
+function compile_multi_stage(multi_stage)
+    local stage_meta = multi_stage and multi_stage.stages or {}
+    
+    for i = 1, #stage_meta do
+        local stage = stage_meta[i]
+
+        -- Promote single use entry to on_ws array if needed (one-time setup)
+        if i == 2 and stage and not stage.on_ws and stage.use then
+            stage.on_ws = {
+                party_using = stage.party_using,
+                use = stage.use,
+                threshold = stage.threshold
+            }
+
+            stage.use = nil
+            stage.party_using = nil
+            stage.threshold = nil
+        end
+
+        -- Promote stage-level threshold/participants to each on_ws entry if they aren't already defined (one-time setup)
+        if i == 2 and stage and (stage.threshold or stage.participants) then
+            for _, entry in ipairs(stage.on_ws or {}) do
+                if not entry.threshold then
+                    entry.threshold = stage.threshold
+                end
+
+                if not entry.participants then
+                    entry.participants = stage.participants
+                end
+            end
+
+            stage.threshold = nil
+            stage.participants = nil
+        end
+
+        -- Ensure that all participant names are normalized (one-time setup)
+        if type(stage.participants) ~= 'table' then
+            stage.participants = {}
+        end
+
+        -- Normalize participant names (one-time setup)
+        for j = 1, #stage.participants do
+            stage.participants[j] = makePlayerName(stage.participants[j])
+        end
+    end
+
+    multi_stage._compiled = true
+end
+
 -----------------------------------------------------------------------------------------
 --
 function __context_compare(a, b) return a == b end
@@ -1646,6 +1695,15 @@ local function initContextTargetSymbol(context, symbol, debug)
         if symbol.targets.Player then
             -- For player party members and allies, we'll use the global state manager driven by party buffs
             symbol.buffs = actionStateManager:getMemberBuffsFor(symbol.mob)
+
+            local jobInfo = globals.ipc_job_info and globals.ipc_job_info[symbol.name]
+            if jobInfo then
+                symbol.main_job = jobInfo.main_job
+                symbol.main_job_level = jobInfo.main_job_level
+                
+                symbol.sub_job = jobInfo.sub_job                
+                symbol.sub_job_level = jobInfo.sub_job_level
+            end
         elseif symbol.mob.spawn_type == SPAWN_TYPE_TRUST then
             -- For trusts, we'll use the much more limited self-initiated trust buff data we're tracking
             symbol.buffs = actionStateManager:getBuffsForMob(symbol.mob.id)
@@ -1730,6 +1788,13 @@ local function initContextTargetSymbol(context, symbol, debug)
             symbol.is_interactive = not symbol.is_non_interactive
             symbol.is_magic_trust = context_boolean(
                 not symbol.is_non_interactive and (meta.jobs_with_mp[metadata.main_job] or meta.jobs_with_mp[metadata.sub_job]))
+            symbol.main_job = metadata.main_job
+            symbol.sub_job = metadata.sub_job
+            if context.party_leader and context.party_leader.main_job_level then
+                symbol.main_job_level = context.party_leader.main_job_level
+            else
+                symbol.main_job_level = context.me and context.me.main_job_level or 0
+            end
         end
     end
 
@@ -1840,10 +1905,14 @@ local function loadContextTargetSymbols(context, target)
     context.pinfo = {}
 
     local cpi = actionStateManager:getCapacityPointInfo()
-    context.jobPoints = tonumber(cpi and cpi.jobPoints) or 0
+    context.job_points = tonumber(cpi and cpi.jobPoints) or 0
+
+    local conquest = actionStateManager:getConquestInfo()
+    context.conquest_points = conquest and tonumber(conquest.conquestPoints) or 0
+    context.imperial_standing = conquest and tonumber(conquest.imperialStanding) or 0
 
     local mpi = actionStateManager:getMeritPointInfo()
-    context.meritPoints = tonumber(mpi and mpi.current) or 0
+    context.merit_points = tonumber(mpi and mpi.current) or 0
 
     context.waiting_for_trusts = false
 
@@ -2401,7 +2470,56 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         type(entry.use) == 'table' and
                         context.partyUsingWeaponSkill2(entry.party_using)
                     then
-                        return context.canUseWeaponSkill(entry.use)
+                        return context.isNextSkillchainer(entry.threshold, entry.participants) and context.canUseWeaponSkill(entry.use)
+                    end
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Determines if the stage 2 closer for the currently examined weapon skill is ready to go.
+    context.isInitialCloserReady = function (stage_2)
+        if context.weapon_skill and type(stage_2) == 'table' and type(stage_2.on_ws) == 'table' then
+
+            for i = 1, #stage_2.on_ws do
+                local entry = stage_2.on_ws[i]
+                if 
+                    type(entry) == 'table' and
+                    type(entry.use) == 'table' and
+                    #entry.use > 0
+                then
+                    if 
+                        type(entry.party_using) ~= 'table' or                           -- If it's not a table, assume all weapon skills
+                        #entry.party_using == 0 or                                      -- If it's an empty table, assume all weapon skills
+                        arrayIndexOfStrI(entry.party_using, context.weapon_skill.name)  -- Otherwise, check for a match
+                    then
+                        -- If the participants are not defined, this is a default handler and we'll just return true
+                        if type(entry.participants) ~= 'table' or #entry.participants == 0 then
+                            return true
+                        end
+
+                        for j = 1, #entry.participants do
+                            local participant = entry.participants[j]
+                            if participant then
+                                local member = context.pinfo[participant]
+                                if 
+                                    member and 
+                                    --(not member.is_me and or context.hasBuff(member, 'Sekkanoki')) and
+                                    member.valid_target and
+                                    member.is_engaged and
+                                    member.distance < 20 
+                                then
+                                    -- If this member is at or above the tp threshold, we will always end here.
+                                    -- We will return true if and only if the member is yourself.
+                                    if member.tp >= (entry.threshold or 800) then
+                                        return true
+                                    end
+                                end
+                            end
+                        end
+
+                        return
                     end
                 end
             end
@@ -2410,32 +2528,42 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Determine if you are the multistage opener and are ready to go.
-    context.isNextMultiStageOpener = function(stage_meta)
+    context.isNextMultiStageOpener = function(multi_stage)
         if not context.partyUsingWeaponSkill() then
-            local stage = context.isNextMultiStager(stage_meta)
+            local stage = context.isNextMultiStager(multi_stage)
             return stage == 1
         end
     end
 
     --------------------------------------------------------------------------------------
     -- Determine if you are the next multistage closer and are ready to go.
-    context.isNextMultiStageCloser = function(stage_meta)
+    context.isNextMultiStageCloser = function(multi_stage)
         if context.partyUsingWeaponSkill2() then
-            local stage = context.isNextMultiStager(stage_meta)
+            local stage = context.isNextMultiStager(multi_stage)
             return stage and stage > 1
         end
     end
 
     --------------------------------------------------------------------------------------
     -- Determine if you are the next multistage participant and are ready to go.
-    context.isNextMultiStager = function (stage_meta, max_stage)
-        local party_using_weapon_skill = context.partyUsingWeaponSkill()
-        local skillchaining = context.skillchaining()
+    context.isNextMultiStager = function (multi_stage, max_stage)
+
+        local stage_meta = multi_stage and multi_stage.stages or nil
+        if not stage_meta then
+            return
+        end
 
         local max_stage = tonumber(max_stage) or math.huge
         max_stage = math.max(max_stage, 1)
 
         if type(stage_meta) == 'table' and #stage_meta > 0 then
+
+            if not multi_stage._compiled then
+                compile_multi_stage(multi_stage)
+            end
+
+            local party_using_weapon_skill = context.partyUsingWeaponSkill()
+            local skillchaining = context.skillchaining()
 
             local stage = nil
 
@@ -2449,6 +2577,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     stage and 
                     context.canUseWeaponSkill(stage.use) and 
                     context.isNextSkillchainer(stage.threshold, stage.participants) and
+                    (stage[2] == nil or isInitialCloserReady(stage[2])) and
                     1
             end
 
@@ -2464,23 +2593,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if party_using_weapon_skill and not skillchaining then
                 stage = stage_meta[2]
 
-                -- We allow direct party_using/use values to be set directly in the stage, rather than in an on_ws array.
-                -- To do so, we promote the direct fields into an array of our creation with the single defined entry
-                -- from the stage. This is purely for usability's sake.
-                if stage and not stage.on_ws and stage.use then
-                    stage.on_ws = {
-                        party_using = stage.party_using,
-                        use = stage.use
-                    }
-
-                    stage.use = nil
-                    stage.party_using = nil
-                end
-
                 return 
                     stage and
                     context.onWeaponSkills(stage.on_ws) and
-                    context.isNextSkillchainer(stage.threshold, stage.participants) and                    
                     2
             end
 
@@ -3277,7 +3392,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             elseif 
                 FAST_JOB_ABILITIES[ability.name]
             then
-                waitTime = 0.25
+                waitTime = 0.5
                 stopWalk = false
             end
 
@@ -6273,6 +6388,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.varCycleUp = context_var_cycle_up
     context.varCycleDown = context_var_cycle_down
 
+    context.smallnum = compress_number
+    context.fnum = format_number
+
+    context._tsmallnum  = function(text) return text_number(compress_number(text), Colors.cornsilk) end
+    context._tfnum      = function(text) return text_number(format_number(text), Colors.cornsilk) end
+    context._tnum       = function(text) return text_number(text, Colors.cornsilk) end
     context._tred       = function(text) return colorize(Colors.red, text, Colors.cornsilk) end
     context._tgreen     = function(text) return colorize(Colors.green, text, Colors.cornsilk) end
     context._tblue      = function(text) return colorize(Colors.blue, text, Colors.cornsilk) end

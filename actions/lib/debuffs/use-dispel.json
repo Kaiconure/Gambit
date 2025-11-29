@@ -10,11 +10,12 @@
   "actions": [
     {
       "when": [
+        "bt",
         "canUse('Dispel')",
         "arrayCount(vars.use_dispel.buffs) > 0",
-        "partyHasEffect(vars.use_dispel.buffs)"
+        "hasBuff(bt, vars.use_dispel.buffs)"
       ],
-      "commands": "use(member)",
+      "commands": "use(bt)",
       "frequency": 1,
       "miss_frequency": 1
     }

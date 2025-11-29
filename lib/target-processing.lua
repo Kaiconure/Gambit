@@ -471,6 +471,10 @@ function lockTarget(player, mob, battleTarget, noTabs)
                             -- that our tabbing stays in the general vicinity of our desired target.
                             if not has_fps then
                                 sendKey('numpad5')
+                                coroutine.sleep(0.125)
+                                -- coroutine.sleep(0.25)
+                                -- sendKey('numpad5')
+                                -- coroutine.sleep(0.25)
                                 has_fps = true
                             end
 

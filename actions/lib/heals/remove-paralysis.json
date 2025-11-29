@@ -4,13 +4,15 @@
   },
   "actions": [
     {
-      "when": ["hasEffect('Silence') and canUseItem('Echo Drops', 'Remedy')"],
+      "when": [
+        "hasBuff('Paralysis') and (canUseSpell('Paralyna') or canUseItem('Remedy'))"
+      ],
       "commands": ["use(me)"],
       "frequency": 1,
       "miss_frequency": 1
     },
     {
-      "when": ["canUse('Silena') and partyHasBuff('Silence')"],
+      "when": ["canUse('Paralyna') and partyHasBuff('Paralysis')"],
       "commands": ["removeEffect(member)"],
       "frequency": 5,
       "miss_frequency": 5

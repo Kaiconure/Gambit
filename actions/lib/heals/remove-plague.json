@@ -1,0 +1,21 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": [
+        "hasBuff('Plague') and (canUseSpell('Viruna') or canUseItem('Tincture', 'Remedy'))"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    },
+    {
+      "when": ["canUse('Viruna') and partyHasBuff('Plague')"],
+      "commands": ["removeEffect(member)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    }
+  ]
+}

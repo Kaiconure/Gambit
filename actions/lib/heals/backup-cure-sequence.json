@@ -18,7 +18,7 @@
     {
       "when": [
         "vars.roles.main_healer or (not skillchaining() and not partyUsingWeaponSkill())",
-        "partyByMinField('hpp', 60)",
+        "partyByMinField('hpp', 70)",
         "member.distance <= constants.spell_distance",
         "canUseSpell('Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],

@@ -43,7 +43,7 @@
       "import": "reactions/use-stun"
     },
     {
-      "import": "heals/remove-doom"
+      "imports": ["heals/remove-doom", "heals/remove-plague"]
     },
     {
       "import": "reactions/face-away"

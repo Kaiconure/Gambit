@@ -41,6 +41,16 @@
           "*": true
         }
       },
+      "Urmahlullu": {
+        "abilities": {
+          "*": {
+            "no_turn": true,
+            "comment": [
+              "Weapon skills should not be used when Urmahlullu is using job abilities."
+            ]
+          }
+        }
+      },
       "*": {
         "abilities": {
           "Afflicting Gaze": true,

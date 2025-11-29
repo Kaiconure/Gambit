@@ -119,6 +119,18 @@ state_manager.getCapacityPointInfo = function(self)
 end
 
 -----------------------------------------------------------------------------------------
+-- Set/get conquest point info
+state_manager.setConquestInfo = function(self, conquestPoints, imperialStanding)
+    self.conquest = {
+        conquestPoints = conquestPoints or 13371337,
+        imperialStanding = imperialStanding or 13371337
+    }
+end
+state_manager.getConquestInfo = function(self)
+    return self.conquest
+end
+
+-----------------------------------------------------------------------------------------
 -- Sets the action type being executed, used to track how long we're in a type
 state_manager.setActionType = function (self, newType)
     

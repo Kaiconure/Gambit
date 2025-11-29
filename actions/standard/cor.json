@@ -68,7 +68,7 @@
       "import": "reactions/face-away"
     },
     {
-      "import": "heals/remove-doom"
+      "imports": ["heals/remove-doom", "heals/remove-plague"]
     },
     {
       "import": "frontline-engagement"

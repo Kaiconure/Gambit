@@ -14,7 +14,7 @@
   },
   "actions": [
     {
-      "import": "heals/remove-doom"
+      "imports": ["heals/remove-doom"]
     },
     {
       "when": ["hasEffect('Silence') and canUseItem('Echo Drops', 'Remedy')"],
@@ -22,12 +22,9 @@
       "frequency": 1
     },
     {
-      "when": ["hasEffect('Paralysis') and canUse('Paralyna', 'Remedy')"],
+      "when": ["hasEffect('Paralysis') and canUseItem('Paralyna')"],
       "commands": ["use(me)"],
       "frequency": 1
-    },
-    {
-      "import": "heals/remove-petrify"
     },
     {
       "when": [
@@ -70,23 +67,14 @@
       "frequency": 1
     },
     {
-      "when": ["partyHasBuff('Paralysis') and canUse('Paralyna')"],
-      "commands": ["removeEffect(member)"],
-      "frequency": 1
+      "imports": [
+        "heals/remove-plague",
+        "heals/remove-petrify",
+        "heals/remove-paralysis"
+      ]
     },
     {
-      "when": [
-        "arrayCount(vars.cure_sequence.silena_targets) > 0 and canUse('Silena')",
-        "partyByName(vars.cure_sequence.silena_targets)",
-        "member.hasEffect('Silence') "
-      ],
-      "commands": ["removeEffect(member)"],
-      "frequency": 1
-    },
-    {
-      "when": ["partyHasBuff('Poison') and canUse('Poisona')"],
-      "commands": ["removeEffect(member)"],
-      "frequency": 3
+      "imports": ["heals/remove-poison"]
     }
   ]
 }

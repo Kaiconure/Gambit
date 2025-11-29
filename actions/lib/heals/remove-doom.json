@@ -11,7 +11,7 @@
       "frequency": 0.25
     },
     {
-      "when": ["partyHasBuff('Doom') and canUse('Cursna')"],
+      "when": ["canUse('Cursna') and partyHasBuff('Doom')"],
       "commands": ["removeEffect(member)"],
       "frequency": 0.25
     }

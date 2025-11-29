@@ -291,6 +291,30 @@ function compress_number(number)
 end
 
 --------------------------------------------------------------------------------------
+-- Format a number with commas (1,123,456)
+function format_number(number)
+    number = tonumber(number) or 0
+
+    local sign = number < 0 and '-' or ''    
+    local number = math.abs(math.round(number))
+
+    -- The following makes a nice, formatted number with commas. This should be moved to a helper...
+    local str = number > 0 and '' or '0'
+    while number > 0 do
+        local sub_amount = number % 1000
+        number = math.floor(number / 1000)
+
+        if number > 0 then
+            str = ',%03d':format(sub_amount) .. str
+        else
+            str = sub_amount .. str
+        end
+    end
+
+    return sign .. str
+end
+
+--------------------------------------------------------------------------------------
 -- Semantic formatting references
 text_player               = text_yellow
 text_mount                = text_green
