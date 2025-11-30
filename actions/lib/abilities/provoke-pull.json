@@ -26,6 +26,7 @@
       ],
       "commands": [
         "logf('Pulling %s with %s at distance: %.2f (%.2f)', bt.name, (recastReady(spell_recast) and spell or ability).name, bt.distance, bt.center_distance)",
+        "(facingEnemy() and wait(0.1)) or faceEnemy()",
         "use(bt, recastReady(spell_recast) and spell or ability) and postpone(vars.provoke_pull.frequency or 0)"
       ],
       "delay": 0,
@@ -46,6 +47,7 @@
       ],
       "commands": [
         "logf('Pulling %s with %s at distance: %.2f (%.2f)', bt.name, (recastReady(spell_recast) and spell or ability).name, bt.distance, bt.center_distance)",
+        "(facingEnemy() and wait(0.1)) or faceEnemy()",
         "use(bt, recastReady(spell_recast) and spell or ability) and postpone(vars.provoke_pull.frequency or 0)"
       ],
       "comment": "Use Animated Flourish to pull."
@@ -65,7 +67,7 @@
       ],
       "commands": [
         "logf('Pulling %s with RA at distance: %.2f (%.2f)', bt.name, bt.distance, bt.center_distance)",
-        "facingEnemy() or (faceEnemy() and wait(0.5))",
+        "(facingEnemy() and wait(0.1)) or (faceEnemy() and wait(0.5))",
         "shoot(1) and postpone(3)"
       ],
       "delay": 1,

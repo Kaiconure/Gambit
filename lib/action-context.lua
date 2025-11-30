@@ -115,47 +115,68 @@ end
 
 function compile_multi_stage(multi_stage)
     local stage_meta = multi_stage and multi_stage.stages or {}
-    
-    for i = 1, #stage_meta do
+
+    for i = #stage_meta, 1 do
         local stage = stage_meta[i]
 
-        -- Promote single use entry to on_ws array if needed (one-time setup)
-        if i == 2 and stage and not stage.on_ws and stage.use then
-            stage.on_ws = {
-                party_using = stage.party_using,
-                use = stage.use,
-                threshold = stage.threshold
-            }
+        if type(stage) ~= 'table' then
+            -- We will strip out any invalid stage entries
+            table.remove(stage_meta, i)
 
-            stage.use = nil
-            stage.party_using = nil
-            stage.threshold = nil
-        end
+            writeMessage('Removed invalid stage %s from multi-stage configuration due to invalid value.':format(text_number(i)))
+        else
+            -- Threshold must always be a number between 0 and 1000
+            stage.threshold = math.clamp(tonumber(stage.threshold) or 800, 0, 1000)
+            stage.participants = type(stage.participants) == 'table' and stage.participants or {}
 
-        -- Promote stage-level threshold/participants to each on_ws entry if they aren't already defined (one-time setup)
-        if i == 2 and stage and (stage.threshold or stage.participants) then
-            for _, entry in ipairs(stage.on_ws or {}) do
-                if not entry.threshold then
-                    entry.threshold = stage.threshold
-                end
+            -- Promote single use entry to on_ws array if needed (one-time setup)
+            if i == 2 and not stage.on_ws and stage.use then
+                stage.on_ws = {
+                    party_using = stage.party_using,
+                    use = stage.use,
+                    threshold = stage.threshold
+                }
 
-                if not entry.participants then
-                    entry.participants = stage.participants
-                end
+                stage.use = nil
+                stage.party_using = nil
+                stage.threshold = nil
             end
 
-            stage.threshold = nil
-            stage.participants = nil
-        end
+            -- Promote stage-level threshold/participants to each on_ws entry if they aren't already defined (one-time setup)
+            if i == 2 then
+                stage.on_ws = type(stage.on_ws) == 'table' and stage.on_ws or {}
+                for _, entry in ipairs(stage.on_ws) do
+                    -- Threshold must always be a number between 0 and 1000
+                    entry.threshold = math.clamp(tonumber(entry.threshold) or stage.threshold, 0, 1000)
 
-        -- Ensure that all participant names are normalized (one-time setup)
-        if type(stage.participants) ~= 'table' then
-            stage.participants = {}
-        end
+                    -- Participants must always be a table. Inherit the stage-level participants if not defined at the entry level.
+                    if type(entry.participants) ~= 'table' then
+                        entry.participants = stage.participants
+                    end
 
-        -- Normalize participant names (one-time setup)
-        for j = 1, #stage.participants do
-            stage.participants[j] = makePlayerName(stage.participants[j])
+                    -- Inherit the include_self flag if not defined at the entry level. This determines whether your own TP
+                    -- is taken into account when determining if a skillchain can be started.
+                    if entry.include_self == nil then
+                        entry.include_self = stage.include_self
+                    end
+
+                    -- We need each participant to have a normalized player name, so we can compare more easily later.
+                    for j = 1, #entry.participants do
+                        entry.participants[j] = makePlayerName(entry.participants[j])
+                    end
+                end
+
+                stage.threshold = nil
+                stage.participants = nil
+                stage.include_self = nil
+            end
+
+            -- We need each participant to have a normalized player name, so we can compare more easily later.
+            if stage.participants then
+                for j = 1, #stage.participants do
+                    stage.participants[j] = makePlayerName(stage.participants[j])
+                end
+            end
         end
     end
 
@@ -2505,14 +2526,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                                 local member = context.pinfo[participant]
                                 if 
                                     member and 
-                                    --(not member.is_me and or context.hasBuff(member, 'Sekkanoki')) and
+                                    (not member.is_me or entry.include_self) and
                                     member.valid_target and
                                     member.is_engaged and
                                     member.distance < 20 
                                 then
+                                    local next_threshold = math.clamp((entry.threshold or 800) * 0.75, 0, 1000)
+
                                     -- If this member is at or above the tp threshold, we will always end here.
                                     -- We will return true if and only if the member is yourself.
-                                    if member.tp >= (entry.threshold or 800) then
+                                    if member.tp >= next_threshold then
                                         return true
                                     end
                                 end
@@ -2577,7 +2600,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     stage and 
                     context.canUseWeaponSkill(stage.use) and 
                     context.isNextSkillchainer(stage.threshold, stage.participants) and
-                    (stage[2] == nil or isInitialCloserReady(stage[2])) and
+                    (stage_meta[2] == nil or context.isInitialCloserReady(stage_meta[2])) and
                     1
             end
 
