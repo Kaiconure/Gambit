@@ -381,6 +381,10 @@ handlers['verbosity'] = function (args)
 end
 
 handlers['sendkey'] = function(args)
+    -- This short sleep before the first key press ensures that we can use this command on ourselves, 
+    -- even when manually typing out the command.
+    coroutine.sleep(0.5)
+
     if #args > 0 then
         local all_keys = table.concat(args, ' ')
         writeMessage('Preparing to send key sequence: %s':format(text_yellow(all_keys)))
@@ -492,6 +496,8 @@ handlers['config'] = function(args)
     local partyTarget = tonumber(arrayIndexOfStrI(args, '-partytarget') or arrayIndexOfStrI(args, '-pt') or 0)
     local debugging = tonumber(arrayIndexOfStrI(args, '-debugging') or 0)
     local slowTargetTransitions = tonumber(arrayIndexOfStrI(args, '-stt') or 0)
+    local skipPacketTargeting = tonumber(arrayIndexOfStrI(args, '-spt') or 0)
+    local preTargeting = tonumber(arrayIndexOfStrI(args, '-pretarget') or 0)
 
     local cp = tonumber(arrayIndexOfStrI(args, '-cloudpanel') or arrayIndexOfStrI(args, '-cp') or 0)
     
@@ -600,16 +606,17 @@ handlers['config'] = function(args)
     end
 
     if tabs > 0 then
-        tabs = tonumber(args[tabs + 1])
-        if tabs and tabs >= 0 then
-            tabs = math.floor(math.clamp(tabs, 0.0, 20))
-            settings.maxTabs = tabs
-            hasChanges = true
-        end
+        -- tabs = tonumber(args[tabs + 1])
+        -- if tabs and tabs >= 0 then
+        --     tabs = math.floor(math.clamp(tabs, 0.0, 20))
+        --     settings.maxTabs = tabs
+        --     hasChanges = true
+        -- end
 
-        writeMessage('Targeting tab presses: %s':format(
-            text_number(settings.maxTabs)
-        ))
+        -- writeMessage('Targeting tab presses: %s':format(
+        --     text_number(settings.maxTabs)
+        -- ))
+        writeWarning('The tabs setting is no longer used and has been deprecated.')
     end
 
     if useRawDistance > 0 then
@@ -680,6 +687,36 @@ handlers['config'] = function(args)
 
         writeMessage('Use slower target transitions: %s':format(
             settings.slowTargetTransitions and text_green('on') or text_red('off')
+        ))
+    end
+
+    if skipPacketTargeting > 0 then
+        skipPacketTargeting = args[skipPacketTargeting + 1]
+        if skipPacketTargeting == 'on' then
+            settings.skipPacketTargeting = true
+            hasChanges = true
+        elseif skipPacketTargeting == 'off' then
+            settings.skipPacketTargeting = false
+            hasChanges = true
+        end
+
+        writeMessage('Skip packet targeting: %s':format(
+            settings.skipPacketTargeting and text_green('on') or text_red('off')
+        ))
+    end
+
+    if preTargeting > 0 then
+        preTargeting = args[preTargeting + 1]
+        if preTargeting == 'on' then
+            settings.preTargeting = true
+            hasChanges = true
+        elseif preTargeting == 'off' then
+            settings.preTargeting = false
+            hasChanges = true
+        end
+
+        writeMessage('Pre-targeting: %s':format(
+            settings.preTargeting and text_green('on') or text_red('off')
         ))
     end
 

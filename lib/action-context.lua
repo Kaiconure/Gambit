@@ -6246,13 +6246,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Try to set the target cursor to the specified mob
-    context.setTargetCursor = function(mob, allow_retarget, no_tabs)
+    context.setTargetCursor = function(mob, allow_retarget)
         local id = type(mob) == 'table' and mob.id or mob
         if type(id) == 'number' then
             mob = windower.ffxi.get_mob_by_id(id)
             if mob and mob.valid_target then
                 if allow_retarget or (context.me and context.me.target_index ~= mob.index) then
-                    local result = lockTarget(context.player, mob, nil, no_tabs)
+                    local result = lockTarget(context.player, mob, nil)
                     local t = windower.ffxi.get_mob_by_target('t')
 
                     if t and t.id == id then

@@ -314,7 +314,7 @@ end
 --------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
 local lock_target_id = 1
-function lockTarget(player, mob, battleTarget, noTabs)
+function lockTarget(player, mob, battleTarget, skip_packet_targeting)
     local id = lock_target_id
     lock_target_id = lock_target_id + 1
 
@@ -339,8 +339,33 @@ function lockTarget(player, mob, battleTarget, noTabs)
             (not BATTLE_ONLY_MOBS[mob.name] or mob.status == STATUS_ENGAGED) and
             mob.hpp > 0
         then
-            local max_tabs = math.huge -- NOTE: Tabbing is now a requirement. Targeting time is the only limiter.
+            if battleTarget then
+                windower.send_ipc_message('set_bt -from %s -id %s -index %s -zone %s':format(
+                    tostring(globals.me_id) or 'n/a',
+                    tostring(mob.id) or 'n/a',
+                    tostring(mob.index) or 'n/a',
+                    tostring(globals.currentZone and globals.currentZone.id) or 'n/a'
+                ))
+            end
+
+            local mob_name = mob.name
+            local mob_id = mob.id
+
+            local start_t = os.clock()
             local fail_fast = false
+
+            -- We'll first try and see if the mob is already targeted. This will often be the case during battle, as any member
+            -- who is in the leader strategy will use a /assist command to set the cursor before calling lockTarget.
+            local t = windower.ffxi.get_mob_by_target('t')
+            if t and t.id == mob.id then
+                if t.valid_target then
+                    printDebug('%s/%d already targeted, exiting after %.2fs.':format(mob.name, mob.id, os.clock() - start_t))
+                    return true, nil
+                else
+                    printDebug('%s/%d is invalid, exiting after %.2fs.':format(mob.name, mob.id, os.clock() - start_t))
+                    return false, nil
+                end
+            end
 
             -- For players, we can shortcut targeting by simply using their name
             if
@@ -349,7 +374,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 windower.send_command('input /target %s;':format(mob.name))
                 coroutine.sleep(0.5)
 
-                local t = windower.ffxi.get_mob_by_target('t')
+                t = windower.ffxi.get_mob_by_target('t')
                 return t and t.id == mob.id and t.valid_target, nil
             end
 
@@ -362,7 +387,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     windower.send_command('input /target %s;':format(target_symbol))
                     coroutine.sleep(0.5)
 
-                    local t = windower.ffxi.get_mob_by_target('t')
+                    t = windower.ffxi.get_mob_by_target('t')
                     return t and t.id == mob.id and t.valid_target, nil
                 end
             end
@@ -371,79 +396,62 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 mob.spawn_type == SPAWN_TYPE_TRUST or
                 mob.spawn_type == SPAWN_TYPE_MOB
             then
-                local loop_start_t = os.clock()
-                local num_attempted = 0
+                skip_packet_targeting = skip_packet_targeting or settings.skipPacketTargeting
 
-                local max_attempts = 1--5
+                if not skip_packet_targeting then
+                    local num_attempted = 0
 
-                -- We'll try a few times to establish our target directly
-                for i = 1, max_attempts do
-                    num_attempted = num_attempted + 1
+                    local max_attempts = 1
 
-                    packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
-                        ['Player'] = player.id,
-                        ['Target'] = mob.id,
-                        ['Player Index'] = player.index,
-                    }))
+                    -- We'll try a few times to establish our target directly
+                    for i = 1, max_attempts do
+                        num_attempted = num_attempted + 1
 
-                    -- Give it a moment to target
-                    --coroutine.sleep((0.5 * (i - 1)) + 0.5)
+                        packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
+                            ['Player'] = player.id,
+                            ['Target'] = mob.id,
+                            ['Player Index'] = player.index,
+                        }))
 
-                    -- Exponentially increase the sleep time. Sample values include:
-                    --  - i=1:  0.5s
-                    --  - i=2:  0.6s    ~1.1s total
-                    --  - i=3:  0.7s    ~1.8s total
-                    --  - i=4:  0.8s    ~2.6s total
-                    --  - i=5:  1.0     ~3.6s total
-                    --  - i=6  (1.0)    ~4.6s total
-                    -- coroutine.sleep(
-                    --     math.min(math.pow(1.1, i - 1) - 0.5, 1.0)  -- Don't allow sleeps of longer than 1 second at a time
-                    -- )
+                        coroutine.sleep(0.5)
 
-                    coroutine.sleep(0.5)
+                        t = windower.ffxi.get_mob_by_target('t')
+                        if 
+                            t and
+                            t.id == mob.id
+                        then
+                            if not t.valid_target then
+                                -- The fail fast flag ensures that later code doesn't try to target the mob again
+                                fail_fast = true
+                                break
+                            end
 
-                    local t = windower.ffxi.get_mob_by_target('t')
-                    if 
-                        t and
-                        t.id == mob.id
-                    then
-                        if not t.valid_target then
-                            fail_fast = true
-                            break
+                            printDebug('Packet targeting of %s/%d was successful after %.2fs (%d/%d)':format(
+                                t.name,
+                                t.id,
+                                os.clock() - start_t,
+                                num_attempted,
+                                max_attempts
+                            ))
+
+                            return true, nil
                         end
-
-                        printDebug('Direct target of %s/%d was successful after %.2fs (%d/%d)':format(
-                            t.name,
-                            t.id,
-                            os.clock() - loop_start_t,
-                            num_attempted,
-                            max_attempts
-                        ))
-
-                        -- writeVerbose('Direct target acquisition of %s was %s!':format(
-                        --     text_mob(mob.name, Colors.verbose),
-                        --     text_green('successful', Colors.verbose)
-                        -- ))
-
-                        return true, nil
                     end
-                end
 
-                printDebug('Direct target of %s/%d failed after %.2fs and %d attempt(s)':format(
-                    mob.name,
-                    mob.id,
-                    os.clock() - loop_start_t,
-                    num_attempted
-                ))
-            else
-                -- We always need to go back to tabbing if we're going after a target of this spawn type (not a trust, mob, or player)
-                max_tabs = math.max(math.huge, max_tabs)
+                    printDebug('Packet targeting %s/%d failed after %.2fs and %d attempt(s)':format(
+                        mob.name,
+                        mob.id,
+                        os.clock() - start_t,
+                        num_attempted
+                    ))
+                else
+                    --printDebug('Packet targeting has been disabled. Re-enable with: gbt config -spt off')
+                end
             end
 
             -- In laggy situations, it can take a while for the target to be acquired. This gives us 
             -- some time to try and ensure we can get the target.
             if not fail_fast then
-                local start = os.clock()
                 local looping = true
 
                 local has_st    = false
@@ -451,14 +459,16 @@ function lockTarget(player, mob, battleTarget, noTabs)
                 local is_trust = mob.spawn_type == SPAWN_TYPE_TRUST
 
                 local num_tabs = 0
-                local tabs_remaining = max_tabs
 
                 -- Toggle whether we will ignore trusts in targeting or not
                 --windower.send_command('input /ignorefaith %s':format(is_trust and 'off' or 'on'))
                 --coroutine.sleep(0.15)
 
                 if closeUx() then
-                    while looping and (not battleTarget or globals.enabled) do
+                    while 
+                        looping and 
+                        (globals.enabled or not battleTarget)   -- This ensures that we stop trying to find a battle target if the addon is disabled.
+                    do
                         local mob = windower.ffxi.get_mob_by_id(mob.id)
                         if mob and mob.valid_target then
 
@@ -471,18 +481,24 @@ function lockTarget(player, mob, battleTarget, noTabs)
                             -- that our tabbing stays in the general vicinity of our desired target.
                             if not has_fps then
                                 sendKey('numpad5')
-                                coroutine.sleep(0.125)
+                                coroutine.sleep(0.33)
                                 -- coroutine.sleep(0.25)
                                 -- sendKey('numpad5')
                                 -- coroutine.sleep(0.25)
                                 has_fps = true
                             end
 
+                            --coroutine.sleep(0.2)
+
                             -- Start selecting NPC's.
                             if not has_st then
-                                has_st = true
+                                --sendKey('f8')  
+                                --coroutine.sleep(0.25)
+
                                 windower.send_command('input /ta <stnpc>;')
-                                coroutine.sleep(0.15)                                
+                                coroutine.sleep(0.33)
+
+                                has_st = true
                             end
 
                             local st = windower.ffxi.get_mob_by_target('st')
@@ -497,14 +513,13 @@ function lockTarget(player, mob, battleTarget, noTabs)
                                     printDebug('Command-based target of %s/%d was successful after %.2fs with %d tab(s)':format(
                                         st.name,
                                         st.id,
-                                        os.clock() - start,
+                                        os.clock() - start_t,
                                         num_tabs
                                     ))
                                 else
                                     sendKey('tab')
 
                                     num_tabs = num_tabs + 1
-                                    tabs_remaining = tabs_remaining - 1
 
                                     coroutine.sleep(0.15)
                                 end
@@ -520,8 +535,7 @@ function lockTarget(player, mob, battleTarget, noTabs)
                         -- Detect our external end conditions
                         if looping then
                             if
-                                tabs_remaining <= 0 or
-                                os.clock() - start >= settings.targetingDuration 
+                                os.clock() - start_t >= settings.targetingDuration 
                             then
                                 looping = false
                             end
@@ -547,28 +561,29 @@ function lockTarget(player, mob, battleTarget, noTabs)
                     sendKey('numpad5')
                 end
 
-                local t = windower.ffxi.get_mob_by_target('t')
+                t = windower.ffxi.get_mob_by_target('t')
                 if t and t.valid_target and t.id == mob.id then
                     writeVerbose('Target acquisition of %s (%s) was %s after %s%s':format(
                         text_mob(t.name, Colors.verbose),
                         text_number(tostring(t.id), Colors.verbose),
                         text_green('successful', Colors.verbose),
-                        text_number('%.2fs':format(os.clock() - start), Colors.verbose),
+                        text_number('%.2fs':format(os.clock() - start_t), Colors.verbose),
                         overridden and text_yellow(' (overridden)') or ''
                     ))
                     return true, nil
                 end
 
-                if mob then
-                    writeVerbose('Target acquisition of %s has %s after %s':format(
-                        text_mob(mob.name, Colors.verbose),
-                        text_red('failed', Colors.verbose),
-                        text_number('%.2fs':format(os.clock() - start), Colors.verbose)
-                    ))
-                end
+                writeVerbose('Target acquisition of %s/%s has %s after %s':format(
+                    text_mob(mob_name, Colors.verbose),
+                    text_number(mob_id, Colors.verbose),
+                    text_red('failed', Colors.verbose),
+                    text_number('%.2fs':format(os.clock() - start_t), Colors.verbose)
+                ))
             end
         end
     end
+
+    return false, nil
 end
 
 
@@ -727,6 +742,7 @@ function processTargeting(player, party)
             local leaderMob = windower.ffxi.get_mob_by_id(party.party1_leader)
             if 
                 leaderMob and
+                leaderMob.valid_target and
                 type(leaderMob.target_index) == 'number' and
                 leaderMob.target_index > 0 and
                 leaderMob.status == STATUS_ENGAGED and
@@ -741,19 +757,34 @@ function processTargeting(player, party)
                     (target.claim_id and target.claim_id > 0) and
                     partyInfo:canShareClaim(target.claim_id)
                 then
-                    -- Let's just try a /assist command here and let it do its thing
-                    windower.send_command('input /assist "%s";':format(leaderMob.name))
-                    coroutine.sleep(0.5)
-
                     local t = windower.ffxi.get_mob_by_target('t')
                     if 
                         t and
-                        t.spawn_type == SPAWN_TYPE_MOB and
-                        t.valid_target and 
                         t.id == target.id and
                         t.index == target.index
                     then
-                        setTargetMob(t) -- Match up with the party leader's target, which we've already acquired
+                        -- If we've already got the mob targeted, we're done. Success if it's the right type of mob.
+                        if
+                            t.spawn_type == SPAWN_TYPE_MOB and
+                            t.valid_target
+                        then
+                            setTargetMob(t)
+                        end
+                    else
+                        -- If we don't have the mob targeted
+                        windower.send_command('input /assist "%s";':format(leaderMob.name))
+                        coroutine.sleep(0.5)
+
+                        local t = windower.ffxi.get_mob_by_target('t')
+                        if 
+                            t and
+                            t.spawn_type == SPAWN_TYPE_MOB and
+                            t.valid_target and 
+                            t.id == target.id and
+                            t.index == target.index
+                        then
+                            setTargetMob(t) -- Match up with the party leader's target, which we've already acquired
+                        end
                     end
                 end
             end

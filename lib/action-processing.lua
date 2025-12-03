@@ -964,6 +964,7 @@ function cr_actionProcessor()
 
             if 
                 globals.enabled and
+                not globals.paused() and
                 player and
                 me and
                 me.valid_target and

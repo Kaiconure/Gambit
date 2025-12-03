@@ -102,6 +102,9 @@ party_info.refresh = function(self, player, party, force)
 
         self.target_symbols_by_id = target_symbols_by_id
 
+        -- Store the party leader id, or use ourself if none is set
+        self.party_leader_id = party.party1_leader or player.id
+
         self.last_refreshed = os.clock()
 
         return true
@@ -122,6 +125,10 @@ end
 
 party_info.isMember = function(self, id)
     return self:isParty(id) or self:isAlliance1(id) or self:isAlliance2(id)
+end
+
+party_info.isPartyLeader = function(self, id)
+    return self.party_leader_id and self.party_leader_id == id
 end
 
 --------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-__version = '0.96.0-beta18a'
+__version = '0.96.0-beta18b'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -76,6 +76,7 @@ ActionContext = require('./lib/action-context')
 
 globals = {
     enabled             = false,
+    pause_count         = 0,
     isSpellCasting      = false,
     isRangedAttacking   = false,
     target              = nil,
@@ -105,6 +106,19 @@ globals = {
 
     last_broadcast_pos = nil
 }
+
+globals.pause = function() 
+    globals.pause_count = math.max(globals.pause_count + 1, 1)
+end
+
+globals.unpause = function()
+    globals.pause_count = math.min(globals.pause_count - 1, 0)
+end
+
+globals.paused = function()
+    return globals.pause_count > 0
+end
+
 
 local MAX_MOB_OVERRIDE_DISTANCE_2   = (50 * 50)     -- Maximum mob override distance squared
 
@@ -700,6 +714,8 @@ windower.register_event('ipc message', function (msg)
         return
     end
 
+    --printDebug('IPC message received: [%s]':format(msg))
+
     msg = msg or ''--string.lower(msg or '')
 
     local split = msg:split(' ', string.encoding.shift_jis)
@@ -801,6 +817,52 @@ windower.register_event('ipc message', function (msg)
                 sub_level
             ))
             --partyInfo:updateMemberJobInfo(name, main_job, main_level, sub_job, sub_level)
+        end
+    elseif command == 'set_bt' then
+        -- set_bt -from %s -id %s -index %s -zone %s
+
+        if settings.preTargeting then
+            local zone_id = tonumber(getArgValue(args, '-zone'))
+            if type(zone_id) == 'number' and zone_id == (globals.currentZone and globals.currentZone.id) then
+                
+                local from_id = tonumber(getArgValue(args, '-from'))
+                local target_id = tonumber(getArgValue(args, '-id'))
+                local target_index = tonumber(getArgValue(args, '-index'))
+                
+
+                local sender = type(from_id) == 'number' and windower.ffxi.get_mob_by_id(from_id)
+                local target = type(target_id) == 'number' and windower.ffxi.get_mob_by_id(target_id)
+
+                if
+                    (sender and sender.valid_target) and
+                    (target and target.valid_target) and
+                    target.index == target_index and
+                    target.spawn_type == SPAWN_TYPE_MOB
+                then
+                    local player = windower.ffxi.get_player()
+                    if player.status == STATUS_IDLE and sender.id ~= player.id then
+                        if 
+                            (settings and settings.strategy == TargetStrategy.leader) and
+                            partyInfo:isPartyLeader(sender.id) 
+                        then
+                            printDebug('Received battle target message from %s: %s/%d':format(
+                                sender.name,
+                                target.name,
+                                target.id
+                            ))
+
+                            local jobInfo = smartMove:getJobInfo()
+                            if jobInfo ~= nil then
+                                smartMove:cancelJob()
+                            end
+
+                            globals.pause()
+                            lockTarget(player, target, true, true)                        
+                            globals.unpause()
+                        end
+                    end
+                end
+            end
         end
     end
 
@@ -1241,7 +1303,7 @@ local _handle_actionChunk = function(id, data)
         category == 14  -- Unblinkable job abilities
     then
         action = resources.job_abilities[actionId]
-        buffId = tonumber(action.status) or 0
+        buffId = action and tonumber(action.status) or 0
 
         if action then
             isDispel    = arrayIndexOf(meta.dispel.job_abilities, action.id)

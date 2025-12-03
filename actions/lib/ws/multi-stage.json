@@ -49,7 +49,8 @@
     {
       "when": [
         "vars.ws.multi_stage.stages and not vars.ws.multi_stage.stages_disabled",
-        "isNextMultiStageCloser(vars.ws.multi_stage)"
+        "isNextMultiStageCloser(vars.ws.multi_stage)",
+        "$macro:can_close_sc"
       ],
       "commands": ["$macro:close_skillchain"]
     },

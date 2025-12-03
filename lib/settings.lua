@@ -942,7 +942,7 @@ function loadSettings(actionsName, settingsOnly)
         MAX_SKILLCHAIN_TIME)
 
     -- The maximum number of tabs to press when having trouble acquiring targets
-    tempSettings.maxTabs = math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 5, 0, 20))
+    tempSettings.maxTabs = nil --math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 5, 0, 20))
 
     -- The maximum length of targeting attempts
     tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 2, 20)
