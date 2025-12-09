@@ -22,11 +22,7 @@
         "member.distance <= constants.spell_distance",
         "canUseSpell('Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": [
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
-        "useSpell(member)",
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
-      ],
+      "commands": ["$macro:cure_member"],
       "frequency": 2
     },
     {

@@ -275,8 +275,15 @@ local function inventory_items_match(item1, item2)
     end
 end
 
-inventory.equip_many = function(pieces, all_items, simulate)
+inventory.equip_many = function(pieces, all_items, simulate, changes)
     all_items = all_items or windower.ffxi.get_items()
+    
+    if type(changes) == 'table' then
+        changes.removed = {}
+        changes.equipped = {}
+    else
+        changes = nil
+    end
 
     local exclusion_list = { }
     local bags_to_search = INVENTORY_BAGS_BY_ID
@@ -327,7 +334,7 @@ inventory.equip_many = function(pieces, all_items, simulate)
                             candidate.raw_slots[slot_id]
                         then
                             arrayAppend(exclusion_list, candidate)
-                            arrayAppend(swaps, { slot_id = slot_id, item = candidate })
+                            arrayAppend(swaps, { slot_id = slot_id, slot = slot, item = candidate })
 
                             -- We've already found our match, we're done
                             searching = false
@@ -343,7 +350,46 @@ inventory.equip_many = function(pieces, all_items, simulate)
 
     -- Now we will go through all of the processed swaps, and equip the gear
     if not simulate then
-        for i, swap in ipairs(swaps) do        
+        if inventory.printDebug then
+            inventory.printDebug('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        end
+
+        for i, swap in ipairs(swaps) do
+
+            -- If we're tracking changes, store those changes now
+            if changes then
+                -- If an item is already in this slot, fetch it and store it in the removed list
+                local removed = inventory.find_equipment_in_slot(swap.slot, all_items)
+                if removed then
+                    changes.removed[swap.slot] = {
+                        name = removed.name,
+                        augments = removed.augments
+                    }
+                end
+
+                -- Store the item we are swapping in
+                changes.equipped[swap.slot] = {
+                    name = swap.item.name,
+                    augments = swap.augments
+                }
+            end
+
+            -- If a debugging callback was provided, log the specific changes we're making
+            if inventory.printDebug then
+                if changes and changes.removed[swap.slot] then
+                    inventory.printDebug('Equipping %s: [%s]>>[%s]':format(
+                        swap.slot,
+                        changes.removed[swap.slot].name,
+                        swap.item.name
+                    ))
+                else                    
+                    inventory.printDebug('Equipping %s: [%s]':format(
+                        swap.slot,
+                        swap.item.name
+                    ))
+                end
+            end
+
             windower.ffxi.set_equip(
                 swap.item.localId,
                 swap.slot_id,

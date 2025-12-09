@@ -23,11 +23,7 @@
         "member.distance <= constants.spell_distance",
         "canUseSpell('Curaga III', 'Curaga II', 'Curaga')"
       ],
-      "commands": [
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
-        "useSpell(member)",
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
-      ],
+      "commands": ["$macro:cure_member"],
       "frequency": 10
     },
     {
@@ -36,11 +32,7 @@
         "member.distance <= constants.spell_distance",
         "canUseSpell('Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": [
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
-        "useSpell(member)",
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
-      ],
+      "commands": ["$macro:cure_member"],
       "frequency": 3
     }
   ]

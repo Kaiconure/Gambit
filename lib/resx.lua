@@ -269,6 +269,25 @@ local function getWeaponSkillResource(weaponSkill)
     return weaponSkill
 end
 
+--------------------------------------------------------------------------------------
+-- Determine an id is in the specified resource table. The table can contain either
+-- straight id values, or sub-tables with an id field.
+function hasResourceById(res, id)
+    if type(res) == 'table' and type(id) == 'number' then
+        for key, val in pairs(res) do
+            if type(val) == 'number' and val == id then
+                return key
+            end
+
+            if type(val) == 'table' and val.id == id then
+                return key
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+--
 function hasBuffInArray(buffs, buff, strict)
     -- Nothing to do if we don't have a buffs array to search
     if type(buffs) ~= 'table' or #buffs < 1 then return end
@@ -563,10 +582,25 @@ function canUseAbility(player, ability, recasts)
     return false
 end
 
+function hasWeaponSkillDirect(known_weapon_skills, weapon_skill)
+    if type(weapon_skill) == 'string' then weapon_skill = string.lower(weapon_skill) end
+
+    if type(known_weapon_skills) == 'table' then
+        for i, id in pairs(known_weapon_skills) do
+            local candidate = findWeaponSkill(id)
+            if 
+                candidate and (candidate.id == weapon_skill or string.lower(candidate.name) == weapon_skill)
+            then
+                return candidate
+            end
+        end
+    end
+end
+
 --------------------------------------------------------------------------------------
 -- 
 function hasWeaponSkill(player, weaponSkill, abilities)
-    player = player or windower.ffxi.get_player()
+    --player = player or windower.ffxi.get_player()
 
     weaponSkill = getWeaponSkillResource(weaponSkill)
     if weaponSkill == nil then

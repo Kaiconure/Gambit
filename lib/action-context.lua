@@ -113,10 +113,203 @@ local function is_known_targeting_symbol(symbol)
         symbol == 'scan'
 end
 
+local WS_ATTRIBUTE_MARKER = '$attributes:'
+
+local SKILLCHAINS_BY_TIER = {
+    {
+        ['compression'] = true,
+        ['detonation'] = true,
+        ['impaction'] = true,
+        ['induration'] = true,
+        ['liquefaction'] = true,
+        ['reverberation'] = true,
+        ['scission'] = true,
+        ['transfixion'] = true
+    },
+    {
+        ['distortion'] = true,
+        ['fragmentation'] = true,
+        ['fusion'] = true,
+        ['gravitation'] = true,
+    },
+    {
+        ['light'] = true,
+        ['darkness'] = true
+    }
+}
+
+local TIERS_BY_SKILLCHAIN = 
+{
+    ['compression'] = 1,
+    ['detonation'] = 1,
+    ['impaction'] = 1,
+    ['induration'] = 1,
+    ['liquefaction'] = 1,
+    ['reverberation'] = 1,
+    ['scission'] = 1,
+    ['transfixion'] = 1,
+
+    ['distortion'] = 2,
+    ['fragmentation'] = 2,
+    ['fusion'] = 2,
+    ['gravitation'] = 2,
+
+    ['light'] = 3,
+    ['darkness'] = 3
+}
+
+function find_matching_weapon_skill_by_attribute(possible_weapon_skills, attributes)
+
+    local find_all = possible_weapon_skills == nil
+
+    local matches = {}
+
+    local exclude_attributes = {}
+    for i = #attributes, 1, -1 do
+        local attribute = attributes[i]
+        if string.sub(attribute, 1, 1) == '!' then
+            table.insert(exclude_attributes, string.lower(string.sub(attribute, 2)))
+        end
+    end
+
+    for i, attribute in ipairs(attributes) do
+        attribute = trimString(string.lower(attribute))
+
+        if attribute ~= '' then
+            -- local start = find_all and 255 or #possible_weapon_skills
+            -- for j = start, 1, -1 do
+            local last = find_all and 255 or #possible_weapon_skills
+            for j = 1, last do 
+                local id = j
+                if not find_all then
+                    id = possible_weapon_skills[j]
+                end
+
+                local ws = resources.weapon_skills[id]
+                if ws then
+                    local sc_attributes = {
+                        string.lower(ws.skillchain_a),
+                        string.lower(ws.skillchain_b),
+                        string.lower(ws.skillchain_c)
+                    }
+
+                    -- It's a match if our desired attribute is the highest on this WS
+                    local is_match_1 = sc_attributes[1] == attribute
+
+                    -- If it wasn't already a match, it can be a match if our desired attribute is the
+                    -- secondary on this WS and it's at the same tier is the primary.
+                    local is_match_2 = not is_match_1 and (
+                        sc_attributes[2] and
+                        sc_attributes[2] == attribute and
+                        TIERS_BY_SKILLCHAIN[attribute] == TIERS_BY_SKILLCHAIN[sc_attributes[1]]
+                    )
+
+                    -- If it wasn't already a match, it can be a match if our desired attribute is the
+                    -- tertiary on this WS and it's at the same tier is the primary and secondary.
+                    local is_match_3 = not is_match_1 and not is_match_2 and (
+                        sc_attributes[3] and
+                        sc_attributes[3] == attribute and
+                        TIERS_BY_SKILLCHAIN[attribute] == TIERS_BY_SKILLCHAIN[sc_attributes[1]] and
+                        TIERS_BY_SKILLCHAIN[attribute] == TIERS_BY_SKILLCHAIN[sc_attributes[2]]
+                    )
+
+                    local is_match = is_match_1 or is_match_2 or is_match_3
+
+                    --local is_match_3 = is_match_2 and (not sc_attributes[3] or sc_attributes[3] == attribute)
+
+                    -- local is_match = 
+                    --     (ws.skillchain_a and string.lower(ws.skillchain_a) == attribute) or
+                    --     (ws.skillchain_b and string.lower(ws.skillchain_b) == attribute) or
+                    --     (ws.skillchain_c and string.lower(ws.skillchain_c) == attribute)
+
+                    -- If we have a match and there are exclusions, filter those out
+                    if is_match and #exclude_attributes > 0 then
+                        is_match = 
+                            not arrayIndexOfStrI(exclude_attributes, ws.skillchain_a) and
+                            not arrayIndexOfStrI(exclude_attributes, ws.skillchain_b) and
+                            not arrayIndexOfStrI(exclude_attributes, ws.skillchain_c)
+                    end
+
+                    if is_match then
+                        if not find_all then
+                            return { ws.name }
+                        end
+
+                        table.insert(matches, ws.name)
+                    end
+                end
+            end
+        end
+    end
+
+    return matches
+end
+
+function expand_attribute_weapon_skills(weapon_skill_list, possible_weapon_skills, allow_pruning)
+    -- Iterate over the requested weapon skills
+    if type(weapon_skill_list) == 'table' then
+        for i = #weapon_skill_list, 1, -1 do
+            
+            local ws = string.lower(tostring(weapon_skill_list[i]))
+
+            if type(ws) ~= 'string' then
+                -- Remove any invalid entries
+                table.remove(weapon_skill_list, i)
+            else
+                -- Check if this is a prefixed value
+                local has_prefix = string.sub(ws, 1, #WS_ATTRIBUTE_MARKER) == WS_ATTRIBUTE_MARKER
+                if has_prefix then
+                    -- Always remove this entry if it was given an attribute marker. It will either be
+                    -- replaced or invalidated below.
+                    table.remove(weapon_skill_list, i)
+
+                    local value = string.sub(ws, #WS_ATTRIBUTE_MARKER + 1)
+                    local attributes = value:split(',')
+
+                    local matches = find_matching_weapon_skill_by_attribute(possible_weapon_skills, attributes)
+                    if matches and #matches > 0 then
+                        for j = #matches, 1, -1 do
+                            table.insert(weapon_skill_list, i, matches[j])
+                        end
+                    end
+                else
+                    -- If configured to do so, we will remove entries for WS's that we don't actually have
+                    if possible_weapon_skills and allow_pruning and not hasWeaponSkillDirect(possible_weapon_skills, ws) then
+                        table.remove(weapon_skill_list, i)
+                    end
+                end
+            end
+        end
+
+        -- If we're looking for usable weapon skills only, we'll stick a placeholder in if we stripped the table all the way down
+        if possible_weapon_skills and #weapon_skill_list == 0 then
+            table.insert(weapon_skill_list, '[Placeholder]')
+        end
+
+        -- Force de-duplication of entries
+        local by_name = {}
+        for i = #weapon_skill_list, 1, -1 do
+            local current = string.lower(weapon_skill_list[i])
+            if by_name[current] then
+                table.remove(weapon_skill_list, i)
+            else
+                by_name[current] = true
+            end            
+        end
+
+        if not possible_weapon_skills then
+            table.sort(weapon_skill_list)
+        end
+    end
+end
+
 function compile_multi_stage(multi_stage)
     local stage_meta = multi_stage and multi_stage.stages or {}
 
-    for i = #stage_meta, 1 do
+    local abilities = windower.ffxi.get_abilities()
+    local known_weapon_skills = abilities and abilities.weapon_skills or {}
+
+    for i = #stage_meta, 1, -1 do
         local stage = stage_meta[i]
 
         if type(stage) ~= 'table' then
@@ -164,11 +357,16 @@ function compile_multi_stage(multi_stage)
                     for j = 1, #entry.participants do
                         entry.participants[j] = makePlayerName(entry.participants[j])
                     end
+
+                    expand_attribute_weapon_skills(entry.party_using)
+                    expand_attribute_weapon_skills(entry.use, known_weapon_skills)
                 end
 
                 stage.threshold = nil
                 stage.participants = nil
                 stage.include_self = nil
+            else
+                expand_attribute_weapon_skills(stage.use, known_weapon_skills, i ~= 1)
             end
 
             -- We need each participant to have a normalized player name, so we can compare more easily later.
@@ -181,6 +379,16 @@ function compile_multi_stage(multi_stage)
     end
 
     multi_stage._compiled = true
+
+    local player = windower.ffxi.get_player()
+    multi_stage._compiled_for = player and player.name
+
+    writeJsonToFile('./data/multi-stage/%s/compiled.%s.json':format(
+            player and player.name or 'unknown',
+            (player and player.main_job) and (player.sub_job and '%s-%s':format(player.main_job, player.sub_job) or player.main_job) or 'unknown'
+        ), 
+        multi_stage
+    )
 end
 
 -----------------------------------------------------------------------------------------
@@ -2380,12 +2588,46 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local entries = context.sanitizeEquipmentList(false, ...)        
         local count = inventory.equip_many(entries)
         if count > 0 then
-            writeVerbose('Equipped: %s':format(
+            writeVerbose('Changing equipment: %s changed':format(
                 pluralize(count, 'gear item', 'gear items', Colors.verbose)
             ))
 
             return count
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Similar to equipMany above, but equipment change details are saved for use
+    -- with equipPop for restoration later.
+    context.equipPush = function(...)
+        local changes = {}
+
+        local entries = context.sanitizeEquipmentList(false, ...)        
+        local count = inventory.equip_many(entries, nil, false, changes)
+        if count > 0 then
+            writeVerbose('Pushing equipment: %s changed':format(
+                pluralize(count, 'gear item', 'gear items', Colors.verbose)
+            ))
+
+            table.insert(context.vars._.eq_stack, changes)
+
+            return count
+        end
+
+        -- We will always push an entry, even if it's blank. This makes for easier push/pop management in your gambits.
+        table.insert(context.vars._.eq_stack, {removed = {}, equipped = {}})
+    end
+
+    context.equipPop = function()
+        if #context.vars._.eq_stack > 0 then
+            local latest = table.remove(context.vars._.eq_stack)
+            if latest and latest.removed then
+                writeVerbose('Restoring previous equipment...')
+                return context.equipMany(latest.removed)
+            end
+        end
+
+        writeVerbose('No equipment was found to restore!')
     end
 
     -- Push a stop request to the currently running function, if any. Has no effect
@@ -2570,7 +2812,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Determine if you are the next multistage participant and are ready to go.
     context.isNextMultiStager = function (multi_stage, max_stage)
-
         local stage_meta = multi_stage and multi_stage.stages or nil
         if not stage_meta then
             return
@@ -2600,7 +2841,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     stage and 
                     context.canUseWeaponSkill(stage.use) and 
                     context.isNextSkillchainer(stage.threshold, stage.participants) and
-                    (stage_meta[2] == nil or context.isInitialCloserReady(stage_meta[2])) and
+                    --(stage_meta[2] == nil or context.isInitialCloserReady(stage_meta[2])) and
                     1
             end
 
@@ -3687,16 +3928,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- sooner. This allows us to spend a little time as possible waiting for
                 -- spells to complete (fast cast, interruption, and so on can impact this).
 
-                -- Raise doesn't have a special status, so we'll track it manually
-                if target.id and isMobPlayer(target) then
-                    if is_raise then
-                        context.vars.last_raise = context.vars.last_raise or {}
-                        context.vars.last_raise[target.id] = context.time
+                -- Returns a flag indicating whether the action completed successfully
+                local success = sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+
+                if success then
+                    -- Raise doesn't have a special status, so we'll track it manually
+                    if target.id and isMobPlayer(target) then
+                        if is_raise then
+                            context.vars.last_raise = context.vars.last_raise or {}
+                            context.vars.last_raise[target.id] = context.time
+                        end
                     end
                 end
 
-                -- Returns a flag indicating whether the action completed successfully
-                return sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+                return success
             end
         end
     end
@@ -4599,22 +4844,30 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Find a player by name
-    context.findByName = function(name)
+    context.findByName = function(...)
+        names = varargs({...})
         context.find_result = nil
 
-        if type(name) == 'string' then
+        if #names > 0 then
             local mobs = windower.ffxi.get_mob_array()
-            if mobs then
-                name = string.lower(name)
-                for key, mob in pairs(mobs) do
-                    if string.lower(mob.name) == name then
-                        local _mob = windower.ffxi.get_mob_by_id(mob.id)
-                        if _mob and _mob.valid_target then
-                            local f = { symbol = _mob.name, mob = _mob }
-                            initContextTargetSymbol(context, f)
 
-                            context.find_result = f
-                            return context.find_result
+            for i = 1, #names do
+                local name = names[i]
+                if type(name) == 'string' then
+                    
+                    if mobs then
+                        name = string.lower(name)
+                        for key, mob in pairs(mobs) do
+                            if string.lower(mob.name) == name then
+                                local _mob = windower.ffxi.get_mob_by_id(mob.id)
+                                if _mob and _mob.valid_target then
+                                    local f = { symbol = _mob.name, mob = _mob }
+                                    initContextTargetSymbol(context, f)
+
+                                    context.find_result = f
+                                    return context.find_result
+                                end
+                            end
                         end
                     end
                 end
@@ -5411,6 +5664,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.vars.__suppress_offensive_magic = 1
             end
         end
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -5472,6 +5727,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.vars.__suppress_offensive_magic = false
             end
         end
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -5484,6 +5741,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.vars.__suppress_weapon_skills = 1
             end
         end
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -5498,6 +5757,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 context.vars.__suppress_weapon_skills = false
             end
         end
+
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -5858,7 +6119,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Ensure that the current action does not execute again for at least
     -- the given number of seconds
     context.postpone = function(s)
-        if type(s) == 'number' then
+        if type(s) == 'number' and context.action then
             if s > 0 then
                 if settings.verbosity >= VERBOSITY_DEBUG then
                     writeDebug('Postponing next action execution by %s':format(
@@ -5877,18 +6138,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- existing scheduled time. It could cause the actin to be executed earlier than
     -- what would have been the case previously.
     context.schedule = function(s)
-        if type(s) == 'number' then
-            if s > 0 then
-                if settings.verbosity >= VERBOSITY_DEBUG then
-                    writeDebug('Rescheduling next action execution in %s':format(
-                        text_number('%.1fs':format(s), Colors.debug)
-                    ))
+        if context.action then
+            if type(s) == 'number' then
+                if s > 0 then
+                    if settings.verbosity >= VERBOSITY_DEBUG then
+                        writeDebug('Rescheduling next action execution in %s':format(
+                            text_number('%.1fs':format(s), Colors.debug)
+                        ))
+                    end
+                    context.action.availableAt = os.clock() + s
                 end
-                context.action.availableAt = os.clock() + s
             end
+
+            return context.action.availableAt
         end
 
-        return context.action.availableAt
+        return 0
     end
 
     --------------------------------------------------------------------------------------

@@ -12,6 +12,19 @@
       "gear": null
     }
   },
+  "macros": {
+    "set_cure_equip": [
+      "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipPush(vars.cure_sequence.gear.casting)"
+    ],
+    "restore_cure_equip": [
+      "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipPop(vars.cure_sequence.gear.casting)"
+    ],
+    "cure_member": [
+      "$macro:set_cure_equip",
+      "useSpell(member)",
+      "$macro:restore_cure_equip"
+    ]
+  },
   "actions": [
     {
       "imports": ["heals/remove-doom"]
@@ -33,11 +46,7 @@
         "member.distance <= constants.spell_distance",
         "canUseSpell('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')"
       ],
-      "commands": [
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
-        "useSpell(member)",
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
-      ],
+      "commands": ["$macro:cure_member"],
       "frequency": 10
     },
     {
@@ -46,11 +55,7 @@
         "member.distance <= constants.spell_distance",
         "canUseSpell('Cure VI', 'Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": [
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
-        "useSpell(member)",
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
-      ],
+      "commands": ["$macro:cure_member"],
       "frequency": 1
     },
     {
@@ -59,11 +64,7 @@
         "member.distance <= constants.spell_distance",
         "canUseSpell('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": [
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipMany(vars.cure_sequence.gear.casting)",
-        "useSpell(member)",
-        "vars.cure_sequence.gear and vars.cure_sequence.gear.battle and equipMany(vars.cure_sequence.gear.battle)"
-      ],
+      "commands": ["$macro:cure_member"],
       "frequency": 1
     },
     {

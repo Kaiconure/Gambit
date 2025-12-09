@@ -143,6 +143,10 @@ end
 -- Find the point at the given distance and angle offset from the mob
 local function findMobOffset(mob, angleOffset, distance)
     local player = windower.ffxi.get_mob_by_target('me')
+
+    if not player then
+        return V({0, 0})
+    end
     
     local vPlayer = V({player.x, player.y})
     local vMob = V({mob.x, mob.y})

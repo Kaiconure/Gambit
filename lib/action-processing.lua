@@ -511,6 +511,10 @@ local function compileAllActions()
 
     actionStateManager.vars = actions and actions.vars or {}
 
+    -- Internal variables are stored here
+    actionStateManager.vars._ = {}
+    actionStateManager.vars._.eq_stack = {}
+
     actionStateManager:keybindFunctions()
 
     actionStateManager.needsRecompile = false

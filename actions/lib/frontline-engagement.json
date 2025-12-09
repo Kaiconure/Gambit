@@ -85,10 +85,10 @@
       "when": [
         "actionType == 'battle'",
         "bt and bt.distance <= vars.frontline_engagement._distance + 2",
-        "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, vars.frontline_engagement._distance)"
+        "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance)"
       ],
       "commands": [
-        "align(bt, vars.frontline_engagement.angle, vars.frontline_engagement._distance) or postpone(10)"
+        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance) or postpone(10)"
       ],
       "frequency": 1,
       "scope": "battle",

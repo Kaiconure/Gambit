@@ -1,4 +1,4 @@
-__version = '0.96.0-beta18b'
+__version = '0.96.0-beta18c'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -35,6 +35,7 @@ resources = require('resources')
 packets = require('packets')
 config = require('config')
 files = require('files')
+bit = require('bit')
 
 texts = require('texts')
 images = require('images')
@@ -117,6 +118,30 @@ end
 
 globals.paused = function()
     return globals.pause_count > 0
+end
+
+---------------------------------------------------------------------------------------------------
+-- Sends packets that request certain currency updates from the game
+function requestCurrencies()
+    -- Sparks
+    local sparks_packet = packets.new('outgoing', 0x117, {["_unknown2"]=0})
+    packets.inject(sparks_packet)
+
+    -- Conquest Points and Imperial Standing
+    local conquest_packet = packets.new('outgoing', 0x05A, {["_unknown2"]=0})
+    packets.inject(conquest_packet)
+end
+
+---------------------------------------------------------------------------------------------------
+-- Extracts a uint32 value from a byte-encoded string at the specified offset
+function unpack_uint32(data, offset)
+    local result = 0
+    for i = 0, 3 do
+        local byte = string.byte(data[offset + i])
+        result = bit.bor(result, bit.lshift(byte, i * 8))
+    end
+
+    return result
 end
 
 
@@ -239,6 +264,8 @@ function sendJobInfoIpc(player)
 end
 
 function reloadSettings(actionsName, bypassActions)
+    inventory.printDebug = nil
+
     bypassActions = bypassActions and settings.actions ~= nil
 
     settings = loadSettings(actionsName, bypassActions)
@@ -257,6 +284,10 @@ function reloadSettings(actionsName, bypassActions)
 
     if globals.cloud_panel then
         globals.cloud_panel:configure(settings.cloudPanel)
+    end
+
+    if settings.debugging then
+        inventory.printDebug = printDebug
     end
 end
 
@@ -386,6 +417,8 @@ windower.register_event('load', function()
         resetCurrentMob(nil, true)
         reloadSettings()
 
+        requestCurrencies()
+
         -- Send our job info to other alts on the system via IPC. We'll wait a moment here, to handle the case where
         -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
         coroutine.schedule(function()
@@ -441,6 +474,8 @@ windower.register_event('login', function ()
     -- Reload all settings
     resetCurrentMob(nil, true)
     reloadSettings()
+
+    requestCurrencies()
 
     sendJobInfoIpc()
 end)
@@ -1532,19 +1567,8 @@ local function _handle_conquestInfoChunk(id, data)
     local player = windower.ffxi.get_player()
     if not player then return end   
 
-    local byte3 = string.byte(data[0x94])
-    local byte2 = string.byte(data[0x93])
-    local byte1 = string.byte(data[0x92])
-    local byte0 = string.byte(data[0x91])
-
-    local conquest_points = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216)
-
-    byte3 = string.byte(data[0xB4])
-    byte2 = string.byte(data[0xB3])
-    byte1 = string.byte(data[0xB2])
-    byte0 = string.byte(data[0xB1])
-
-    local imperial_standing = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216)
+    local conquest_points = unpack_uint32(data, 0x91)
+    local imperial_standing = unpack_uint32(data, 0xB1)
 
     -- printDebug('Conquest Points updated: cp=%d, is=%d':format(
     --     tonumber(conquest_points) or -1,

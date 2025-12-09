@@ -400,8 +400,9 @@ handlers['sk'] = handlers['sendkey']
 handlers['iteminfo'] = function(args)
     local bag_info = windower.ffxi.get_bag_info()
     local inventory = bag_info and bag_info.inventory or bag_info
+    local verbose = hasArg(args, '-verbose') or hasArg(args, '-v')
 
-    writeMessage(text_green('Item Information:'))
+    writeMessage(text_green('Item Information'))
 
     if inventory and inventory.enabled then
         writeMessage('  %s: %s / %s':format(
@@ -411,12 +412,126 @@ handlers['iteminfo'] = function(args)
         ))
     end
 
+    writeMessage(text_green('Currencies'))
+
     local gil = windower.ffxi.get_items('gil')
     if gil then
         writeMessage('  %s: %s':format(
             text_yellow('Gil'),
             text_number(format_number(gil))
         ))
+    end
+
+    if verbose then
+        local conquest = actionStateManager:getConquestInfo()
+        local conquest_points = conquest and tonumber(conquest.conquestPoints)
+        local imperial_standing = conquest and tonumber(conquest.imperialStanding)
+
+        if conquest_points then
+            writeMessage('  %s: %s':format(
+                text_yellow('Conquest Points'),
+                text_number(format_number(conquest_points))
+            ))
+        end
+
+        if imperial_standing then
+            writeMessage('  %s: %s':format(
+                text_yellow('Imperial Standing'),
+                text_number(format_number(imperial_standing))
+            ))
+        end
+
+        local sack = bag_info.sack and bag_info.sack.enabled and bag_info.sack
+        local case = bag_info.case and bag_info.case.enabled and bag_info.case
+        local satchel = bag_info.satchel and bag_info.satchel.enabled and bag_info.satchel
+
+        if sack or case or satchel then
+            writeMessage('%s':format(text_green("Field-Accessible Storage")))
+
+            if case then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Case'),
+                    text_number(case.count or '--'),
+                    text_number(case.max or '--')
+                ))
+            end
+
+            if sack then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Mog Sack'),
+                    text_number(sack.count or '--'),
+                    text_number(sack.max or '--')
+                ))
+            end
+
+            if satchel then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Satchel'),
+                    text_number(satchel.count or '--'),
+                    text_number(satchel.max or '--')
+                ))
+            end
+        end
+
+        --writeJsonToFile('./data/%.03f.get_bag_info.json':format(os.clock()), bag_info)
+
+        local safe = bag_info.safe and bag_info.safe.max and bag_info.safe.max > 0 and bag_info.safe
+        local safe2 = bag_info.safe2 and bag_info.safe2.max and bag_info.safe2.max > 0 and bag_info.safe2
+        local locker = bag_info.locker and bag_info.locker.max and bag_info.locker.max > 0 and bag_info.locker
+        local storage = bag_info.storage and bag_info.storage.max and bag_info.storage.max > 0 and bag_info.storage
+
+        if safe or safe2 or locker or storage then
+            writeMessage('%s':format(text_green("Other Storage")))
+
+            if safe then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Safe'),
+                    text_number(safe.count or '--'),
+                    text_number(safe.max or '--')
+                ))
+            end
+
+            if safe2 then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Safe2'),
+                    text_number(safe2.count or '--'),
+                    text_number(safe2.max or '--')
+                ))
+            end
+
+            if locker then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Locker'),
+                    text_number(locker.count or '--'),
+                    text_number(locker.max or '--')
+                ))
+            end
+
+            if storage then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow('Storage'),
+                    text_number(storage.count or '--'),
+                    text_number(storage.max or '--')
+                ))
+            end
+        end
+
+        writeMessage('%s':format(text_green("Wardrobes")))
+        for i = 1, 8 do
+            local wname = 'wardrobe'
+            if i > 1 then
+                wname = wname .. i
+            end
+
+            local wardrobe = bag_info[wname]
+            if wardrobe and wardrobe.enabled then
+                writeMessage('  %s: %s / %s':format(
+                    text_yellow(wname),
+                    text_number(wardrobe.count or '--'),
+                    text_number(wardrobe.max or '--')
+                ))
+            end
+        end
     end
 end
 handlers['ii'] = handlers['iteminfo']
@@ -1398,9 +1513,13 @@ end
 handlers['align'] = function(args)
     local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
     local distance = arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d')
+    local angle = arrayIndexOfStrI(args, '-angle') or arrayIndexOfStrI(args, '-a')
+    local wait = arrayIndexOfStrI(args, '-wait') or arrayIndexOfStrI(args, '-w')
     local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
 
-    distance = (tonumber(distance) and args[tonumber(distance) + 1]) or 1
+    distance = tonumber(tonumber(distance) and args[tonumber(distance) + 1]) or 1
+    angle = tonumber(tonumber(angle) and args[tonumber(angle) + 1])
+    wait = tonumber(tonumber(wait) and args[tonumber(wait) + 1]) or 10
 
     if cancel then
         local jobInfo = smartMove:getJobInfo()
@@ -1410,18 +1529,45 @@ handlers['align'] = function(args)
         else
             writeMessage('There was no follow to cancel.')
         end
-    elseif target then
-        local target = windower.ffxi.get_mob_by_target('t')
-        local job = smartMove:moveBehindIndex(target.index, 5)
-        if job then
-            writeMessage('Moving behind %s with a distance of %.1f':format(
-                text_mob(target.name),
-                distance
-            ))
+    else
+        if target then
+            target = windower.ffxi.get_mob_by_name(args[target + 1])
         else
-            writeMessage('Unable to move behind %s!':format(
+            target = windower.ffxi.get_mob_by_target('t')
+        end
+
+        if target and target.valid_target then
+            local context = actionStateManager:getContext()
+
+            if context then
+                if angle then
+                    writeMessage('Aligning within %s of the %s position of %s...':format(
+                        text_number('%03d degree':format(angle)),
+                        text_number('%.1f':format(distance)),
+                        text_mob(target.name)
+                    ))
+                else
+                    writeMessage('Aligning within %s of %s...':format(
+                        text_number('%.1f':format(distance)),
+                        text_mob(target.name)
+                    ))
+                end
+
+                local success = context.align(target, angle, distance, wait)
+
+                writeMessage('Alginment with %s was %s!':format(
+                    text_mob(target.name),
+                    success and text_green('successful') or text_red('unsuccessful')
+                ))
+
+                return
+            end
+
+            writeMessage('Unable to align with %s!':format(
                 text_mob(target.name)
             ))
+        else
+            writeMessage('A valid alignment target was not specified!')
         end
     end
 end

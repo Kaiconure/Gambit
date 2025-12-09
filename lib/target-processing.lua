@@ -311,6 +311,9 @@ local function closeUx(max_seconds)
     return os.clock() - start_t
 end
 
+-- The maximum change in heading allowed before we pause for an adjustment
+local MAX_HEADING_DELTA = directionality.degToRad(30)
+
 --------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
 local lock_target_id = 1
@@ -452,6 +455,7 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
             -- In laggy situations, it can take a while for the target to be acquired. This gives us 
             -- some time to try and ensure we can get the target.
             if not fail_fast then
+                local target_overridden = false
                 local looping = true
 
                 local has_st    = false
@@ -475,7 +479,11 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                             -- Face toward our target. It's important that we do this before sending the FPS view
                             -- mode command, because even if we're out of sync (already in FPS) this will ensure
                             -- that our camera is always facing the mob.
-                            directionality.faceTarget(mob)
+                            heading, heading_delta = directionality.faceTarget(mob)
+                            if heading_delta and heading_delta > MAX_HEADING_DELTA then
+                                printDebug('Heading delta was %.1f degrees, sleeping...':format(directionality.radToDeg(heading_delta)))
+                                coroutine.sleep(0.33)
+                            end
 
                             -- Enter fps view. This ensures that the camera is facing toward the mob we want, so
                             -- that our tabbing stays in the general vicinity of our desired target.
@@ -503,19 +511,44 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
 
                             local st = windower.ffxi.get_mob_by_target('st')
                             if st then
-                                if st.id == mob.id then
+                                is_exact_match = st.id == mob.id
+                                -- is_secondary_match = 
+                                --     not is_exact_match and
+                                --     battleTarget and
+                                --     settings.selection_mode == 'any_match' and                          -- If we're allowing any matching mob to be claimed
+                                --     mob.spawn_type == SPAWN_TYPE_MOB and                                -- Only allow mobs
+                                --     st.spawn_type == SPAWN_TYPE_MOB and                                 --
+                                --     st.name == mob.name and                                             -- Our mob and the st are the same target type
+                                --     (mob.status == STATUS_IDLE or st.status == STATUS_ENGAGED) and      -- Our mob is idle or the st is engaged
+                                --     st.distance <= (settings.maxDistance * settings.maxDistance) and    -- The st is in our targeting range
+                                --     st.distance <= (20 * 20) and                                        -- The st is in engagement range
+                                --     partyInfo:canShareClaimOnMob(st)                                    -- This is a mob we can claim
+
+                                if is_exact_match or is_secondary_match then
                                     -- When our st matches our target, commit it using the enter key. We'll then clear
                                     -- the has_st flag, and indicate that we should exit the loop.
                                     sendKey('enter')
                                     has_st = false
                                     looping = false
 
-                                    printDebug('Command-based target of %s/%d was successful after %.2fs with %d tab(s)':format(
+                                    
+
+                                    printDebug('Command-based target of %s/%d was successful after %.2fs with %d tab(s)%s':format(
                                         st.name,
                                         st.id,
                                         os.clock() - start_t,
-                                        num_tabs
+                                        num_tabs,
+                                        is_secondary_match and '\n    <<overridden from %s/%d>>':format(mob.name, mob.id) or ''
                                     ))
+
+                                    -- mob = st
+                                    -- target_overridden = is_secondary_match
+
+                                    -- if is_secondary_match then
+                                    --     coroutine.sleep(0.15)
+                                    --     windower.send_command('input /attack;')
+                                    --     coroutine.sleep(0.33)
+                                    -- end
                                 else
                                     sendKey('tab')
 

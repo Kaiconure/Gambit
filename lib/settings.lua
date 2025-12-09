@@ -158,7 +158,7 @@ local function findExistingActionsFileName(playerName, actionsName, skip_standar
     }
 
     if not skip_standard then
-        table.append(paths, './actions/standard/%s.json':format(actionsName))
+        table.insert(paths, './actions/standard/%s.json':format(actionsName))
     end
 
     for i, path in ipairs(paths) do
