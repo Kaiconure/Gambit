@@ -1,4 +1,10 @@
 {
+  "about": {
+    "author": "@Kaiconure",
+    "documentation": [
+      "This gambit allows you to set up a multi-stage weapon skill/skillchain sequence."
+    ]
+  },
   "vars": {
     "ws": {
       "multi_stage": {
@@ -7,6 +13,17 @@
       }
     }
   },
+  "functions": [
+    {
+      "commands": [
+        "vars.ws.multi_stage.stages and \\",
+        "  (log('Preparing to test multi-stage configuration...') and isNextMultiStageOpener(vars.ws.multi_stage) or log('Multi-stage test completed!')) or \\",
+        "  (log('A valid multi-stage configuration was not found.'))"
+      ],
+      "name": "test/multi-stage",
+      "max_iterations": 1
+    }
+  ],
   "actions": [
     {
       "import": "ws/terminal-reset"
@@ -47,6 +64,16 @@
       "on_load": true
     },
     {
+      "when": ["vars.ws.multi_stage.skillchain_delay"],
+      "commands": [
+        "logf('Configuring multi-stage skillchain delay to: %.1fs', vars.ws.multi_stage.skillchain_delay)",
+        "sendCommand('gbt config -scd %.1f', vars.ws.multi_stage.skillchain_delay)"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
       "when": [
         "vars.ws.multi_stage.stages and not vars.ws.multi_stage.stages_disabled",
         "isNextMultiStageCloser(vars.ws.multi_stage)",
@@ -57,7 +84,7 @@
     {
       "when": [
         "vars.ws.multi_stage.stages and not vars.ws.multi_stage.stages_disabled",
-        "--TODO: UNCOMMENT ME!!!!!! $macro:can_open_sc",
+        "$macro:can_open_sc",
         "isNextMultiStageOpener(vars.ws.multi_stage)"
       ],
       "commands": ["$macro:open_skillchain"]

@@ -350,9 +350,9 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
 
     -- Now we will go through all of the processed swaps, and equip the gear
     if not simulate then
-        if inventory.printDebug then
-            inventory.printDebug('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-        end
+        -- if inventory.printDebug then
+        --     inventory.printDebug('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        -- end
 
         for i, swap in ipairs(swaps) do
 
@@ -375,20 +375,20 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
             end
 
             -- If a debugging callback was provided, log the specific changes we're making
-            if inventory.printDebug then
-                if changes and changes.removed[swap.slot] then
-                    inventory.printDebug('Equipping %s: [%s]>>[%s]':format(
-                        swap.slot,
-                        changes.removed[swap.slot].name,
-                        swap.item.name
-                    ))
-                else                    
-                    inventory.printDebug('Equipping %s: [%s]':format(
-                        swap.slot,
-                        swap.item.name
-                    ))
-                end
-            end
+            -- if inventory.printDebug then
+            --     if changes and changes.removed[swap.slot] then
+            --         inventory.printDebug('Equipping %s: [%s]>>[%s]':format(
+            --             swap.slot,
+            --             changes.removed[swap.slot].name,
+            --             swap.item.name
+            --         ))
+            --     else                    
+            --         inventory.printDebug('Equipping %s: [%s]':format(
+            --             swap.slot,
+            --             swap.item.name
+            --         ))
+            --     end
+            -- end
 
             windower.ffxi.set_equip(
                 swap.item.localId,

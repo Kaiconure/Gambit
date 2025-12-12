@@ -113,284 +113,6 @@ local function is_known_targeting_symbol(symbol)
         symbol == 'scan'
 end
 
-local WS_ATTRIBUTE_MARKER = '$attributes:'
-
-local SKILLCHAINS_BY_TIER = {
-    {
-        ['compression'] = true,
-        ['detonation'] = true,
-        ['impaction'] = true,
-        ['induration'] = true,
-        ['liquefaction'] = true,
-        ['reverberation'] = true,
-        ['scission'] = true,
-        ['transfixion'] = true
-    },
-    {
-        ['distortion'] = true,
-        ['fragmentation'] = true,
-        ['fusion'] = true,
-        ['gravitation'] = true,
-    },
-    {
-        ['light'] = true,
-        ['darkness'] = true
-    }
-}
-
-local TIERS_BY_SKILLCHAIN = 
-{
-    ['compression'] = 1,
-    ['detonation'] = 1,
-    ['impaction'] = 1,
-    ['induration'] = 1,
-    ['liquefaction'] = 1,
-    ['reverberation'] = 1,
-    ['scission'] = 1,
-    ['transfixion'] = 1,
-
-    ['distortion'] = 2,
-    ['fragmentation'] = 2,
-    ['fusion'] = 2,
-    ['gravitation'] = 2,
-
-    ['light'] = 3,
-    ['darkness'] = 3
-}
-
-function find_matching_weapon_skill_by_attribute(possible_weapon_skills, attributes)
-
-    local find_all = possible_weapon_skills == nil
-
-    local matches = {}
-
-    local exclude_attributes = {}
-    for i = #attributes, 1, -1 do
-        local attribute = attributes[i]
-        if string.sub(attribute, 1, 1) == '!' then
-            table.insert(exclude_attributes, string.lower(string.sub(attribute, 2)))
-        end
-    end
-
-    for i, attribute in ipairs(attributes) do
-        attribute = trimString(string.lower(attribute))
-
-        if attribute ~= '' then
-            -- local start = find_all and 255 or #possible_weapon_skills
-            -- for j = start, 1, -1 do
-            local last = find_all and 255 or #possible_weapon_skills
-            for j = 1, last do 
-                local id = j
-                if not find_all then
-                    id = possible_weapon_skills[j]
-                end
-
-                local ws = resources.weapon_skills[id]
-                if ws then
-                    local sc_attributes = {
-                        string.lower(ws.skillchain_a),
-                        string.lower(ws.skillchain_b),
-                        string.lower(ws.skillchain_c)
-                    }
-
-                    -- It's a match if our desired attribute is the highest on this WS
-                    local is_match_1 = sc_attributes[1] == attribute
-
-                    -- If it wasn't already a match, it can be a match if our desired attribute is the
-                    -- secondary on this WS and it's at the same tier is the primary.
-                    local is_match_2 = not is_match_1 and (
-                        sc_attributes[2] and
-                        sc_attributes[2] == attribute and
-                        TIERS_BY_SKILLCHAIN[attribute] == TIERS_BY_SKILLCHAIN[sc_attributes[1]]
-                    )
-
-                    -- If it wasn't already a match, it can be a match if our desired attribute is the
-                    -- tertiary on this WS and it's at the same tier is the primary and secondary.
-                    local is_match_3 = not is_match_1 and not is_match_2 and (
-                        sc_attributes[3] and
-                        sc_attributes[3] == attribute and
-                        TIERS_BY_SKILLCHAIN[attribute] == TIERS_BY_SKILLCHAIN[sc_attributes[1]] and
-                        TIERS_BY_SKILLCHAIN[attribute] == TIERS_BY_SKILLCHAIN[sc_attributes[2]]
-                    )
-
-                    local is_match = is_match_1 or is_match_2 or is_match_3
-
-                    --local is_match_3 = is_match_2 and (not sc_attributes[3] or sc_attributes[3] == attribute)
-
-                    -- local is_match = 
-                    --     (ws.skillchain_a and string.lower(ws.skillchain_a) == attribute) or
-                    --     (ws.skillchain_b and string.lower(ws.skillchain_b) == attribute) or
-                    --     (ws.skillchain_c and string.lower(ws.skillchain_c) == attribute)
-
-                    -- If we have a match and there are exclusions, filter those out
-                    if is_match and #exclude_attributes > 0 then
-                        is_match = 
-                            not arrayIndexOfStrI(exclude_attributes, ws.skillchain_a) and
-                            not arrayIndexOfStrI(exclude_attributes, ws.skillchain_b) and
-                            not arrayIndexOfStrI(exclude_attributes, ws.skillchain_c)
-                    end
-
-                    if is_match then
-                        if not find_all then
-                            return { ws.name }
-                        end
-
-                        table.insert(matches, ws.name)
-                    end
-                end
-            end
-        end
-    end
-
-    return matches
-end
-
-function expand_attribute_weapon_skills(weapon_skill_list, possible_weapon_skills, allow_pruning)
-    -- Iterate over the requested weapon skills
-    if type(weapon_skill_list) == 'table' then
-        for i = #weapon_skill_list, 1, -1 do
-            
-            local ws = string.lower(tostring(weapon_skill_list[i]))
-
-            if type(ws) ~= 'string' then
-                -- Remove any invalid entries
-                table.remove(weapon_skill_list, i)
-            else
-                -- Check if this is a prefixed value
-                local has_prefix = string.sub(ws, 1, #WS_ATTRIBUTE_MARKER) == WS_ATTRIBUTE_MARKER
-                if has_prefix then
-                    -- Always remove this entry if it was given an attribute marker. It will either be
-                    -- replaced or invalidated below.
-                    table.remove(weapon_skill_list, i)
-
-                    local value = string.sub(ws, #WS_ATTRIBUTE_MARKER + 1)
-                    local attributes = value:split(',')
-
-                    local matches = find_matching_weapon_skill_by_attribute(possible_weapon_skills, attributes)
-                    if matches and #matches > 0 then
-                        for j = #matches, 1, -1 do
-                            table.insert(weapon_skill_list, i, matches[j])
-                        end
-                    end
-                else
-                    -- If configured to do so, we will remove entries for WS's that we don't actually have
-                    if possible_weapon_skills and allow_pruning and not hasWeaponSkillDirect(possible_weapon_skills, ws) then
-                        table.remove(weapon_skill_list, i)
-                    end
-                end
-            end
-        end
-
-        -- If we're looking for usable weapon skills only, we'll stick a placeholder in if we stripped the table all the way down
-        if possible_weapon_skills and #weapon_skill_list == 0 then
-            table.insert(weapon_skill_list, '[Placeholder]')
-        end
-
-        -- Force de-duplication of entries
-        local by_name = {}
-        for i = #weapon_skill_list, 1, -1 do
-            local current = string.lower(weapon_skill_list[i])
-            if by_name[current] then
-                table.remove(weapon_skill_list, i)
-            else
-                by_name[current] = true
-            end            
-        end
-
-        if not possible_weapon_skills then
-            table.sort(weapon_skill_list)
-        end
-    end
-end
-
-function compile_multi_stage(multi_stage)
-    local stage_meta = multi_stage and multi_stage.stages or {}
-
-    local abilities = windower.ffxi.get_abilities()
-    local known_weapon_skills = abilities and abilities.weapon_skills or {}
-
-    for i = #stage_meta, 1, -1 do
-        local stage = stage_meta[i]
-
-        if type(stage) ~= 'table' then
-            -- We will strip out any invalid stage entries
-            table.remove(stage_meta, i)
-
-            writeMessage('Removed invalid stage %s from multi-stage configuration due to invalid value.':format(text_number(i)))
-        else
-            -- Threshold must always be a number between 0 and 1000
-            stage.threshold = math.clamp(tonumber(stage.threshold) or 800, 0, 1000)
-            stage.participants = type(stage.participants) == 'table' and stage.participants or {}
-
-            -- Promote single use entry to on_ws array if needed (one-time setup)
-            if i == 2 and not stage.on_ws and stage.use then
-                stage.on_ws = {
-                    party_using = stage.party_using,
-                    use = stage.use,
-                    threshold = stage.threshold
-                }
-
-                stage.use = nil
-                stage.party_using = nil
-                stage.threshold = nil
-            end
-
-            -- Promote stage-level threshold/participants to each on_ws entry if they aren't already defined (one-time setup)
-            if i == 2 then
-                stage.on_ws = type(stage.on_ws) == 'table' and stage.on_ws or {}
-                for _, entry in ipairs(stage.on_ws) do
-                    -- Threshold must always be a number between 0 and 1000
-                    entry.threshold = math.clamp(tonumber(entry.threshold) or stage.threshold, 0, 1000)
-
-                    -- Participants must always be a table. Inherit the stage-level participants if not defined at the entry level.
-                    if type(entry.participants) ~= 'table' then
-                        entry.participants = stage.participants
-                    end
-
-                    -- Inherit the include_self flag if not defined at the entry level. This determines whether your own TP
-                    -- is taken into account when determining if a skillchain can be started.
-                    if entry.include_self == nil then
-                        entry.include_self = stage.include_self
-                    end
-
-                    -- We need each participant to have a normalized player name, so we can compare more easily later.
-                    for j = 1, #entry.participants do
-                        entry.participants[j] = makePlayerName(entry.participants[j])
-                    end
-
-                    expand_attribute_weapon_skills(entry.party_using)
-                    expand_attribute_weapon_skills(entry.use, known_weapon_skills)
-                end
-
-                stage.threshold = nil
-                stage.participants = nil
-                stage.include_self = nil
-            else
-                expand_attribute_weapon_skills(stage.use, known_weapon_skills, i ~= 1)
-            end
-
-            -- We need each participant to have a normalized player name, so we can compare more easily later.
-            if stage.participants then
-                for j = 1, #stage.participants do
-                    stage.participants[j] = makePlayerName(stage.participants[j])
-                end
-            end
-        end
-    end
-
-    multi_stage._compiled = true
-
-    local player = windower.ffxi.get_player()
-    multi_stage._compiled_for = player and player.name
-
-    writeJsonToFile('./data/multi-stage/%s/compiled.%s.json':format(
-            player and player.name or 'unknown',
-            (player and player.main_job) and (player.sub_job and '%s-%s':format(player.main_job, player.sub_job) or player.main_job) or 'unknown'
-        ), 
-        multi_stage
-    )
-end
-
 -----------------------------------------------------------------------------------------
 --
 function __context_compare(a, b) return a == b end
@@ -2202,40 +1924,44 @@ local function loadContextTargetSymbols(context, target)
         context[a1] = nil
         if context.party[a1] then
             local mob = context.party[a1].mob
-            context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, in_party = false, in_alliance = true }
+            if mob then
+                context[a1] = { symbol = a1, mob = mob, member = context.party[a1], targets = {}, in_party = false, in_alliance = true }
 
-            initContextTargetSymbol(context, context[a1])
+                initContextTargetSymbol(context, context[a1])
 
-            context.alliance_by_id[mob.id] = context[a1]
-            context.alliance_by_index[mob.index] = context[a1]
+                context.alliance_by_id[mob.id] = context[a1]
+                context.alliance_by_index[mob.index] = context[a1]
 
-            if not context[a1].is_dead then
-                -- Clear raise info if the mob is dead
-                context.vars.last_raise[mob.id] = nil
-                context.can_raise = false
-            else
-                -- Allow raise attempts every 5 minutes by default
-                context[a1].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+                if not context[a1].is_dead then
+                    -- Clear raise info if the mob is dead
+                    context.vars.last_raise[mob.id] = nil
+                    context.can_raise = false
+                else
+                    -- Allow raise attempts every 5 minutes by default
+                    context[a1].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+                end
             end
         end
 
         context[a2] = nil
         if context.party[a2] then
             local mob = context.party[a2].mob
-            context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, in_party = false, in_alliance = true }
+            if mob then
+                context[a2] = { symbol = a2, mob = mob, member = context.party[a2], targets = {}, in_party = false, in_alliance = true }
 
-            initContextTargetSymbol(context, context[a2])
+                initContextTargetSymbol(context, context[a2])
 
-            context.alliance_by_id[mob.id] = context[a2]
-            context.alliance_by_index[mob.index] = context[a2]
+                context.alliance_by_id[mob.id] = context[a2]
+                context.alliance_by_index[mob.index] = context[a2]
 
-            if not context[a2].is_dead then
-                -- Clear raise info if the mob is dead
-                context.vars.last_raise[mob.id] = nil
-                context.can_raise = false
-            else
-                -- Allow raise attempts every 5 minutes by default
-                context[a2].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+                if not context[a2].is_dead then
+                    -- Clear raise info if the mob is dead
+                    context.vars.last_raise[mob.id] = nil
+                    context.can_raise = false
+                else
+                    -- Allow raise attempts every 5 minutes by default
+                    context[a2].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
+                end
             end
         end
     end
@@ -2686,25 +2412,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    context.isNextSkillchainer = function(threshold, ...)
-        local participants = nil
-
-        if type(threshold) == 'table' then
-            -- When the threshold is a table, assume it is the participant list and default the tp threshold
-            participants = threshold
-            threshold = 800
-        elseif type(threshold) == 'string' then
-            -- When the threshold is a string, assume it is the first participant in a list and default the tp threshold
-            participants = varargs({...})
-            table.insert(participants, 1, threshold)
-            threshold = 800
-        else
-            -- Otherwise, take the treshold (or use the default) and treat the remaining args as the participant list
-            threshold = math.max(0, tonumber(threshold) or 800)
-            participants = varargs({...})
-        end        
-
+    context.isNextSkillchainer = function(threshold, participants, min_tp)
         if type(participants) == 'table' then
+            min_tp = math.clamp(tonumber(min_tp) or 1000, 1000, 3000)
+            threshold = math.clamp(tonumber(threshold) or 800, 0, min_tp)
+
             for i = 1, #participants do
                 local participant = makePlayerName(participants[i])
                 if participant then
@@ -2713,7 +2425,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         -- If this member is at or above the tp threshold, we will always end here.
                         -- We will return true if and only if the member is yourself.
                         if member.tp >= threshold then
-                            return member.is_me and member.tp >= 1000
+                            return member.is_me and member.tp >= min_tp
                         end
                     end
                 end
@@ -2728,12 +2440,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if not context.skillchaining() then
                 for i = 1, #on_ws_array do
                     local entry = on_ws_array[i]
-                    if 
-                        type(entry) == 'table' and
-                        type(entry.use) == 'table' and
-                        context.partyUsingWeaponSkill2(entry.party_using)
-                    then
-                        return context.isNextSkillchainer(entry.threshold, entry.participants) and context.canUseWeaponSkill(entry.use)
+                    if entry and entry.use then
+                        if context.partyUsingWeaponSkillMapped2(entry.party_using) then
+                            return context.isNextSkillchainer(entry.threshold, entry.participants) and context.canUseWeaponSkill(entry.use)
+                        end
                     end
                 end
             end
@@ -2742,7 +2452,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Determines if the stage 2 closer for the currently examined weapon skill is ready to go.
-    context.isInitialCloserReady = function (stage_2)
+    context.isInitialCloserReady = function (stage_1, stage_2)
+        if 1 == 1 then return true end
+
         if context.weapon_skill and type(stage_2) == 'table' and type(stage_2.on_ws) == 'table' then
 
             for i = 1, #stage_2.on_ws do
@@ -2750,17 +2462,21 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if 
                     type(entry) == 'table' and
                     type(entry.use) == 'table' and
+                    type(entry.party_using) == 'table' and
                     #entry.use > 0
                 then
                     if 
-                        type(entry.party_using) ~= 'table' or                           -- If it's not a table, assume all weapon skills
-                        #entry.party_using == 0 or                                      -- If it's an empty table, assume all weapon skills
-                        arrayIndexOfStrI(entry.party_using, context.weapon_skill.name)  -- Otherwise, check for a match
+                        --type(entry.party_using) ~= 'table' or                           -- If it's not a table, assume all weapon skills
+                        --#entry.party_using == 0 or                                      -- If it's an empty table, assume all weapon skills
+                        --arrayIndexOfStrI(entry.party_using, context.weapon_skill.name)  -- Otherwise, check for a match
+                        entry.party_using[string.lower(context.weapon_skill.name)]
                     then
                         -- If the participants are not defined, this is a default handler and we'll just return true
                         if type(entry.participants) ~= 'table' or #entry.participants == 0 then
                             return true
                         end
+
+                        local next_threshold = math.clamp((entry.threshold or stage_2.threshold or stage_1.threshold or 800) * 0.75, 0, 1000)
 
                         for j = 1, #entry.participants do
                             local participant = entry.participants[j]
@@ -2773,8 +2489,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                                     member.is_engaged and
                                     member.distance < 20 
                                 then
-                                    local next_threshold = math.clamp((entry.threshold or 800) * 0.75, 0, 1000)
-
                                     -- If this member is at or above the tp threshold, we will always end here.
                                     -- We will return true if and only if the member is yourself.
                                     if member.tp >= next_threshold then
@@ -2840,8 +2554,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 return 
                     stage and 
                     context.canUseWeaponSkill(stage.use) and 
-                    context.isNextSkillchainer(stage.threshold, stage.participants) and
-                    --(stage_meta[2] == nil or context.isInitialCloserReady(stage_meta[2])) and
+                    context.isNextSkillchainer(stage.threshold, stage.participants, multi_stage.min_start_tp) and
+                    (stage_meta[2] == nil or context.isInitialCloserReady(stage, stage_meta[2])) and
                     1
             end
 
@@ -5923,6 +5637,47 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- of time has ellapsed since the weapon skill was used.
     context.partyUsingWeaponSkill2 = function(...)
         local result = context.partyUsingWeaponSkill(...)
+        if result then
+            local age = os.clock() - context.skillchain_trigger_time
+            if
+                (age >= settings.skillchainDelay - 1)
+            then
+                return result
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if a party member is using a weapon skill or TP move. The mapped
+    -- variation uses a keyed table of strings rather than an array, to allow
+    -- for faster lookup of large sets of weapon skills. The map *must* be 
+    -- built of lower-case names. This is mainly for internal use.
+    context.partyUsingWeaponSkillMapped = function(map)
+        if map and context.bt then
+            local party_weapon_skill = context.party_weapon_skill
+
+            if 
+                party_weapon_skill and
+                party_weapon_skill.mob and
+                party_weapon_skill.mob.id == context.bt.id
+            then
+                if map[string.lower(party_weapon_skill.name)] or map['*'] then
+                    return party_weapon_skill
+                end
+            end
+        end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Trigger if a party member is using a weapon skill or TP move. The mapped
+    -- variation uses a keyed table of strings rather than an array, to allow
+    -- for faster lookup of large sets of weapon skills. The map *must* be 
+    -- built of lower-case names. This is mainly for internal use.
+    --
+    -- Similar to partyUsingWeaponSkillMapped, but only triggers if a minimum amount
+    -- of time has ellapsed since the weapon skill was used.
+    context.partyUsingWeaponSkillMapped2 = function(map)
+        local result = context.partyUsingWeaponSkillMapped(map)
         if result then
             local age = os.clock() - context.skillchain_trigger_time
             if

@@ -1,4 +1,4 @@
-__version = '0.96.0-beta18c'
+__version = '0.96.0-beta19'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -40,6 +40,8 @@ bit = require('bit')
 texts = require('texts')
 images = require('images')
 
+skillchain_helper = require('lib/skillchain-helper')
+
 require('ux/core')
 require('ux/cloud-panel')
 
@@ -64,6 +66,7 @@ require('./lib/resx')
 require('./lib/eventing')
 require('./lib/commands')
 require('./lib/target-processing')
+require('./lib/multi-stage-compiler')
 
 inventory = require('./lib/inventory')
 smartMove = require('./lib/smart-move')
