@@ -1,4 +1,21 @@
 -----------------------------------------------------------------------------------------
+-- Converts an array of strings into a map, where the lower-case equivalent of
+-- each entry maps to its original location. Essentially this reverses the
+-- mapping of index->field to field->index instead.
+local function string_array_to_map(array)
+    local map = {}
+    if array then
+        for i, val in ipairs(array) do
+            if val then
+                map[string.lower(tostring(val))] = i
+            end
+        end
+    end
+
+    return map
+end
+
+-----------------------------------------------------------------------------------------
 -- Performs an in-place conversion of a string array to its lower-case equivalent
 local function string_array_to_lower(string_array)
     if type(string_array) == 'table' then
@@ -40,21 +57,22 @@ end
 local function shuffle_multi_stage_participants(stage_number, strategy, participants)
     if participants and #participants > 1 then
         participants = {unpack(participants)}
-        if strategy == 'rotate' then
+        if strategy == 'rotate' or strategy == 'rotate-right' then
+            
+            -- Rotate Right: Moves the last element to the front
             local max_moves = (stage_number % #participants) - 1
-
-            for i = 1, max_moves do
-                local removed = table.remove(participants, 1)
-                table.insert(participants, removed)
-            end
-        elseif strategy == 'rotate-left' then
-            local max_moves = (stage_number % #participants) - 1
-
-            -- Remove from the end and move to the front
             for i = 1, max_moves do
                 local removed = table.remove(participants, #participants)
                 table.insert(participants, 1, removed)
             end
+        elseif strategy == 'rotate-left' then
+            -- Rotate Left: Moves the first element to the end
+            local max_moves = (stage_number % #participants) - 1
+            for i = 1, max_moves do
+                local removed = table.remove(participants, 1)
+                table.insert(participants, removed)
+            end
+            
         end
     end
 
@@ -89,7 +107,10 @@ local function setup_multi_stage_openers(multi_stage, known_weapon_skills)
                     end
 
                     local sequences = skillchain_helper.find_skillchain_openings(opening_sc)
-                    local openers = skillchain_helper.filter_weapon_skills(sequences.all_openers, known_weapon_skills)
+                    local openers = skillchain_helper.filter_weapon_skills(sequences.all_openers, 
+                        known_weapon_skills,
+                        multi_stage.preferred_weapon_skills,
+                        multi_stage.blocked_weapon_skills)
                     if openers then
                         stage1.use = openers
                     else
@@ -130,7 +151,7 @@ local function setup_multi_stage_openers(multi_stage, known_weapon_skills)
                         end
 
                         if not participants then
-                            participants = multi_stage.stage_participants[sub_stage] or stage2.participants or multi_stage.participants
+                            participants = multi_stage.stage_participants[sub_stage] or multi_stage.stage_participants['2'] or stage2.participants or multi_stage.participants
                         end
                         
                         participants = process_multi_stage_exclusions(stage2.exclusions, participants, group_i)
@@ -139,7 +160,10 @@ local function setup_multi_stage_openers(multi_stage, known_weapon_skills)
 
                         local party_using = skillchain_helper.filter_weapon_skills(group.open_with)
                         if party_using then
-                            local use = skillchain_helper.filter_weapon_skills(group.close_with, known_weapon_skills)
+                            local use = skillchain_helper.filter_weapon_skills(group.close_with, 
+                                known_weapon_skills,
+                                multi_stage.preferred_weapon_skills,
+                                multi_stage.blocked_weapon_skills)
 
                             table.insert(stage2.on_ws, {
                                 party_using = party_using,
@@ -192,7 +216,10 @@ local function setup_multi_stage_openers(multi_stage, known_weapon_skills)
                     stage2.party_using = nil
                     stage2.use = nil
                 else
-                    stage1.use = skillchain_helper.filter_weapon_skills(string_array_to_lower(stage1.use), known_weapon_skills)
+                    stage1.use = skillchain_helper.filter_weapon_skills(string_array_to_lower(stage1.use),
+                        known_weapon_skills,
+                        multi_stage.preferred_weapon_skills,
+                        multi_stage.blocked_weapon_skills)
 
                     if not stage1.use then
                         local participants = stage1.participants or multi_stage.participants
@@ -219,7 +246,9 @@ local function expand_skillchain_continuation(multi_stage, stage_number, known_w
             if type(stage.continue_from) == 'string' and type(stage.continue_to) == 'string' then
                 local continuation_weapon_skills = skillchain_helper.filter_weapon_skills(
                     skillchain_helper.get_skillchain_continuation(stage.continue_from, stage.continue_to),
-                    known_weapon_skills
+                    known_weapon_skills, 
+                    multi_stage.preferred_weapon_skills,
+                    multi_stage.blocked_weapon_skills
                 )
 
                 if continuation_weapon_skills then
@@ -255,7 +284,9 @@ local function expand_skillchain_continuation(multi_stage, stage_number, known_w
             else
                 stage.use = skillchain_helper.filter_weapon_skills(
                     string_array_to_lower(stage.use),
-                    known_weapon_skills
+                    known_weapon_skills, 
+                    multi_stage.preferred_weapon_skills,
+                    multi_stage.blocked_weapon_skills
                 )
 
                 if not stage.use then
@@ -285,6 +316,11 @@ function compile_multi_stage(multi_stage)
     local known_weapon_skills = abilities and abilities.weapon_skills or {}
 
     multi_stage.stage_participants = multi_stage.stage_participants or {}
+
+    -- Preferred or blocked weapon skills. These are ONLY used when auto-generating weapon skills. Anything
+    -- explicitly set in the configuration file will be used as-is.
+    multi_stage.preferred_weapon_skills = multi_stage.preferred_weapon_skills or {}
+    multi_stage.blocked_weapon_skills = multi_stage.blocked_weapon_skills or {}
 
     setup_multi_stage_openers(multi_stage, known_weapon_skills)
 
@@ -348,7 +384,7 @@ function compile_multi_stage(multi_stage)
                     -- For manually entered entries, we'll validate that the current character can participate if included
                     if not stage.generated then
                         entry.party_using = string_array_to_lower(entry.party_using)
-                        entry.use = skillchain_helper.filter_weapon_skills(string_array_to_lower(entry.use), known_weapon_skills)
+                        entry.use = skillchain_helper.filter_weapon_skills(string_array_to_lower(entry.use), known_weapon_skills, multi_stage.preferred_weapon_skills, multi_stage.blocked_weapon_skills)
 
                         entry.participants = entry.participants or stage.participants or multi_stage.participants or {}
                         entry.participants = process_multi_stage_exclusions(stage.exclusions, entry.participants, entry_i)                                  -- Stage 2's own exclusion list
@@ -390,8 +426,10 @@ function compile_multi_stage(multi_stage)
                     end
 
                     -- We need each participant to have a normalized player name, so we can compare more easily later.
-                    for j = 1, #entry.participants do
-                        entry.participants[j] = makePlayerName(entry.participants[j])
+                    if entry.participants then
+                        for j = 1, #entry.participants do
+                            entry.participants[j] = makePlayerName(entry.participants[j])
+                        end
                     end
                 end
 

@@ -32,6 +32,19 @@
         "Frayed Pouch (D)",
         "Frayed Pouch (G)",
         "Frayed Pouch (R)"
+      ],
+      "general_items": [
+        "Beitetsu Box",
+        "Beitetsu Parcel",
+        "Beitetsu Coffer",
+
+        "Boulder Box",
+        "Boulder Case",
+        "Rift Boulder Coffer",
+
+        "Pluton Box",
+        "Pluton Case",
+        "Pluton Coffer"
       ]
     }
   },
@@ -43,6 +56,7 @@
         "not vars.common_consumables.escha_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.escha_items)",
         "not vars.common_consumables.unm_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.unm_items)",
         "not vars.common_consumables.woe_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.woe_items)",
+        "not vars.common_consumables.general_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.general_items)",
         "arrayCount(vars.common_consumables.all_items) == 0 and log('No common consumables were configured for use.')",
         "arrayCount(vars.common_consumables.all_items) ~= 0 and log('Configured', arrayCount(vars.common_consumables.all_items), 'common consumable type(s) to use when present.')"
       ],

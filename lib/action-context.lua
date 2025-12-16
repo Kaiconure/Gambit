@@ -2453,7 +2453,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Determines if the stage 2 closer for the currently examined weapon skill is ready to go.
     context.isInitialCloserReady = function (stage_1, stage_2)
-        if 1 == 1 then return true end
+        --if 1 == 1 then return true end
 
         if context.weapon_skill and type(stage_2) == 'table' and type(stage_2.on_ws) == 'table' then
 
