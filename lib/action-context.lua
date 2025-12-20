@@ -335,20 +335,26 @@ local function context_table_merge(...)
 end
 
 -----------------------------------------------------------------------------------------
--- Inherits values from multiple tables into a target table. Only fields that do not
--- already exist in the target will be copied over.
-local function context_table_inherit(target, ...)
-    local tables = {...}
+-- Inherits values from one table into another. By default, only values not already
+-- set in the target will be copied in. If the force flag is set, then the entire
+-- source will be copied in regardless of the original state.
+local function context_table_inherit(target, source, force)
     if type(target) ~= 'table' then
-        target = { }
+        target = {}
     end
 
-    for i = 1, #tables do
-        local current = tables[i]
-        if type(current) == 'table' then
-            for key, value in pairs(current) do
-                if target[key] == nil and value ~= nil then
-                    target[key] = value
+    if type(target) == 'table' and type(source) == 'table' then
+        for s_key, s_val in pairs(source) do
+            local t_val = target[s_key]
+
+            -- We will perform the inheritance step if the force flag is set, or if the target value is nil
+            if force or t_val == nil then
+                if type(s_val) == 'table' then
+                    -- If the source value is a table, we will need to do a recursive inheritance
+                    target[s_key] = context_table_inherit(target[s_key], s_val, force)
+                else
+                    -- Inherit the value directly
+                    target[s_key] = s_val
                 end
             end
         end
@@ -2388,7 +2394,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             weaponSkill = findWeaponSkill(_weaponSkill)
             if weaponSkill then
                 local target    = weaponSkill.targets.Self and context.me or context.bt
-                local suppress  = context.vars.__suppress_weapon_skills and target == context.bt
+                local suppress  = context.vars.__suppress_weapon_skills and target == context.bt and not context.runningAsFunction()
 
                 if not suppress then
                     local targetOutOfRange = target and
@@ -5120,7 +5126,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         for i = start_index, #names do
             local name = names[i]
 
-            local buff = hasBuffInArray(target.buffs, name, strict)
+            local buff = hasBuffInArray(target.buffs, name, use_strict)
 
             if buff then
                 context.effect = buff
@@ -5225,7 +5231,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local buffId = res and res.status
 
             if buffId then
-                local buff = hasBuffInArray(target.buffs, buffId, strict)
+                local buff = hasBuffInArray(target.buffs, buffId, use_strict)
                 if buff then
                     context.effect = buff    
                     context.effect_count = arrayCountOccurences(target.buffs, buff.id)

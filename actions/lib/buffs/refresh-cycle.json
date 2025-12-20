@@ -17,7 +17,7 @@
         "arrayCount(vars.refresh_cycle.targets) > 0",
         "hasSpell(vars.refresh_cycle.spells) and canUse(spell)",
         "partyByName(vars.refresh_cycle.targets)",
-        "not hasEffectOf(member, spell) and not hasEffectOf(member, 'Sublimation')",
+        "not hasEffectOf(member, 'use-strict', spell) and not hasEffectOf(member, 'Sublimation')",
         "(member.is_player and member.mpp <= (vars.refresh_cycle.player_mpp or 100)) or (member.is_trust and member.mpp <= (vars.refresh_cycle.trust_mpp or 60))"
       ],
       "commands": ["useSpell()", "postpone(spellRecast(spell.name) or 0 + 10)"],

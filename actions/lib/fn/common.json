@@ -121,12 +121,36 @@
     },
     {
       "name": "cancel_follow",
-      "when": ["params._iter == 1"],
       "commands": [
         "cancelFollow()",
         "log('Your follow operation has been cancelled.')"
       ],
-      "silent": true
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "suppress_magic",
+      "commands": ["suppressOffensiveMagic()"],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "suppress_ws",
+      "commands": ["suppressWeaponSkills()"],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "resume_magic",
+      "commands": ["resumeOffensiveMagic()"],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "resume_ws",
+      "commands": ["resumeWeaponSkills()"],
+      "silent": true,
+      "max_iterations": 1
     }
   ]
 }

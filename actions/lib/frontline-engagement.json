@@ -22,11 +22,15 @@
   "actions": [
     {
       "commands": [
-        "setVar('vars.frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))"
+        "setVar('vars.frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))",
+        "runningAsFunction() and log('Applied frontline engagement positioning updates!')"
       ],
       "delay": 0,
       "frequency": "infinity",
-      "scope": "battle"
+      "scope": "battle",
+      "name": "frontline_engagement/recalculate",
+      "silent": true,
+      "max_iterations": 1
     },
     {
       "when": [

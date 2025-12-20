@@ -4,9 +4,7 @@
   },
   "actions": [
     {
-      "when": [
-        "hasBuff('Poison') and (canUseSpell('Poisona') or canUseItem('Antidote'))"
-      ],
+      "when": ["hasBuff('Poison') and (canUseSpell('Poisona'))"],
       "commands": ["use(me)"],
       "frequency": 1,
       "miss_frequency": 1

@@ -999,11 +999,14 @@ handlers['function'] = function(args)
                 not globals.shutting_down 
             do
                 if action._fn_iteration >= max_iterations then
-                    writeMessage('  %s: The maximum iteration count of %s has been reached!':format(text_green(action.name), text_number(action._fn_iteration)))
+                    if not silent then
+                        writeMessage('  %s: The maximum iteration count of %s has been reached!':format(text_green(action.name), text_number(action._fn_iteration)))
+                    end
                     done = true
                 end
 
                 if settings.settings_counter ~= settings_counter then
+                    -- We will log this scenario even when silent, because it is an external indicator
                     writeMessage('  %s: Settings have been reloaded, functions will exit.':format(text_green(action.name)))
                     done = true
                 end

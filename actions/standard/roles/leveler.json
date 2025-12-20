@@ -28,10 +28,11 @@
     {
       "when": [
         "me.level == 99 and not me.is_mastered",
-        "findUnequippedItem('Aptitude Mantle +1')"
+        "findUnequippedItem('Aptitude Mantle +1') or findUnequippedItem('Barataria Ring')"
       ],
       "commands": ["equip()"],
       "frequency": 180,
+      "miss_frequency": 10,
       "scope": "battle"
     },
     {

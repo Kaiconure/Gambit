@@ -5,7 +5,7 @@
   "actions": [
     {
       "when": [
-        "hasBuff('Paralysis') and (canUseSpell('Paralyna') or canUseItem('Remedy'))"
+        "hasBuff('Paralysis') and (canUseSpell('Paralyna') or canUseItem('--Remedy'))"
       ],
       "commands": ["use(me)"],
       "frequency": 1,
