@@ -1916,7 +1916,7 @@ local function loadContextTargetSymbols(context, target)
                 if not context[p].is_dead then
                     -- Clear raise info if the mob is dead
                     context.vars.last_raise[mob.id] = nil
-                    context.can_raise = false
+                    context[p].can_raise = false
                 else
                     -- Allow raise attempts every 5 minutes by default
                     context[p].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
@@ -1941,7 +1941,7 @@ local function loadContextTargetSymbols(context, target)
                 if not context[a1].is_dead then
                     -- Clear raise info if the mob is dead
                     context.vars.last_raise[mob.id] = nil
-                    context.can_raise = false
+                    context[a1].can_raise = false
                 else
                     -- Allow raise attempts every 5 minutes by default
                     context[a1].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
@@ -1963,7 +1963,7 @@ local function loadContextTargetSymbols(context, target)
                 if not context[a2].is_dead then
                     -- Clear raise info if the mob is dead
                     context.vars.last_raise[mob.id] = nil
-                    context.can_raise = false
+                    context[a2].can_raise = false
                 else
                     -- Allow raise attempts every 5 minutes by default
                     context[a2].can_raise = context.vars.last_raise[mob.id] == nil or (context.time - context.vars.last_raise[mob.id]) > 300
@@ -3584,10 +3584,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             local is_raise = 
-                spell.id == 12 or       -- Raise
-                spell.id == 13 or       -- Raise II
-                spell.id == 140 or     -- Raise III
-                spell.id == 494         -- Arise
+                spell.id == 12 or   -- Raise
+                spell.id == 13 or   -- Raise II
+                spell.id == 140 or  -- Raise III
+                spell.id == 494     -- Arise
 
             if target ~= nil and target.symbol then
                 if not bypass_target_check and target.targets then
@@ -6278,7 +6278,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             mob = windower.ffxi.get_mob_by_id(id)
             if mob and mob.valid_target then
                 if allow_retarget or (context.me and context.me.target_index ~= mob.index) then
-                    local result = lockTarget(context.player, mob, nil)
+                    local result = lockTarget(context.player, mob, true, false)
                     local t = windower.ffxi.get_mob_by_target('t')
 
                     if t and t.id == id then

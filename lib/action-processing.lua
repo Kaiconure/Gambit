@@ -208,6 +208,19 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
         return
     end
 
+    -- EXPERIMENTAL: Do not try to cast a spell if we're already casting something.
+    if 
+        actionStateManager:isActing()
+    then
+        if settings.verbosity >= VERBOSITY_DEBUG then
+            writeDebug('%s: Will not cast due to another action already in progress.':format(
+                text_spell(spell.name, Colors.debug)
+            ))
+        end
+        
+        return false
+    end
+
     local followJob = smartMove:cancelJob()
 
     -- Calculate the maximum amount of time we will wait for spell casting to complete. It's
@@ -238,7 +251,7 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
 
         if
             os.clock() >= endTime or
-            currentSpell.spell ~= spell
+            currentSpell.spell ~= spell -- Note: This is a reference compare, which seems to work due to resource table lookup. But should be validated.
         then
             continue = false
             interrupted = currentSpell.interrupted

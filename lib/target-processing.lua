@@ -399,7 +399,9 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                 mob.spawn_type == SPAWN_TYPE_TRUST or
                 mob.spawn_type == SPAWN_TYPE_MOB
             then
-                skip_packet_targeting = skip_packet_targeting or settings.skipPacketTargeting
+                if skip_packet_targeting == nil then
+                    skip_packet_targeting = settings.skipPacketTargeting
+                end
 
                 if not skip_packet_targeting then
                     local num_attempted = 0

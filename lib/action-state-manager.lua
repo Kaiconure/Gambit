@@ -21,10 +21,19 @@ local state_manager = {
     actions = { },
     actionTypeStartTime = os.clock(),
 
+    weaponSkill = {
+        time = 0
+    },
+    weaponSkills = {},
+
     skillchain = {
         time = 0
     },
     skillchains = {},
+
+    rangedAttack = { 
+        time = 0 
+    },
 
     currentSpell = {
         time = 0,
@@ -599,6 +608,19 @@ state_manager.getMobAbilityInfo = function(self, mob, windowed)
             end
         end
     end
+end
+
+-----------------------------------------------------------------------------------------
+-- This returns whether you are currently doing some kind of action that would
+-- prevent you from taking some other action. For example, casting a spell
+-- would prevent you from using a job ability or another spell, etc.
+--
+-- NOTE: This is not yet complete, and only tracks spells and ranged attacks for now.
+--
+state_manager.isActing = function(self)
+    return
+        (self.currentSpell and self.currentSpell.spell) or
+        (self.rangedAttack and self.rangedAttack.time > 0)
 end
 
 -----------------------------------------------------------------------------------------

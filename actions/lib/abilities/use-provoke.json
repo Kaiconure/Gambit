@@ -9,7 +9,8 @@
       "min_hpp": 25,
       "allow_flourish": true,
       "allow_flash": true,
-      "min_finishing_moves": 1
+      "min_finishing_moves": 1,
+      "leader_only": null
     }
   },
   "actions": [

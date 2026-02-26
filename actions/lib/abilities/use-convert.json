@@ -7,13 +7,15 @@
       "disabled": null,
       "max_mpp": 20,
       "min_mp": 15,
-      "aggro_range": 0
+      "aggro_range": 0,
+      "allow_while_weakened": null
     }
   },
   "actions": [
     {
       "when": [
         "not vars.use_convert.disabled",
+        "not hasBuff('Weakness') or vars.use_convert.allow_while_weakened",
         "me.hp > me.mp",
         "me.mpp < vars.use_convert.max_mpp",
         "me.mp >= vars.use_convert.min_mp and me.mp > 0",
