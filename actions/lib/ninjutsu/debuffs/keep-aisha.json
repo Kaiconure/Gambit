@@ -5,7 +5,9 @@
   "vars": {
     "ninjutsu": {
       "debuffs": {
-        "aisha": {}
+        "aisha": {
+          "spells": ["Aisha: Ichi"]
+        }
       }
     }
   },
@@ -13,14 +15,17 @@
     {
       "comment": [
         "=======================================================================",
-        " Jubaku inflicts the Attack Down debuff. If the effect fails to land,",
+        " Aisha inflicts the Attack Down debuff. If the effect fails to land,",
         "  recast will be delayed based on the configured retry duration.",
         "======================================================================="
       ],
       "when": [
+        "bt",
+        "not vars.ninjutsu.yellow_proc_only or runningAsFunction()",
+        "not runningAsFunction() or functionIteration() == 1",
         "bt.distance <= 20",
         "bt.mob_time >= (vars.ninjutsu.debuffs.aisha.delay or vars.ninjutsu.debuffs.delay or 2)",
-        "hasSpell('Aisha: Ichi') and canUseSpell(spell)",
+        "hasSpell(vars.ninjutsu.debuffs.aisha.spells) and canUseSpell(spell)",
         "not hasEffectOf(bt, spell)",
         "findItemInInventory('Soshi', 'Chonofuda') or \\",
         "  (findUsableItem('Toolbag (Soshi)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
@@ -31,7 +36,8 @@
         "useSpell(bt) or postpone(vars.ninjutsu.debuffs.aisha.retry or vars.ninjutsu.debuffs.retry or 10)"
       ],
       "frequency": 1,
-      "scope": "battle"
+      "scope": "battle",
+      "name": "keep_aisha"
     }
   ]
 }

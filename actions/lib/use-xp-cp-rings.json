@@ -17,6 +17,8 @@
         "useItem(me)"
       ],
       "frequency": 15,
+      "miss_frequency": 15,
+      "scope": "battle",
       "comment": "Use the first available CP ring if we don't alredy have the Commitment effect. Only used if level 99 and not in the master levels."
     },
     {
@@ -32,11 +34,13 @@
         "useItem(me)"
       ],
       "frequency": 15,
+      "miss_frequency": 15,
+      "scope": "battle",
       "comment": "Use the first available XP ring if we don't have the Dedication effect. Only used if level is below 99."
     },
     {
       "when": [
-        "me.level == 99",
+        "me.level == 99 and not vars.use_xp_cp_rings.ignore_emporox",
         "hasCappedMerits()",
         "not hasBuff(\"Emporox's Gift\")",
         "canUseItem(\"Emporox's Ring\")"
@@ -47,15 +51,18 @@
         "useItem(me)"
       ],
       "frequency": 15,
+      "miss_frequency": 15,
+      "scope": "battle",
       "comment": "Use Emperox's Ring when we're at max level and max limits."
     }
   ],
   "vars": {
     "use_xp_cp_rings": {
-      "ignore_master_levels": false,
-      "ignore_xp_level_cap": false,
+      "ignore_master_levels": null,
+      "ignore_xp_level_cap": null,
       "min_xp_level": 10,
       "slot": "ring1",
+      "ignore_emporox": null,
       "cp_rings": [
         "Endorsement Ring",
         "Trizek Ring",

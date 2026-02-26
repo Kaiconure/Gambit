@@ -1,4 +1,4 @@
-__version = '0.95.5-beta43'
+__version = '0.96.0-beta19b'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -10,6 +10,23 @@ _addon.shortName = __shortName
 _addon.author = __author
 _addon.commands = __commands
 
+---------------------------------------------------------------------------------------------------
+-- Print a formatted message to the Windower console
+function printDebug(format, ...)
+    if settings and settings.debugging then
+        print('[%s] GBT: ':format(os.date("%X")) .. string.format(tostring(format) or '', ...))
+    end
+end
+
+---------------------------------------------------------------------------------------------------
+-- Print a formatted message to the Windower console, with stack trace included
+function printDebugST(format, ...)
+    if settings and settings.debugging then
+        printDebug(format, ...)
+        printDebug('%s', debug.traceback())
+    end
+end
+
 require('sets')
 require('vectors')
 
@@ -18,6 +35,15 @@ resources = require('resources')
 packets = require('packets')
 config = require('config')
 files = require('files')
+bit = require('bit')
+
+texts = require('texts')
+images = require('images')
+
+skillchain_helper = require('lib/skillchain-helper')
+
+require('ux/core')
+require('ux/cloud-panel')
 
 require('actions')
 
@@ -40,6 +66,7 @@ require('./lib/resx')
 require('./lib/eventing')
 require('./lib/commands')
 require('./lib/target-processing')
+require('./lib/multi-stage-compiler')
 
 inventory = require('./lib/inventory')
 smartMove = require('./lib/smart-move')
@@ -52,21 +79,157 @@ partyInfo = require('./lib/party-info')
 ActionContext = require('./lib/action-context')
 
 globals = {
-    enabled         = false,
-    isSpellCasting  = false,
-    target          = nil,
-    currentZone = nil,
-    zoneEntryTime = 0,
+    enabled             = false,
+    pause_count         = 0,
+    isSpellCasting      = false,
+    isRangedAttacking   = false,
+    target              = nil,
+    currentZone         = nil,
+    player              = nil,      -- The most recent context-based player object
+    me                  = nil,      -- The most recent context-based 'me' mob,
+    logged_in           = false,
+    shutting_down       = false,
+    zoneEntryTime       = 0,
     selfName = __name,
     selfShortName = __shortName,
     selfCommand = __commands[1],
     language = 'en',
     actionsEnabled = true,
     autoFollowIndex = nil,
-    spells = {}
+    latest_npc_activation = 0,
+    spells = {},
+    action_processor_started = false,
+    ipc_sender_started = false,
+    suppress_logging = true,
+    cloud_panel = nil,
+
+    ipc_positions = {},
+    ipc_positions_by_index = {},
+
+    ipc_job_info = {},
+
+    last_broadcast_pos = nil
 }
 
-globals.spells.trust = resources.spells:type('Trust')
+globals.pause = function() 
+    globals.pause_count = math.max(globals.pause_count + 1, 1)
+end
+
+globals.unpause = function()
+    globals.pause_count = math.min(globals.pause_count - 1, 0)
+end
+
+globals.paused = function()
+    return globals.pause_count > 0
+end
+
+---------------------------------------------------------------------------------------------------
+-- Sends packets that request certain currency updates from the game
+function requestCurrencies()
+    -- Sparks
+    local sparks_packet = packets.new('outgoing', 0x117, {["_unknown2"]=0})
+    packets.inject(sparks_packet)
+
+    -- Conquest Points and Imperial Standing
+    local conquest_packet = packets.new('outgoing', 0x05A, {["_unknown2"]=0})
+    packets.inject(conquest_packet)
+end
+
+---------------------------------------------------------------------------------------------------
+-- Extracts a uint32 value from a byte-encoded string at the specified offset
+function unpack_uint32(data, offset)
+    local result = 0
+    for i = 0, 3 do
+        local byte = string.byte(data[offset + i])
+        result = bit.bor(result, bit.lshift(byte, i * 8))
+    end
+
+    return result
+end
+
+
+local MAX_MOB_OVERRIDE_DISTANCE_2   = (50 * 50)     -- Maximum mob override distance squared
+
+function applyMobOverrides(mob, force_refresh)
+    if mob and mob.id then
+        -- We won't re-override a mob unless the force flag was set
+        if true then --force_refresh or not mob.has_overrides then
+            local key = tostring(mob.id)
+            local data = key and globals.ipc_positions[key]
+
+            -- Only perform ipc positioning overrides if we're in the same zone
+            if 
+                data and
+                data.zone and
+                data.zone > 0 and
+                globals.currentZone and
+                data.zone == globals.currentZone.id and
+                globals.me and
+                globals.me.valid_target
+            then
+                local delta_x = (data.x - globals.me.x)
+                local delta_y = (data.y - globals.me.y)
+                local distance_squared = (delta_x * delta_x) + (delta_y * delta_y)
+
+                if distance_squared <= MAX_MOB_OVERRIDE_DISTANCE_2 then
+                    mob.x = data.x
+                    mob.y = data.y
+                    mob.z = data.z or mob.z
+                    mob.distance = distance_squared
+                    mob.has_overrides = true
+                    mob.heading = data.heading or mob.heading
+                    -- mob.was_valid_target = mob.valid_target
+                    -- mob.valid_target = true
+                end
+            end
+
+            if data then
+                mob.last_updated = data.t
+            end
+        end
+    end
+
+    return mob
+end
+
+function getMobById(id, raw_only)
+    local mob = windower.ffxi.get_mob_by_id(id)
+    if not raw_only then
+        return applyMobOverrides(mob or globals.ipc_positions[tostring(id)])
+    end
+
+    return mob
+end
+
+function getMobByIndex(index, raw_only)
+    local mob = windower.ffxi.get_mob_by_index(index)
+    if not raw_only then
+        return applyMobOverrides(mob or globals.ipc_positions_by_index[tostring(index)])
+    end
+
+    return mob
+end
+
+--------------------------------------------------------------------------------------
+-- Initialize trust data structures
+function initTrustData()
+    if not globals.spells.trust then
+        globals.spells.trust = resources.spells:type('Trust')
+    end
+
+    if not meta.trusts_by_party_name then
+        meta.trusts_by_party_name = { }
+        for id, trust in pairs(meta.trusts) do
+            if trust and trust.id and trust.party_name then
+                local lower_name = string.lower(trust.party_name)
+                if not meta.trusts_by_party_name[lower_name] then
+                    meta.trusts_by_party_name[lower_name] = { }
+                end
+                table.insert(meta.trusts_by_party_name[lower_name], trust)
+            end
+        end
+    end
+end
 
 --------------------------------------------------------------------------------------
 -- Make a command that can be run against this addon with an optional wait afterward
@@ -88,7 +251,24 @@ function sendSelfCommand(command, wait)
     windower.send_command(makeSelfCommand(command, wait))
 end
 
+--------------------------------------------------------------------------------------
+-- Broadcasts your job info to other alts on the IPC channel
+function sendJobInfoIpc(player)
+    player = player or windower.ffxi.get_player()
+    if player and player.name and player.main_job and player.main_job_level then
+        windower.send_ipc_message('job -n %s -main %s -main-l %d -sub %s -sub-l %d':format(
+            player.name,
+            player.main_job,
+            player.main_job_level or 0,
+            player.sub_job or 'n/a',
+            player.sub_job_level or 0
+        ))
+    end
+end
+
 function reloadSettings(actionsName, bypassActions)
+    inventory.printDebug = nil
+
     bypassActions = bypassActions and settings.actions ~= nil
 
     settings = loadSettings(actionsName, bypassActions)
@@ -101,16 +281,37 @@ function reloadSettings(actionsName, bypassActions)
     end
 
     writeMessage(text_green('Settings have been reloaded!', Colors.default))
+
+    smartMove:applySettings(settings)
+    smartMove:setMobLookupFunctions(getMobById, getMobByIndex)
+
+    if globals.cloud_panel then
+        globals.cloud_panel:configure(settings.cloudPanel)
+    end
+
+    if settings.debugging then
+        inventory.printDebug = printDebug
+    end
 end
 
 -- Player status change
 windower.register_event('status change', function(new_id, previous_id)
-    
+
+    local previous_status   = previous_id and resources.statuses[previous_id]
+    local new_status        = new_id and resources.statuses[new_id]
+
+    -- printDebug('Status change: %d (%s) to %d (%s)':format(
+    --     previous_id or -1, 
+    --     previous_status and previous_status.name or 'n/a/',
+    --     new_id or -1,
+    --     new_status and new_status.name or 'n/a/'
+    -- ))
+
     if
-        --new_id == STATUS_IDLE
         new_id and
         new_id ~= STATUS_ENGAGED
     then
+        --printDebug('Resetting mob due to status change.')
         resetCurrentMob(nil, true)
 
         -- We'll unfollow once battle has ended to avoid the possibility of running
@@ -167,12 +368,9 @@ windower.register_event('load', function()
         return
     end
 
-    writeMessage('')
-    writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
-    writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
-    writeMessage('')
+    initTrustData()
 
-    sendSelfCommand('disable')
+    globals.cloud_panel = ux.cloud_panel.new()
 
     smartMove:setLogger(writeDebug, writeTrace)
 
@@ -196,37 +394,72 @@ windower.register_event('load', function()
     windower.send_command('alias gbtfn gbt func -n')
     windower.send_command('alias gbtta gbt target -n')
 
+    windower.send_command('alias varget gbt varget')
+    windower.send_command('alias varset gbt varset')
+
     -- Store the current zone
     local info = windower.ffxi.get_info()
-    if info then
+    if info and info.logged_in then
+        globals.logged_in = true
+        globals.suppress_logging = false
+
+        writeMessage('')
+        writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
+        writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
+        writeMessage('')
+
         globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
         globals.language = info.language
+
+        -- Store self info
+        local me = windower.ffxi.get_mob_by_target('me')
+        globals.me_id = me and me.id
+        globals.me_name = me and me.name
+
+        -- Reload all settings
+        resetCurrentMob(nil, true)
+        reloadSettings()
+
+        requestCurrencies()
+
+        -- Send our job info to other alts on the system via IPC. We'll wait a moment here, to handle the case where
+        -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
+        coroutine.schedule(function()
+            sendJobInfoIpc()
+        end, 3.0)
+    else
+        globals.suppress_logging = true
+
+        -- The loadSettings function properly handles stubbed out defaults when no user is logged in
+        settings = loadSettings()
     end
 
-    -- Store self info
-    local me = windower.ffxi.get_mob_by_target('me')
-    if me then
-        globals.me_id = me.id
-        globals.me_name = me.name
-    end
-    
-    -- Reload all settings
-    resetCurrentMob(nil, true)
-    reloadSettings()
-    
     -- Kick off background threads
     coroutine.schedule(cr_actionProcessor, 0)
+    coroutine.schedule(cr_ipcSender, 0)
 end)
 
 ---------------------------------------------------------------------
 -- Login
 windower.register_event('login', function ()
+    actionStateManager:setConquestInfo()
+
     if 
         not windower or
         not windower.ffxi
     then
         return
     end
+
+    globals.logged_in = true
+    globals.suppress_logging = false
+
+    initTrustData()
+
+    writeMessage('')
+    writeMessage(string.format(' ===== Welcome to %s v%s! ===== ', globals.selfName, __version), Colors.green)
+    writeMessage('    Use Shift+Alt+G to toggle automation.', Colors.blue)
+    writeMessage('')
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
@@ -235,28 +468,42 @@ windower.register_event('login', function ()
 
     -- Store self info
     local me = windower.ffxi.get_mob_by_target('me')
-    if me then
-        globals.me_id = me.id
-        globals.me_name = me.name
-    end
+    globals.me = me
+    globals.me_id = me and me.id
+    globals.me_name = me and me.name
 
     sendSelfCommand('disable')
     
     -- Reload all settings
     resetCurrentMob(nil, true)
     reloadSettings()
+
+    requestCurrencies()
+
+    sendJobInfoIpc()
 end)
 
 windower.register_event('logout', function()
-    -- This may cause a crash...?
-    -- sendSelfCommand('disable')
+    globals.logged_in = false
+    globals.suppress_logging = true
+
+    globals.me = nil
+    globals.me_id = nil
+    globals.me_name = nil
 end)
 
 ---------------------------------------------------------------------
 -- Addon unloaded
 windower.register_event('unload', function()
+    print('Gambit: Shutdown notification received.')
+
+    globals.logged_in = false
+    globals.shutting_down = true
+
     resetCurrentMob(nil, true)
     windower.send_command('unbind !~G;')    -- Unbind the automation toggle key
+
+    coroutine.sleep(1.0)
 end)
 
 
@@ -267,6 +514,10 @@ local CATEGORY_SPELL_END            = 4
 local CATEGORY_RANGED_START         = 12     -- action.category=12, action.param = 24931
 local CATEGORY_RANGED_INTERRUPT     = 12     -- action.category=12, action.param = 24931
 local CATEGORY_RANGED_END           = 2
+
+local CATEGORY_JOB_ABILITY_1        = 6     -- Most job abilities fall into this category
+local CATEGORY_JOB_ABILITY_2        = 3     -- Many direct-damage abilities such as WS or Jumps
+local CATEGORY_JOB_ABILITY_3        = 14    -- Non-blinkable abilities such as jigs/sambas/flourishes
 
 local PARAM_STARTED                 = 24931 -- Normal start
 local PARAM_INTERRUPTED             = 28787 -- Interrupted before completion
@@ -290,6 +541,9 @@ windower.register_event('action', function(action)
     end
 
     local player        = windower.ffxi.get_player()
+    if not player then
+        return
+    end
     local playerId      = player.id
     local actorId       = action.actor_id
     local isSelf        = actorId == playerId
@@ -433,8 +687,10 @@ windower.register_event('action', function(action)
         -- NOTE: For now, ranged tracking is only for self
         if isSelf then
             if isRangedStart then
+                globals.isRangedAttacking = true
                 actionStateManager:markRangedAttackStart()
             elseif isRangedComplete then
+                globals.isRangedAttacking = false
                 actionStateManager:markRangedAttackCompleted(isRangedSuccessful)
             end
         end
@@ -450,6 +706,8 @@ windower.register_event('job change', function()
     then
         return
     end
+
+    sendJobInfoIpc()
 
     actionStateManager:setMeritPointInfo(0, 0, 0)
     actionStateManager:setCapacityPointInfo(0, 0)
@@ -482,6 +740,170 @@ windower.register_event('addon command', function (command, ...)
     end
 
     commands.process(command, args)
+end)
+
+windower.register_event('ipc message', function (msg)
+    --print('in ipc message with msg: %s':format(tostring(msg) or 'nil'))
+    if
+        not globals.logged_in or
+        not globals.currentZone or
+        globals.currentZone.id <= 0
+    then
+        return
+    end
+
+    --printDebug('IPC message received: [%s]':format(msg))
+
+    msg = msg or ''--string.lower(msg or '')
+
+    local split = msg:split(' ', string.encoding.shift_jis)
+    if #split < 1 then
+        return
+    end
+
+    local command = split[1]
+    local args = split--{table.unpack(split, 2)} -- Note: We don't need to actually extract the command name due to how we handle args below
+
+    --print('IPC message received: [%s] with %d arg(s)':format(command or 'nil', #args))
+    -- for i = 1, #args do
+    --     print('  %d: [%s]':format(i, args[i]))
+    -- end
+
+    --print('command: %s':format(command or 'nil'))
+
+    if command == 'pos' then
+        -- Start by grabbing and validating the id
+        local id = tonumber(getArgValue(args, '-id'))
+        if id == nil or id <= 0 then
+            return
+        end
+
+        local key = tostring(id)
+
+        -- Now get the zone, x, y, and z positions
+        local zone = tonumber(getArgValue(args, '-zone'))
+        local x = tonumber(getArgValue(args, '-x'))
+        local y = tonumber(getArgValue(args, '-y'))
+        local z = tonumber(getArgValue(args, '-z'))
+        local heading = tonumber(getArgValue(args, '-h'))
+        local index = tonumber(getArgValue(args, '-index'))
+
+        -- Invalid configs should result in a clearing of the stored values
+        if
+            not zone or
+            not x or
+            not y 
+        then
+            globals.ipc_positions[key] = nil
+            if index then
+                local index_key = tostring(index)
+                local by_index = index_key and globals.ipc_positions_by_index[index_key]
+                if by_index and by_index.id == id then
+                    globals.ipc_positions_by_index[index_key] = nil
+                end
+            end
+            return
+        end
+
+        -- Do not store data for positions out of this zone, and clear the table entry if present
+        -- if zone ~= globals.currentZone.id then
+        --     globals.ipc_positions[id] = nil
+        --     return
+        -- end
+
+        --print('received %d: %.2f %.2f':format(id, x, y))
+        
+        globals.ipc_positions[tostring(key)] = {
+            id = id,
+            index = index,
+            t = os.clock(),
+            zone = zone,
+            x = x,
+            y = y,
+            z = z,
+            heading = heading
+        }
+
+        -- Update the index table
+        if index then
+            globals.ipc_positions_by_index[tostring(index)] = globals.ipc_positions[key]
+        end
+    elseif command == 'job' then
+        local name = getArgValue(args, '-n')
+        local main_job = getArgValue(args, '-main')
+        local main_level = tonumber(getArgValue(args, '-main-l')) or 0
+        local sub_job = getArgValue(args, '-sub')
+        local sub_level = tonumber(getArgValue(args, '-sub-l')) or 0
+
+        if 
+            name and
+            main_job and
+            main_level > 0
+        then
+            globals.ipc_job_info[name] = {
+                t = os.clock(),
+                main_job = main_job,
+                main_job_level = main_level,
+                sub_job = sub_job,
+                sub_job_level = sub_level
+            }
+            printDebug('IPC job info updated for %s: %s%d/%s%d':format(
+                name,
+                main_job,
+                main_level,
+                sub_job,
+                sub_level
+            ))
+            --partyInfo:updateMemberJobInfo(name, main_job, main_level, sub_job, sub_level)
+        end
+    elseif command == 'set_bt' then
+        -- set_bt -from %s -id %s -index %s -zone %s
+
+        if settings.preTargeting then
+            local zone_id = tonumber(getArgValue(args, '-zone'))
+            if type(zone_id) == 'number' and zone_id == (globals.currentZone and globals.currentZone.id) then
+                
+                local from_id = tonumber(getArgValue(args, '-from'))
+                local target_id = tonumber(getArgValue(args, '-id'))
+                local target_index = tonumber(getArgValue(args, '-index'))
+                
+
+                local sender = type(from_id) == 'number' and windower.ffxi.get_mob_by_id(from_id)
+                local target = type(target_id) == 'number' and windower.ffxi.get_mob_by_id(target_id)
+
+                if
+                    (sender and sender.valid_target) and
+                    (target and target.valid_target) and
+                    target.index == target_index and
+                    target.spawn_type == SPAWN_TYPE_MOB
+                then
+                    local player = windower.ffxi.get_player()
+                    if player.status == STATUS_IDLE and sender.id ~= player.id then
+                        if 
+                            (settings and settings.strategy == TargetStrategy.leader) and
+                            partyInfo:isPartyLeader(sender.id) 
+                        then
+                            printDebug('Received battle target message from %s: %s/%d':format(
+                                sender.name,
+                                target.name,
+                                target.id
+                            ))
+
+                            local jobInfo = smartMove:getJobInfo()
+                            if jobInfo ~= nil then
+                                smartMove:cancelJob()
+                            end
+
+                            globals.pause()
+                            lockTarget(player, target, true, true)                        
+                            globals.unpause()
+                        end
+                    end
+                end
+            end
+        end
+    end
+
 end)
 
 -- Call from the incoming chunk event, with the data from event 0x076 (party buff update message)
@@ -723,18 +1145,101 @@ local _handle_partyBuffsChunk = function (id, data)
     actionStateManager:setMemberBuffs(partyBuffs)
 end
 
+local _handle_lockTargetChunk = function(id, data, modified_data, injected, blocked)
+    -- We won't mess with these packets if we're not enabled
+    if not globals.enabled then
+        return
+    end
+
+    -- If we get a target lock packet that was injected, we'll crosscheck it against the
+    -- latest injected targeting info and block if this is not it.
+    if injected then
+        local packet = packets.parse('incoming', data)
+        local target_id = packet and packet.Target
+
+        -- print('Targeting packet intercepted: id=%d, injected=%s, blocked=%s':format(
+        --     target_id or -1,
+        --     injected and 'true' or 'false',
+        --     blocked and 'true' or 'false'
+        -- ))
+
+        -- If we couldn't get a target id, we'll just return. This shouldn't happen, but
+        -- if so we will just let Windower/FFXI do what it does.
+        if not target_id then
+            printDebug('Forwarding injected targeting packet due to no corresponding target id being found.')
+            return
+        end
+
+        -- If the mob in the packet is invalid or not a normal mob, we will let things proceed as normal
+        local target_mob = windower.ffxi.get_mob_by_target(target_id)
+        if 
+            target_mob == nil or 
+            not target_mob.valid_target or 
+            target_mob.spawn_type ~= SPAWN_TYPE_MOB 
+        then
+            return
+        end
+
+        -- If we're not in a valid targeting state, bail
+        local player = windower.ffxi.get_player()
+        if
+            injected and 
+            player and
+            player.status and (
+                player.status ~= STATUS_IDLE and
+                player.status ~= STATUS_RESTING and
+                player.status ~= STATUS_MOUNT and
+                player.status ~= STATUS_CHOCOBO
+            )
+        then
+            local status = resources.statuses[player.status]
+            printDebug('Ignoring injected targeting packet due to invalid player status [%s] / %d.':format(
+                status and status.name or 'n/a',
+                status and status.id or '-1'
+            ))
+            return false
+        end
+
+        -- printDebug('Received targeting packet %03X: mob.id=%d, injected=%s, blocked=%s':format(
+        --     id,
+        --     target_id,
+        --     injected and 'true' or 'false',
+        --     blocked and 'true' or 'false'
+        -- ))
+
+        -- If no lock target id has been saved, we will ignore this packet
+        if not globals.last_lock_target_id then
+            printDebug('Ignoring injected targeting packet due to no prior target id being found.')
+            return false
+        end
+
+        -- If the target id from this packet does not match up
+        if target_id ~= globals.last_lock_target_id then
+            printDebug('Ignoring injected targeting packet due to mismatching target id values.')
+            return false
+        end
+
+        -- If we're already targeting the mob represented by the packet, then we'll ignore
+        -- the packet due to the work already being done.
+        local current_t = windower.ffxi.get_mob_by_target('t')
+        if current_t and current_t.id == target_id then
+            printDebug('Ignoring injected targeting packet because the requested mob is already targeted.')
+            return false
+        end
+    end
+end
+
 local _handle_actionChunk = function(id, data)
     local packet = packets.parse('incoming', data)
 
     local count = tonumber(packet['Target Count']) or 0
     if count < 1 then return end
 
-    local me = windower.ffxi.get_mob_by_target('me')
+    --local me = windower.ffxi.get_mob_by_target('me')
 
     -- Note: For now, we can only reliably track buffs on trusts if they were set by ourselves. This is
     -- because trusts don't send us messages when they lose effects we weren't responsible for.
     local actorId = tonumber(packet['Actor']) or 0
-    --if actorId <= 0 or actorId ~= me.id then return end
     if actorId <= 0 then return end
 
     local actionId = tonumber(packet['Param']) or 0
@@ -772,16 +1277,15 @@ local _handle_actionChunk = function(id, data)
             -- Try to identify whether this is a weapon skill-like spell
             if
                 actor and
-                actor.id and
-                actor.in_party
+                partyInfo:canShareClaim(actor.id)
             then
                 local context = actionStateManager:getContext()
                 if
                     context and
-                    context.party1_by_id and
-                    context.party1_by_id[actor.id]
+                    context.alliance_by_id and
+                    context.alliance_by_id[actor.id]
                 then
-                    local member = context.party1_by_id[actor.id]
+                    local member = context.alliance_by_id[actor.id]
                     if
                         member and
                         type(member.hasBuff) == 'function'
@@ -789,8 +1293,8 @@ local _handle_actionChunk = function(id, data)
                         local chain_ability = nil
                         local ws_action = action
                         if
-                            member.hasBuff(470) and
-                            action.type == 'BlackMagic'
+                            action.type == 'BlackMagic' and
+                            member.hasBuff(470) -- Immanence buff (SCH)                            
                         then
                             local category = meta.immanence:category_of(action.name)
                             if category then
@@ -799,15 +1303,19 @@ local _handle_actionChunk = function(id, data)
                                     ws_action = base_spell
                                 end
 
-                                chain_ability = resources.job_abilities[317] -- Immanence (SCH)
+                                chain_ability = resources.job_abilities[317] -- Immanence ability (SCH)
                             end
-                        elseif member.hasBuff(164) and action.type == 'BlueMagic' and action.element then
-                            chain_ability = resources.job_abilities[94] -- Chain Affinity (BLU)
+                        elseif 
+                            action.type == 'BlueMagic' and
+                            action.element and
+                            member.hasBuff(164) -- Chain Affinity buff (BLU)
+                        then
+                            chain_ability = resources.job_abilities[94] -- Chain Affinity ability (BLU)
                         end
 
                         if chain_ability then
-                            local targetId = tonumber(packet['Target 1 ID':format(i)]) or 0
-                            local target = windower.ffxi.get_mob_by_id(targetId)
+                            local targetId = tonumber(packet['Target 1 ID'])
+                            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
 
                             if 
                                 target and
@@ -833,7 +1341,7 @@ local _handle_actionChunk = function(id, data)
         category == 14  -- Unblinkable job abilities
     then
         action = resources.job_abilities[actionId]
-        buffId = tonumber(action.status) or 0
+        buffId = action and tonumber(action.status) or 0
 
         if action then
             isDispel    = arrayIndexOf(meta.dispel.job_abilities, action.id)
@@ -902,7 +1410,11 @@ local _handle_actionChunk = function(id, data)
                 target.valid_target
             then
                 -- Store the first target
-                firstTarget = firstTarget or target
+                if not firstTarget then
+                    firstTarget = target
+                end
+
+                -- Bump the total valid target count
                 targetCount = targetCount + 1
 
                 if
@@ -947,18 +1459,24 @@ local _handle_actionChunk = function(id, data)
         category == 14      -- Unblinkable job ability
     then
         local ability = resources.job_abilities[actionId]
-        if ability then
+        local context = actionStateManager:getContext()
+
+        if 
+            ability and
+            context
+        then
             if 
-                ability.type == 'CorsairRoll'
+                ability.type == 'CorsairRoll' and
+                context.player
             then
-                local player = windower.ffxi.get_player()
-                local targetNumber = findPacketTargetNumber(packet, player.id)
+                local targetNumber = findPacketTargetNumber(packet, context.player.id)
                 local count = targetNumber and tonumber(packet['Target %d Action 1 Param':format(targetNumber)])
 
                 if 
                     count and
                     actor and
-                    (actor.in_party or actor.id == player.id)
+                    context.alliance_by_id and
+                    context.alliance_by_id[actor.id]
                 then
                     writeMessage('%s: %s %s %s':format(
                         text_player(actor.name),
@@ -970,32 +1488,34 @@ local _handle_actionChunk = function(id, data)
                     actionStateManager:setRollCount(ability.id, count)
                 end
             elseif
-                ability.id == 177   -- Snake Eye
+                ability.id == 177       -- Snake Eye
             then
                 actionStateManager:applySnakeEye()
             elseif
                 ability.id == 209 or    -- Wild Flourish
                 ability.id == 320       -- Konzen-ittai
             then
-                if 
-                    actor and 
-                    actor.in_alliance and
-                    firstTarget
-                then
-                    -- These are abilities that act as skillchain openers.
-                    setPartyWeaponSkill(actor, ability, firstTarget)
+                if firstTarget and actor then
+                    if
+                        context.alliance_by_id and
+                        context.alliance_by_id[actor.id]
+                    then
+                        -- These are abilities that act as skillchain openers.
+                        setPartyWeaponSkill(actor, ability, firstTarget)
 
-                    writeVerbose('%s: %s %s %s %s':format(
-                        text_player(actor.name, Colors.verbose),
-                        text_weapon_skill(ability.name, Colors.verbose),
-                        CHAR_RIGHT_ARROW,
-                        text_mob(firstTarget.name),
-                        text_red('Chainbound!', Colors.verbose)
-                    ))
+                        writeVerbose('%s: %s %s %s %s':format(
+                            text_player(actor.name, Colors.verbose),
+                            text_weapon_skill(ability.name, Colors.verbose),
+                            CHAR_RIGHT_ARROW,
+                            text_mob(firstTarget.name),
+                            text_red('Chainbound!', Colors.verbose)
+                        ))
+                    end
                 end
             elseif
                 actor and
-                actor.id == me.id and (
+                context.me and
+                actor.id == context.me.id and (
                     ability.id == 233   -- Sublimation
                 )
             then
@@ -1046,6 +1566,21 @@ local _handle_actionMessageChunk = function(id, data)
     end
 end
 
+local function _handle_conquestInfoChunk(id, data)
+    local player = windower.ffxi.get_player()
+    if not player then return end   
+
+    local conquest_points = unpack_uint32(data, 0x91)
+    local imperial_standing = unpack_uint32(data, 0xB1)
+
+    -- printDebug('Conquest Points updated: cp=%d, is=%d':format(
+    --     tonumber(conquest_points) or -1,
+    --     tonumber(imperial_standing) or -1
+    -- ))
+
+    actionStateManager:setConquestInfo(conquest_points, imperial_standing)
+end
+
 local _handle_limitCapacityChunk = function(id, data)
     local packet = packets.parse('incoming', data)
 
@@ -1078,9 +1613,24 @@ local _handle_limitCapacityChunk = function(id, data)
     end
 end
 
+local NPC_ACTIVATION_PACKETS =
+{
+    0x032,      -- NPC Interaction 1
+    0x033,      -- String NPC Interaction
+    0x034,      -- NPC Interaction 2
+    0x04C,      -- Auction House Menu
+    --0x052,      -- NPC Release
+    --0x05C       -- Dialogue Information
+}
+
 ---------------------------------------------------------------------
 -- Incoming chunks (chunks are individual pieces of a packet)
-windower.register_event('incoming chunk', function (id, data)
+windower.register_event('incoming chunk', function (id, data, modified_data, injected, blocked)
+    -- NOTES:
+    --  - Returning false from this handler will result in the packet being BLOCKED
+    --  - Returning nil from this handler will allow it to be forwarded on to the game and other handlers
+    --  - Returning a string from this handler will modify the packet before forwarding it on
+
     if
         id == 0x076     -- Party buffs update
     then
@@ -1094,81 +1644,101 @@ windower.register_event('incoming chunk', function (id, data)
     then
         _handle_actionMessageChunk(id, data)
     elseif
+        id == PACKET_TARGET_LOCK
+    then
+        _handle_lockTargetChunk(id, data, modified_data, injected, blocked)
+    elseif
+        id == 0x05E     -- Conquest/Beseiged info
+    then
+        _handle_conquestInfoChunk(id, data)
+    elseif
         id == 0x063     -- Limit Point and Capacity Point updates
     then
         _handle_limitCapacityChunk(id, data)
+    elseif
+        arrayIndexOf(NPC_ACTIVATION_PACKETS, id)
+    then
+        --print('npc activation packet received: %d (0x%03X)':format(id, id))
+        globals.latest_npc_activation = os.clock()
+    -- else
+    --     if id ~= 0x00D and id ~= 0x00E and id ~= 0x037 and id ~= 0x067 and id ~= 0x0DF then
+    --         print('packet received: %d (0x%03X)':format(id, id))
+    --     end
     end
 end)
 
---[[
-windower.register_event('outgoing chunk', function(id, data, modified, injected, blocked)
-    if id == 0x05B then
-        local packet = packets.parse('outgoing', data)
-        if packet then
-            local target = packet.Target and windower.ffxi.get_mob_by_id(packet.Target)
-            if not target or target.spawn_type ~= 2 then
-                return
-            end
+function cr_ipcSender()
+    local MIN_MOVEMENT = 0.33
 
-            local is_waypoint = target.name == "Waypoint"
-            local is_homepoint = not is_waypoint and string.sub(target.name, 1, 10) == 'Home Point'
+    if globals.ipc_sender_started then
+        print('Gambit: Warning: Double-entry of IPC sender co-routine detected!')
+        return
+    end
 
-            if is_waypoint or is_homepoint then
-                local me = windower.ffxi.get_mob_by_target('me')
-                if not me then
-                    return
+    globals.ipc_sender_started = true
+    print('Gambit: The IPC sender co-routine has started!')
+
+    while not globals.shutting_down do
+        local wait_time = 0.5
+        local zone = globals.currentZone
+        local logged_in = globals.logged_in
+
+        if zone and zone.id > 0 and logged_in then
+            local me = windower.ffxi.get_mob_by_target('me')
+            if me and me.valid_target then
+
+                local should_send = 
+                    globals.last_broadcast_pos == nil or        -- Force send if we have no prior position
+                    -- (
+                    --     globals.last_broadcast_pos.zone ~= zone.id and
+                    --     os.clock() - globals.zoneEntryTime >= 5.0
+                    -- )
+                    globals.last_broadcast_pos.zone ~= zone.id  -- Force send if we've changed zones
+
+                -- Otherwise, we can send if we've moved more than a minimum amount
+                if not should_send then
+                    local delta_x = math.abs(globals.last_broadcast_pos.x - me.x)
+                    local delta_y = math.abs(globals.last_broadcast_pos.y - me.y)
+
+                    should_send = delta_x >= MIN_MOVEMENT or delta_y >= MIN_MOVEMENT
                 end
 
-                local option_index = tonumber(packet['Option Index']) or 0
-                local automated_message = packet['Automated Message']
-                local unknown1 = tonumber(packet['_unknown1']) or 0
-                local unknown2 = tonumber(packet['_unknown2']) or 0
-                local menu_id = tonumber(packet['Menu ID']) or 0
-                local zone = tonumber(packet['Zone']) or 0
-
-                if
-                    automated_message and option_index > 0 and unknown1 > 0
-                then
-                    sendSelfCommand('warp -by %d -m %d -o %d -z %d u1 %d':format(
+                if should_send then
+                    local command = 'pos -id %d -zone %d -x %.2f -y %.2f -z %.2f -h %f -index %d':format(
                         me.id,
-                        menu_id,
-                        option_index,
-                        zone,
-                        unknown1
-                    ))
-
-                    -- {
-                    --     "Menu ID": 32762,
-                    --     "_name": "Dialog choice",
-                    --     "_dir": "outgoing",
-                    --     "_id": 91,
-                    --     "Option Index": 32800,
-                    --     "_unknown2": 0,
-                    --     "_description": "Chooses a dialog option.",
-                    --     "Zone": 230,
-                    --     "Automated Message": false,
-                    --     "Target Index": 101,
-                    --     "_size": 20,
-                    --     "Target": 17719397,
-                    --     "_unknown1": 0,
-                    --     "_sequence": 0
-                    -- }
-
-                    writeMessage(
-                        'Home point selection made:\n' ..
-                        ' Id: %s\n':format(text_number(target.id)) ..
-                        ' Index: %s\n':format(text_number(target.index)) ..
-                        ' Name: %s\n':format(text_green(target.name)) ..
-                        ' Menu ID: %s\n':format(text_number(menu_id)) ..
-                        ' Option Index: %s\n':format(text_number(option_index)) ..
-                        ' Zone: %s\n':format(text_number(zone)) ..
-                        ' Automated Message: %s\n':format(text_item(automated_message == true and 'true' or 'false')) ..
-                        ' _unknown1: %s\n':format(text_number(unknown1)) ..
-                        ' _unknown2: %s\n':format(text_number(zone))
+                        zone.id,
+                        me.x,
+                        me.y,
+                        me.z,
+                        me.heading,
+                        me.index
                     )
+                    --print('sending: %s':format(command))
+                    windower.send_ipc_message(command)
+
+                    globals.last_broadcast_pos = {
+                        id = me.id,
+                        zone = zone.id,
+                        x = me.x,
+                        y = me.y,
+                        z = me.z,
+                        heading = me.heading,
+                        index = me.index
+                    }
+                end
+            else
+                -- We'll only get here if we're logged in and able to obtain the 'me' mob, but
+                -- we're an invalid target. This could only occur while zoning AFAIK.
+                if me and me.id then
+                    windower.send_ipc_message('pos -id %d -index %d':format(me.id, me.index or -1))
                 end
             end
+        else
+            wait_time = 2
         end
+
+        coroutine.sleep(wait_time)
     end
-end)
-]]
+
+    print('Gambit: The IPC sender co-routine is exiting!')
+end

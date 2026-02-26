@@ -5,24 +5,31 @@
   "vars": {
     "ninjutsu": {
       "nukes": {
-        "suiton": {}
+        "suiton": {
+          "spells": ["Suiton: San", "Suiton: Ni", "Suiton: Ichi"]
+        }
       }
     }
   },
   "actions": [
     {
       "when": [
+        "bt",
+        "not vars.ninjutsu.yellow_proc_only or runningAsFunction()",
+        "not runningAsFunction() or functionIteration() == 1",
         "bt.distance <= 20",
-        "hasSpell('Suiton: San', 'Suiton: Ni', 'Suiton: Ichi') and canUseSpell(spell)",
+        "hasSpell(vars.ninjutsu.nukes.suiton.spells) and canUseSpell(spell)",
         "findItemInInventory('Mizu-Deppo', 'Inoshishinofuda') or \\",
         "  (findUsableItem('Toolbag (Mizu)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
-        "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
+        "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))",
+        "not runningAsFunction() or functionIteration() == 1"
       ],
       "commands": [
         "log('Casting', spell.name, '(Water damage + Lightning resistance down) on', bt.name)",
         "useSpell(bt) and postpone(vars.ninjutsu.nukes.suiton.frequency or vars.ninjutsu.nukes.frequency or 5)"
       ],
-      "scope": "battle"
+      "scope": "battle",
+      "name": "use_suiton"
     }
   ]
 }

@@ -1,0 +1,78 @@
+{
+  "vars": {
+    "provoke_pull": {
+      "blacklist": null,
+      "frequency": null,
+      "min_distance": null,
+      "min_time": null,
+      "leader_only": null,
+      "allow_ranged": null,
+      "allow_spells": null,
+      "ranged_mob_time": null,
+      "ranged_idle_only": null,
+      "ranged_min_distance": null
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "bt and not vars.provoke_pull.disabled",
+        "me.is_party_leader or not vars.provoke_pull.leader_only",
+        "not bt.has_claim",
+        "not vars.provoke_pull.min_distance or (bt.distance >= vars.provoke_pull.min_distance)",
+        "not vars.provoke_pull.min_time or (bt.mob_time >= vars.provoke_pull.min_time)",
+        "not any(bt.name, vars.provoke_pull.blacklist)",
+        "(bt.distance <= 15 and canUse('Provoke')) or \\",
+        "  (bt.distance <= 20 and vars.provoke_pull.allow_spells and canUse('Flash', 'Banish', 'Banish II', 'Holy'))"
+      ],
+      "commands": [
+        "logf('Pulling %s with %s at distance: %.2f (%.2f)', bt.name, (recastReady(spell_recast) and spell or ability).name, bt.distance, bt.center_distance)",
+        "(facingEnemy() and wait(0.1)) or faceEnemy()",
+        "use(bt, recastReady(spell_recast) and spell or ability) and postpone(vars.provoke_pull.frequency or 0)"
+      ],
+      "delay": 0,
+      "frequency": 0,
+      "comment": "Use Provoke to pull."
+    },
+    {
+      "when": [
+        "bt and not vars.provoke_pull.disabled",
+        "me.is_party_leader or not vars.provoke_pull.leader_only",
+        "not bt.has_claim",
+        "not vars.provoke_pull.min_distance or (bt.distance >= vars.provoke_pull.min_distance)",
+        "not vars.provoke_pull.min_time or (bt.mob_time >= vars.provoke_pull.min_time)",
+        "not any(bt.name, vars.provoke_pull.blacklist)",
+        "not canUse('Provoke')",
+        "(bt.distance <= 15 and finishingMoves() > 0 and canUse('Animated Flourish')) or \\",
+        "  (bt.distance <= 20 and vars.provoke_pull.allow_spells and canUse('Flash', 'Banish', 'Banish II', 'Holy'))"
+      ],
+      "commands": [
+        "logf('Pulling %s with %s at distance: %.2f (%.2f)', bt.name, (recastReady(spell_recast) and spell or ability).name, bt.distance, bt.center_distance)",
+        "(facingEnemy() and wait(0.1)) or faceEnemy()",
+        "use(bt, recastReady(spell_recast) and spell or ability) and postpone(vars.provoke_pull.frequency or 0)"
+      ],
+      "comment": "Use Animated Flourish to pull."
+    },
+    {
+      "when": [
+        "bt and not vars.provoke_pull.disabled",
+        "vars.provoke_pull.allow_ranged",
+        "me.is_party_leader or not vars.provoke_pull.leader_only",
+        "not vars.provoke_pull.ranged_idle_only or bt.is_idle",
+        "not vars.provoke_pull.min_distance or (bt.distance >= vars.provoke_pull.min_distance)",
+        "not vars.provoke_pull.min_time or (bt.mob_time >= vars.provoke_pull.min_time)",
+        "not any(bt.name, vars.provoke_pull.blacklist)",
+        "not bt.has_claim and (bt.mob_time > (vars.provoke_pull.ranged_mob_time or 1) and (bt.distance >= 15 or not canUse('Provoke', 'Animated Flourish')))",
+        "bt.hpp >= 100",
+        "(bt.distance <= 25 and bt.distance > (vars.provoke_pull.ranged_min_distance or 3) and canRA())"
+      ],
+      "commands": [
+        "logf('Pulling %s with RA at distance: %.2f (%.2f)', bt.name, bt.distance, bt.center_distance)",
+        "(facingEnemy() and wait(0.1)) or (faceEnemy() and wait(0.5))",
+        "shoot(1) and postpone(3)"
+      ],
+      "delay": 1,
+      "comment": "Use ranged attack to pull."
+    }
+  ]
+}

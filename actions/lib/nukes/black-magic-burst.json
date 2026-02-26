@@ -5,15 +5,17 @@
   "macros": {
     "check_magic_burst": [
       "bt and bt.distance < 20",
+      "not vars.black_magic_burst.targets or vars.black_magic_burst.targets[bt.name]",
+      "me.mpp >= vars.black_magic_burst.min_mpp",
       "not hasBuff('Immanence')",
-      "skillchaining() and me.mpp >= vars.black_magic_burst.min_mpp",
+      "skillchaining(vars.black_magic_burst.skillchains)",
       "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
     ],
     "exec_magic_burst": [
       "log('Magic bursting', skillchain.name, 'with', spell.name)",
       "equipMany(vars.black_magic_burst.gear.casting)",
       "vars.black_magic_burst.gear[skillchain.name] and equipMany(vars.black_magic_burst.gear[skillchain.name])",
-      "canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
+      "not vars.black_magic_burst.abilities_blacklist[bt.name] and canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
       "useSpell()",
       "equipMany(vars.black_magic_burst.gear.battle)",
       "vars.black_magic_burst.frequency and vars.black_magic_burst.frequency > 0 and postpone(vars.black_magic_burst.frequency)"
@@ -61,10 +63,15 @@
       "max_tier": "III",
       "min_mpp": 25,
       "abilities": ["Elemental Seal", "Manawell"],
+      "targets": null,
+      "abilities_blacklist": {
+        "Warder of Courage": true
+      },
       "gear": {
         "casting": [],
         "battle": []
       },
+      "skillchains": null,
       "Darkness": [
         "Blizzard VI",
         "Water VI",

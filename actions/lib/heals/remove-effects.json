@@ -1,0 +1,25 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "import": "heals/remove-doom"
+    },
+    {
+      "import": "heals/remove-plague"
+    },
+    {
+      "import": "heals/remove-poison"
+    },
+    {
+      "import": "heals/remove-silence"
+    },
+    {
+      "import": "heals/remove-sleep"
+    },
+    {
+      "import": "heals/remove-petrify"
+    }
+  ]
+}

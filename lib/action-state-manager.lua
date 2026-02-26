@@ -21,10 +21,19 @@ local state_manager = {
     actions = { },
     actionTypeStartTime = os.clock(),
 
+    weaponSkill = {
+        time = 0
+    },
+    weaponSkills = {},
+
     skillchain = {
         time = 0
     },
     skillchains = {},
+
+    rangedAttack = { 
+        time = 0 
+    },
 
     currentSpell = {
         time = 0,
@@ -119,6 +128,18 @@ state_manager.getCapacityPointInfo = function(self)
 end
 
 -----------------------------------------------------------------------------------------
+-- Set/get conquest point info
+state_manager.setConquestInfo = function(self, conquestPoints, imperialStanding)
+    self.conquest = {
+        conquestPoints = conquestPoints or 13371337,
+        imperialStanding = imperialStanding or 13371337
+    }
+end
+state_manager.getConquestInfo = function(self)
+    return self.conquest
+end
+
+-----------------------------------------------------------------------------------------
 -- Sets the action type being executed, used to track how long we're in a type
 state_manager.setActionType = function (self, newType)
     
@@ -133,38 +154,46 @@ state_manager.setActionType = function (self, newType)
     if self.actionType ~= newType and newType ~= nil then
         local isInit = self.actionType == nil
         local isResting = self.actionType == 'resting'
+        local isEvent = self.actionType == 'event'
         local isDead = self.actionType == 'dead'
         local isIdlePull = (self.actionType == 'idle' or self.actionType == 'pull' or self.actionType == 'idle_battle')
         local isBattle = (self.actionType == 'battle')
         local isMounted = (self.actionType == 'mounted')
+        local isLoading = self.actionType == 'loading'
 
         local isNewTypeResting = newType == 'resting'
+        local isNewTypeEvent = newType == 'event'
         local isNewTypeDead = newType == 'dead'
         local isNewTypeIdlePull = newType == 'idle' or newType == 'pull' or newType == 'idle_battle'
         local isNewTypeBattle = newType == 'battle'
         local isNewTypeMounted = newType == 'mounted'
+        local isNewTypeLoading = newType == 'loading'
 
         local mode = (isInit and 'init')
             or (isResting and 'resting')
+            or (isEvent and 'event')
             or (isDead and 'dead')
             or (isIdlePull and 'idle/pull')
             or (isBattle and 'battle')
             or (isMounted and 'mounted')
+            or (isLoading and 'loading')
 
         local newMode = (isNewTypeResting and 'resting')
+            or (isNewTypeEvent and 'event')
             or (isNewTypeDead and 'dead')
             or (isNewTypeIdlePull and 'idle/pull')
             or (isNewTypeBattle and 'battle')
             or (isNewTypeMounted and 'mounted')
+            or (isNewTypeLoading and 'loading')
 
         -- Only reset time if we're changing state
         if mode ~= newMode then
             writeVerbose(string.format(
-                'Transitioning from %s to %s after %s',
-                text_red(mode, Colors.verbose),
-                text_red(newMode, Colors.verbose),
-                pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.verbose)
-            ))
+                    'Transitioning from %s to %s after %s',
+                    text_red(mode, Colors.verbose),
+                    text_red(newMode, Colors.verbose),
+                    pluralize(string.format('%.1f', self:elapsedTimeInType()), 'second', 'seconds', Colors.verbose)
+                ))
 
             -- Sync up the latest mob state on mode change
             self:validateBuffsForMobs()
@@ -177,7 +206,17 @@ state_manager.setActionType = function (self, newType)
             self.mobAbilities = { }
 
             if mode ~= 'init' then
+                -- print('incrementing battle scope (%s->%s): %d to %d':format(
+                --     mode,
+                --     newMode,
+                --     self.actionTransitionCounter,
+                --     self.actionTransitionCounter + 1))
                 self.actionTransitionCounter = self.actionTransitionCounter + 1
+            end
+
+            if newMode == 'event' then
+                -- Cancel follow jobs upon entering event mode
+                smartMove:cancelJob()
             end
         end
 
@@ -379,26 +418,37 @@ end
 state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
     local mobId = tonumber(type(mob) == 'table' and mob.id)
     if mobId then
-        if actor and skill then            
-            local skillchains = {}
-            if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
-            if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
-            if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
+        if actor and skill then
+            if isMobPlayer(actor) then  
 
-            -- Clear SC on this mob if we're using a new WS. The SC created by this WS (if any) will
-            -- come as a subsequent event message.
-            self:clearSkillchain(mob)
+                -- writeMessage('Adding WS tracking of %s\'s %s on %s':format(
+                --     text_mob(actor.name, Colors.verbose),
+                --     text_weapon_skill(skill.name, Colors.verbose),
+                --     text_mob(mob.name, Colors.verbose)
+                -- ))
 
-            self.weaponSkills[mobId] = {
-                time = os.clock(),
-                skill = skill,
-                name = skill.name,
-                actor = actor,
-                mob = mob,
-                skillchains = skillchains
-            }
+                local skillchains = {}
+                if (skill.skillchain_a or '') ~= '' then arrayAppend(skillchains, skill.skillchain_a) end
+                if (skill.skillchain_b or '') ~= '' then arrayAppend(skillchains, skill.skillchain_b) end
+                if (skill.skillchain_c or '') ~= '' then arrayAppend(skillchains, skill.skillchain_c) end
+
+                -- Clear SC on this mob if we're using a new WS. The SC created by this WS (if any) will
+                -- come as a subsequent event message.
+                self:clearSkillchain(mob)
+
+                self.weaponSkills[mobId] = {
+                    time = os.clock(),
+                    skill = skill,
+                    name = skill.name,
+                    actor = actor,
+                    mob = mob,
+                    skillchains = skillchains
+                }
+            end
         else
-            self.weaponSkills[mobId] = nil
+            if not skill then
+                self.weaponSkills[mobId] = nil
+            end
         end
     end
 end
@@ -477,6 +527,42 @@ state_manager.purgeSkillchains = function(self)
     end
 end
 
+state_manager.purgePositionUpdates = function(self)
+    local MAX_POSITION_AGE = 10
+
+    if globals.ipc_positions then
+        local now = os.clock()
+
+        -- Clear the id->position table
+        for id, pos in pairs(globals.ipc_positions) do
+            local age = now - pos.t
+            if age > MAX_POSITION_AGE then
+                local id_key = tostring(id)
+
+                -- We'll clear the by-index table entry for this item if it all matches up. This has
+                -- a bit of fuzziness to it given that indexes might change by zone whereas id
+                -- values should remain the same forever.
+                local index_key = tostring(pos.index)
+                local by_index = index_key and globals.ipc_positions_by_index[index_key]
+                if by_index and by_index.id == id then
+                    globals.ipc_positions_by_index[index_key] = nil
+                end
+
+                globals.ipc_positions[id_key] = nil
+            end
+        end
+
+        -- Clear the index->position table. Hopefully this cleanup has generally
+        -- happened already above in the id->index mapping.
+        for index, pos in pairs(globals.ipc_positions_by_index) do
+            local age = now - pos.t
+            if age > MAX_POSITION_AGE then
+                globals.ipc_positions_by_index[tostring(index)] = nil
+            end
+        end
+    end
+end
+
 -----------------------------------------------------------------------------------------
 --
 state_manager.clearMobAbility = function(self, mob, finalize)
@@ -522,6 +608,19 @@ state_manager.getMobAbilityInfo = function(self, mob, windowed)
             end
         end
     end
+end
+
+-----------------------------------------------------------------------------------------
+-- This returns whether you are currently doing some kind of action that would
+-- prevent you from taking some other action. For example, casting a spell
+-- would prevent you from using a job ability or another spell, etc.
+--
+-- NOTE: This is not yet complete, and only tracks spells and ranged attacks for now.
+--
+state_manager.isActing = function(self)
+    return
+        (self.currentSpell and self.currentSpell.spell) or
+        (self.rangedAttack and self.rangedAttack.time > 0)
 end
 
 -----------------------------------------------------------------------------------------
@@ -684,7 +783,7 @@ state_manager.validateBuffsForMob = function (self, id)
             mob == nil or
             not mob.valid_target or
             mob.hpp == 0 or
-            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB and (mob.spawn_type ~= SPAWN_TYPE_PLAYER or mob.in_alliance)) or
+            (mob.spawn_type ~= SPAWN_TYPE_TRUST and mob.spawn_type ~= SPAWN_TYPE_MOB and (not isMobPlayer(mob) or mob.in_alliance)) or
             mob.index ~= value.index or
             mob.name ~= value.name
         then
@@ -908,9 +1007,44 @@ state_manager.getRawBuffsForMob = function(self, id)
     return self.mobBuffs and self.mobBuffs[id] and self.mobBuffs[id].buffs or {}
 end
 
+state_manager.keybindFunctions = function(self, unbind)
+    if type(self.functions) == 'table' then    
+        if unbind then
+            -- Unbind all functions from their keys
+            local unbinds = {}
+            for key, fn in pairs(self.functions) do
+                if type(fn) == 'table' and type(fn.bind) == 'string' then
+                    unbinds[#unbinds + 1] = 'unbind %s':format(fn.bind)
+                end
+            end
+
+            if #unbinds > 0 then
+                windower.send_command(table.concat(unbinds, ';'))
+                
+                -- We need to give Windower a moment to complete this command, or we run the risk of re-binds
+                -- happening out of sync and being left in an unbound state.
+                coroutine.sleep(1)
+            end
+        else
+            -- Bind all functions to their keys
+            for key, fn in pairs(self.functions) do
+                if
+                    type(fn) == 'table' and
+                    type(fn.bind) == 'string' and
+                    type(fn.name) == 'string'
+                then
+                    windower.send_command('bind %s gbtfn "%s"':format(fn.bind, fn.name))
+                end
+            end
+        end
+    end
+end
+
 -----------------------------------------------------------------------------------------
 --
 state_manager.reset = function (self)
+    self:keybindFunctions(true)
+
     self.currentTime = 0
     self.cycles = 0
     self.idleWakeTime = 0
@@ -927,6 +1061,7 @@ state_manager.reset = function (self)
     self.rangedAttack = { time = 0 }
     self.actionTypeStartTime = os.clock()
     self.actions = { }
+    self.functions = {}
     self.vars = { }
     self.meritPointInfo = { current = 0, max = 30, limits = 0 }
     self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0 }

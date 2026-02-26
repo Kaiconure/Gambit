@@ -13,7 +13,7 @@
     {
       "when": [
         "hasSpell(vars.regen_cycle.spells) and canUse(spell)",
-        "partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, spell)"
+        "partyByName(vars.regen_cycle.targets) and member.in_spell_range and not hasEffectOf(member, spell)"
       ],
       "commands": [
         "useSpell()",

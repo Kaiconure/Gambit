@@ -1,4 +1,7 @@
 {
+  "about": {
+    "author": "@Kaiconure"
+  },
   "vars": {
     "common_consumables": {
       "disabled": null,
@@ -11,9 +14,12 @@
       ],
       "unm_items": [
         "Arke's Coffer",
+        "Ayapec's Coffer",
         "Bakunawa's Coffer",
         "Belinda's Coffer",
+        "Borealis Shadow's Coffer",
         "Clawberry's Coffer",
+        "Glazemane's Coffer",
         "Harold's Coffer",
         "Shedu's Coffer",
         "Sovereign's Coffer",
@@ -27,33 +33,49 @@
         "Frayed Pouch (D)",
         "Frayed Pouch (G)",
         "Frayed Pouch (R)"
+      ],
+      "general_items": [
+        "Beitetsu Box",
+        "Beitetsu Parcel",
+        "Beitetsu Coffer",
+
+        "Boulder Box",
+        "Boulder Case",
+        "Rift Boulder Coffer",
+
+        "Pluton Box",
+        "Pluton Case",
+        "Pluton Coffer"
       ]
     }
   },
   "actions": [
     {
-      "when": [
-        "not vars.common_consumables.disabled and not vars.common_consumables.escha_items_disabled",
-        "canUseItem(vars.common_consumables.escha_items) and freeInventorySlots() > 0"
+      "when": ["not vars.common_consumables.disabled"],
+      "commands": [
+        "setVar('vars.common_consumables.all_items', {})",
+        "not vars.common_consumables.escha_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.escha_items)",
+        "not vars.common_consumables.unm_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.unm_items)",
+        "not vars.common_consumables.woe_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.woe_items)",
+        "not vars.common_consumables.general_items_disabled and arrayAppend(vars.common_consumables.all_items, vars.common_consumables.general_items)",
+        "arrayCount(vars.common_consumables.all_items) == 0 and log('No common consumables were configured for use.')",
+        "arrayCount(vars.common_consumables.all_items) ~= 0 and log('Configured', arrayCount(vars.common_consumables.all_items), 'common consumable type(s) to use when present.')"
       ],
-      "commands": ["useItem(me)"],
-      "comment": "Escha Items"
+      "delay": 0,
+      "frequency": "infinity",
+      "miss_frequency": "infinity"
     },
     {
       "when": [
-        "not vars.common_consumables.disabled and not vars.common_consumables.unm_items_disabled",
-        "canUseItem(vars.common_consumables.unm_items) and freeInventorySlots() > 0"
+        "not vars.common_consumables.disabled",
+        "not bt or not bt.is_engaged",
+        "freeInventorySlots() > 0",
+        "arrayCount(vars.common_consumables.all_items) > 0",
+        "canUseItem(vars.common_consumables.all_items)"
       ],
       "commands": ["useItem(me)"],
-      "comment": "UNM Items"
-    },
-    {
-      "when": [
-        "not vars.common_consumables.disabled and not vars.common_consumables.woe_items_disabled",
-        "canUseItem(vars.common_consumables.woe_items) and freeInventorySlots() > 0"
-      ],
-      "commands": ["useItem(me)"],
-      "comment": "Walk of Echoes Items"
+      "miss_frequency": 30,
+      "scope": "battle"
     }
   ]
 }

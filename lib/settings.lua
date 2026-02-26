@@ -1,3 +1,5 @@
+local settings_counter = 0
+
 ----------------------------------------------------------------------------------------
 -- Supported targeting strategies
 TargetStrategy = {
@@ -7,12 +9,11 @@ TargetStrategy = {
     aggressor       = 'aggressor',  -- Behaves like nearest, but initiates battle rather than finding the nearest aggroing mob
     leader          = 'leader',     -- The party leader target, or the nearest aggro if none
     puller          = 'puller',     -- Similar to aggressor, but tries to limit to mobs that aren't engaged with others while unclaimed
-    manual          = 'manual',     -- You as the player pick the targets by engaging manually
-    camp            = 'camp'        -- Camps on a spot and waits for puller to bring mobs close [NOT IMPLEMENTED]
+    manual          = 'manual'      -- You as the player pick the targets by engaging manually
 }
 
--- We will use the 'leader' strategy if no other has been set
-TargetStrategy.default = TargetStrategy.leader
+-- We will use the 'manual' strategy if no other has been set
+TargetStrategy.default = TargetStrategy.manual
 
 --
 -- Ignore list fields:
@@ -78,7 +79,8 @@ local DefaultIgnoreList = {
     { name = 'Vengeful Shunned', ignoreAlways = true, _note = 'Reive guard' },
     { name = 'Iroha', ignoreAlways = true, _note = 'NPC ally in certain battles' },
     { name = 'Arciela', ignoreAlways = true, _note = 'NPC ally in certain battles' },
-    { name = 'Lion', ignoreAlways = true, _note = 'NPC ally in certain battles' }
+    { name = 'Lion', ignoreAlways = true, _note = 'NPC ally in certain battles' },
+    { name = 'Resistance Fighter', ignoreAlways = true, _note = 'Background NPC scattered through Abyssea zones' }
 }
 
 --
@@ -99,7 +101,14 @@ local DefaultNoRearList = {
 -- Some mobs cannot be approached using the standard melee distance. These can be called
 -- out here, with the appropriate minimum distance override.
 local DefaultMinDistanceList = {
-    ['Bedrock Crag'] = 6
+    ['Amaranth Barrier'] = 3,
+    ['Bedrock Crag'] = 3,
+    ['Broadleaf Palm'] = 3,
+    ['Gnarled Rampart'] = 3,
+    ['Heliotrope Barrier'] = 3,
+    ['Icy Palisade'] = 3,
+    ['Knotted Root'] = 3,
+    ['Monolithic Boulder'] = 3
 }
 
 local defaultSettings = {
@@ -114,7 +123,12 @@ local defaultSettings = {
     minDistanceList = DefaultMinDistanceList,
     maxChaseTime = nil,
     followCommandDistance = 1,
-    weaponSkillDelay = nil
+    weaponSkillDelay = nil,
+    cloudPanel = {
+        enabled = true,
+        duration = 3,
+        top = 100
+    }
 }
 
 ----------------------------------------------------------------------------------------
@@ -123,18 +137,42 @@ local function getSettingsFileName(playerName)
     return string.format('./settings/%s/main.json', playerName)
 end
 
+-----------------------------------------------------------------------------------------
+-- Gets the name of the actions file in the user's own actions directory,
+-- whether it exists or not.
 local function getActionsFileName(playerName, actionsName)
     if actionsName == nil then print('no actionsName provided') end
     return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
 end
 
-local function getActionsAlternateFileName(playerName, actionsName)
+-----------------------------------------------------------------------------------------
+-- Given a player name and actions name, find the best matching file that
+-- exists on disk.
+local function findExistingActionsFileName(playerName, actionsName, skip_standard)
+    if playerName == nil then print('No player name provided') end
     if actionsName == nil then print('no actionsName provided') end
-    return string.format('./settings/actions/%s.json', actionsName)
+
+    local paths = {
+        './settings/%s/actions/%s.json':format(playerName, actionsName),    -- 1. User's settings folder
+        './settings/actions/%s.json':format(actionsName)                    -- 2. Settings folder
+    }
+
+    if not skip_standard then
+        table.insert(paths, './actions/standard/%s.json':format(actionsName))
+    end
+
+    for i, path in ipairs(paths) do
+        if path then
+            local file = files.new(path)
+            if file and file:exists() then
+                return path
+            end
+        end
+    end
 end
 
-local function getActionsJobFileName(player)
-    local actionsName = player.main_job
+local function getActionsJobFileName(player, actionsName)
+    actionsName = actionsName or player.main_job
     -- if player.sub_job then
     --     actionsName = actionsName .. '-' .. player.sub_job
     -- end
@@ -199,7 +237,7 @@ local IMPORT_GLOBAL_LIB     = "^$%(GlobalLib%)"
 -- true if new actions were imported as part of this pass.
 local function _loadActionImportsInternal(playerName, baseActions, actionType, pass, player)
     local imported = false
-    local actions = baseActions and baseActions[actionType]
+    local actions = baseActions and baseActions[actionType] or {}
     if actions then
         if baseActions.vars == nil then
             baseActions.vars = {}
@@ -232,108 +270,223 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
             --  - names:        An array of character names that can run this action.
             --
             if action and not action.disabled and player then
+                local disable = false
+
+                -- Main/sub jobs are special; one can fail, but as long as the other succeeds, we're good
+                local require_main_job_match = type(action.filter.main_jobs) == 'table' and #action.filter.main_jobs > 0
+                local require_sub_job_match = type(action.filter.sub_jobs) == 'table' and #action.filter.sub_jobs > 0                
+                local require_job_match = require_main_job_match or require_sub_job_match
+
+                local has_main_job_match = require_job_match and require_main_job_match and arrayIndexOf(useArray(action.filter.main_jobs), player.main_job)
+                local has_sub_job_match = require_job_match and require_sub_job_match and arrayIndexOf(useArray(action.filter.sub_jobs), player.sub_job)
+
                 if
-                    (action.filter.main_jobs and not arrayIndexOf(useArray(action.filter.main_jobs), player.main_job))  or
+                    -- If you look at either main or sub, and neither matches
+                    (require_main_job_match and require_sub_job_match and not has_main_job_match and not has_sub_job_match) or
+                    -- If you require only the main job, and you don't have it
+                    (require_main_job_match and not require_sub_job_match and not has_main_job_match) or
+                    -- If you require only the sub job, and you don't have it
+                    (require_sub_job_match and not require_main_job_match and not has_sub_job_match) 
+                then
+                    disable = true
+                end
+
+                if
+                    not disable and
                     (action.filter.names and not arrayIndexOf(useArray(action.filter.names), player.name))
                 then
-                    action.disabled = true
+                    disable = true
                 end
+
+                action.disabled = disable
             end
 
-            -- Import any items that have an import reference and which aren't marked as disabled
-            if type(action.import) == 'string' and not action.disabled then
-                local file = nil
-                local fileName = nil
+            if not action.disabled then
+                action.disabled = nil
 
-                if action.import:find(IMPORT_PLAYER_LIB) then
-                    fileName = action.import:gsub(IMPORT_PLAYER_LIB, './settings/%s/actions/lib':format(playerName)) .. '.json'
-                    -- print('Referenced player-level import: ' .. fileName)
-                    file = files.new(fileName)
-                elseif action.import:find(IMPORT_SETTINGS_LIB) then
-                    fileName = action.import:gsub(IMPORT_SETTINGS_LIB, './settings/actions/lib') .. '.json'
-                    -- print('Referenced Settings-level import: ' .. fileName)
-                    file = files.new(fileName)
-                elseif action.import:find(IMPORT_GLOBAL_LIB) then
-                    fileName = action.import:gsub(IMPORT_GLOBAL_LIB, './actions/lib') .. '.json'
-                    --print('Referenced Global-level import: ' .. fileName)
-                    file = files.new(fileName)
-                else                
-                    -- First, try the character-level actions libs folder
-                    fileName = './settings/%s/actions/lib/%s.json':format(playerName, action.import)
-                    file = files.new(fileName)
-
-                    -- If the import doesn't exist there, try the user-level actions lib folder
-                    if not file:exists() then
-                        fileName = './settings/actions/lib/%s.json':format(action.import)
-                        file = files.new(fileName)
-                    end
-
-                    -- If the import doesn't exist there, use the standard actions lib folder
-                    if not file:exists() then
-                        fileName = './actions/lib/%s.json':format(action.import)
-                        file = files.new(fileName)
+                if type(action.import) == 'string' then
+                    if type(action.imports) == 'table' then
+                        table.insert(action.imports, 1, action.import)
+                    else
+                        action.imports = { action.import }
                     end
                 end
+                
+                if type(action.imports) == 'string' then
+                    action.imports = { action.imports }
+                end
 
-                if file and file:exists() then
-                    import = json.parse(file:read())
+                -- Import any items that have an import reference and which aren't marked as disabled
+                --if type(action.import) == 'string' then
+                if type(action.imports) == 'table' and #action.imports > 0 then
+                    -- Remove the import reference from the calling action
+                    table.remove(actions, i)
 
-                    if import then
-                        -- if type(import.imports) == 'table' and import.imports[1] then
-                        --     for ii_index, ii_ref in ipairs(import.imports) do
-                        --         local 
-                        --         if not baseActions.importedImports[string.lower(ii_ref.import)] then
-                        --             baseActions.importedImports[string.lower(ii_ref.import)] = { import = string.lower(ii_ref.import) }
-                        --         end
-                        --     end
-                        -- end
+                    -- Remove any invalid/disabled/commented imports
+                    for import_index = #action.imports, 1, -1 do
+                        local action_import = action.imports[import_index]
+                        if type(action_import) ~= 'string' or string.sub(action_import, 1, 2) == '--' then
+                            table.remove(action.imports, import_index)
+                        end
+                    end
 
-                        -- Remove the import reference from the calling action
-                        table.remove(actions, i)
+                    -- Process all remaining imports
+                    for import_index = #action.imports, 1, -1 do
+                        local action_import = action.imports[import_index]
+                        local file = nil
+                        local fileName = nil
 
-                        --
-                        -- Pull in any variables defined in this import. Existing values are not overwritten.
-                        if import.vars then
-                            loadVars(baseActions.vars, import.vars)
+                        if action_import:find(IMPORT_PLAYER_LIB) then
+                            fileName = action_import:gsub(IMPORT_PLAYER_LIB, './settings/%s/actions/lib':format(playerName)) .. '.json'
+                            -- print('Referenced player-level import: ' .. fileName)
+                            file = files.new(fileName)
+                        elseif action_import:find(IMPORT_SETTINGS_LIB) then
+                            fileName = action_import:gsub(IMPORT_SETTINGS_LIB, './settings/actions/lib') .. '.json'
+                            -- print('Referenced Settings-level import: ' .. fileName)
+                            file = files.new(fileName)
+                        elseif action_import:find(IMPORT_GLOBAL_LIB) then
+                            fileName = action_import:gsub(IMPORT_GLOBAL_LIB, './actions/lib') .. '.json'
+                            --print('Referenced Global-level import: ' .. fileName)
+                            file = files.new(fileName)
+                        else                
+                            -- First, try the character-level actions libs folder
+                            fileName = './settings/%s/actions/lib/%s.json':format(playerName, action_import)
+                            file = files.new(fileName)
+
+                            -- If the import doesn't exist there, try the user-level actions lib folder
+                            if not file:exists() then
+                                fileName = './settings/actions/lib/%s.json':format(action_import)
+                                file = files.new(fileName)
+                            end
+
+                            -- If the import doesn't exist there, use the standard actions lib folder
+                            if not file:exists() then
+                                fileName = './actions/lib/%s.json':format(action_import)
+                                file = files.new(fileName)
+                            end
                         end
 
-                        -- Pull in the macros
-                        if type(import.macros) == 'table' then
-                            local macros = type(import.macros) == 'table' and import.macros or { }
+                        if file and file:exists() then
+                            import = json.parse(file:read())
 
-                            for name, macro in pairs(macros) do
-                                if baseActions.macros[name] == nil then
-                                    baseActions.macros[name] = macro
+                            if import then
+                                --
+                                -- Pull in any variables defined in this import. Existing values are not overwritten.
+                                if import.vars then
+                                    loadVars(baseActions.vars, import.vars)
+                                end
+
+                                -- Pull in the macros. For macros defined more than once, we will always use the definition
+                                -- found in the earliest file we import. The base gambit file will always take priority.
+                                if type(import.macros) == 'table' then
+                                    for name, macro in pairs(import.macros) do
+                                        if baseActions.macros[name] == nil then
+                                            baseActions.macros[name] = macro
+                                        end
+                                    end
+                                end                        
+                                import.macros = nil
+
+                                -- Pull in functions actions
+                                if type(import.functions) == 'table' and #import.functions > 0 then
+                                    -- If there are functions, we will insert them in-place after setting the as_function property. They will
+                                    -- be processed properly on the next pass.
+                                    for _, fn in ipairs(import.functions) do
+                                        if type(fn) == 'table' then
+                                            fn.as_function = true
+                                            table.insert(actions, i, fn)
+                                        end
+                                    end
+                                end
+                                import.functions = nil
+
+                                -- Pull in loading actions
+                                if type(import.loading) == 'table' and #import.loading > 0 then
+                                    -- If there are loading actions, we will insert them in place after setting the on_load property. They will
+                                    -- be processed properly on the next pass.
+                                    for _, ld in ipairs(import.loading) do
+                                        if type(ld) == 'table' then
+                                            ld.on_load = true
+                                            table.insert(actions, i, ld)
+                                        end
+                                    end
+                                end
+                                import.loading = nil
+
+                                -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
+                                -- then the originating import action will simply be removed.
+                                if 
+                                    import.actions and
+                                    #import.actions > 0
+                                then
+                                    for j = #import.actions, 1, -1 do
+                                        local importedAction = import.actions[j]
+                                        if importedAction then
+                                            imported = true
+                                            importedAction.importedFrom = action_import
+
+                                            -- The id uniquely identifies this import action regardless of context.
+                                            -- The discriminator takes into account the action type as well.
+                                            importedAction.id = string.lower('$path=%s,$index=%d':format(fileName, j))
+                                            importedAction.discriminator = string.lower('%s,$type=%s':format(importedAction.id, string.lower(actionType)))
+
+                                            table.insert(actions, i, importedAction)
+                                        end
+                                    end
                                 end
                             end
-                        end                        
-                        import.macros = nil
-
-                        -- Pull in any child actions, replacing the import. If this file only defines variables or macros,
-                        -- then the originating import action will simply be removed.
-                        if 
-                            import.actions and
-                            #import.actions > 0
-                        then
-                            for j = #import.actions, 1, -1 do
-                                local importedAction = import.actions[j]
-                                if importedAction then
-                                    imported = true
-                                    importedAction.importedFrom = action.import
-
-                                    table.insert(actions, i, importedAction)
-                                end
+                        else
+                            if not action.silent then
+                                writeMessage('Warning: Referenced %s action import [%s] could not be found.':format(
+                                    text_action(actionType),
+                                    text_gold(action_import)
+                                ))
                             end
                         end
                     end
                 else
-                    if not action.silent then
-                        writeMessage('Warning: Referenced %s action import [%s] could not be found.':format(
-                            text_action(actionType),
-                            text_gold(action.import)
-                        ))
+                    if
+                        (action.when == nil or (type(action.when) == 'table' and #action.when == 0)) and
+                        (action.commands == nil or (type(action.commands) == 'table' and #action.commands == 0))
+                    then
+                        -- Actions without missing both the when and commands properties will be filtered out. Nothing will
+                        -- actually be done here, so there's no point wasting cycles on them.
+                        table.remove(actions, i)
+                    else
+                        if not action.id then
+                            -- If the action id hasn't been set, it means this action was not from an import and is in the base gambit file.
+                            action.id = string.lower('$path=root_file,$index=%d':format(i))
+                            action.discriminator = string.lower('%s,$type=%s':format(action.id, string.lower(actionType)))
+                        end
+
+                        if action.on_load == true and actionType ~= 'loading' then
+                            baseActions._processed = baseActions._processed or {}
+                            baseActions._processed.loading = baseActions._processed.loading or {}
+
+                            -- If on_load is true, this action will be moved to the end of the loading list
+                            table.remove(actions, i)
+
+                            if not action.id or not baseActions._processed.loading[action.id] then
+                                table.insert(baseActions.loading, action)
+                                baseActions._processed.loading[action.id] = true
+                            end
+                        elseif action.as_function == true and actionType ~= 'functions' then
+                            baseActions._processed = baseActions._processed or {}
+                            baseActions._processed.functions = baseActions._processed.functions or {}
+
+                            -- If as_function is true, this action will be moved to the end of the functions list
+                            table.remove(actions, i)
+
+                            if not action.id or not baseActions._processed.functions[action.id] then
+                                table.insert(baseActions.functions, action)
+                                baseActions._processed.functions[action.id] = true
+                            end
+                        end
                     end
                 end
+            else
+                -- Disabled actions should be removed
+                table.remove(actions, i)
             end
         end
     end
@@ -419,6 +572,42 @@ local function _expandActionMacrosToArray(macros, array)
     end
  end
 
+ local function _stripComments(loadedData, action)
+    
+    local actualWhens = {}
+    if action.when then
+        if type(action.when) == 'string' then
+            action.when = { action.when }
+        end
+
+        -- Remove any empty comment lines in the "when" list
+        for i, when in ipairs(action.when) do
+            local value = trimString(when)
+            if value ~= '' and string.find(value, '--', 1, true) ~= 1 then
+                actualWhens[#actualWhens + 1] = when
+            end
+        end
+    end
+    
+    local actualCommands = {}
+    if action.commands then
+        if type(action.commands) == 'string' then
+            action.commands = { action.commands }
+        end
+
+        -- Remove any empty or comment lines in the "commands" list
+        for i, command in ipairs(action.commands) do
+            local value = trimString(command)
+            if value ~= '' and string.find(value, '--', 1, true) ~= 1 then
+                actualCommands[#actualCommands + 1] = command
+            end
+        end
+    end
+
+    action.when = actualWhens
+    action.commands = actualCommands
+ end
+
  local function _expandActionMacros(loadedData, action)
     local macros = loadedData.macros
     if type(macros) == 'table' then
@@ -479,12 +668,13 @@ local function _expandActionMacrosToArray(macros, array)
     end
 
     -- Now, expand all macros into their respective actions
-    local actionTypes = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'functions'}
+    local actionTypes = {'loading', 'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'functions', 'imports'}
     for i, actionType in ipairs(actionTypes) do
         local actions = loadedData and loadedData[actionType]
         if type(actions) == 'table' then
             for i, action in ipairs(actions) do
-                _expandActionMacros(loadedData, action)
+                _stripComments(loadedData, action)
+                _expandActionMacros(loadedData, action)                
             end
         end
     end
@@ -497,11 +687,13 @@ local function loadActionImports(playerName, actions, player)
     -- imports which have their own imports will work.
     if actions then
         local MAX_PASSES = 10
-        local types = {'battle', 'idle_battle', 'pull', 'idle', 'resting', 'dead', 'mounted', 'imports', 'functions'}
+        local types = {'loading', 'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'imports', 'functions'}
 
         -- Force macros and imports to an object, even if empty
         actions.macros = type(actions.macros) == 'table' and actions.macros or { }
         actions.imports = type(actions.imports) == 'table' and actions.imports or { }
+
+        actions._processed = {}
 
         -- Attempt to load the built-in files, if possible.
         table.insert(actions.imports, 1, { silent = true, import = "$(PlayerLib)/common/%s":format(player.main_job) })
@@ -511,8 +703,15 @@ local function loadActionImports(playerName, actions, player)
         table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/%s":format(player.main_job) })
         table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/common" })
 
-        for i = 1, #types do
-            local actionType = types[i]
+        -- Ensure that all action types have at least an empty array. We do this in a pre-pass step
+        -- to ensure that no action types are built until all action types are prepared.
+        for i, actionType in ipairs(types) do
+            if not actions[actionType] then
+                actions[actionType] = {}
+            end
+        end
+
+        for i, actionType in ipairs(types) do
             local passes = 0
 
             -- Prevent runaway, infinite imports. Most likely caused if an include references 
@@ -530,6 +729,8 @@ local function loadActionImports(playerName, actions, player)
         end
 
         _processMacros(actions)
+
+        actions._processed = nil
     end
 end
 
@@ -575,31 +776,6 @@ local function loadActionsFromFile(playerName, fileName)
     local actions = _loadActionsWithPreprocessing(file)
     if actions then
         loadActionImports(playerName, actions, windower.ffxi.get_player())
-        --writeJsonToFile('.\\settings\\%s\\.output\\processed-actions.json':format(playerName), actions)
-
-        -- if type(actions.importedImports) then
-        --     local imported = true
-
-        --     actions['imported-imports'] = {}
-
-        --     while imported do
-        --         imported = false
-        --         for entry_key, entry in pairs(actions.importedImports) do
-        --             if not entry.imported then
-        --                 arrayAppend(actions['imported-imports'], {
-        --                     import = entry_key,
-        --                     imported = false
-        --                 })
-        --                 imported = true
-        --                 entry.imported = true
-        --             end
-        --         end
-
-        --         if imported then
-        --             --local function _loadActionImportsInternal(playerName, baseActions, actionType, pass)
-        --         end
-        --     end
-        -- end
     end
 
     return actions
@@ -608,20 +784,37 @@ end
 ----------------------------------------------------------------------------------------
 --
 local function loadDefaultActions(player, save)
-    local fileName = './actions/defaults/default-actions.json'
-    local defaults = loadActionsFromFile(player.name, fileName)
 
-    if defaults and save then
-        local file = files.new(fileName)
-        local defaultJson = file:read()
+    local locations = 
+    {
+        './settings/%s/actions/defaults/default-actions.json':format(player.name),
+        './settings/actions/defaults/default-actions.json',
+        './actions/defaults/default-actions.json'
+    }
 
-        if save then
-            local saveAsFileName = getActionsJobFileName(player)
-            writeStringToFile(saveAsFileName, defaultJson)
+    for i = 1, #locations do
+        local fileName = locations[i]
+        local defaults = loadActionsFromFile(player.name, fileName)
+        local saveAsFileName = fileName
+
+        print('Gambit: Looking for default actions in [%s]...':format(fileName))
+
+        if defaults then
+            if save then
+                local file = files.new(fileName)
+                local defaultJson = file:read()
+
+                if save then
+                    saveAsFileName = getActionsJobFileName(player)
+                    writeStringToFile(saveAsFileName, defaultJson)
+                end
+            end
+
+            print('Gambit: Default actions found!')
+
+            return defaults, saveAsFileName
         end
     end
-
-    return defaults
 end
 
 ----------------------------------------------------------------------------------------
@@ -635,19 +828,61 @@ function saveDefaultActions(player, force)
         return
     end
 
-    return loadDefaultActions(player, true) ~= nil
+    local defaults, fileName = loadDefaultActions(player, true)
+    return defaults ~= nil
+end
+
+function saveActions(player, force, actionsName)
+    local saveAsFileName = getActionsJobFileName(player, actionsName)
+    local targetFile = files.new(saveAsFileName)
+
+    -- Can't overwrite an existing file without the force flag
+    if targetFile:exists() and not force then
+        return false, 'The action name %s already exists for %s. Use %s to overwrite.':format(
+            text_action(actionsName),
+            text_player(player.name),
+            text_red('-force')
+        )
+    end
+
+    if not settings or not settings.actionInfo or not settings.actionInfo.fileName then
+        return false, 'No current settings are loaded, or the source file name could not be determined.'
+    end
+
+    local sourceFile = files.new(settings.actionInfo.fileName)
+    local sourceJson = sourceFile:read()
+    if type(sourceJson) ~= 'string' or #sourceJson == 0 then
+        return false, 'The source file could not be read.'
+    end
+
+    targetFile:write(sourceJson)
+
+    reloadSettings(actionsName)
+
+    return true
 end
 
 ----------------------------------------------------------------------------------------
 -- Load settings
 function loadSettings(actionsName, settingsOnly)
     local player = windower.ffxi.get_player()
+    if not player then
+        tempSettings = json.parse(json.stringify(defaultSettings))
+
+        tempSettings.actions = actions
+        tempSettings.actionInfo = tempSettings.actionInfo or {}
+        tempSettings.actionInfo.name = actionsName
+        tempSettings.actionInfo.fileName = actionsFileName
+
+        return tempSettings
+    end
+
     local fileName = getSettingsFileName(player.name)
 
     local file = files.new(fileName)
     if not file:exists() then
         writeMessage('No settings found for %s. Defaults will be loaded.':format(text_player(player.name)))
-        tempSettings = defaultSettings
+        tempSettings = json.parse(json.stringify(defaultSettings))
     else
         writeMessage('Loading configured settings for %s...':format(text_player(player.name)))
         tempSettings = json.parse(file:read()) or {}
@@ -678,7 +913,11 @@ function loadSettings(actionsName, settingsOnly)
     tempSettings.maxDistanceZ = math.max(tempSettings.maxDistanceZ or 0, 1)
 
     -- The default distance that the follow command will use if none is specified
-    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 1.0, 10.0)
+    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 0.25, 10.0)
+
+    -- We will leave the horizontal follow offset unassigned if it is not a valid number. Otherwise, we will
+    -- ensure it is a non-negative number.
+    tempSettings.followOffset = type(tempSettings.followOffset) == 'number' and math.max(tempSettings.followOffset, 0) or nil
 
     -- The maximum amount of time to wait (in seconds) before assuming an unengaged target
     -- is unreachable. This prevents you from getting into infinite wall-running ruts.
@@ -690,6 +929,11 @@ function loadSettings(actionsName, settingsOnly)
         tempSettings.maxChaseTime = 17
     end
 
+    -- Default the slow target transitions to true if no value has been set
+    if tempSettings.slowTargetTransitions == nil then
+        tempSettings.slowTargetTransitions = true
+    end
+
     -- The amount of time to allow between a weapon skill/skillchain being detected, 
     -- and a skillchain being continued.
     tempSettings.skillchainDelay = math.clamp(
@@ -698,20 +942,36 @@ function loadSettings(actionsName, settingsOnly)
         MAX_SKILLCHAIN_TIME)
 
     -- The maximum number of tabs to press when having trouble acquiring targets
-    tempSettings.maxTabs = math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 0, 0, 20))
+    tempSettings.maxTabs = nil --math.floor(math.clamp(tonumber(tempSettings.maxTabs) or 5, 0, 20))
 
     -- The maximum length of targeting attempts
-    tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 1, 20)
+    tempSettings.targetingDuration = math.clamp(tonumber(tempSettings.targetingDuration) or 10, 2, 20)
+
+    if not tempSettings.cloudPanel then
+        tempSettings.cloudPanel = json.parse(json.stringify(defaultSettings.cloudPanel))
+    end
 
     local jobActionsName = nil
+    local actionsFileName = nil
     local actions = nil
     local defaultsLoaded = false
+
+    -- Use the default min distance list settings
+    tempSettings.minDistanceList = tempSettings.minDistanceList or {}
+    for key, val in pairs(DefaultMinDistanceList) do
+        if not tempSettings.minDistanceList[key] then
+            tempSettings.minDistanceList[key] = val
+        end
+    end
 
     tempSettings.actions = {}
 
     if actionsName then
-        writeMessage('Attempting to load actions from: [%s/%s]':format(player.name, actionsName))
-        actions = loadActions(player.name, actionsName)
+        writeMessage('Attempting to load actions for %s from: [%s]':format(
+            text_player(player.name),
+            text_action(actionsName)
+        ))
+        actions, actionsFileName = loadActions(player.name, actionsName)
     elseif settingsOnly then
         writeMessage('All previously compiled actions will be reapplied to the current state.')
 
@@ -727,19 +987,19 @@ function loadSettings(actionsName, settingsOnly)
         if subJob then
             actionsName = '%s-%s':format(mainJob, subJob):lower()
             jobActionsName = actionsName
-            actions = loadActions(player.name, actionsName)
+            actions, actionsFileName = loadActions(player.name, actionsName)
         end
 
         -- If no actions were found, load the main job actions (default)
         if actions == nil then
             actionsName = '%s':format(mainJob):lower()
             jobActionsName = actionsName
-            actions = loadActions(player.name, actionsName)
+            actions, actionsFileName = loadActions(player.name, actionsName)
         end
 
         -- Load the default actions if nothing else has worked
         if actions == nil then
-            actions = loadDefaultActions(player)
+            actions, actionsFileName = loadDefaultActions(player)
 
             if actions then
                 defaultsLoaded = true
@@ -758,17 +1018,23 @@ function loadSettings(actionsName, settingsOnly)
         tempSettings.actions = actions
         tempSettings.actionInfo = tempSettings.actionInfo or {}
         tempSettings.actionInfo.name = actionsName
+        tempSettings.actionInfo.fileName = actionsFileName
 
         -- Save the post-processed actions
         writeJsonToFile('./settings/%s/.output/%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
 
         if actionsName and not defaultsLoaded then
-            writeMessage('Successfully loaded %s actions: %s':format(
+            writeMessage('Successfully loaded %s actions %s':format(
                 text_player(player.name),
                 text_action(actionsName)
             ))
+
+            print('Gambit: Actions loaded from [%s]':format(actionsFileName or 'n/a'))
         end
     end
+    
+    settings_counter = settings_counter + 1
+    tempSettings.settings_counter = settings_counter
 
     return tempSettings
 end
@@ -792,16 +1058,17 @@ function saveSettings(settingsToSave)
 end
 
 ----------------------------------------------------------------------------------------
--- Load actions by player and action set name
-function loadActions(playerName, actionsName)
-    local fileName = getActionsFileName(playerName, actionsName)
-    local actions = loadActionsFromFile(playerName, fileName)
-    if actions == nil then
-        fileName = getActionsAlternateFileName(playerName, actionsName)
+-- Load actions by player and action set name. If the no_search flag is set,
+-- then only the 
+function loadActions(playerName, actionsName, skip_standard)
+    local actions = nil
+    local fileName = findExistingActionsFileName(playerName, actionsName, skip_standard)
+
+    if fileName then
         actions = loadActionsFromFile(playerName, fileName)
     end
 
-    return actions
+    return actions, fileName
 end
 
 ----------------------------------------------------------------------------------------

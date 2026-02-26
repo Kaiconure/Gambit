@@ -3,6 +3,12 @@
     "author": "@Kaiconure",
     "description": "Ensures that your battle target always lines up with the party leader."
   },
+  "vars": {
+    "leader_sync": {
+      "disabled": null,
+      "idle_disengage": true
+    }
+  },
   "actions": [
     {
       "comment": [
@@ -13,16 +19,18 @@
         " re-engage you with the proper target to stay in sync with the leader."
       ],
       "when": [
+        "not vars.leader_sync.disabled",
         "bt and bt.id",
         "not me.is_party_leader and settings.strategy == 'leader'",
-        "not party_leader_bt or not party_leader_bt.id or party_leader_bt.id ~= bt.id"
+        "party_leader and not party_leader.is_dead and party_leader.valid_target and party_leader.distance <= 50",
+        "(not party_leader_bt and vars.leader_sync.idle_disengage) or (party_leader_bt and party_leader_bt.id ~= bt.id)"
       ],
       "commands": [
-        "log('Disengaging from', bt.name, 'to sync up with the party leader!')",
-        "disengage()",
-        "wait(1)"
+        "not party_leader_bt and (disengage() and logf('Disengaging from [%s] as party leader has no target!', bt.name))",
+        "party_leader_bt and setBattleTarget(party_leader_bt) and logf('Acquiring leader target %s!', party_leader_bt.name) and wait(1)"
       ],
-      "frequency": 5
+      "frequency": 5,
+      "miss_frequency": 5
     }
   ]
 }

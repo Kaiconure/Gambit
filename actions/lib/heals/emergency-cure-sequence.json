@@ -5,35 +5,77 @@
   "vars": {
     "roles": {
       "backup_healer": true
+    },
+    "cure_sequence": {
+      "silena_targets": null,
+      "suppress_curaga": null,
+      "gear": null
     }
+  },
+  "macros": {
+    "set_cure_equip": [
+      "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipPush(vars.cure_sequence.gear.casting)"
+    ],
+    "restore_cure_equip": [
+      "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipPop(vars.cure_sequence.gear.casting)"
+    ],
+    "cure_member": [
+      "$macro:set_cure_equip",
+      "useSpell(member)",
+      "$macro:restore_cure_equip"
+    ]
   },
   "actions": [
     {
-      "import": "heals/remove-doom"
+      "imports": ["heals/remove-doom"]
+    },
+    {
+      "when": ["hasEffect('Silence') and canUseItem('Echo Drops', '--Remedy')"],
+      "commands": ["use(me)"],
+      "frequency": 1
+    },
+    {
+      "when": ["hasEffect('Paralysis') and canUseItem('Paralyna')"],
+      "commands": ["use(me)"],
+      "frequency": 1
     },
     {
       "when": [
-        "canUse('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')",
-        "partyCount('hpp < 50 and distance <= 10') >= 3"
+        "not vars.cure_sequence.suppress_curaga",
+        "partyByMinField('hpp', 50) and member_count >= 3",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')"
       ],
-      "commands": "use(me)",
+      "commands": ["$macro:cure_member"],
       "frequency": 10
     },
     {
       "when": [
-        "canUse('Cure VI', 'Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 30')",
-        "member.distance <= constants.spell_distance"
+        "partyByMinField('hpp', 30)",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Cure VI', 'Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": ["use()"],
+      "commands": ["$macro:cure_member"],
       "frequency": 1
     },
     {
       "when": [
-        "canUse('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure') and partyAny('hpp < 50')",
-        "member.distance <= constants.spell_distance"
+        "partyByMinField('hpp', 50)",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Cure V', 'Cure IV', 'Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": ["use()"],
+      "commands": ["$macro:cure_member"],
       "frequency": 1
+    },
+    {
+      "imports": [
+        "heals/remove-plague",
+        "heals/remove-petrify",
+        "heals/remove-paralysis"
+      ]
+    },
+    {
+      "imports": ["heals/remove-poison"]
     }
   ]
 }

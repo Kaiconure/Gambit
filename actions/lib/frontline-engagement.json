@@ -6,11 +6,55 @@
     "frontline_engagement": {
       "prioritize_melee_engagement": true,
       "angle": null,
-      "distance": 2,
-      "engage_trusts": null
+      "distance": null,
+      "engage_trusts": null,
+      "camp": {
+        "min_distance": null,
+        "max_distance": null,
+        "max_duration": null,
+        "zone": null,
+        "location": null,
+        "action_types": null,
+        "wait": null
+      }
     }
   },
   "actions": [
+    {
+      "commands": [
+        "setVar('vars.frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))",
+        "runningAsFunction() and log('Applied frontline engagement positioning updates!')"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "name": "frontline_engagement/recalculate",
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "when": [
+        "vars.frontline_engagement.camp",
+        "vars.frontline_engagement.camp.location",
+        "not vars.frontline_engagement.leader_only or me.is_party_leader",
+        "not vars.frontline_engagement.aggressor_only or any(gambit.strategy, 'aggressor', 'puller')",
+        "vars.frontline_engagement.camp.zone and any(vars.frontline_engagement.camp.zone, zone_id, zone_name, zone_search)",
+        "arrayCount(vars.frontline_engagement.camp.action_types) == 0 or any(actionType, vars.frontline_engagement.camp.action_types)",
+        "-------------------------------------------------------------------------------------",
+        "-- We'll only return to camp if we're within the configured range ",
+        "distanceInRange(vars.frontline_engagement.camp.location, vars.frontline_engagement.camp.min_distance or 5, vars.frontline_engagement.camp.max_distance or 20)"
+      ],
+      "commands": [
+        "logf('[%s] Returning to camp location (%.1f, %.1f)', actionType, vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y)",
+        "move(vars.frontline_engagement.camp.location.x, vars.frontline_engagement.camp.location.y, vars.frontline_engagement.camp.max_duration or 10)",
+        "faceEnemy() and wait(vars.frontline_engagement.camp.wait or 1)"
+      ],
+      "comment": [
+        "If we have an assigned camp location for this zone and we've moved too far from it, get back to it."
+      ],
+      "frequency": "infinity",
+      "scope": "battle"
+    },
     {
       "when": "bt and not facingEnemy()",
       "commands": "faceEnemy()",
@@ -29,7 +73,7 @@
       "when": [
         "bt and me.is_party_leader",
         "vars.frontline_engagement.engage_trusts and waiting_for_trusts",
-        "vars.frontline_engagement.distance > 2",
+        "vars.frontline_engagement._distance > 2",
         "bt and bt.distance > 3",
         "not hasEffect('Bind')"
       ],
@@ -44,33 +88,33 @@
     {
       "when": [
         "actionType == 'battle'",
-        "bt and bt.distance <= vars.frontline_engagement.distance + 2",
-        "canAlign(bt) and not aligned(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance)"
+        "bt and bt.distance <= vars.frontline_engagement._distance + 2",
+        "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance)"
       ],
       "commands": [
-        "align(bt, vars.frontline_engagement.angle, vars.frontline_engagement.distance) or postpone(10)"
+        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance) or postpone(10)"
       ],
       "frequency": 1,
       "scope": "battle",
       "delay": 2
     },
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.distance and following(bt)",
+      "when": "bt and bt.distance <= vars.frontline_engagement._distance and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
-      "when": "bt and bt.distance <= vars.frontline_engagement.distance and not facingEnemy()",
+      "when": "bt and bt.distance <= vars.frontline_engagement._distance and not facingEnemy()",
       "commands": ["faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
-      "when": "bt and bt.distance > vars.frontline_engagement.distance and not following(bt)",
+      "when": "bt and bt.distance > vars.frontline_engagement._distance and not following(bt)",
       "commands": [
         "faceEnemy()",
-        "follow(bt, vars.frontline_engagement.distance)",
+        "follow(bt, vars.frontline_engagement._distance)",
         "wait(0.5)"
       ],
       "frequency": 1,
@@ -79,11 +123,11 @@
     {
       "when": [
         "vars.frontline_engagement.prioritize_melee_engagement",
-        "bt and bt.distance > (vars.frontline_engagement.distance + 2)",
+        "bt and bt.distance > (vars.frontline_engagement._distance + 2)",
         "not hasEffect('Bind')"
       ],
       "commands": [
-        "not following(bt) and follow(bt, vars.frontline_engagement.distance) and log('Unexpected: Initiated melee range following')",
+        "not following(bt) and follow(bt, vars.frontline_engagement._distance) and log('Unexpected: Initiated melee range following')",
         "wait(1)"
       ],
       "comment": "Ensure that we get into melee range without executing later actions."

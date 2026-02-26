@@ -1,0 +1,119 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": [
+      "Standard set of gambits for skilling up your enhancing magic.",
+      "Best when used as RDM or /RDM for Refresh and Convert."
+    ]
+  },
+  "vars": {
+    "configuration": {
+      "commands": [
+        "gbt config -d 5",
+        "gbt config -z 3",
+        "gbt config -strat nearest"
+      ]
+    },
+    "use_convert": {
+      "min_mp": 5
+    },
+    "ensure_trusts": {
+      "spells": ["Sakura", "Ulmia"]
+    },
+    "trust_spells": {
+      "tank": ["Valaineral", "AAEV", "Rahal"],
+      "healer": ["Yoran-Oran (UC)", "Kupipi", "Sylvie (UC)"],
+      "support": ["Koru-Moru", "Joachim", "Ulmia"]
+    },
+    "protect_spells": ["Protect II", "Protectra", "Protect"],
+    "shell_spells": ["Shell II", "Shell"],
+    "haste_spells": ["Haste II", "Haste"],
+    "refresh_spells": ["Refresh III", "Refresh II", "Refresh"]
+  },
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "commands": [
+        "-----------------------------------------------------------------------------------------------------------",
+        "-- Set up skill up spell list based on available spells",
+        "-----------------------------------------------------------------------------------------------------------",
+        "setVar('vars.skillups.spells', {})",
+        "hasSpell(vars.protect_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.shell_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.haste_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+        "hasSpell(vars.refresh_spells) and setVar('vars.skillups.spells', arrayMerge(vars.skillups.spells, spell.name))",
+
+        "log('Queuing', arrayCount(vars.skillups.spells), 'skillup spell(s):')",
+        "log(vars.skillups.spells)",
+
+        "-----------------------------------------------------------------------------------------------------------",
+        "-- Set up trust list based on available spells",
+        "-----------------------------------------------------------------------------------------------------------",
+        "hasSpell(vars.trust_spells.tank) and arrayAppend(vars.ensure_trusts.spells, spell.name)",
+        "hasSpell(vars.trust_spells.healer) and arrayAppend(vars.ensure_trusts.spells, spell.name)",
+        "hasSpell(vars.trust_spells.support) and arrayAppend(vars.ensure_trusts.spells, spell.name)",
+
+        "log('Using', arrayCount(vars.ensure_trusts.spells), 'trust(s):')",
+        "log(vars.ensure_trusts.spells)"
+      ],
+      "frequency": "infinity",
+      "delay": 0
+    },
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep your best usable Refresh spell up, if any."
+      ],
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep yourself healed up, primarily for recovery from Convert."
+      ],
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": "me.mpp < 15 or me.mp < 50",
+      "commands": "rest()"
+    },
+    {
+      "comment": [
+        " This import ensures that you keep yourself hasted, to minimize recast timers on spells."
+      ],
+      "import": "buffs/haste-cycle"
+    },
+    {
+      "when": "not hasBuff('Food') and canUse('B.E.W. Pitaru')",
+      "commands": "use(me)",
+      "frequency": 10
+    },
+    {
+      "when": [
+        "partyAll('is_interactive') and canUseSpell(vars.skillups.spells)"
+      ],
+      "commands": [
+        "logf('Using spell %s on %s...', spell.name, member.name)",
+        "useSpell(member)"
+      ],
+      "delay": 2,
+      "frequency": 0
+    }
+  ],
+  "resting": [
+    {
+      "when": [
+        "me.mpp >= 99 \\",
+        " or (me.mpp <= 20 and me.mp > vars.use_convert.min_mp and canUse('Convert')) \\",
+        " or (me.mpp >= 75 and canUse('Refresh II', 'Refresh'))"
+      ],
+      "commands": ["stopResting()"]
+    }
+  ]
+}

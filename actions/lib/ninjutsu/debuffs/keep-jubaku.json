@@ -5,7 +5,9 @@
   "vars": {
     "ninjutsu": {
       "debuffs": {
-        "jubaku": {}
+        "jubaku": {
+          "spells": ["Jubaku: San", "Jubaku: Ni", "Jubaku: Ichi"]
+        }
       }
     }
   },
@@ -18,9 +20,12 @@
         "======================================================================="
       ],
       "when": [
+        "bt",
+        "not vars.ninjutsu.yellow_proc_only or runningAsFunction()",
+        "not runningAsFunction() or functionIteration() == 1",
         "bt.distance <= 20",
         "bt.mob_time >= (vars.ninjutsu.debuffs.jubaku.delay or vars.ninjutsu.debuffs.delay or 2)",
-        "hasSpell('Jubaku: San', 'Jubaku: Ni', 'Jubaku: Ichi') and canUseSpell(spell)",
+        "hasSpell(vars.ninjutsu.debuffs.jubaku.spells) and canUseSpell(spell)",
         "not hasEffectOf(bt, spell)",
         "findItemInInventory('Jusatsu', 'Chonofuda') or \\",
         "  (findUsableItem('Toolbag (Jusa)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
@@ -31,7 +36,8 @@
         "useSpell(bt) or postpone(vars.ninjutsu.debuffs.jubaku.retry or vars.ninjutsu.debuffs.retry or 10)"
       ],
       "frequency": 1,
-      "scope": "battle"
+      "scope": "battle",
+      "name": "keep_jubaku"
     }
   ]
 }

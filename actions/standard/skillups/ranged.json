@@ -1,0 +1,93 @@
+{
+  "vars": {
+    "ensure_trusts": {
+      "spells": ["Yoran-Oran (UC)", "Koru-Moru"],
+      "mob_safety_range": 0
+    },
+    "frontline_engagement": {
+      "angle": null
+    },
+    "use_rolls": {
+      "rolls": ["Hunter's Roll"]
+    },
+    "waypoints": {
+      "active": "NO woh_gates_h10_north",
+      "mode": "cycle",
+      "scoped": true
+    },
+    "keep_ammo": {
+      "ammo": "Bullet",
+      "pouch": "Bullet Pouch"
+    }
+  },
+  "imports": [],
+  "pull": [
+    {
+      "import": "keep-ammo"
+    },
+    {
+      "when": ["bt and bt.distance < 20", "canRA()"],
+      "commands": ["facingEnemy() or faceEnemy()", "shoot(0)"],
+      "delay": 0,
+      "frequency": 5
+    },
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "keep-ammo"
+    },
+    {
+      "import": "reactions/use-stun"
+    },
+    {
+      "imports": ["heals/remove-doom", "heals/remove-plague"]
+    },
+    {
+      "import": "reactions/face-away"
+    },
+    {
+      "import": "abilities/use-rolls"
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "when": ["canRA()"],
+      "commands": ["facingEnemy() or faceEnemy()", "shoot(0)"],
+      "delay": 0
+    }
+  ],
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    },
+    {
+      "import": "follow-leader"
+    },
+    {
+      "import": "common-consumables"
+    },
+    {
+      "import": "waypoints-ex"
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death"
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
+  ]
+}

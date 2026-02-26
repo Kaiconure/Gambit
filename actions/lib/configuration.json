@@ -15,6 +15,7 @@
         "logEach(vars.configuration.commands)",
         "sendCommands(vars.configuration.commands)"
       ],
+      "on_load": true,
       "delay": 0,
       "frequency": "infinity",
       "comment": [

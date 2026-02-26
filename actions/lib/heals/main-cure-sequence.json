@@ -6,6 +6,10 @@
     "roles": {
       "main_healer": true,
       "backup_healer": false
+    },
+    "cure_sequence": {
+      "suppress_curaga": null,
+      "gear": null
     }
   },
   "actions": [
@@ -14,18 +18,22 @@
     },
     {
       "when": [
-        "partyCount('hpp <= 75 and distance <= 10') >= 3 and canUse('Curaga III', 'Curaga II', 'Curaga')"
+        "not vars.cure_sequence.suppress_curaga",
+        "partyByMinField('hpp', 70) and member_count >= 3",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Curaga III', 'Curaga II', 'Curaga')"
       ],
-      "commands": "use(me)",
+      "commands": ["$macro:cure_member"],
       "frequency": 10
     },
     {
       "when": [
-        "partyAny('hpp <= 80') and canUse('Cure III', 'Cure II', 'Cure')",
-        "member.distance <= constants.spell_distance"
+        "partyByMinField('hpp', 80)",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": ["use()"],
-      "frequency": 1
+      "commands": ["$macro:cure_member"],
+      "frequency": 3
     }
   ]
 }

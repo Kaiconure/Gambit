@@ -4,7 +4,7 @@
   },
   "actions": [
     {
-      "when": "partyHasEffect('Sleep') and canUse('Cure')",
+      "when": ["partyHasEffect('Sleep') and canUse('Cure')"],
       "commands": [
         "log('Removing sleep from', member.name, 'with', spell.name)",
         "removeEffect(member)"

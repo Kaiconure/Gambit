@@ -1,0 +1,201 @@
+{
+  "vars": {
+    "configuration": {
+      "commands": ["gbt config -strat leader", "gbt config -d 20"]
+    },
+    "haste_cycle": {
+      "targets": ["me"]
+    },
+    "ensure_trusts": {
+      "spells": []
+    },
+    "refresh_cycle": {
+      "targets": ["me"]
+    },
+    "regen_cycle": {
+      "targets": ["Valaineral", "AAEV", "August", "Rahal", "Trion"]
+    },
+    "keep_protectra_shellra": {
+      "check_members": ["Valaineral", "AAEV", "August", "Rahal", "Trion"]
+    },
+    "frontline_engagement": {
+      "angle": 150,
+      "distance_offset": null
+    },
+    "use_convert": {
+      "disabled": false,
+      "min_mp": 150
+    },
+    "use_dispel": {
+      "buffs": [
+        "Defense Boost",
+        "Evasion Boost",
+        "Magic Def. Boost",
+        "Phalanx",
+        "Protect",
+        "Shell"
+      ]
+    },
+    "use_erase": {
+      "targets": [],
+      "debuffs": [
+        "Attack Down",
+        "Bind",
+        "Max HP Down",
+        "Max MP Down",
+        "Slow",
+        "STR Down",
+        "Weight"
+      ]
+    },
+    "setup": {
+      "bar_element_spell": "Baraera",
+      "bar_effect_spell": "Barpoisonra",
+      "devotion_targets": [],
+      "use_foods": ["Pear Crepe", "Grape Daifuku"]
+    }
+  },
+  "pull": [
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "when": [
+        "bt.hpp >= 5 and me.tp >= 1000 and me.mpp <= 60",
+        "(bt.distance <= 5 and canUseWeaponSkill('Spirit Taker')) or \\",
+        "  canUseWeaponSkill('Myrkr', 'Moonlight', 'Starlight')"
+      ],
+      "commands": [
+        "facingEnemy() or (faceEnemy() and wait(0.5))",
+        "useWeaponSkill()"
+      ],
+      "scope": "battle",
+      "frequency": 5
+    },
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "reactions/face-away"
+    },
+    {
+      "import": "reactions/use-stun"
+    },
+    {
+      "import": "leader-sync"
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "import": "debuffs/use-dispel"
+    },
+    {
+      "import": "buffs/refresh-cycle"
+    },
+    {
+      "import": "buffs/keep-protectra-shellra"
+    },
+    {
+      "import": "buffs/use-erase"
+    },
+    {
+      "when": [
+        "canUse('Devotion')",
+        "partyByName(vars.setup.devotion_targets) and member.mp < 700"
+      ],
+      "commands": "use(member)",
+      "frequency": 15
+    },
+    {
+      "import": "buffs/haste-cycle"
+    },
+    {
+      "when": "not hasEffectOf('Auspice') and canUse('Auspice')",
+      "commands": "use(me)"
+    },
+    {
+      "when": [
+        "vars.setup.bar_element_spell",
+        "not hasEffectOf(vars.setup.bar_element_spell) and canUseSpell(vars.setup.bar_element_spell)"
+      ],
+      "commands": ["useSpell(me)"],
+      "frequency": 3
+    },
+    {
+      "when": [
+        "vars.setup.bar_effect_spell",
+        "not hasEffectOf(vars.setup.bar_effect_spell) and canUseSpell(vars.setup.bar_effect_spell)"
+      ],
+      "commands": ["useSpell(me)"],
+      "frequency": 3
+    },
+    {
+      "import": "buffs/regen-cycle"
+    },
+    {
+      "when": "not hasBuff('Afflatus Solace') and canUse('Afflatus Solace')",
+      "commands": "use(me)"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": "not hasBuff('Food') and canUse(vars.setup.use_foods)",
+      "commands": "use(me)",
+      "frequency": 1
+    },
+    {
+      "when": "not hasEffectOf('Stoneskin') and canUse('Stoneskin')",
+      "commands": "use(me)",
+      "frequency": 10
+    }
+  ],
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "when": [
+        "allyAny('can_raise and distance < 20')",
+        "canUseSpell('Arise', 'Raise III', 'Raise II', 'Raise')"
+      ],
+      "commands": [
+        "logf('Raising knocked out member %s with %s...', member.name, spell.name)",
+        "useSpell(member)"
+      ],
+      "frequency": 10,
+      "miss_frequency": 5
+    },
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "heals/main-cure-sequence"
+    },
+    {
+      "import": "follow-leader"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "import": "buffs/use-erase"
+    }
+  ],
+  "resting": [],
+  "dead": [],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
+  ]
+}
