@@ -1,4 +1,11 @@
 local settings_counter = 0
+local settingsPaths = require('./lib/settings-paths')
+
+local function firstSettingsPath(paths)
+    return settingsPaths.firstExisting(paths, function(path)
+        return files.new(path):exists()
+    end)
+end
 
 ----------------------------------------------------------------------------------------
 -- Supported targeting strategies
@@ -134,7 +141,10 @@ local defaultSettings = {
 ----------------------------------------------------------------------------------------
 -- Determine the settings file name for this player
 local function getSettingsFileName(playerName)
-    return string.format('./settings/%s/main.json', playerName)
+    -- Reuse the highest-priority existing file for both loading and saving.
+    -- Only create a character override when no main.json exists in the search paths.
+    return firstSettingsPath(settingsPaths.candidates(playerName, 'main.json'))
+        or settingsPaths.writePath(playerName, 'main.json')
 end
 
 -----------------------------------------------------------------------------------------
@@ -142,7 +152,7 @@ end
 -- whether it exists or not.
 local function getActionsFileName(playerName, actionsName)
     if actionsName == nil then print('no actionsName provided') end
-    return string.format('./settings/%s/actions/%s.json', playerName, actionsName)
+    return settingsPaths.writePath(playerName, 'actions/' .. actionsName .. '.json')
 end
 
 -----------------------------------------------------------------------------------------
@@ -152,10 +162,7 @@ local function findExistingActionsFileName(playerName, actionsName, skip_standar
     if playerName == nil then print('No player name provided') end
     if actionsName == nil then print('no actionsName provided') end
 
-    local paths = {
-        './settings/%s/actions/%s.json':format(playerName, actionsName),    -- 1. User's settings folder
-        './settings/actions/%s.json':format(actionsName)                    -- 2. Settings folder
-    }
+    local paths = settingsPaths.candidates(playerName, 'actions/' .. actionsName .. '.json')
 
     if not skip_standard then
         table.insert(paths, './actions/standard/%s.json':format(actionsName))
@@ -227,10 +234,6 @@ local function loadVars(original, incoming)
         end
     end
 end
-
-local IMPORT_PLAYER_LIB     = "^$%(PlayerLib%)"
-local IMPORT_SETTINGS_LIB   = "^$%(SettingsLib%)"
-local IMPORT_GLOBAL_LIB     = "^$%(GlobalLib%)"
 
 ----------------------------------------------------------------------------------------
 -- Pulls the next round of imports into the specified actions array. Returns
@@ -336,35 +339,10 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                         local file = nil
                         local fileName = nil
 
-                        if action_import:find(IMPORT_PLAYER_LIB) then
-                            fileName = action_import:gsub(IMPORT_PLAYER_LIB, './settings/%s/actions/lib':format(playerName)) .. '.json'
-                            -- print('Referenced player-level import: ' .. fileName)
-                            file = files.new(fileName)
-                        elseif action_import:find(IMPORT_SETTINGS_LIB) then
-                            fileName = action_import:gsub(IMPORT_SETTINGS_LIB, './settings/actions/lib') .. '.json'
-                            -- print('Referenced Settings-level import: ' .. fileName)
-                            file = files.new(fileName)
-                        elseif action_import:find(IMPORT_GLOBAL_LIB) then
-                            fileName = action_import:gsub(IMPORT_GLOBAL_LIB, './actions/lib') .. '.json'
-                            --print('Referenced Global-level import: ' .. fileName)
-                            file = files.new(fileName)
-                        else                
-                            -- First, try the character-level actions libs folder
-                            fileName = './settings/%s/actions/lib/%s.json':format(playerName, action_import)
-                            file = files.new(fileName)
-
-                            -- If the import doesn't exist there, try the user-level actions lib folder
-                            if not file:exists() then
-                                fileName = './settings/actions/lib/%s.json':format(action_import)
-                                file = files.new(fileName)
-                            end
-
-                            -- If the import doesn't exist there, use the standard actions lib folder
-                            if not file:exists() then
-                                fileName = './actions/lib/%s.json':format(action_import)
-                                file = files.new(fileName)
-                            end
-                        end
+                        -- Automatic common imports pin a physical file so namespace
+                        -- variants supplement base files instead of hiding them.
+                        fileName = action._commonFile or firstSettingsPath(settingsPaths.importCandidates(playerName, action_import))
+                        if fileName then file = files.new(fileName) end
 
                         if file and file:exists() then
                             import = json.parse(file:read())
@@ -695,13 +673,15 @@ local function loadActionImports(playerName, actions, player)
 
         actions._processed = {}
 
-        -- Attempt to load the built-in files, if possible.
-        table.insert(actions.imports, 1, { silent = true, import = "$(PlayerLib)/common/%s":format(player.main_job) })
-        table.insert(actions.imports, 1, { silent = true, import = "$(PlayerLib)/common/common" })
-        table.insert(actions.imports, 1, { silent = true, import = "$(SettingsLib)/common/%s":format(player.main_job) })
-        table.insert(actions.imports, 1, { silent = true, import = "$(SettingsLib)/common/common" })
-        table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/%s":format(player.main_job) })
-        table.insert(actions.imports, 1, { silent = true, import = "$(GlobalLib)/common/common" })
+        -- Keep common files in low-to-high priority order before explicit imports.
+        -- The loader walks backward and preserves existing variable/macro values.
+        local commonFiles = settingsPaths.commonFiles(playerName, player.main_job)
+        for i = #commonFiles, 1, -1 do
+            local fileName = commonFiles[i]
+            table.insert(actions.imports, 1, {
+                silent = true, import = fileName, _commonFile = fileName,
+            })
+        end
 
         -- Ensure that all action types have at least an empty array. We do this in a pre-pass step
         -- to ensure that no action types are built until all action types are prepared.
@@ -785,12 +765,8 @@ end
 --
 local function loadDefaultActions(player, save)
 
-    local locations = 
-    {
-        './settings/%s/actions/defaults/default-actions.json':format(player.name),
-        './settings/actions/defaults/default-actions.json',
-        './actions/defaults/default-actions.json'
-    }
+    local locations = settingsPaths.candidates(player.name, 'actions/defaults/default-actions.json')
+    table.insert(locations, './actions/defaults/default-actions.json')
 
     for i = 1, #locations do
         local fileName = locations[i]
@@ -857,14 +833,14 @@ function saveActions(player, force, actionsName)
 
     targetFile:write(sourceJson)
 
-    reloadSettings(actionsName)
+    reloadSettings(actionsName, false, settingsPaths.getLoadedNamespace() or false)
 
     return true
 end
 
 ----------------------------------------------------------------------------------------
 -- Load settings
-function loadSettings(actionsName, settingsOnly)
+local function loadSettingsInternal(actionsName, settingsOnly)
     local player = windower.ffxi.get_player()
     if not player then
         tempSettings = json.parse(json.stringify(defaultSettings))
@@ -877,6 +853,7 @@ function loadSettings(actionsName, settingsOnly)
         return tempSettings
     end
 
+    writeMessage('Settings namespace: ' .. text_green(settingsPaths.getLoadedNamespace() or '(global)'))
     local fileName = getSettingsFileName(player.name)
 
     local file = files.new(fileName)
@@ -1021,7 +998,7 @@ function loadSettings(actionsName, settingsOnly)
         tempSettings.actionInfo.fileName = actionsFileName
 
         -- Save the post-processed actions
-        writeJsonToFile('./settings/%s/.output/%s.actions.processed.json':format(player.name, (actionsName or player.name)), actions)
+        writeJsonToFile(settingsPaths.writePath(player.name, '.output/' .. (actionsName or player.name) .. '.actions.processed.json'), actions)
 
         if actionsName and not defaultsLoaded then
             writeMessage('Successfully loaded %s actions %s':format(
@@ -1041,6 +1018,30 @@ end
 
 ----------------------------------------------------------------------------------------
 -- Save settings
+-- nil selects the session namespace; false explicitly selects global settings.
+function loadSettings(actionsName, settingsOnly, namespaceOverride)
+    local previous = settingsPaths.getLoadedNamespace()
+    local name = namespaceOverride
+    if name == nil then
+        if settingsOnly then name = previous else name = settingsPaths.getNamespace() end
+    end
+    name = name or nil
+    local valid, message = settingsPaths.validateNamespace(name)
+    if not valid then error(message) end
+    if name then
+        local player = windower.ffxi.get_player()
+        local success, err = settingsPaths.ensureNamespaceFolders(player and player.name, name)
+        if not success then error(err) end
+    end
+    settingsPaths.setLoadedNamespace(name)
+    local success, result = pcall(loadSettingsInternal, actionsName, settingsOnly)
+    if not success then
+        settingsPaths.setLoadedNamespace(previous)
+        error(result)
+    end
+    return result
+end
+
 function saveSettings(settingsToSave)
     local player = windower.ffxi.get_player()
     local fileName = getSettingsFileName(player.name)

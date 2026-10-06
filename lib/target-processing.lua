@@ -399,34 +399,61 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                 mob.spawn_type == SPAWN_TYPE_TRUST or
                 mob.spawn_type == SPAWN_TYPE_MOB
             then
-                if skip_packet_targeting == nil then
-                    skip_packet_targeting = settings.skipPacketTargeting
-                end
+                -- if skip_packet_targeting == nil then
+                --     skip_packet_targeting = settings.skipPacketTargeting
+                -- end
+                skip_packet_targeting = false
 
                 if not skip_packet_targeting then
                     local num_attempted = 0
-
-                    local max_attempts = 1
+                    local max_attempts = 15
 
                     -- We'll try a few times to establish our target directly
                     for i = 1, max_attempts do
+                        -- We'll sleep a bit every iteration, a little longer as we go
+                        if num_attempted <= 1 then
+                            -- nothing
+                        elseif num_attempted <= 8 then
+                            coroutine.sleep(0.25)
+                        elseif num_attempted <= 15 then
+                            coroutine.sleep(0.33)
+                        else
+                            coroutine.sleep(0.33)
+                        end
+
+                        -- If this is a subsequent retry, we'll make sure that the mob is
+                        -- still something we can actually claim for ourselves.
+                        if num_attempted > 0 then
+                            local current = windower.ffxi.get_mob_by_id(mob.id)
+                            if
+                                not current or
+                                not current.valid_target
+                            then
+                                printDebug('Exiting targeting loop due to invalid target.')
+                                fail_fast = true
+                                break
+                            elseif
+                                not partyInfo:canShareClaimOnMob(current) 
+                            then
+                                printDebug('Exiting targeting loop due to stolen claim.')
+                                fail_fast = true
+                                break
+                            end
+                        end
+
                         num_attempted = num_attempted + 1
 
-                        packets.inject(packets.new('incoming', PACKET_TARGET_LOCK, {
-                            ['Player'] = player.id,
-                            ['Target'] = mob.id,
-                            ['Player Index'] = player.index,
-                        }))
-
-                        coroutine.sleep(0.5)
+                        directionality.faceTarget(mob)
+                        targetAndEngage(mob.id)
 
                         t = windower.ffxi.get_mob_by_target('t')
                         if 
                             t and
                             t.id == mob.id
                         then
+                            -- Bail if this target is no loner valid (dead, despawned, etc)
                             if not t.valid_target then
-                                -- The fail fast flag ensures that later code doesn't try to target the mob again
+                                printDebug('Exiting targeting loop due to invalidated target.')
                                 fail_fast = true
                                 break
                             end
@@ -531,9 +558,7 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                                     -- the has_st flag, and indicate that we should exit the loop.
                                     sendKey('enter')
                                     has_st = false
-                                    looping = false
-
-                                    
+                                    looping = false                                    
 
                                     printDebug('Command-based target of %s/%d was successful after %.2fs with %d tab(s)%s':format(
                                         st.name,
@@ -621,6 +646,33 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
     return false, nil
 end
 
+
+--------------------------------------------------------------------------------------
+-- Targets and engages a battle target by mob ID.
+-- Stub: returns false until targeting and engagement are implemented.
+function targetAndEngage(mobId)
+    local mob = windower.ffxi.get_mob_by_id(mobId)
+
+    -- We can only proceed if we have a valid enemy-type mob within targeting range
+    if 
+        not mob or
+        not mob.valid_target or
+        mob.spawn_type ~= SPAWN_TYPE_MOB or
+        mob.distance >= 50 * 50
+    then
+        return false
+    end
+
+    packets.inject(packets.new('outgoing', 0x01A, {
+        ['Target'] = mob.id,
+        ['Target Index'] = mob.index,
+        ['Category'] = 0x02
+    }))
+
+    coroutine.sleep(0.25)
+
+    return true
+end
 
 local targetScope = 0
 --------------------------------------------------------------------------------------

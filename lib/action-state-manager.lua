@@ -42,7 +42,7 @@ local state_manager = {
     },
 
     meritPointInfo = { current = 0, max = 30, limits = 0 },
-    capacityPointInfo = { capacityPoints = 0, jobPoints = 0 },
+    capacityPointInfo = { capacityPoints = 0, jobPoints = 0, spentJobPoints = 0, totalJobPoints = 0 },
 
     othersSpells = { },
 
@@ -117,10 +117,12 @@ end
 
 -----------------------------------------------------------------------------------------
 -- Set/get capacity/job point info
-state_manager.setCapacityPointInfo = function(self, capacityPoints, jobPoints)
+state_manager.setCapacityPointInfo = function(self, capacityPoints, jobPoints, spentJobPoints)
     self.capacityPointInfo = {
         capacityPoints = capacityPoints,
-        jobPoints = jobPoints
+        jobPoints = jobPoints,
+        spentJobPoints = spentJobPoints,
+        totalJobPoints = jobPoints + spentJobPoints
     }
 end
 state_manager.getCapacityPointInfo = function(self)
@@ -1063,8 +1065,8 @@ state_manager.reset = function (self)
     self.actions = { }
     self.functions = {}
     self.vars = { }
-    self.meritPointInfo = { current = 0, max = 30, limits = 0 }
-    self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0 }
+    --self.meritPointInfo = { current = 0, max = 30, limits = 0 }
+    --self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0, spentJobPoints = 0, totalJobPoints = 0 }
     -- self.memberBuffs = { }   -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
     -- self.mobBuffs = { }    -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
 end

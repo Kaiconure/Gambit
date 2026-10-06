@@ -2,6 +2,7 @@
 /.data/*
 /settings/*
 !/settings/.*
+/settings/.ns
 /.backup/*
 /.VSCodeCounter/*
 /functions.txt

@@ -1,4 +1,4 @@
-__version = '0.96.0-beta19b'
+__version = '0.96.0-beta19c'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -49,6 +49,7 @@ require('actions')
 
 json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
+executionFactory = require('./lib/execution-factory')
 
 meta = meta or {}
 meta.erase = require('./meta/erase') or {}
@@ -266,12 +267,13 @@ function sendJobInfoIpc(player)
     end
 end
 
-function reloadSettings(actionsName, bypassActions)
+function reloadSettings(actionsName, bypassActions, namespaceOverride)
+    executionFactory.clear()
     inventory.printDebug = nil
 
     bypassActions = bypassActions and settings.actions ~= nil
 
-    settings = loadSettings(actionsName, bypassActions)
+    settings = loadSettings(actionsName, bypassActions, namespaceOverride)
     logging_settings.verbosity = settings.verbosity
 
     -- We will not recompile actions or reset the current mob if this is a settings-only reload
@@ -709,8 +711,8 @@ windower.register_event('job change', function()
 
     sendJobInfoIpc()
 
-    actionStateManager:setMeritPointInfo(0, 0, 0)
-    actionStateManager:setCapacityPointInfo(0, 0)
+    -- actionStateManager:setMeritPointInfo(0, 0, 0)
+    -- actionStateManager:setCapacityPointInfo(0, 0, 0)
 
     reloadSettings()
 end)
@@ -1602,13 +1604,15 @@ local _handle_limitCapacityChunk = function(id, data)
             local job = player.main_job_full
             local numCapacityPoints = packet[job..' Capacity Points']
             local numJobPoints = packet[job..' Job Points']
+            local spentJobPoints = packet[job..' Spent Job Points']
 
-            -- writeMessage('Capacity Event: CP=%d, JP=%d':format(
+            -- writeMessage('Capacity Event: CP=%d, JP=%d, SJP: %d':format(
             --    numCapacityPoints,
-            --    numJobPoints
+            --    numJobPoints,
+            --    spentJobPoints
             -- ))
 
-            actionStateManager:setCapacityPointInfo(numCapacityPoints, numJobPoints)
+            actionStateManager:setCapacityPointInfo(numCapacityPoints, numJobPoints, spentJobPoints)
         end
     end
 end

@@ -1,4 +1,42 @@
 local handlers = {}
+local settingsPaths = require('./lib/settings-paths')
+
+-------------------------------------------------------------------------------
+-- Namespace selection is session state, never a persisted setting.
+handlers['namespace'] = function(args)
+    if #args == 0 then
+        writeMessage('Current namespace: ' .. text_green(settingsPaths.getNamespace() or '(global)'))
+        return
+    end
+
+    local option = (args[1] or ''):lower()
+    if not ((option == '-set' and #args == 2) or (option == '-clear' and #args == 1)) then
+        writeMessage('Usage: gbt namespace [-set <name> | -clear] (alias: ns)')
+        return
+    end
+
+    local name = option == '-set' and args[2] or nil
+    local previousNamespace = settingsPaths.getNamespace()
+    local success, message = settingsPaths.setNamespace(name)
+    if not success then
+        writeMessage(message)
+        return
+    end
+
+    if name then
+        local player = windower.ffxi.get_player()
+        success, message = settingsPaths.ensureNamespaceFolders(player and player.name)
+        if not success then
+            settingsPaths.setNamespace(previousNamespace)
+            writeMessage(message)
+            return
+        end
+    end
+
+    -- Match a normal full settings reload: select actions for the current job.
+    reloadSettings()
+end
+handlers['ns'] = handlers['namespace']
 
 -------------------------------------------------------------------------------
 -- show
@@ -319,6 +357,22 @@ handlers['reload'] = function (args)
     local bypassActions = arrayIndexOfStrI(args, '-settings-only') or arrayIndexOfStrI(args, '-so')
     local actionsName = arrayIndexOfStrI(args, '-actions') or arrayIndexOfStrI(args, '-a')
     local reload = arrayIndexOfStrI(args, '-reload') or arrayIndexOfStrI(args, '-r')
+    local nsIndex = arrayIndexOfStrI(args, '-ns')
+    local namespaceOverride
+    if nsIndex then
+        if bypassActions then
+            writeMessage('The -ns option cannot be combined with -settings-only.')
+            return
+        end
+        namespaceOverride = args[nsIndex + 1]
+        local valid, message = settingsPaths.validateNamespace(namespaceOverride)
+        if not namespaceOverride or namespaceOverride:sub(1, 1) == '-' or not valid then
+            writeMessage(message or 'Usage: gbt r -ns <namespace>')
+            return
+        end
+    elseif reload then
+        namespaceOverride = settingsPaths.getLoadedNamespace() or false
+    end
 
     if reload and settings.actionInfo and type(settings.actionInfo.name) == 'string' then
         writeMessage('Attempting to reload: %s':format(text_action(settings.actionInfo.name)))
@@ -327,7 +381,7 @@ handlers['reload'] = function (args)
         actionsName = actionsName and (args[actionsName + 1]) or nil
     end
 
-    reloadSettings(actionsName, bypassActions ~= nil)
+    reloadSettings(actionsName, bypassActions ~= nil, namespaceOverride)
 end
 handlers['r'] = handlers['reload']
 

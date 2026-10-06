@@ -1863,6 +1863,8 @@ local function loadContextTargetSymbols(context, target)
 
     local cpi = actionStateManager:getCapacityPointInfo()
     context.job_points = tonumber(cpi and cpi.jobPoints) or 0
+    context.spent_job_points = tonumber(cpi and cpi.spentJobPoints) or 0
+    context.total_job_points = tonumber(cpi and cpi.totalJobPoints) or 0
 
     local conquest = actionStateManager:getConquestInfo()
     context.conquest_points = conquest and tonumber(conquest.conquestPoints) or 0
@@ -1870,6 +1872,16 @@ local function loadContextTargetSymbols(context, target)
 
     local mpi = actionStateManager:getMeritPointInfo()
     context.merit_points = tonumber(mpi and mpi.current) or 0
+
+    -- Transfer all point-related additions into the 'me' object for consistency
+    context.me.job_points = context.job_points
+    context.me.spent_job_points = context.spent_job_points
+    context.me.total_job_points = context.total_job_points
+    --
+    context.me.conquest_points = context.conquest_points
+    context.me.imperial_standing = context.imperial_standing
+    --
+    context.me.merit_points = context.merit_points
 
     context.waiting_for_trusts = false
 
@@ -6370,6 +6382,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.member_count = count
 
         return result
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Executes a Lua string or an array of independent expressions in order.
+    -- Arrays return the final expression's results; use a string for full scripts.
+    context.execute = function(code, ...)
+        if type(code) == 'string' or type(code) == 'table' then
+            return executionFactory.execute(code, context, ...)
+        end
     end
 
     --------------------------------------------------------------------------------------

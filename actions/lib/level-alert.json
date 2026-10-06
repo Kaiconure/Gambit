@@ -1,0 +1,83 @@
+{
+  "vars": {
+    "level_alert": {
+      "levels": {
+        "all": null,
+        "99": null
+      },
+      "job_points": {
+        "capped": null,
+        "mastered": null
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "not vars.level_alert._job or vars.level_alert._job ~= me.main_job or (\\",
+        " vars.level_alert._job_points == 0 and me.job_points > 0\\",
+        ")"
+      ],
+      "commands": [
+        "setVar('vars.level_alert._level', me.level)",
+        "setVar('vars.level_alert._is_mastered', me.is_mastered)",
+        "setVar('vars.level_alert._job_points', me.job_points)",
+        "setVar('vars.level_alert._total_job_points', me.total_job_points)",
+        "setVar('vars.level_alert._job', me.main_job)"
+      ],
+      "comment": [
+        "==================================================================================",
+        " Set the current job and level if we don't already have it, or if it's changed.",
+        " This ensures we don't detect job changes as level changes.",
+        "=================================================================================="
+      ]
+    },
+    {
+      "when": [
+        "vars.level_alert._level and vars.level_alert._level ~= me.level"
+      ],
+      "commands": [
+        "logf('Detected level change: %d to %d', vars.level_alert._level, me.level)",
+        "setVar('vars.level_alert._level', me.level)",
+        "vars.level_alert.levels[string(me.level)] and execute(vars.level_alert.levels[string(me.level)])",
+        "vars.level_alert.levels.all and execute(vars.level_alert.levels.all)"
+      ],
+      "comment": [
+        "==================================================================================",
+        " Executes any level-specific actions, as well as the all-level actions (if any).",
+        "=================================================================================="
+      ]
+    },
+    {
+      "when": [
+        "vars.level_alert._job_points and vars.level_alert._job_points < 500 and me.job_points >= 500"
+      ],
+      "commands": [
+        "logf('Detected capped job points at 500!')",
+        "setVar('vars.level_alert._job_points', me.job_points)",
+        "vars.level_alert.job_points.capped and execute(vars.level_alert.job_points.capped)"
+      ],
+      "comment": [
+        "==================================================================================",
+        " Executes when the capping at 500 job points.",
+        "=================================================================================="
+      ]
+    },
+    {
+      "when": [
+        "not me.is_mastered",
+        "vars.level_alert._total_job_points and vars.level_alert._total_job_points < 2100 and me.total_job_points >= 2100"
+      ],
+      "commands": [
+        "logf('Detected sufficient job points to master your job!')",
+        "setVar('vars.level_alert._total_job_points', me.total_job_points)",
+        "vars.level_alert.job_points.mastered and execute(vars.level_alert.job_points.mastered)"
+      ],
+      "comment": [
+        "==================================================================================",
+        " Executes when your total job point value reaches 2100.",
+        "=================================================================================="
+      ]
+    }
+  ]
+}
