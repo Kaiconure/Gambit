@@ -1583,6 +1583,48 @@ local function _handle_conquestInfoChunk(id, data)
     actionStateManager:setConquestInfo(conquest_points, imperial_standing)
 end
 
+local _handle_charStatsChunk = function(id, data)
+    local packet = packets.parse('incoming', data)
+
+    local level = packet['Main Job Level']
+    local master_level = packet['Master Level']
+    local su = packet['Su Level']
+    local item_level = level + packet['iLevel over 99']
+    local ep = packet['Current Exemplar Points']
+    local ep_required = packet['Required Exemplar Points']
+    local nation = packet['Nation']
+    local nation_rank = packet['Nation rank']
+    local unity = packet['Unity ID']
+    local unity_rank = packet['Unity Rank']
+    local unity_points = packet['Unity Points']
+
+    -- print('ML: %d, IL: %d, su: %d, ep: %d/%d, nat: %d (rank %d), un: %d (rank %d) %d':format(
+    --     master_level,
+    --     item_level,
+    --     su,
+    --     ep,
+    --     ep_required,
+    --     nation,
+    --     nation_rank,
+    --     unity,
+    --     unity_rank,
+    --     unity_points
+    -- ))
+
+    actionStateManager:setCharStatInfo(
+        master_level,
+        item_level,
+        su,
+        ep,
+        ep_required,
+        nation,
+        nation_rank,
+        unity,
+        unity_rank,
+        unity_points
+    )
+end
+
 local _handle_limitCapacityChunk = function(id, data)
     local packet = packets.parse('incoming', data)
 
@@ -1655,6 +1697,10 @@ windower.register_event('incoming chunk', function (id, data, modified_data, inj
         id == 0x05E     -- Conquest/Beseiged info
     then
         _handle_conquestInfoChunk(id, data)
+    elseif
+        id == 0x061     -- Char stats
+    then
+        _handle_charStatsChunk(id, data);
     elseif
         id == 0x063     -- Limit Point and Capacity Point updates
     then

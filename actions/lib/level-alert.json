@@ -5,6 +5,10 @@
         "all": null,
         "99": null
       },
+      "master_levels": {
+        "all": null,
+        "50": null
+      },
       "job_points": {
         "capped": null,
         "mastered": null
@@ -20,6 +24,7 @@
       ],
       "commands": [
         "setVar('vars.level_alert._level', me.level)",
+        "setVar('vars.level_alert._master_level', me.master_level)",
         "setVar('vars.level_alert._is_mastered', me.is_mastered)",
         "setVar('vars.level_alert._job_points', me.job_points)",
         "setVar('vars.level_alert._total_job_points', me.total_job_points)",
@@ -45,6 +50,23 @@
       "comment": [
         "==================================================================================",
         " Executes any level-specific actions, as well as the all-level actions (if any).",
+        "=================================================================================="
+      ]
+    },
+    {
+      "when": [
+        "vars.level_alert._master_level and vars.level_alert._master_level ~= me.master_level"
+      ],
+      "commands": [
+        "logf('Detected master level change: %d to %d', vars.level_alert._master_level, me.master_level)",
+        "setVar('vars.level_alert._master_level', me.master_level)",
+        "vars.level_alert.master_levels[string(me.master_level)] and execute(vars.level_alert.master_levels[string(me.master_level)])",
+        "vars.level_alert.master_levels.all and execute(vars.level_alert.master_levels.all)"
+      ],
+      "comment": [
+        "==================================================================================",
+        " Executes any master level-specific actions, as well as the all-master",
+        " level actions (if any).",
         "=================================================================================="
       ]
     },

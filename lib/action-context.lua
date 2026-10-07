@@ -1873,15 +1873,34 @@ local function loadContextTargetSymbols(context, target)
     local mpi = actionStateManager:getMeritPointInfo()
     context.merit_points = tonumber(mpi and mpi.current) or 0
 
+    local cs = actionStateManager:getCharStatInfo()
+    context.master_level = tonumber(cs and cs.masterLevel) or 0
+    context.item_level = tonumber(cs and cs.itemLevel) or 0
+    context.su_level = tonumber(cs and cs.suLevel) or 0
+    context.nation = tonumber(cs and cs.nation) or 0
+    context.nation_rank = tonumber(cs and cs.nationRank) or 0
+    context.unity = tonumber(cs and cs.unity) or 0
+    context.unity_rank = tonumber(cs and cs.unityRank) or 0
+    context.unity_accolades = tonumber(cs and cs.unityAccolades) or 0
+
     -- Transfer all point-related additions into the 'me' object for consistency
     context.me.job_points = context.job_points
-    context.me.spent_job_points = context.spent_job_points
-    context.me.total_job_points = context.total_job_points
+    context.me.spent_job_points     = context.spent_job_points
+    context.me.total_job_points     = context.total_job_points
     --
-    context.me.conquest_points = context.conquest_points
-    context.me.imperial_standing = context.imperial_standing
+    context.me.conquest_points      = context.conquest_points
+    context.me.imperial_standing    = context.imperial_standing
     --
-    context.me.merit_points = context.merit_points
+    context.me.merit_points         = context.merit_points
+    --
+    context.me.master_level         = context.master_level
+    context.me.item_level           = context.item_level
+    context.me.su_level             = context.su_level
+    context.me.nation               = context.nation
+    context.me.nation_rank          = context.nation_rank
+    context.me.unity                = context.unity
+    context.me.unity_rank           = context.unity_rank
+    context.me.unity_accolades      = context.unity_accolades
 
     context.waiting_for_trusts = false
 

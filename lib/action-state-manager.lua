@@ -43,6 +43,18 @@ local state_manager = {
 
     meritPointInfo = { current = 0, max = 30, limits = 0 },
     capacityPointInfo = { capacityPoints = 0, jobPoints = 0, spentJobPoints = 0, totalJobPoints = 0 },
+    charStats = {
+        masterLevel = 0,
+        itemLevel = 1,
+        suLevel = 0,
+        ep = 0,
+        epRequired = 2500,
+        nation = 0,
+        nationRank = 1,
+        unity = 0,
+        unityRank = 0,
+        unityAccolades = 0 
+    },
 
     othersSpells = { },
 
@@ -140,6 +152,27 @@ end
 state_manager.getConquestInfo = function(self)
     return self.conquest
 end
+
+-----------------------------------------------------------------------------------------
+-- Set/get character stats info
+state_manager.setCharStatInfo = function(self, masterLevel, itemLevel, suLevel, ep, epRequired, nation, nationRank, unity, unityRank, unityAccolades)
+    self.charStats = {
+        masterLevel = masterLevel,
+        itemLevel = itemLevel,
+        suLevel = suLevel,
+        ep = ep,
+        epRequired = epRequired,
+        nation = nation,
+        nationRank = nationRank,
+        unity = unity,
+        unityRank = unityRank,
+        unityAccolades = unityAccolades
+    }
+end
+state_manager.getCharStatInfo = function(self)
+    return self.charStats
+end
+
 
 -----------------------------------------------------------------------------------------
 -- Sets the action type being executed, used to track how long we're in a type
