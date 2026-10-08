@@ -1,6 +1,10 @@
 local handlers = {}
 local settingsPaths = require('./lib/settings-paths')
 
+handlers['capture'] = function(args)
+    writeMessage(encounterCapture.command(args))
+end
+
 -------------------------------------------------------------------------------
 -- Namespace selection is session state, never a persisted setting.
 handlers['namespace'] = function(args)

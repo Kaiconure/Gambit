@@ -50,6 +50,7 @@ require('actions')
 json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
 executionFactory = require('./lib/execution-factory')
+encounterCapture = require('./lib/encounter-capture')
 
 meta = meta or {}
 meta.erase = require('./meta/erase') or {}

@@ -6406,6 +6406,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Executes a Lua string or an array of independent expressions in order.
     -- Arrays return the final expression's results; use a string for full scripts.
+    -- Query live diagnostic state; unknown/manual only until a detector is verified.
+    context.ploutonState = encounterCapture.getState
+    context.startPloutonCapture = encounterCapture.start
+    context.ploutonProbeDue = encounterCapture.probeDue
+    context.probePlouton = function() return encounterCapture.probe(context) end
+
     context.execute = function(code, ...)
         if type(code) == 'string' or type(code) == 'table' then
             return executionFactory.execute(code, context, ...)
