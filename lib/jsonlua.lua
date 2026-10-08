@@ -152,7 +152,8 @@ function json.stringify(obj, as_key)
   elseif kind == 'nil' then
     return 'null'
   else
-    error('Unjsonifiable type: ' .. kind .. '.')
+    --error('Unjsonifiable type: ' .. kind .. '.')
+    return 'null'
   end
   return table.concat(s)
 end

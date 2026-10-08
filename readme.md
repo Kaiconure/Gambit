@@ -125,12 +125,33 @@ Disables automation. Has no effect if automation is already disabled. See also: 
 
 Enables automation. Has no effect if automation is already enabled. See also: `disable`, `toggle`
 
-#### **reload** [-settings-only] [-actions {action-name}]
+#### **reload** [-settings-only] [-actions {action-name}] [-ns {namespace}] [-r]
 
 Forces the addon to reload all settings and actions, resetting the action processing state. This *does not* affect whether automation is enabled.
 
 - `-settings-only`, `-so` - Force the addon to reload settings but not actions. This is primarily useful if you've modified the settings file directly, and want to reload those without resetting the action state.
 - `-actions {action-name}` - Perform a full reload, but load the specified action set rather than the default job-based one. This is completely ignored if you've asked for a settings-only reload.
+- `-ns {namespace}` - Load once from this namespace without changing the session selection reported by `gbt ns`. For example, `gbt r -a xp-leveler -ns common`. Cannot be combined with `-settings-only`.
+- `-r`, `-reload` - Reload the currently loaded action name and its namespace, including a previous one-time namespace override. An explicit `-ns` takes precedence over the remembered namespace.
+
+A plain `gbt r` returns to job-based actions in the session-selected namespace. Saves and processed output use the loaded configuration's namespace; settings-only reloads retain that context too. Neither namespace is persisted across addon reloads.
+
+#### **namespace** / **ns** [-set {name} | -clear]
+
+Namespaces group activity-specific settings under `settings/.ns/{name}/`, mirroring the normal settings structure. For example, `settings/.ns/abyssea/Carbonite/actions/pld.json` supplies Carbonite's PLD actions, while `settings/.ns/abyssea/actions/lib/` holds shared library gambits.
+
+- `gbt ns` reports the current namespace (or global).
+- `gbt ns -set abyssea` ensures the namespace contains `actions`, `actions/lib`, and the current character's folder, then selects Abyssea and fully reloads settings and job-based actions. Existing folders are preserved; no settings files are created by this folder initialization. If folder creation fails, the previous namespace remains active and no reload occurs.
+- `gbt ns -clear` returns to global settings and fully reloads.
+- `gbt r` and other settings reloads retain the current namespace. Reloading the addon resets it to global. Selection is local to each character and is never saved to disk.
+
+Lookup order is namespace character, namespace common, base character, base common, then shipped defaults where applicable. This applies to `main.json`, action entry points, explicit library imports, and default actions. The first matching file wins; namespace files do not merge with lower-priority versions. Automatic common imports are the additive exception described below. Existing action-import variable merging is unchanged.
+
+Explicit `$(PlayerLib)` and `$(SettingsLib)` imports search their respective scope in the namespace and then base settings; `$(GlobalLib)` continues to reference shipped libraries directly. Action saves and processed action output go to the active namespace's character folder. Main settings saves update the highest-priority existing `main.json` in the search paths, including shared or base files. A new character-specific `main.json` is created in the active namespace (or base character folder when no namespace is active) only when none exists.
+
+Names may contain letters, numbers, underscores, and hyphens, with forward slashes separating folders. For example, `gbt ns -set ambuscade/dragon` selects `settings/.ns/ambuscade/dragon/`. These folders are purely organizational: the parent `ambuscade` namespace is not searched as an additional fallback. Leading, trailing, or repeated slashes and `.` or `..` segments are not allowed. A namespace need not exist yet: missing files fall back to base settings, and normal saves can populate its character folder.
+
+Common files are automatically included before explicit imports, from lowest to highest priority: global library, base settings library, base player library, namespace settings library, then namespace player library. Within each library, the order is `common/common.json`, `common/{main_job}.json`, then `common.json` directly under the library folder. All existing files are included; namespace common files supplement rather than hide base common files. Missing files are silently skipped. Imports are processed backward, so more specific common files supply variable and macro defaults first; the main action file and explicit imports retain their existing precedence. Explicit imports, including imports inside common files, still use first-match namespace lookup.
 
 #### **show**
 

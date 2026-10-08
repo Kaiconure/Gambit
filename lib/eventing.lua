@@ -132,8 +132,11 @@ ActionPacket.open_listener(function (act)
     then
         local actorId = actionPacket:get_id()
         local actor = windower.ffxi.get_mob_by_id(actorId)
-        local my_target = windower.ffxi.get_mob_by_target('bt') or windower.ffxi.get_mob_by_target('t')
-        local is_actor_allied = actor.in_party or actor.in_alliance
+        local context = actionStateManager:getContext()
+        local my_target = (context and context.bt and context.bt.mob) or
+            windower.ffxi.get_mob_by_target('bt') or
+            windower.ffxi.get_mob_by_target('t')
+        local is_actor_allied = actor and (actor.in_party or actor.in_alliance)
 
         if
             actor and actor.id -- Require an actor
@@ -154,31 +157,33 @@ ActionPacket.open_listener(function (act)
 
                     local ability = nil
                     local is_ws = false
-                    if 
-                        fields.ability
-                    then
-                        -- This is an ability. Test things like Wild Flourish, etc. Refer to Gambit.lua/_handle_actionChunk for cross-reference.
-                        ability = resources.job_abilities[id]
-                        if ability then
-                            if 
-                                ability.id ~= 209 and   -- Wild Flourish
-                                ability.id ~= 320       -- Konzen-ittai
-                            then
-                                ability = nil
+                    if id then
+                        if
+                            fields.ability
+                        then
+                            -- This is an ability. Test things like Wild Flourish, etc. Refer to Gambit.lua/_handle_actionChunk for cross-reference.
+                            ability = resources.job_abilities[id]
+                            if ability then
+                                if 
+                                    ability.id ~= 209 and   -- Wild Flourish
+                                    ability.id ~= 320       -- Konzen-ittai
+                                then
+                                    ability = nil
+                                end
                             end
-                        end
-                    elseif
-                        fields.spell
-                    then
-                        -- This is a spell. TODO: Test things like chain affinity for BLU, etc.
-                        ability = resources.spells[id]
-                    else
-                        -- fields.weapon_skill
-                        if id < 256 then
-                            ability = resources.weapon_skills[id]
-                            is_ws = true
+                        elseif
+                            fields.spell
+                        then
+                            -- This is a spell. TODO: Test things like chain affinity for BLU, etc.
+                            ability = resources.spells[id]
                         else
-                            ability = resources.monster_abilities[id]
+                            -- fields.weapon_skill
+                            if id < 256 then
+                                ability = resources.weapon_skills[id]
+                                is_ws = true
+                            else
+                                ability = resources.monster_abilities[id]
+                            end
                         end
                     end
 
@@ -233,24 +238,22 @@ ActionPacket.open_listener(function (act)
                             (ability.skillchain_c or '') ~= ''
                         then
                             if damage > 0 then
+                                -- Note: This will actually send blue magic abilities used by and on mobs. It's handled in
+                                -- the underlying implementation of setPartyWeaponSkill.
                                 setPartyWeaponSkill(actor, ability, target)
                             end
                         else
-                            writeDebug('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.debug)))
+                            if settings.verbosity >= VERBOSITY_DEBUG then
+                                writeDebug('Non-chainable weapon skill %s detected!':format(text_weapon_skill(ability.name, Colors.debug)))
+                            end
                         end
 
                         -- We'll still only output if it is our current battle target
                         if
                             target and
                             my_target and
-                            --actor.spawn_type ~= SPAWN_TYPE_MOB and
-                            --(my_target.id == target.id or (target.spawn_type ~= SPAWN_TYPE_MOB))
                             (my_target.id == target.id or actor.in_party or actor.in_alliance)
                         then
-                            -- if ability.name == 'Spirit Taker' or ability.name == 'Myrkr' then
-                            --     writeJsonToFile('data/ws/tracking/%s_%s_uses_%s_on_%s.json':format(os.clock(), actor.name, ability.name, target.name), actionPacket)
-                            -- end
-
                             writeVerbose('%s: %s %s %s%s %s':format(
                                 text_player(actor.name, Colors.verbose),
                                 text_weapon_skill(ability.name, Colors.verbose),

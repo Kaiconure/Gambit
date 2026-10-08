@@ -4,13 +4,14 @@ local inventory = {}
 -- Bags that store equippable items
 local INVENTORY_BAGS_BY_ID = 
 {
-    [0] = { field = "inventory", usable = true, equippable = true },
+    [0] = { field = "inventory", usable = true, equippable = true, linkshell = true },
     [1] = { field = "safe" },
     [2] = { field = "storage" },
     [3] = { field = "locker" },
     [4] = { field = "temporary", usable = true },
-    [5] = { field = "satchel" },
-    [6] = { field = "sack" },
+    [5] = { field = "satchel", linkshell = true },
+    [6] = { field = "sack", linkshell = true },
+    [7] = { field = "case", linkshell = true },
     [8] = { field = "wardrobe", usable = true, equippable = true },
     [10] = { field = "wardrobe2", usable = true, equippable = true },
     [11] = { field = "wardrobe3", usable = true, equippable = true },
@@ -29,6 +30,7 @@ local INVENTORY_ID_BY_NAME = {
     ["temporary"] = 4,
     ["satchel"] = 5,
     ["sack"] = 6,
+    ["case"] = 7,
     ["wardrobe"] = 8,
     ["wardrobe2"] = 10,
     ["wardrobe3"] = 11,
@@ -214,6 +216,30 @@ inventory.find_equipment_in_slot = function(slot, items)
         items)
 end
 
+local function sanitize_augments(extdata)
+    if
+        extdata and
+        type(extdata) == 'table' and
+        type(extdata.augments) == 'table' and
+        #extdata.augments > 0
+    then
+        while true do
+            local found = false
+            for i, augment in ipairs(extdata.augments) do
+                if augment == 'none' or augment == nil then
+                    found = true
+                    table.remove(extdata.augments, i)
+                    break
+                end
+            end
+
+            if not found then
+                return
+            end
+        end
+    end
+end
+
 local function is_item_excluded(exclusion_list, bagId, localId)
     if type(exclusion_list) ~= 'table' or #exclusion_list < 1 then
         return
@@ -237,13 +263,27 @@ local function inventory_items_match(item1, item2)
         if
             item1.id == item2.id
         then
-            return true
+            -- If they both have extdata, then we'll return true if all augments match
+            if item1.extdata and item2.extdata then
+                return inventory.has_all_augments(item1.extdata, item2.extdata.augments)
+            end
+
+            -- Otherwise, we'll only return true if both items have no extdata. They're not
+            -- the same item if the underlying metadata differs.
+            return not item1.extdata and not item2.extdata
         end
     end
 end
 
-inventory.equip_many = function(pieces, all_items)
+inventory.equip_many = function(pieces, all_items, simulate, changes)
     all_items = all_items or windower.ffxi.get_items()
+    
+    if type(changes) == 'table' then
+        changes.removed = {}
+        changes.equipped = {}
+    else
+        changes = nil
+    end
 
     local exclusion_list = { }
     local bags_to_search = INVENTORY_BAGS_BY_ID
@@ -256,13 +296,13 @@ inventory.equip_many = function(pieces, all_items)
     local flags = { equippable = true, equipped = false }
     local swaps = { }
 
-    for i, piece in ipairs(pieces) do
-        local name = piece.equipment or piece.item or piece.gear
-        local slot_id = type(name) == 'string' and type(piece.slot) == 'string'
-            and inventory.get_slot_id_by_name(piece.slot)
+    for slot, piece in pairs(pieces) do
+        local name = piece.equipment or piece.item or piece.gear or piece.name
+        local augments = piece.augments or piece.aug or {}
+        local slot_id = type(name) == 'string' and type(slot) == 'string' and inventory.get_slot_id_by_name(slot)
 
         if type(name) == 'string' and type(slot_id) == 'number' then
-            local equipped = inventory.find_equipment_in_slot(piece.slot, all_items)
+            local equipped = inventory.find_equipment_in_slot(slot, all_items)
             local searching = true
 
             -- Clone the exclusion list
@@ -272,8 +312,9 @@ inventory.equip_many = function(pieces, all_items)
             end
 
             while searching do
+                local find_param = {name = name, augments = augments, slot = slot}
                 local candidate = inventory.find_item(
-                    name,
+                    find_param,
                     flags,
                     all_items,
                     local_exclusion_list
@@ -293,7 +334,7 @@ inventory.equip_many = function(pieces, all_items)
                             candidate.raw_slots[slot_id]
                         then
                             arrayAppend(exclusion_list, candidate)
-                            arrayAppend(swaps, { slot_id = slot_id, item = candidate })
+                            arrayAppend(swaps, { slot_id = slot_id, slot = slot, item = candidate })
 
                             -- We've already found our match, we're done
                             searching = false
@@ -308,15 +349,103 @@ inventory.equip_many = function(pieces, all_items)
     end
 
     -- Now we will go through all of the processed swaps, and equip the gear
-    for i, swap in ipairs(swaps) do        
-        windower.ffxi.set_equip(
-            swap.item.localId,
-            swap.slot_id,
-            swap.item.bagId
-        )
+    if not simulate then
+        -- if inventory.printDebug then
+        --     inventory.printDebug('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+        -- end
+
+        for i, swap in ipairs(swaps) do
+
+            -- If we're tracking changes, store those changes now
+            if changes then
+                -- If an item is already in this slot, fetch it and store it in the removed list
+                local removed = inventory.find_equipment_in_slot(swap.slot, all_items)
+                if removed then
+                    changes.removed[swap.slot] = {
+                        name = removed.name,
+                        augments = removed.augments
+                    }
+                end
+
+                -- Store the item we are swapping in
+                changes.equipped[swap.slot] = {
+                    name = swap.item.name,
+                    augments = swap.augments
+                }
+            end
+
+            -- If a debugging callback was provided, log the specific changes we're making
+            -- if inventory.printDebug then
+            --     if changes and changes.removed[swap.slot] then
+            --         inventory.printDebug('Equipping %s: [%s]>>[%s]':format(
+            --             swap.slot,
+            --             changes.removed[swap.slot].name,
+            --             swap.item.name
+            --         ))
+            --     else                    
+            --         inventory.printDebug('Equipping %s: [%s]':format(
+            --             swap.slot,
+            --             swap.item.name
+            --         ))
+            --     end
+            -- end
+
+            windower.ffxi.set_equip(
+                swap.item.localId,
+                swap.slot_id,
+                swap.item.bagId
+            )
+        end
     end
 
     return #swaps
+end
+
+inventory.find_equipped_linkshells = function(player, items)
+    local result = {}
+
+    player = player or windower.ffxi.get_player()
+    if player then
+        items = items or windower.ffxi.get_items()        
+
+        if items then
+            local primary_linkshell = nil
+            local secondary_linkshell = nil
+
+            local primary_linkshell_name = player.linkshell
+
+            for bagId, bagInfo in pairs(INVENTORY_BAGS_BY_ID) do
+                -- Only search bags that allow linkshell equipping
+                if bagInfo and bagInfo.linkshell then
+                    local bag = items[bagInfo.field]
+
+                    -- Only search bags that are enabled
+                    if bag.enabled then
+                        for localId, bagItem in pairs(bag) do
+
+                            -- Only look at equipped linkshells
+                            if type(bagItem) == 'table' and bagItem.status == 19 then
+                                local ext = extdata.decode(bagItem)
+                                if ext then
+                                    local info = {
+                                        bagId = bagId,
+                                        localId = localId,
+                                        linkshellId = ext.linkshell_id,
+                                        name = ext.name,
+                                        type = ext.status
+                                    }
+
+                                    table.insert(result, info)
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    return result
 end
 
 inventory.find_item = function(item, flags, items, exclusion_list)
@@ -326,20 +455,38 @@ inventory.find_item = function(item, flags, items, exclusion_list)
     local only_equippable = flags.equippable
     local only_inventory = flags.inventory
 
+    local augments = (type(item) == 'table' and (item.augments or item.aug)) or nil
+
+    -- If the flags don't specify a specific bag local id, we'll just look up the item directly from metadata
     if not flags.local_id then
         item = findItem(item)    
-        if item == nil then return end
+        if item == nil then 
+            return 
+        end
+    end
+
+    -- Search all bags by default
+    local bags_to_search = INVENTORY_BAGS_BY_ID
+
+    -- If the flags specify a bag id that is valid, we'll search only that bag
+    if flags.bag_id and INVENTORY_BAGS_BY_ID[flags.bag_id] then
+        bags_to_search =
+        {
+            [flags.bag_id] = INVENTORY_BAGS_BY_ID[flags.bag_id]
+        }
     end
 
     local empty = { }
-    local bags_to_search = (flags.bag_id and { INVENTORY_BAGS_BY_ID[flags.bag_id] }) or INVENTORY_BAGS_BY_ID
 
-    -- Limit to inventory, if requested
+    -- If we're only looking at the main inventory, limit our bag search to that
     if only_inventory then
-        bags_to_search = { INVENTORY_BAGS_BY_ID[INVENTORY_ID_BY_NAME['inventory']] }
+        local inventory_id = INVENTORY_ID_BY_NAME['inventory']
+        bags_to_search = {
+            [inventory_id] = INVENTORY_BAGS_BY_ID[inventory_id]
+        }
     end
 
-    items = items or windower.ffxi.get_items()    
+    items = items or windower.ffxi.get_items()
 
     for bagId, bagInfo in pairs(bags_to_search) do
         local bag_is_usable = bagInfo.usable
@@ -409,6 +556,9 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                         if type(ext.activation_time) == 'number' then
                             secondsUntilActivation = ext.activation_time + 18000 - os.time()
                         end
+
+                        -- Strip out non-augments from the list so that we only have legitimate augments remaining
+                        sanitize_augments(ext)
                     end
                     
                     local isUsableItem = 
@@ -457,6 +607,8 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                         end
                     end
 
+                    --print('item: %s, augments: %s':format(item.name, augments and tostring(#augments) or 'none'))
+
                     if 
                         (isUsableItem or not flags.usable) and          -- Usable flag
                         (isEquippableItem or not flags.equippable) and  -- Equippable flag
@@ -464,7 +616,8 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                             flags.equipped == nil or                    -- Equipped flag
                             (flags.equipped and isEquipped) or
                             (not flags.equipped and not isEquipped)
-                        )
+                        ) and 
+                        inventory.has_all_augments(ext, augments)       -- Augments match
                     then
                         if slots then
                             if slots[1] == 'main' or slots[2] == 'main' then
@@ -485,6 +638,8 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                             ext_type = ext and ext.type,
                             is_equipped = isEquipped,
                             is_bazaar = bagItem.status == 25,
+                            augments = ext.augments or {},  -- The augments this item has
+                            matched_augments = augments,    -- The augments we searched for and were matched on
                             charges_remaining = charges,
                             seconds_until_reuse = secondsUntilReuse,
                             seconds_until_activation = secondsUntilActivation,
@@ -537,6 +692,39 @@ inventory.get_ranged_equipment = function ()
             }
         end
     end
+end
+
+--
+-- Determine if the specified item contains ALL of the specified required augments.
+--
+inventory.has_all_augments = function(item_or_extdata, required_augments)
+
+    local extdata = item_or_extdata
+    if type(item_or_extdata) == 'table' and type(item_or_extdata.extdata) == 'table' then
+        extdata = item_or_extdata.extdata
+    end
+
+    local matches = 0
+    local num_required = (type(required_augments) == 'table' and #required_augments) or 0
+
+    if 
+        num_required > 0 and
+        type(extdata) == 'table' and
+        type(extdata.augments) == 'table' and
+        #extdata.augments > 0 
+    then
+        for i, required_augment in ipairs(required_augments) do
+            for j, contained_augment in ipairs(extdata.augments) do
+                if required_augment == contained_augment then
+                    found = true
+                    matches = matches + 1
+                    break
+                end
+            end
+        end
+    end
+
+    return matches >= num_required
 end
 
 return inventory

@@ -1,0 +1,12 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": ["canUse('Stona') and partyHasBuff('Petrification')"],
+      "commands": ["removeEffect(member)"],
+      "frequency": 0.25
+    }
+  ]
+}

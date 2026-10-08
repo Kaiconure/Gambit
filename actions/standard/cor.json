@@ -1,0 +1,134 @@
+{
+  "vars": {
+    "ensure_trusts": {
+      "spells": null
+    },
+    "configuration": {
+      "commands": [
+        "gbt config -strat leader",
+        "gbt config -d 15",
+        "gbt config -fd 1.5"
+      ]
+    },
+    "keep_ammo": {
+      "ammo": "SAMPLE: Corsair Bullet",
+      "pouch": "SAMPLE: Cor. Bull. Pouch"
+    },
+    "waypoints_ex": {
+      "active": null
+    },
+    "use_rolls": {
+      "rolls": ["Chaos Roll", "Corsair's Roll"],
+      "rolls REFRESH": ["Corsair's Roll", "Evoker's Roll"],
+      "rolls ACC": ["Corsair's Roll", "Hunter's Roll"],
+      "rolls3 M.ACC": ["Corsair's Roll", "Warlock's Roll"],
+      "rolls4 M.ATK": ["Corsair's Roll", "Wizard's Roll"],
+      "rolls5 SC+": ["Corsair's Roll", "Allies' Roll"],
+      "rolls TP": ["Samurai Roll", "Corsair's Roll"],
+      "rolls WS": ["Samurai Roll", "Chaos Roll"],
+      "logic": {
+        "Allies' Roll": {
+          "double_up": [1, 2, 4, 5, 6]
+        },
+        "Chaos Roll": {
+          "double_up": [1, 2, 3, 5, 6]
+        },
+        "Corsair's Roll": {
+          "double_up": [1, 2, 3, 4, 6]
+        },
+        "Hunter's Roll": {
+          "double_up": [1, 2, 3, 5, 6]
+        },
+        "Samurai Roll": {
+          "snake_eye": [1, 10]
+        },
+        "Warlock's Roll": {
+          "double_up": [1, 2, 3, 5, 6]
+        },
+        "Wizard's Roll": {
+          "double_up": [1, 2, 3, 4, 6]
+        }
+      }
+    },
+    "frontline_engagement": {
+      "distance": null,
+      "angle": null
+    }
+  },
+  "pull": [
+    {
+      "import": "keep-ammo"
+    },
+    {
+      "import": "frontline-engagement"
+    }
+  ],
+  "battle": [
+    {
+      "import": "reactions/face-away"
+    },
+    {
+      "imports": ["heals/remove-doom", "heals/remove-plague"]
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "import": "abilities/use-rolls"
+    },
+    {
+      "when": ["canUse('Random Deal', 'Wild Card', 'Cutting Cards')"],
+      "commands": ["use(me)"],
+      "delay": 20,
+      "frequency": 10,
+      "scope": "battle",
+      "scoped_enumerators": true
+    },
+    {
+      "when": [
+        "canUseItem('Grape Daifuku', 'Red Curry Bun', 'Black Curry Bun', 'Coeurl Sub', 'Crab Sushi') and not hasBuff('Food')"
+      ],
+      "frequency": 1,
+      "commands": ["useItem(me)"]
+    },
+    {
+      "when": ["bt.hpp < 25 and canUse('Triple Shot')"],
+      "commands": ["use(me)"]
+    }
+  ],
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "import": "keep-ammo"
+    },
+    {
+      "import": "follow-leader"
+    },
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "use-xp-cp-rings"
+    },
+    {
+      "import": "common-consumables",
+      "disabled": true
+    },
+    {
+      "import": "waypoints-ex"
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death",
+      "disabled": true
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
+  ]
+}

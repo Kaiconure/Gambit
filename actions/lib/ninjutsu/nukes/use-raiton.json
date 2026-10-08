@@ -5,15 +5,20 @@
   "vars": {
     "ninjutsu": {
       "nukes": {
-        "raiton": {}
+        "raiton": {
+          "spells": ["Raiton: San", "Raiton: Ni", "Raiton: Ichi"]
+        }
       }
     }
   },
   "actions": [
     {
       "when": [
+        "bt",
+        "not vars.ninjutsu.yellow_proc_only or runningAsFunction()",
+        "not runningAsFunction() or functionIteration() == 1",
         "bt.distance <= 20",
-        "hasSpell('Raiton: San', 'Raiton: Ni', 'Raiton: Ichi') and canUseSpell(spell)",
+        "hasSpell(vars.ninjutsu.nukes.raiton.spells) and canUseSpell(spell)",
         "findItemInInventory('Hiraishin', 'Inoshishinofuda') or \\",
         "  (findUsableItem('Toolbag (Hira)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
         "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
@@ -22,7 +27,8 @@
         "log('Casting', spell.name, '(Lightning damage + Earth resistance down) on', bt.name)",
         "useSpell(bt) and postpone(vars.ninjutsu.nukes.raiton.frequency or vars.ninjutsu.nukes.frequency or 5)"
       ],
-      "scope": "battle"
+      "scope": "battle",
+      "name": "use_raiton"
     }
   ]
 }

@@ -20,6 +20,16 @@
             ]
           }
         }
+      },
+      "Urmahlullu": {
+        "spells": {
+          "*": {
+            "no_turn": true,
+            "comment": [
+              "Weapon skills should not be used when Urmahlullu is casting."
+            ]
+          }
+        }
       }
     }
   },

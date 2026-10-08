@@ -4,8 +4,8 @@
   },
   "vars": {
     "use_cover": {
-      "targets": [],
-      "trigger_hpp": 20
+      "targets": null,
+      "trigger_hpp": 30
     }
   },
   "actions": [
@@ -13,6 +13,7 @@
       "when": [
         "canUse('Cover')",
         "partyByName(vars.use_cover.targets)",
+        "not member.is_me",
         "member.distance <= 10 and member.hpp <= vars.use_cover.trigger_hpp"
       ],
       "commands": ["use(member)"],

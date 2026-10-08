@@ -131,9 +131,27 @@ function findWeaponSkill(name)
     return findResourceByName(resources.weapon_skills, name)
 end
 
+-- Some monster abilities that are learnable blue magic spells have different names
+-- between ability and spell. This maps them across.
+local monster_abilities_to_spells = 
+{
+    ["Atramentous Libations"] = "Atra. Libations",
+    ["Everyone's Grudge"]     = "Evryone. Grudge",
+    ["Nature's Meditation"]   = "Nat. Meditation",
+    ["Orcish Counterstance"]  = "O. Counterstance",
+    ["Quadratic Continuum"]   = "Quad. Continuum",
+    ["Tempestuous Upheaval"]  = "Tem. Upheaval",    
+    ["Winds of Promyvion"]    = "Winds of Promy."
+}
+
+
 --------------------------------------------------------------------------------------
 --
 function findSpell(name)
+
+    -- Perform the name mapping if this is a blue magic monster ability name that requires it
+    name = (type(name) == 'string' and monster_abilities_to_spells[name]) or name
+
     return findResourceByName(resources.spells, name)
 end
 
@@ -251,6 +269,25 @@ local function getWeaponSkillResource(weaponSkill)
     return weaponSkill
 end
 
+--------------------------------------------------------------------------------------
+-- Determine an id is in the specified resource table. The table can contain either
+-- straight id values, or sub-tables with an id field.
+function hasResourceById(res, id)
+    if type(res) == 'table' and type(id) == 'number' then
+        for key, val in pairs(res) do
+            if type(val) == 'number' and val == id then
+                return key
+            end
+
+            if type(val) == 'table' and val.id == id then
+                return key
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+--
 function hasBuffInArray(buffs, buff, strict)
     -- Nothing to do if we don't have a buffs array to search
     if type(buffs) ~= 'table' or #buffs < 1 then return end
@@ -545,6 +582,44 @@ function canUseAbility(player, ability, recasts)
     return false
 end
 
+function hasWeaponSkillDirect(known_weapon_skills, weapon_skill)
+    if type(weapon_skill) == 'string' then weapon_skill = string.lower(weapon_skill) end
+
+    if type(known_weapon_skills) == 'table' then
+        for i, id in pairs(known_weapon_skills) do
+            local candidate = findWeaponSkill(id)
+            if 
+                candidate and (candidate.id == weapon_skill or string.lower(candidate.name) == weapon_skill)
+            then
+                return candidate
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------------
+-- 
+function hasWeaponSkill(player, weaponSkill, abilities)
+    --player = player or windower.ffxi.get_player()
+
+    weaponSkill = getWeaponSkillResource(weaponSkill)
+    if weaponSkill == nil then
+        return false
+    end
+
+    abilities = abilities or windower.ffxi.get_abilities() or {}
+    local knownWeaponSkills = abilities.weapon_skills or {}
+
+    -- Only return true if the weapon skill we're checking is in the collection of available weapon skills
+    for i, knownWeaponSkillId in pairs(knownWeaponSkills) do
+        if knownWeaponSkillId == weaponSkill.id then
+            return true
+        end
+    end
+
+    return false
+end
+
 --------------------------------------------------------------------------------------
 --
 function canUseWeaponSkill(player, weaponSkill, abilities)
@@ -704,31 +779,34 @@ TrustSearchModes = {
     usable = 'usable',  -- All usable matches
     all = 'all'         -- All matches
 }
+
 function getTrustSpellMeta(partyName, mode, player, party)
     if type(partyName) ~= 'string' then return end
 
-    local matches = {}
-
+    -- Find the mode, default to best, and bail if it's not valid
     mode = TrustSearchModes[string.lower(mode or TrustSearchModes.best)]
     if mode == nil then return end
+
+    partyName = string.lower(partyName)
+
+    -- Find all trusts that share this party name, bail if none are found
+    local candidate_trusts = meta.trusts_by_party_name[partyName]
+    if not candidate_trusts or #candidate_trusts == 0 then return end
 
     -- A flag that indicates whether the requested mode should be limited 
     -- to usable trust spells only
     local onlyUsable = mode == TrustSearchModes.best or mode == TrustSearchModes.usable
 
-    partyName = string.lower(partyName)
-
     if onlyUsable then
         player = player or windower.ffxi.get_player()
+        if not player then return end
     end
 
-    -- Iterate over the trust metadata. Store any entries that match the mode requirements.
-    for id, metadata in pairs(meta.trusts) do
-        if 
-            string.lower(metadata.party_name) == partyName and
-            (not onlyUsable or canUseSpell(player, metadata.id))
-        then
-            matches[#matches + 1] = metadata
+    -- Iterate over the trust candidates. Store any entries that match the mode requirements.
+    local matches = {}
+    for i, trust in pairs(candidate_trusts) do
+        if not onlyUsable or canUseSpell(player, trust.id) then
+            matches[#matches + 1] = trust
         end
     end
 
@@ -770,4 +848,10 @@ function getTrustSpellMeta(partyName, mode, player, party)
     -- If we've made it here, we'll just return the first match we've found. Note
     -- that if we found no matches, this will just return nil as expected.
     return matches[1]
+end
+
+--------------------------------------------------------------------------------------
+-- Determine if the specified mob is a player character
+function isMobPlayer(mob)
+    return mob and (mob.spawn_type == SPAWN_TYPE_PLAYER or mob.spawn_type == SPAWN_TYPE_PLAYER2)
 end

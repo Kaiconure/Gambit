@@ -1,9 +1,11 @@
 -------------------------------------------------------------------------------
 -- Known spawn types
+SPAWN_TYPE_PLAYER2  = 1     -- Seems to be for players not in your party/alliance
 SPAWN_TYPE_PET      = 2
-SPAWN_TYPE_PLAYER   = 13
+SPAWN_TYPE_PLAYER   = 13    -- Seems to be for players in your party/alliance
 SPAWN_TYPE_TRUST    = 14
 SPAWN_TYPE_MOB      = 16
+SPAWN_TYPE_DOOR     = 34
 
 -------------------------------------------------------------------------------
 -- Known item slots
@@ -28,6 +30,7 @@ BUFF_FAN_DANCE      = 411
 BUFF_FOOD           = 251
 BUFF_ELVORSEAL      = 603
 BUFF_BATTLEFIELD    = 254
+BUFF_REIVE          = 511
 
 -------------------------------------------------------------------------------
 -- Known statuses
@@ -36,6 +39,8 @@ STATUS_ENGAGED        = 1
 STATUS_DEAD           = 2
 STATUS_EVENT          = 4
 STATUS_RESTING        = 33
+STATUS_MOUNT          = 85  -- See STATUS_CHOCOBO, which applies to a purchased chocobo and certain personal mounts (Noble Chocobo, etc)
+STATUS_CHOCOBO        = 5   -- See STATUS_MOUNT, which applies to most personal mounts
 
 -------------------------------------------------------------------------------
 -- Known packet id's
@@ -124,7 +129,7 @@ end
 -------------------------------------------------------------------------------
 -- Append an item to an array
 function arrayAppend(array, item)
-    array[#array + 1] = item
+    table.insert(array, item)
 end
 
 --------------------------------------------------------------------------------------
@@ -191,6 +196,33 @@ function arrayIndexOfStrI(array, search, start)
             end
         end
     end
+end
+
+--------------------------------------------------------------------------------------
+-- Replaces command line tokens with their respective value when possible
+function replaceTokens(value)
+    if value and type(value) == 'string' then
+        local context = actionStateManager:getContext()
+        if context then
+            value = string.gsub(value, '$%(me%)', context.me and context.me.name or value)
+            value = string.gsub(value, '$%(leader%)', context.party_leader and context.party_leader.name or value)
+        end
+    end
+
+    return value
+end
+
+--------------------------------------------------------------------------------------
+-- Search a given argument list for the value associated with the specified argument
+function getArgValue(args, arg)
+    local i = arrayIndexOfStrI(args, arg)
+    return replaceTokens(i and args[i + 1])
+end
+
+--------------------------------------------------------------------------------------
+-- Search a given argument list for the presence of the specified argument
+function hasArg(args, arg)
+    return arrayIndexOfStrI(args, arg)
 end
 
 --------------------------------------------------------------------------------------
@@ -340,4 +372,25 @@ function fieldsearch(message)
         string.gsub(message,'{(.-)}', function(a) fieldarr[a] = true end)
     end
     return fieldarr
+end
+
+-------------------------------------------------------------------------------
+-- Turns an identifier string into a properly formatted player name. That is,
+-- trimmed with the first letter in caps and the remainder lower case.
+function makePlayerName(s)
+  if type(s) ~= 'string' then
+    return nil
+  end
+  
+  s = trimString(s)
+  local len = #s
+  if len == 0 then
+    return nil
+  elseif #s == 1 then
+    return string.upper(s)
+  else  
+    return 
+        string.upper(string.sub(s, 1, 1)) ..
+        string.lower(string.sub(s, 2))
+  end
 end

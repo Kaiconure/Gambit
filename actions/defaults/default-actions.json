@@ -12,6 +12,11 @@
       "comment": "Drives frontline engagement positioning. Use distance and/or angle (degrees) to set placement around the enemy."
     }
   },
+  "loading": [
+    {
+      "import": "configuration"
+    }
+  ],
   "pull": [
     {
       "import": "frontline-engagement"
@@ -19,16 +24,14 @@
   ],
   "battle": [
     {
-      "import": "reactions/face-away"
+      "import": "reactions/face-away",
+      "disabled": true
     },
     {
       "import": "frontline-engagement"
     }
   ],
   "idle": [
-    {
-      "import": "configuration"
-    },
     {
       "import": "follow-leader",
       "comment": "Follows the party leader when idle. Does nothing if you are the party leader."
@@ -43,12 +46,14 @@
     },
     {
       "import": "common-consumables",
-      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress)."
+      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress).",
+      "disabled": true
     }
   ],
   "dead": [
     {
-      "import": "homepoint-on-death"
+      "import": "homepoint-on-death",
+      "disabled": true
     }
   ],
   "mounted": [

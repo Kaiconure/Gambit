@@ -5,15 +5,20 @@
   "vars": {
     "ninjutsu": {
       "nukes": {
-        "doton": {}
+        "doton": {
+          "spells": ["Doton: San", "Doton: Ni", "Doton: Ichi"]
+        }
       }
     }
   },
   "actions": [
     {
       "when": [
+        "bt",
+        "not vars.ninjutsu.yellow_proc_only or runningAsFunction()",
+        "not runningAsFunction() or functionIteration() == 1",
         "bt.distance <= 20",
-        "hasSpell('Doton: San', 'Doton: Ni', 'Doton: Ichi') and canUse(spell)",
+        "hasSpell(vars.ninjutsu.nukes.doton.spells) and canUse(spell)",
         "findItemInInventory('Makibishi', 'Inoshishinofuda') or \\",
         "  (findUsableItem('Toolbag (Maki)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
         "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
@@ -22,7 +27,8 @@
         "log('Casting', spell.name, '(Earth damage + Wind resistance down) on', bt.name)",
         "useSpell(bt) and postpone(vars.ninjutsu.nukes.doton.frequency or vars.ninjutsu.nukes.frequency or 5)"
       ],
-      "scope": "battle"
+      "scope": "battle",
+      "name": "use_doton"
     }
   ]
 }

@@ -5,15 +5,20 @@
   "vars": {
     "ninjutsu": {
       "nukes": {
-        "katon": {}
+        "katon": {
+          "spells": ["Katon: San", "Katon: Ni", "Katon: Ichi"]
+        }
       }
     }
   },
   "actions": [
     {
       "when": [
+        "bt",
+        "not vars.ninjutsu.yellow_proc_only or runningAsFunction()",
+        "not runningAsFunction() or functionIteration() == 1",
         "bt.distance <= 20",
-        "hasSpell('Katon: San', 'Katon: Ni', 'Katon: Ichi') and canUseSpell(spell)",
+        "hasSpell(vars.ninjutsu.nukes.katon.spells) and canUseSpell(spell)",
         "findItemInInventory('Uchitake', 'Inoshishinofuda') or \\",
         "  (findUsableItem('Toolbag (Uchi)') and freeInventorySlots() > 1 and useItem(me) and wait(1)) or \\",
         "  (findUsableItem('Toolbag (Ino)') and freeInventorySlots() > 1 and useItem(me) and wait(1))"
@@ -22,7 +27,8 @@
         "log('Casting', spell.name, '(Fire damage + Water resistance down) on', bt.name)",
         "useSpell(bt) and postpone(vars.ninjutsu.nukes.katon.frequency or vars.ninjutsu.nukes.frequency or 5)"
       ],
-      "scope": "battle"
+      "scope": "battle",
+      "name": "use_katon"
     }
   ]
 }

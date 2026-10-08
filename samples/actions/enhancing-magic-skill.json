@@ -17,6 +17,14 @@
       "import": "buffs/refresh-cycle"
     },
     {
+      "import": "use-xp-cp-rings"
+    },
+    {
+      "when": ["me.hpp < 90 and canUseSpell('Cure III', 'Cure II', 'Cure')"],
+      "commands": ["useSpell(me)"],
+      "frequency": 2
+    },
+    {
       "when": "me.mpp < 10",
       "commands": "rest()"
     },
@@ -27,12 +35,7 @@
     {
       "when": "canUse('Protect III', 'Protect II', 'Protect')",
       "commands": ["use(me)", "wait(1)", "cancelBuff('Protect')"],
-      "frequency": 1
-    },
-    {
-      "when": "canUse('Shell III', 'Shell II', 'Shell')",
-      "commands": ["use(me)", "wait(1)", "cancelBuff('Shell')"],
-      "frequency": 1
+      "frequency": 3
     },
     {
       "when": "canUse('Enthunder II', 'Enthunder')",
@@ -41,7 +44,7 @@
         "wait(1)",
         "cancelBuff('Enthunder II', 'Enthunder')"
       ],
-      "frequency": 1
+      "frequency": 3
     }
   ],
   "resting": [

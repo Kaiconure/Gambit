@@ -19,7 +19,8 @@
         "useSpell()",
         "postpone((spellRecast(spell.name) or 0) + 5)"
       ],
-      "frequency": 1
+      "frequency": 1,
+      "scope": "battle"
     }
   ]
 }

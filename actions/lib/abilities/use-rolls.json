@@ -6,6 +6,10 @@
     "use_rolls": {
       "rolls": ["Corsair's Roll", "Chaos Roll"],
       "allow_crooked_cards": ["Corsair's Roll"],
+      "gear": {
+        "roll": null,
+        "battle": null
+      },
       "logic": {
         "Allies' Roll": {
           "snake_eye": [2, 10],
@@ -153,9 +157,11 @@
       ],
       "commands": [
         "any(result, vars.use_rolls.allow_crooked_cards) and canUse('Crooked Cards') and use(me) and wait(0.5)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.roll and equipMany(vars.use_rolls.gear.roll)",
         "use(me, result)",
         "vars.use_rolls.logic[result] and vars.use_rolls.logic[result].data and vars.use_rolls.logic[result].data.summary and log(result .. ':', vars.use_rolls.logic[result].data.summary)",
-        "wait(1)"
+        "wait(1)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.battle and equipMany(vars.use_rolls.gear.battle)"
       ],
       "frequency": 15
     },
@@ -183,8 +189,10 @@
       ],
       "commands": [
         "log('Doubling up on', latestRoll.name, 'from', latestRoll.count)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.roll and equipMany(vars.use_rolls.gear.roll)",
         "use(me)",
-        "wait(1)"
+        "wait(1)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.battle and equipMany(vars.use_rolls.gear.battle)"
       ]
     },
     {

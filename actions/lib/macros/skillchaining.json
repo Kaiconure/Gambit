@@ -18,7 +18,9 @@
       "default_scd": null,
       "fast_scd": null,
       "free_for_all": null,
-      "anarchy_for_all": null
+      "anarchy_for_all": null,
+      "min_open_tp": null,
+      "open_delay": null
     }
   },
   "macros": {
@@ -27,24 +29,34 @@
       "vars.gear and vars.gear.battle and equipMany(vars.gear.battle)"
     ],
     "check_pre_ws_abilities": [
-      "(vars.ws.pre_ws_abilities and canUseAbility(vars.ws.pre_ws_abilities)) or 1 == 1"
+      "(me.tp >= 1800 and canUseAbility('Sekkanoki')) or (vars.ws.pre_ws_abilities and canUseAbility(vars.ws.pre_ws_abilities)) or 1 == 1"
     ],
     "close_skillchain": [
-      "log('Closing skillchain with:', weapon_skill.name)",
+      "logf('Preparing to close SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
       "$macro:equip_for_ws",
       "waitSkillchainWithAbility() and useAbility(me)",
       "useWeaponSkill()",
       "$macro:equip_for_battle"
     ],
     "open_skillchain": [
-      "log('Opening skill chain with:', weapon_skill.name)",
+      "logf('Preparing to open SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
       "$macro:equip_for_ws",
       "recastReady(ability_recast) and useAbility() and wait(0.5)",
       "useWeaponSkill()",
       "$macro:equip_for_battle"
     ],
+    "use_weapon_skill": [
+      "$macro:equip_for_ws",
+      "useWeaponSkill()",
+      "$macro:equip_for_battle"
+    ],
     "check_using_ws": ["(partyUsingWeaponSkill2)"],
     "check_skillchaining": ["(skillchaining2)"],
+    "can_open_sc": [
+      "me.tp >= (vars.ws.min_open_tp or 1000)",
+      "bt and bt.mob_time >= (vars.ws.open_delay or 2)"
+    ],
+    "can_close_sc": ["$macro:check_pre_ws_abilities"],
     "ws_partners_deferring": [
       "not vars.ws.anarchy_for_all or (not party_weapon_skill and not skillchain) or resetSkillchain()",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
@@ -71,6 +83,7 @@
         "log('Configuring skillchain delay to prioritize MB damage...')",
         "sendCommand('gbt config -scd %d', vars.ws.default_scd or 5.5)"
       ],
+      "on_load": true,
       "frequency": "infinity"
     },
     {
@@ -81,6 +94,7 @@
         "log('Configuring skillchain delay to prioritize WS/SC damage...')",
         "sendCommand('gbt config -scd %d', vars.ws.fast_scd or 3)"
       ],
+      "on_load": true,
       "frequency": "infinity"
     }
   ]
