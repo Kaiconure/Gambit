@@ -406,19 +406,19 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
 
                 if not skip_packet_targeting then
                     local num_attempted = 0
-                    local max_attempts = 15
+                    local max_attempts = 10
 
                     -- We'll try a few times to establish our target directly
                     for i = 1, max_attempts do
                         -- We'll sleep a bit every iteration, a little longer as we go
-                        if num_attempted <= 1 then
-                            -- nothing
+                        if num_attempted == 0 then
+                            coroutine.sleep(0.5)
                         elseif num_attempted <= 8 then
-                            coroutine.sleep(0.25)
+                            coroutine.sleep(0.5)
                         elseif num_attempted <= 15 then
-                            coroutine.sleep(0.33)
+                            coroutine.sleep(0.5)
                         else
-                            coroutine.sleep(0.33)
+                            coroutine.sleep(0.5)
                         end
 
                         -- If this is a subsequent retry, we'll make sure that the mob is

@@ -133,7 +133,7 @@ local defaultSettings = {
     weaponSkillDelay = nil,
     cloudPanel = {
         enabled = true,
-        duration = 3,
+        duration = 2,
         top = 100
     }
 }

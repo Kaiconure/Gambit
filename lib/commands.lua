@@ -1,4 +1,5 @@
 local handlers = {}
+local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 
 -------------------------------------------------------------------------------
@@ -995,6 +996,16 @@ handlers['function'] = function(args)
             return
         end
 
+        -- Automatic calls must not repeatedly restart a quarantined function.
+        -- A deliberate -retry, or recompilation on reload, clears its failure.
+        if action._runtimeError then
+            if hasArg(args, '-retry') and not action._running then
+                action._runtimeError = nil
+            else
+                return
+            end
+        end
+
         -- If this function is already running and it allows re-entry, we will give it
         -- a certain amount of time to exit before we proceed and try to retart it.
         if action._running and action.allow_reentry then
@@ -1105,12 +1116,8 @@ handlers['function'] = function(args)
                         context.params._runtime = context.time
                         context.params._fn = name
 
-                        setfenv(action._whenFn, context)
-                        if not action._fn_exiting and action._whenFn() then
-                            for i, command in ipairs(action.commands) do
-                                setfenv(command._commandFn, context)
-                                command._commandFn()
-                            end
+                        if not action._fn_exiting and actionErrors.when(action, context) then
+                            if not actionErrors.commands(action, context) then done = true end
                         else
                             if not silent then
                                 writeMessage('  %s: Execution completed!':format(text_green(action.name)))

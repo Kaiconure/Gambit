@@ -1,3 +1,4 @@
+local actionErrors = require('./lib/action-errors')
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
 --
@@ -326,6 +327,8 @@ local function compileActions(actionType, parent, rawActions)
         local _temp = {}
         for i, action in ipairs(actions) do
             local shouldAdd = false
+            action._runtimeError = nil
+            action._errorLabel = actionType .. '[' .. i .. ']'
 
             -- If the "when" clause was broken into an array, we'll combine it all into
             -- a single parenthesised AND'ed expression here.
@@ -386,7 +389,11 @@ local function compileActions(actionType, parent, rawActions)
 
                 if isArray(action.commands) then
                     -- Compute the 'when' function
-                    action._whenFn = loadstring(string.format('return %s', action.when))
+                    local compileError
+                    action._whenFn, compileError = loadstring(string.format('return %s', action.when))
+                    if not action._whenFn then
+                        actionErrors.fail(action, 'compile when', action.when, compileError)
+                    end
 
                     -- Sanitize the frequency value
                     if action.frequency == 'inf' or action.frequency == 'infinity' then
@@ -449,12 +456,15 @@ local function compileActions(actionType, parent, rawActions)
                                 if type(action.commands[j]) == 'string' then
 
                                     -- Promote the command to an object, with its value and execution function
+                                    local command = action.commands[j]
+                                    local commandFn, message = loadstring(string.format('return %s', command))
                                     action.commands[j] = {
-                                        command = action.commands[j],
-                                        _commandFn = loadstring(string.format('return %s', action.commands[j]))
+                                        command = command,
+                                        _commandFn = commandFn
                                     }
 
                                     if type(action.commands[j]._commandFn) ~= 'function' then
+                                        actionErrors.fail(action, 'compile commands[' .. j .. ']', action.commands[j].command, message)
                                         hasErrors = true
                                     end
                                 end
@@ -563,7 +573,7 @@ local function getNextBattleAction(context)
 
     if actions then
         for i, action in ipairs(actions) do
-            if not action.as_function then
+            if not action.as_function and not action._runtimeError then
                 if action.scope == 'battle' or action.scope == 'zone' then
                     --
                     -- Handle execution scoping. This is updated only when the action conditions are met.
@@ -642,9 +652,7 @@ local function getNextBattleAction(context)
                     context.action = action
 
                     -- Make the context visible to the action function
-                    setfenv(action._whenFn, context)
-
-                    if action._whenFn() then
+                    if actionErrors.when(action, context) then
                         -- If this action will get run, we'll need to schedule the next run time. We'll actually
                         -- update this later, after the actions are executed, based on the time they complete.
                         action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
@@ -692,11 +700,7 @@ local function executeBattleAction(context, action)
         context.player = windower.ffxi.get_player()
         context.action = action
 
-        for i, command in ipairs(action.commands) do
-            -- Make the context visible to the command function, and execute it
-            setfenv(command._commandFn, context)
-            command._commandFn()
-        end
+        if not actionErrors.commands(action, context) then return nil end
 
         -- At this point, we'll set the next schedule time based on the later of either its
         -- configured frequency or its own current schedulable time.
@@ -1011,14 +1015,10 @@ function cr_actionProcessor()
                                 actionStateManager:setActionType(context.actionType)
                                 
                                 if type(action._whenFn) == 'function' then
-                                    setfenv(action._whenFn, context)
-                                    if action._whenFn() then
+                                    context.action = action
+                                    if actionErrors.when(action, context) then
                                         if action.commands and #action.commands > 0 then
-                                            for j, command in ipairs(action.commands) do
-                                                -- Make the context visible to the command function, and execute it
-                                                setfenv(command._commandFn, context)
-                                                command._commandFn()
-                                            end
+                                            actionErrors.commands(action, context)
                                         end
                                     end
                                 end
