@@ -267,13 +267,13 @@ function sendJobInfoIpc(player)
     end
 end
 
-function reloadSettings(actionsName, bypassActions, namespaceOverride)
+function reloadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
     executionFactory.clear()
     inventory.printDebug = nil
 
     bypassActions = bypassActions and settings.actions ~= nil
 
-    settings = loadSettings(actionsName, bypassActions, namespaceOverride)
+    settings = loadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
     logging_settings.verbosity = settings.verbosity
 
     -- We will not recompile actions or reset the current mob if this is a settings-only reload

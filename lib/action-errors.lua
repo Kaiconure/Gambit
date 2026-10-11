@@ -68,15 +68,66 @@ function guard.evaluate(action, context, fn, stage, expression)
 end
 
 function guard.when(action, context)
+    for _, condition in ipairs(action._preconditions or {}) do
+        local ok, value = guard.evaluate(action, context, condition.fn,
+            condition.stage, condition.expression)
+        if not ok or not value then return false end
+    end
     local ok, value = guard.evaluate(action, context, action._whenFn, 'when', action.when)
-    return ok and value
+    return ok and value, ok
 end
 
-function guard.commands(action, context)
+function guard.selectBranch(action, context)
+    local value, evaluated = guard.when(action, context)
+    if value then return 'commands' end
+    if evaluated and action._elseCommands and #action._elseCommands > 0 then return 'else' end
+end
+
+function guard.compileElse(action)
+    action._elseCommands = {}
+    local values = action['else']
+    if values == nil then return true end
+    if type(values) ~= 'table' then values = {values} end
+    local indexes = {}
+    for index in pairs(values) do
+        if type(index) == 'number' then indexes[#indexes + 1] = index end
+    end
+    table.sort(indexes)
+    local pending = ''
+    for _, index in ipairs(indexes) do
+        local expression = values[index]
+        if type(expression) == 'string' and expression:match('%S') then
+            expression = expression:match('^%s*(.-)%s*$')
+            pending = pending .. expression
+            if pending:sub(-1) == '\\' then
+                pending = pending:sub(1, -2) .. ' '
+            else
+                local fn, message = loadstring('return ' .. pending)
+                if not fn then
+                    guard.fail(action, 'compile else[' .. index .. ']', pending, message)
+                    return false
+                end
+                action._elseCommands[#action._elseCommands + 1] = {command=pending, _commandFn=fn}
+                pending = ''
+            end
+        elseif expression ~= nil and type(expression) ~= 'string' then
+            guard.fail(action, 'compile else[' .. index .. ']', expression, 'Expected command string')
+            return false
+        end
+    end
+    if pending ~= '' then
+        guard.fail(action, 'compile else', pending, 'Unfinished command continuation')
+        return false
+    end
+    return true
+end
+
+function guard.commands(action, context, branch)
     if action._runtimeError then return false end
-    for i, command in ipairs(action.commands or {}) do
+    local commands = branch == 'else' and action._elseCommands or action.commands
+    for i, command in ipairs(commands or {}) do
         if not guard.evaluate(action, context, command._commandFn,
-            'commands[' .. i .. ']', command.command) then return false end
+            (branch or 'commands') .. '[' .. i .. ']', command.command) then return false end
     end
     return true
 end

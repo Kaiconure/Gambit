@@ -5,7 +5,7 @@ local originalOpen=io.open
 windower={addon_path='test/',ffxi={get_player=function() return {name='Steris'} end},
  dir_exists=function() return true end}
 io.open=function(path,mode)
- assert(path:match('^test/%.data/action%-errors/Steris%-%d%d%d%d%d%d%d%d%.log$') and mode=='a')
+ assert(path:match('^test/%.data/action%-errors/Steris/Steris%-%d%d%d%d%d%d%d%d%.log$') and mode=='a')
  return {write=function(self,entry) entries[#entries+1]=entry;return self end,
  close=function() return true end}
 end

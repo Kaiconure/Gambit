@@ -1,5 +1,6 @@
 local settings_counter = 0
 local settingsPaths = require('./lib/settings-paths')
+local actionPreconditions = require('./lib/action-preconditions')
 
 local function firstSettingsPath(paths)
     return settingsPaths.firstExisting(paths, function(path)
@@ -307,20 +308,23 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
             if not action.disabled then
                 action.disabled = nil
 
-                if type(action.import) == 'string' then
-                    if type(action.imports) == 'table' then
-                        table.insert(action.imports, 1, action.import)
-                    else
-                        action.imports = { action.import }
+                -- Both spellings accept a string or array. If both are present,
+                -- keep singular entries first, followed by plural entries.
+                local imports = {}
+                for _, key in ipairs({'import', 'imports'}) do
+                    local references = action[key]
+                    if type(references) == 'string' then
+                        imports[#imports + 1] = references
+                    elseif type(references) == 'table' then
+                        for _, reference in ipairs(references) do
+                            imports[#imports + 1] = reference
+                        end
                     end
                 end
-                
-                if type(action.imports) == 'string' then
-                    action.imports = { action.imports }
-                end
+                action.import = nil
+                action.imports = imports
 
                 -- Import any items that have an import reference and which aren't marked as disabled
-                --if type(action.import) == 'string' then
                 if type(action.imports) == 'table' and #action.imports > 0 then
                     -- Remove the import reference from the calling action
                     table.remove(actions, i)
@@ -372,6 +376,8 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                     for _, fn in ipairs(import.functions) do
                                         if type(fn) == 'table' then
                                             fn.as_function = true
+                                            actionPreconditions.inherit(action, fn)
+                                            fn.importedFrom = action_import
                                             table.insert(actions, i, fn)
                                         end
                                     end
@@ -385,6 +391,8 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                     for _, ld in ipairs(import.loading) do
                                         if type(ld) == 'table' then
                                             ld.on_load = true
+                                            actionPreconditions.inherit(action, ld)
+                                            ld.importedFrom = action_import
                                             table.insert(actions, i, ld)
                                         end
                                     end
@@ -402,6 +410,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                         if importedAction then
                                             imported = true
                                             importedAction.importedFrom = action_import
+                                            actionPreconditions.inherit(action, importedAction)
 
                                             -- The id uniquely identifies this import action regardless of context.
                                             -- The discriminator takes into account the action type as well.
@@ -840,7 +849,7 @@ end
 
 ----------------------------------------------------------------------------------------
 -- Load settings
-local function loadSettingsInternal(actionsName, settingsOnly)
+local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     local player = windower.ffxi.get_player()
     if not player then
         tempSettings = json.parse(json.stringify(defaultSettings))
@@ -997,8 +1006,10 @@ local function loadSettingsInternal(actionsName, settingsOnly)
         tempSettings.actionInfo.name = actionsName
         tempSettings.actionInfo.fileName = actionsFileName
 
-        -- Save the post-processed actions
-        writeJsonToFile(settingsPaths.writePath(player.name, '.output/' .. (actionsName or player.name) .. '.actions.processed.json'), actions)
+        -- Post-processed output is an opt-in reload diagnostic.
+        if outputProcessed then
+            writeJsonToFile(settingsPaths.writePath(player.name, '.output/' .. (actionsName or player.name) .. '.actions.processed.json'), actions)
+        end
 
         if actionsName and not defaultsLoaded then
             writeMessage('Successfully loaded %s actions %s':format(
@@ -1019,7 +1030,7 @@ end
 ----------------------------------------------------------------------------------------
 -- Save settings
 -- nil selects the session namespace; false explicitly selects global settings.
-function loadSettings(actionsName, settingsOnly, namespaceOverride)
+function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProcessed)
     local previous = settingsPaths.getLoadedNamespace()
     local name = namespaceOverride
     if name == nil then
@@ -1034,7 +1045,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride)
         if not success then error(err) end
     end
     settingsPaths.setLoadedNamespace(name)
-    local success, result = pcall(loadSettingsInternal, actionsName, settingsOnly)
+    local success, result = pcall(loadSettingsInternal, actionsName, settingsOnly, outputProcessed)
     if not success then
         settingsPaths.setLoadedNamespace(previous)
         error(result)

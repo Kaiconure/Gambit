@@ -1,4 +1,5 @@
 local actionErrors = require('./lib/action-errors')
+local actionPreconditions = require('./lib/action-preconditions')
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
 --
@@ -329,6 +330,12 @@ local function compileActions(actionType, parent, rawActions)
             local shouldAdd = false
             action._runtimeError = nil
             action._errorLabel = actionType .. '[' .. i .. ']'
+            local explicitFrequency = action.frequency
+
+            -- Shared fallback only; explicit per-outcome values take precedence.
+            -- Apply before the default interval for actions without a when clause.
+            if action.frequency == nil then action.frequency = action.frequencies end
+            if action.miss_frequency == nil then action.miss_frequency = action.frequencies end
 
             -- If the "when" clause was broken into an array, we'll combine it all into
             -- a single parenthesised AND'ed expression here.
@@ -395,6 +402,11 @@ local function compileActions(actionType, parent, rawActions)
                         actionErrors.fail(action, 'compile when', action.when, compileError)
                     end
 
+                    local elseValid = actionErrors.compileElse(action)
+                    if action.miss_frequency == nil and #action._elseCommands > 0 then
+                        action.miss_frequency = explicitFrequency ~= nil and explicitFrequency or 1
+                    end
+
                     -- Sanitize the frequency value
                     if action.frequency == 'inf' or action.frequency == 'infinity' then
                         action.frequency = math.huge
@@ -449,7 +461,10 @@ local function compileActions(actionType, parent, rawActions)
                     end
                     action.commands = output_commands
                     
-                    local hasErrors = type(action._whenFn) ~= 'function'
+                    local hasErrors = type(action._whenFn) ~= 'function' or not elseValid
+                    if not hasErrors then
+                        hasErrors = not actionPreconditions.compile(action, actionErrors)
+                    end
                     if not hasErrors then
                         for j = 0, #action.commands do
                             if not hasErrors then
@@ -652,10 +667,13 @@ local function getNextBattleAction(context)
                     context.action = action
 
                     -- Make the context visible to the action function
-                    if actionErrors.when(action, context) then
+                    local branch = actionErrors.selectBranch(action, context)
+                    if branch then
+                        context._actionBranch = branch
                         -- If this action will get run, we'll need to schedule the next run time. We'll actually
                         -- update this later, after the actions are executed, based on the time they complete.
-                        action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
+                        local interval = branch == 'else' and action.miss_frequency or action.frequency
+                        action.availableAt = math.max(os.clock() + interval, action.availableAt)
 
                         if settings.verbosity >= VERBOSITY_DEBUG then
                             writeDebug('Condition met %s %s [scope: %s]':format(
@@ -700,11 +718,13 @@ local function executeBattleAction(context, action)
         context.player = windower.ffxi.get_player()
         context.action = action
 
-        if not actionErrors.commands(action, context) then return nil end
+        local branch = context._actionBranch or 'commands'
+        if not actionErrors.commands(action, context, branch) then return nil end
 
         -- At this point, we'll set the next schedule time based on the later of either its
         -- configured frequency or its own current schedulable time.
-        action.availableAt = math.max(os.clock() + action.frequency, action.availableAt)
+        local interval = branch == 'else' and action.miss_frequency or action.frequency
+        action.availableAt = math.max(os.clock() + interval, action.availableAt)
 
         -- If the action was flagged as incomplete, we'll allow it to be rescheduled again. In this
         -- case, we'll clear the scope and set it to the earlier of its current schedulable time
@@ -1016,10 +1036,9 @@ function cr_actionProcessor()
                                 
                                 if type(action._whenFn) == 'function' then
                                     context.action = action
-                                    if actionErrors.when(action, context) then
-                                        if action.commands and #action.commands > 0 then
-                                            actionErrors.commands(action, context)
-                                        end
+                                    local branch = actionErrors.selectBranch(action, context)
+                                    if branch then
+                                        actionErrors.commands(action, context, branch)
                                     end
                                 end
                             end

@@ -67,7 +67,7 @@
     {
       "when": [
         "bt.hpp >= 5 and me.tp >= 1000 and me.mpp <= 60",
-        "(bt.distance <= 5 and canUseWeaponSkill('Spirit Taker')) or \\",
+        "(bt.distance <= 4 and canUseWeaponSkill('Spirit Taker')) or \\",
         "  canUseWeaponSkill('Myrkr', 'Moonlight', 'Starlight')"
       ],
       "commands": [

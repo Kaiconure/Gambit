@@ -1,3 +1,5 @@
+local targetSelectors = require('./lib/target-selectors')
+
 local PARTY_MEMBER_FIELD_NAMES = {
     'p0', 'p1', 'p2', 'p3', 'p4', 'p5',         -- Party
 }
@@ -1007,7 +1009,7 @@ local function createMemberNamesExpression(context, names)
         expression = 'true'
     else
         local first = true
-        for i, name in ipairs(names) do
+        for i, name in ipairs(targetSelectors.resolve(context, names)) do
             if type(name) == 'string' then
                 name = string.lower(name)
                 if name == '*' then
@@ -1032,6 +1034,22 @@ end
 -----------------------------------------------------------------------------------------
 -- 
 local function setPartyEnumerators(context)
+    -- An explicitly empty target array cancels even an existing enumeration.
+    -- Keep no-argument/nil calls as the existing unrestricted selection.
+    local function clearEmptySelection(...)
+        local targets = ...
+        if select('#', ...) == 1 and type(targets) == 'table' and next(targets) == nil then
+            context.member = nil
+            context.members = {}
+            context.member_count = 0
+            context.action.enumerators.member = nil
+            return true
+        end
+        return false
+    end
+    context.partyHasJob = function(...)
+        return targetSelectors.partyHasJob(context, varargs({...}))
+    end
 
     -----------------------------------------------------------------------------------------
     -- Count the number of party members matching the specified expression
@@ -1097,11 +1115,17 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- Find all party members with the specified names
     context.partyByName = function (...)
-        return context.partyAll(
+        if clearEmptySelection(...) then return nil end
+        local nextMember = getNextMemberEnumerator(context)
+        if nextMember then return nextMember end
+        context.partyAny(
             createMemberNamesExpression(context, 
                 varargs({...})
             )
         )
+        targetSelectors.selfFirst(context, context.members)
+        context.member = context.members[1]
+        return context.member
     end
 
     -----------------------------------------------------------------------------------------
@@ -1126,11 +1150,17 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- Find all allies with the specified names
     context.alliesByName = function (...)
-        return context.allyAll(
+        if clearEmptySelection(...) then return nil end
+        local nextMember = getNextMemberEnumerator(context)
+        if nextMember then return nextMember end
+        context.allyAny(
             createMemberNamesExpression(context, 
                 varargs({...})
             )
         )
+        targetSelectors.selfFirst(context, context.members)
+        context.member = context.members[1]
+        return context.member
     end
 end
 
@@ -1784,6 +1814,7 @@ local function initContextTargetSymbol(context, symbol, debug)
 
     symbol.in_spell_range   = symbol.center_distance <= 20
     symbol.in_ra_range      = symbol.center_distance <= 25
+    symbol.is_participant   = not symbol.is_dead and symbol.in_spell_range
     
     -- symbol.checkAbilityRange = function(ability)
     --     if type(ability) ~= 'table' then
@@ -5027,6 +5058,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     -------------------------------------------------------------------------------------
+    --Determine if you're currently in a battlefield
+    context.isBattlefield = function ()
+        return context.hasBuff('Battlefield', 'Voidwatcher', 'Confrontation')
+    end
+
+    -------------------------------------------------------------------------------------
     -- Trust zones are the same as battle zones. We might be proven wrong at 
     -- some point, but we'll refine that easily if needed.
     context.isTrustZone = context.isBattleZone
@@ -6500,6 +6537,21 @@ end
 local dumped = false
 
 return {
+    -- Manual executions own their context/action and never replace the latest context.
+    createTemporary = function(name)
+        if not settings or not windower.ffxi.get_player() or
+            not windower.ffxi.get_mob_by_target('me') then return nil end
+        local target = globals.target and globals.target:mob()
+        local context = makeActionContext('function', 0, target, 0, -1, windower.ffxi.get_party())
+        context.action = {
+            name=name or 'manual execution', importedFrom='manual command',
+            enumerators={}, scopes={execution={}, iteration={}}, results={},
+            availableAt=0, frequency=0, miss_frequency=0, delay=0,
+        }
+        context.results = {}
+        context.params = {}
+        return context
+    end,
     create = function(actionType, time, target, mobEngagedTime, battleScope, party)
         local context = makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
 

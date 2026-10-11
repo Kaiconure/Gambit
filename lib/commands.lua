@@ -1,6 +1,31 @@
 local handlers = {}
 local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
+local valueOutput = require('./lib/value-output')
+
+handlers['eval'] = function(args)
+    local code = table.concat(args or {}, ' ')
+    if not code:match('%S') then
+        writeMessage('Usage: gbt eval <Lua expression or script>')
+        return
+    end
+    local created, context = pcall(ActionContext.createTemporary, 'gbt eval')
+    if not created then
+        writeMessage('Cannot create eval context: ' .. tostring(context))
+        return
+    end
+    if not context or type(context.execute) ~= 'function' then
+        writeMessage('Cannot evaluate Lua: no action context is available yet.')
+        return
+    end
+    local action = context.action
+    local ok, value = actionErrors.evaluate(action, context, function()
+        return context.execute(code)
+    end, 'eval', code)
+    if ok then
+        valueOutput.write('result', value, 'Eval')
+    end
+end
 
 -------------------------------------------------------------------------------
 -- Namespace selection is session state, never a persisted setting.
@@ -150,62 +175,7 @@ handlers['varget'] = function(args)
         return
     end
 
-    local value = context.getVar(name)
-    writeMessage(text_gray('Variable %s value:':format(text_yellow(type(value), Colors.gray))))
-
-    if type(value) == 'boolean' then
-        writeMessage('  %s: %s':format(
-            text_blue(name),
-            value and text_green('true') or text_red('false')
-        ))
-    elseif type(value) == 'string' then
-        writeMessage('  %s: %s':format(
-            text_blue(name),
-            text_yellow('"%s"':format(value))
-        ))
-    elseif type(value) == 'number' then
-        writeMessage('  %s: %s':format(
-            text_blue(name),
-            text_number(tostring(value))
-        ))
-    elseif type(value) == 'nil' then
-        writeMessage('  %s: %s':format(
-            text_blue(name),
-            text_gray('nil')
-        ))
-    elseif type(value) == 'table' and #value > 0 then
-        writeMessage('  %s %s:':format(
-            text_blue(name),
-            text_yellow('array')
-        ))
-
-        for i, v in ipairs(value) do
-            writeMessage('    %s: %s':format(
-                text_number(i),
-                    (type(v) == 'number' and text_number(v)) or
-                    (type(v) == 'string' and text_yellow('"%s"':format(v))) or
-                    (type(v) == 'boolean' and (v and text_green('true') or text_red('false'))) or
-                    (type(v) == 'nil' and text_gray('nil')) or
-                    text_gray(tostring(v))
-            ))
-        end
-    else
-        writeMessage('  %s %s:':format(
-            text_blue(name),
-            text_yellow('table')
-        ))
-
-        for key, v in pairs(value) do
-            writeMessage('    %s: %s':format(
-                text_yellow(key),
-                    (type(v) == 'number' and text_number(v)) or
-                    (type(v) == 'string' and text_yellow('"%s"':format(v))) or
-                    (type(v) == 'boolean' and (v and text_green('true') or text_red('false'))) or
-                    (type(v) == 'nil' and text_gray('nil')) or
-                    text_gray(tostring(v))
-            ))
-        end
-    end
+    valueOutput.write(name, context.getVar(name))
 end
 
 handlers['varset'] = function(args)
@@ -382,7 +352,8 @@ handlers['reload'] = function (args)
         actionsName = actionsName and (args[actionsName + 1]) or nil
     end
 
-    reloadSettings(actionsName, bypassActions ~= nil, namespaceOverride)
+    local outputProcessed = (arrayIndexOfStrI(args, '-verbose') or arrayIndexOfStrI(args, '-v')) ~= nil
+    reloadSettings(actionsName, bypassActions ~= nil, namespaceOverride, outputProcessed)
 end
 handlers['r'] = handlers['reload']
 
@@ -1116,9 +1087,11 @@ handlers['function'] = function(args)
                         context.params._runtime = context.time
                         context.params._fn = name
 
-                        if not action._fn_exiting and actionErrors.when(action, context) then
+                        local branch = not action._fn_exiting and actionErrors.selectBranch(action, context)
+                        if branch == 'commands' then
                             if not actionErrors.commands(action, context) then done = true end
                         else
+                            if branch == 'else' then actionErrors.commands(action, context, branch) end
                             if not silent then
                                 writeMessage('  %s: Execution completed!':format(text_green(action.name)))
                             end

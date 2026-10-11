@@ -125,16 +125,81 @@ Disables automation. Has no effect if automation is already disabled. See also: 
 
 Enables automation. Has no effect if automation is already enabled. See also: `disable`, `toggle`
 
-#### **reload** [-settings-only] [-actions {action-name}] [-ns {namespace}] [-r]
+#### **reload** [-settings-only] [-actions {action-name}] [-ns {namespace}] [-r] [-verbose]
 
 Forces the addon to reload all settings and actions, resetting the action processing state. This *does not* affect whether automation is enabled.
 
 - `-settings-only`, `-so` - Force the addon to reload settings but not actions. This is primarily useful if you've modified the settings file directly, and want to reload those without resetting the action state.
+- `-verbose`, `-v` - Write processed action JSON to the loaded configuration's `.output` folder for this reload only (for example, `gbt r -r -v`). Normal reloads and automatic loads do not write this diagnostic output. Existing output files are left in place. This flag does not change logging verbosity.
 - `-actions {action-name}` - Perform a full reload, but load the specified action set rather than the default job-based one. This is completely ignored if you've asked for a settings-only reload.
 - `-ns {namespace}` - Load once from this namespace without changing the session selection reported by `gbt ns`. For example, `gbt r -a xp-leveler -ns common`. Cannot be combined with `-settings-only`.
 - `-r`, `-reload` - Reload the currently loaded action name and its namespace, including a previous one-time namespace override. An explicit `-ns` takes precedence over the remembered namespace.
 
 A plain `gbt r` returns to job-based actions in the session-selected namespace. Saves and processed output use the loaded configuration's namespace; settings-only reloads retain that context too. Neither namespace is persisted across addon reloads.
+
+#### **eval** <Lua expression or script>
+
+`gbt eval partyCount('is_participant')` evaluates Lua through a fresh, dedicated context's `execute` function and displays its first returned value (including `false` or `nil`). Full scripts are supported, for example `gbt eval local n = partyCount('in_spell_range'); return n`. Each invocation owns a temporary action with its own enumeration, scope, and scheduling state; it does not replace the saved latest context. A player and loaded settings must be available. Evaluation errors use the existing error outputs/log without quarantining the current gambit action; waits use the existing yield-safe guard. Shared settings, variables, and game operations remain shared: intentional script side effects still take effect normally.
+
+Windower supplies parsed command arguments, which are joined with spaces. Preserve Lua string quotes when entering expressions; this command cannot restore quoting or whitespace already removed by Windower's command parser.
+
+#### Target job selectors
+
+Prefix a job or role selector with `^` to exclude yourself from that selector: `^WHM`, `^mages`, or `^healers`. Matching remains case-insensitive. Exclusion is local to that entry, so `["me", "^mages"]` still includes you, and an unprefixed overlapping selector can also include you. `partyHasJob('^healers')` checks for another living healer within 20 yalms. The prefix applies to job/role selectors, not arbitrary names or markers.
+
+An explicit empty array (`partyByName({})` or `alliesByName({})`) selects nobody and clears the action's current member enumeration. No arguments, a nil argument, or `'*'` retain unrestricted selection. Use `["*"]` in a JSON target list when everyone is intended.
+
+Context member symbols expose `is_participant`: true when alive and within 20 yalms (inclusive). `partyHasJob` uses this flag. For example, `me.is_party_leader or not party_leader or not party_leader.is_participant` allows an action when you lead, no leader is available, or the leader is dead or out of range.
+
+`partyHasJob` only counts matching members who are alive and within the context's spell range (20 yalms, inclusive). Dead members and members outside that range—or without known range information—do not count. Another living, nearby match can still satisfy the check. This availability check does not change `partyByName` or `alliesByName` selection.
+
+`partyHasJob('WHM', 'SCH')` returns a boolean indicating whether any current party member has either main job, without changing target selection or member enumeration. It also accepts an array, role categories, and plural aliases, all case-insensitively: `partyHasJob({'healers', 'GEO'})`. No arguments, unknown selectors, and unknown member jobs do not match. This includes yourself and trusts with known jobs, but excludes alliance-only members. For an RDM main-healer precondition, use `not partyHasJob('WHM', 'SCH')`; for backup healing, use `partyHasJob('WHM', 'SCH')`.
+
+`mages`, `healers`, `nukers`, and `tanks` are aliases for their singular categories. Both forms are case-insensitive and can be mixed without duplicating targets. `melee`, `ranged`, and `support` retain their collective names.
+
+Job categories are also case-insensitive and can overlap. For example, `partyByName({'me', 'healer', 'nuker'})` selects matching party members without duplicating names. These categories describe known main jobs, not equipment or assigned roles. A category with no matching members selects nobody.
+
+| Selector | Main jobs |
+| --- | --- |
+| `melee` | WAR, MNK, THF, PLD, DRK, BST, SAM, NIN, DRG, BLU, PUP, DNC, RUN |
+| `ranged` | RNG, COR |
+| `mage` | WHM, BLM, RDM, BRD, SMN, BLU, SCH, GEO |
+| `healer` | WHM, RDM, SCH |
+| `nuker` | BLM, RDM, BLU, SCH, GEO |
+| `support` | RDM, BRD, COR, SMN, DNC, SCH, GEO |
+| `tank` | PLD, NIN, RUN |
+
+Fresh `partyByName` and `alliesByName` enumerations put your character first when included among the matches (by marker, name, job, or wildcard). Other matches retain their randomized relative order. Continuing an existing enumeration does not reorder it, and general expression-based party/alliance enumeration remains unchanged.
+
+`partyByName` and `alliesByName` accept case-insensitive main-job abbreviations alongside names and semantic markers: for example, `partyByName({'me', 'PLD', 'rdm'})`. Job selectors expand to matching members of the current party using context job information (including trusts and IPC-connected alts). Unknown jobs and unmatched job selectors contribute no targets. Explicit names and markers keep their existing behavior. Job expansion is limited to the party even when using `alliesByName`; explicit alliance names remain supported. Repeated names are deduplicated, and job membership is resolved on each fresh enumeration.
+
+#### Action frequencies
+
+An action may specify `"else": ["log('Condition was false')"]` (or a single command string). When preconditions pass and `when` returns false/nil, this branch executes instead of `commands`. It counts as an action hit and ends the scheduler iteration, using `miss_frequency` for its cooldown. For a nonempty `else`, the miss interval uses the first supplied value in this order: `miss_frequency`, `frequencies`, then explicit `frequency`; otherwise it defaults to one second. An explicit zero removes this safeguard. Preconditions that fail skip both branches. Evaluation errors quarantine the action and never trigger `else`; errors within `else` stop its remaining commands and use the existing error logs.
+
+Missing/nil `else`, empty arrays, and arrays containing only nil or blank strings preserve existing behavior. Both branches share the action's scope and availability time. Values such as `member` or `spell` may not have been selected when `when` fails. Named functions execute `else` once before exiting on a false condition; loading actions also support either branch.
+
+**Scheduling:** once eligible and past its preconditions, an action with executable commands in both branches executes something regardless of its `when` result. Configure both intervals thoughtfully so lower-priority actions can run. Zero intervals can starve lower-priority actions.
+
+`frequencies` supplies a shared default for an action's `frequency` (after execution) and `miss_frequency` (when conditions fail). Either explicit property takes precedence, including zero. For example, `"frequencies": 5, "frequency": 1` means one second after execution and five seconds after a miss. If both individual properties are set, `frequencies` has no effect. Existing interval normalization and the minimum one-second execution interval for actions without a `when` clause still apply.
+
+#### Preconditions
+
+`import` and `imports` are interchangeable: either accepts a single reference string or an array of references. If both are present, `import` entries come first, followed by `imports` entries, preserving order within each array. Preconditions apply to every referenced branch.
+
+Any action or import can specify `"precondition": "isBattlefield()"` or an array such as `"precondition": ["isBattlefield()", "player.hpp > 50"]`. Each entry is a Lua expression evaluated in the same context as `when`.
+
+Preconditions accumulate through nested imports: outer conditions run first, followed by inner conditions, the action's own preconditions, and finally its `when`. Every expression must be truthy; false or nil skips the action without evaluating later conditions or commands. Each import branch inherits its own conditions, including imported loading actions and named functions. Variables and macro definitions are still imported normally.
+
+Missing/nil values, empty or whitespace-only strings, empty arrays, and empty string entries add no restriction. They do not clear inherited conditions. Invalid expressions use the action error guard, with the precondition's source included in the error report. Preconditions compile when actions load and are evaluated each time the action's `when` would be checked.
+
+#### Action errors
+
+Errors also append to `.data/action-errors/<Character>-YYYYMMDD.log`, using local dates and timestamps. Each entry includes the action label, source (when available), evaluation stage, error message, and complete failing `when` or command expression, including embedded newlines. Each action is logged once when quarantined. File logging failures are reported without interrupting automation; both existing chat and print outputs remain enabled.
+
+Action evaluation errors are contained per compiled action: a failing `when` or command prints its source and expression once, then quarantines that action until a full action reload (`gbt r -r`). Commands after the failure are skipped; completed side effects are not rolled back. The JSON `disabled` setting is unchanged. A settings-only reload does not clear quarantine. Loading actions and named functions use the same protection. Named functions may also be explicitly retried by adding `-retry` to their usual invocation. Syntax errors are reported during compilation and the invalid action is omitted.
+
+Protected execution uses a coroutine boundary to catch errors while forwarding yields and resume values to the caller, allowing sleeping commands on Lua 5.1 without yielding through `pcall`. Windower's sleep scheduling still requires in-game verification. These guards contain Lua evaluation errors, not native crashes or infinite loops.
 
 #### **namespace** / **ns** [-set {name} | -clear]
 
