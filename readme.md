@@ -10,6 +10,8 @@
 
 # Gambit
 
+[Command reference](docs/commands.md) — chat/console commands, aliases, options, and examples.
+
 ## Overview
 
 Gambit is a Windower 4 addon that allows you to define data-driven, customizable, scripted action sequences for use in FFXI. It is used to automate all manner of operations within the game.
