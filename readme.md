@@ -248,6 +248,31 @@ Controls the chat log output level. Gambit will only show output that is at or b
 
 TBD
 
+### Prioritized variable defaults
+
+`getOriginalVar(name)` reads the variable value from the most recent action load/compilation, before loading actions execute. It supports the same dotted paths, optional `vars.` prefix, numeric array indexes, and computed `$length`/`$type` queries as `getVar`. Tables are returned as fresh deep copies; missing values return nil.
+
+`resetVar(name)` restores that loaded value through `setVar`, returning the assigned value. For example, `resetVar('keep_silence.targets')` restores the loaded target list. Resetting an object restores its entire subtree and removes runtime-added children. Resetting an absent variable assigns nil. Existing setter restrictions still apply: computed fields cannot be assigned, and nested assignments cannot traverse a scalar parent. Runtime assignments remain unrestricted by load-time priority. A settings-only reload that does not recompile actions leaves the snapshot unchanged.
+
+Prefix a key in an action file's `vars` with `!` to give its supplied values priority during loading:
+
+```json
+"vars": {
+  "!allow_cleave": true,
+  "!keep_silence": {
+    "targets": ["bt", "Enemy Name"]
+  }
+}
+```
+
+Actions still read `vars.allow_cleave` and `vars.keep_silence.targets`. The prefix is removed during loading. Marked values beat ordinary definitions regardless of import order, including ordinary values in the main gambit file. Two conflicting marked values keep the first loaded definition and produce a warning identifying the variable and source. Within a single object, marked keys are applied after ordinary keys.
+
+Objects continue merging recursively: marking `keep_silence` prioritizes its supplied `targets`, while other imports can still provide `spells` and other missing properties. Alternatively, mark only a nested key, such as `"keep_silence": {"!targets": ["bt"]}`. Arrays are whole values, not combined lists. An incoming scalar, array, or clearing marker cannot discard an object containing an earlier prioritized descendant.
+
+Use `"!name": "$object.null"` for prioritized clearing to nil, or `"!name": "$array.empty"` (also `$object.empty` / `$table.empty`) for a protected empty table. Ordinary JSON `null` is removed by the parser and does not establish priority. An empty JSON object supplies no child values; use an explicit empty marker when clearing is intended.
+
+Priority metadata exists only during loading and is discarded afterward. Runtime assignments, including `setVar`, remain unrestricted. Ordinary definitions retain the existing merge rules. Reserve priority markers for configuration overrides rather than reusable library defaults.
+
 `mobByIndex(index)` provides the same context entity through an entity index. Both helpers leave targeting and enumeration unchanged.
 
 The finders `findMob`, `findMobWhere`, and `findMobs` also accept the case-insensitive selector `"bt"`, alone or in a list such as `"targets": ["bt", "Enemy Name"]`. It resolves to the current battle target's ID on each search and matches nothing when that target is unavailable. All existing enemy, range, engagement, and predicate filters still apply; `bt` receives no special priority over nearer qualifying enemies.

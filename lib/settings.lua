@@ -1,5 +1,6 @@
 local settings_counter = 0
 local settingsPaths = require('./lib/settings-paths')
+local variableLoader = require('./lib/variable-loader')
 local actionPreconditions = require('./lib/action-preconditions')
 
 local function firstSettingsPath(paths)
@@ -188,58 +189,10 @@ local function getActionsJobFileName(player, actionsName)
     return getActionsFileName(player.name, actionsName:lower())
 end
 
-local function loadVars(original, incoming)
-    if original and incoming then
-        -- Iterate over all the incoming values
-        for key, val in pairs(incoming) do
-
-            if type(val) == 'table' then
-                -- For tables, we'll perform a deep copy
-                if original[key] == nil then
-                    original[key] = {}
-                end
-
-                -- Perform the same variable load logic on the new key. This will skip any situation
-                -- where the incoming data defines a table and the original already has a non-table
-                -- variable of the same name. This wouldn't be an expected situation.
-                if type(original[key]) == 'table' then
-                    if #original[key] > 0 and original[key][1] ~= nil then
-                        -- For straight up arrays, we'll just leave the original value intact. No overwrites.
-
-                        -- OLD: For straight up arrays, we'll actually just take the new value
-                        -- OLD: original[key] = val
-                    else
-                        -- For non-array tables, we will merge the incoming values in
-                        loadVars(original[key], val)
-                    end
-                end
-            else
-                if      -- Override setting of an empty table
-                    val == '$array.empty' or
-                    val == '$object.empty' or
-                    val == '$table.empty'
-                then
-                    original[key] = {}
-                elseif  -- Override seting of a null value
-                    val == '$object.null' or
-                    val == '$table.null'
-                then
-                    original[key] = nil
-                else
-                    -- For non-tables, copy the value in if it hasn't already been defined
-                    if original[key] == nil then
-                        original[key] = val
-                    end
-                end
-            end
-        end
-    end
-end
-
 ----------------------------------------------------------------------------------------
 -- Pulls the next round of imports into the specified actions array. Returns
 -- true if new actions were imported as part of this pass.
-local function _loadActionImportsInternal(playerName, baseActions, actionType, pass, player)
+local function _loadActionImportsInternal(playerName, baseActions, actionType, pass, player, variables)
     local imported = false
     local actions = baseActions and baseActions[actionType] or {}
     if actions then
@@ -355,7 +308,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                 --
                                 -- Pull in any variables defined in this import. Existing values are not overwritten.
                                 if import.vars then
-                                    loadVars(baseActions.vars, import.vars)
+                                    variables.merge(baseActions.vars, import.vars, fileName)
                                 end
 
                                 -- Pull in the macros. For macros defined more than once, we will always use the definition
@@ -669,10 +622,14 @@ local function _expandActionMacrosToArray(macros, array)
 
 ----------------------------------------------------------------------------------------
 --
-local function loadActionImports(playerName, actions, player)
+local function loadActionImports(playerName, actions, player, sourceFile)
     -- Keep importing actions until there are no more to pull in. This is to ensure that
     -- imports which have their own imports will work.
     if actions then
+        local variables = variableLoader.new(writeWarning)
+        local initialVars = actions.vars
+        actions.vars = {}
+        variables.merge(actions.vars, initialVars, sourceFile)
         local MAX_PASSES = 10
         local types = {'loading', 'battle', 'idle_battle', 'pull', 'idle', 'resting', 'event', 'dead', 'mounted', 'imports', 'functions'}
 
@@ -705,7 +662,7 @@ local function loadActionImports(playerName, actions, player)
 
             -- Prevent runaway, infinite imports. Most likely caused if an include references 
             -- itself. Let's not crash the game because of a mistake or typo.
-            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType, passes + 1, player) do
+            while passes <= MAX_PASSES and _loadActionImportsInternal(playerName, actions, actionType, passes + 1, player, variables) do
                 passes = passes + 1
             end
 
@@ -764,7 +721,7 @@ local function loadActionsFromFile(playerName, fileName)
 
     local actions = _loadActionsWithPreprocessing(file)
     if actions then
-        loadActionImports(playerName, actions, windower.ffxi.get_player())
+        loadActionImports(playerName, actions, windower.ffxi.get_player(), fileName)
     end
 
     return actions

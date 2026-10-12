@@ -1,3 +1,4 @@
+local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
 local targetedAction = require('./lib/targeted-action')
 
@@ -89,25 +90,7 @@ end
 -----------------------------------------------------------------------------------------
 -- Gets the full path to a variable under the 'vars' action object. This splits on
 -- all the dot (.) characters, and omits the 'vars' parent.
-local function get_action_variable_path(s)
-    result = {};
-    for match in (s..'.'):gmatch('(.-)%.') do
-        match = trimString(match)
-        if 
-            match ~= '' and
-            (match ~= 'vars' or #result > 0)
-        then
-            local num_match = tonumber(match)
-            if num_match and math.floor(num_match) == num_match then
-                -- This allows numeric indexes for arrays to be obtained
-                result[#result + 1] = num_match
-            else
-                result[#result + 1] = match
-            end
-        end
-    end
-    return result;
-end
+local get_action_variable_path = variableValues.path
 
 -----------------------------------------------------------------------------------------
 -- Determine if the specified symbol string is something we can handle for
@@ -546,6 +529,7 @@ end
 -- 'vars' name is implicit, and can be either provided or omitted with the same result.
 local function context_set_var(name, value)
     local levels = get_action_variable_path(name)
+    if #levels == 0 then return nil end
 
     -- Bail if we're trying to set a computed field
     local last_level = levels[#levels]
@@ -586,40 +570,15 @@ end
 -- Gets an action context variable by name, allowing for dot ('.') syntax. The leading
 -- 'vars' name is implicit, and can be either provided or omitted with the same result.
 local function context_get_var(name)
-    local levels = get_action_variable_path(name)
+    return variableValues.get(actionStateManager.vars, name)
+end
 
-    -- If only one level is necessary, we'll just set it now and be done
-    if #levels == 1 then
-        return actionStateManager.vars[levels[1]]
-    end
+local function context_get_original_var(name)
+    return actionStateManager:getOriginalVar(name)
+end
 
-    local ref = actionStateManager.vars
-
-    -- Go through all levels to find the final value
-    for i = 1, #levels - 1 do
-        local level = levels[i]
-        local cur = ref[level]
-
-        -- If this is not a table, we've reached the end of the search
-        if type(cur) ~= 'table' then
-            return nil
-        end
-
-        ref = cur
-    end
-
-    -- Allow for array length to be queried
-    local last_level = levels[#levels]
-    if last_level == '$length' then
-        if type(ref) == 'table' then
-            return #ref
-        end
-    elseif last_level == '$type' then
-        return type(ref)
-    end
-
-    -- Return the final level
-    return ref[levels[#levels]]
+local function context_reset_var(name)
+    return context_set_var(name, context_get_original_var(name))
 end
 
 -----------------------------------------------------------------------------------------
@@ -6604,6 +6563,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.wait = context_wait
     context.setVar = context_set_var
     context.getVar = context_get_var
+    context.getOriginalVar = context_get_original_var
+    context.resetVar = context_reset_var
     context.setVarField = context_set_var_field
     context.getVarField = context_get_var_field
     context.varIncrement = context_var_increment

@@ -580,7 +580,7 @@ local function compileAllActions()
     compileActions('imports',       actions, actions and actions.imports or {})
     compileActions('functions',     actions, actions and actions.functions or {})
 
-    actionStateManager.vars = actions and actions.vars or {}
+    actionStateManager:initializeVars(actions and actions.vars or {})
 
     -- Internal variables are stored here
     actionStateManager.vars._ = {}

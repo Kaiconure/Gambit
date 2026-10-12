@@ -7,6 +7,8 @@ SKILLCHAIN_START_DELAY  = 3     -- The delay used between weapon skills if there
 SKILLCHAIN_DELAY        = 5     -- The minimum amount of time to wait after one weapon skill before we try to skillchain with another
 
 
+local variableValues = require('./lib/variable-values')
+
 local state_manager = {
     needsRecompile = true,
 
@@ -1119,10 +1121,20 @@ state_manager.reset = function (self)
     self.actions = { }
     self.functions = {}
     self.vars = { }
+    self.originalVars = {}
     --self.meritPointInfo = { current = 0, max = 30, limits = 0 }
     --self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0, spentJobPoints = 0, totalJobPoints = 0 }
     -- self.memberBuffs = { }   -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
     -- self.mobBuffs = { }    -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that
+end
+
+function state_manager:initializeVars(vars)
+    self.originalVars = variableValues.copy(vars or {})
+    self.vars = vars or {}
+end
+
+function state_manager:getOriginalVar(name)
+    return variableValues.copy(variableValues.get(self.originalVars, name))
 end
 
 return state_manager
