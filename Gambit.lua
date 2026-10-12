@@ -1,4 +1,4 @@
-__version = '0.96.0-beta19c'
+__version = '0.96.0-beta20'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -590,7 +590,7 @@ windower.register_event('action', function(action)
                 end
 
                 if globals.currentSpell then
-                    actionStateManager:setSpellStart(globals.currentSpell)
+                    actionStateManager:setSpellStart(globals.currentSpell, actionTarget and actionTarget.id)
 
                     local message = 'Casting %s':format(text_spell(globals.currentSpell.name, Colors.verbose))
                     if globals.spellTarget then

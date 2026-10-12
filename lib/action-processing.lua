@@ -1,5 +1,6 @@
 local actionErrors = require('./lib/action-errors')
 local actionPreconditions = require('./lib/action-preconditions')
+local targetedAction = require('./lib/targeted-action')
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
 --
@@ -102,7 +103,16 @@ function sendActionCommand(
     end
 
     local movementJob = pauseFollow and smartMove:cancelJob()
-    if command and command ~= '' then
+    if type(command) == 'function' then
+        if command() == false then
+            if movementJob then smartMove:reschedule(movementJob) end
+            if context and context.action then
+                context.action.complete = false
+                context.action.incomplete = true
+            end
+            return false
+        end
+    elseif command and command ~= '' then
         if settings.verbosity >= VERBOSITY_TRACE then
             writeTrace(string.format('Sending %s', colorize(Colors.magenta, command, Colors.trace)))
         end
@@ -231,11 +241,14 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     local endTime = os.clock() + (math.max(spell.cast_time, 1) * 1.5) + 2
 
     -- Construct the actual spell casting command
-    local command = 'input %s "%s" <%s>':format(
+    local command = 'input %s "%s" %s':format(
         spell.prefix,
         spell.name,
-        target
+        type(target) == 'number' and tostring(target) or ('<' .. target .. '>')
     )
+    if type(target) == 'number' then
+        command = function() return targetedAction.send(3, spell, target) end
+    end
 
     local castingStartedAt = os.clock()
     local interrupted   = false     -- Set if the spell completes with interruption
@@ -243,15 +256,32 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     local isFirstCycle  = true
 
     -- Send the casting command. It will wait 1 second before returning (the third parameter)
-    sendActionCommand(command, context, 1)
+    local submitted = sendActionCommand(command, context, 1)
+    if submitted == false then
+        if followJob then smartMove:reschedule(followJob) end
+        return false
+    end
 
     -- We will now continue looping until either casting completes, or the max end time has been reached.
     -- Note that if the spell has not begun casting after the 1 second delay used above, exit early.
     local continue = true
+    local explicitCompleted = false
     while continue do
         local currentSpell = actionStateManager.currentSpell
 
-        if
+        if type(target) == 'number' then
+            local matches = currentSpell and (currentSpell.time or 0) >= castingStartedAt
+                and currentSpell.targetId == target and currentSpell.spellId == spell.id
+            if matches and currentSpell.spell == nil then
+                explicitCompleted = true
+                interrupted = currentSpell.interrupted
+                continue = false
+            elseif os.clock() >= endTime then
+                continue = false
+            else
+                coroutine.sleep(0.1)
+            end
+        elseif
             os.clock() >= endTime or
             currentSpell.spell ~= spell -- Note: This is a reference compare, which seems to work due to resource table lookup. But should be validated.
         then
@@ -283,6 +313,9 @@ function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
     -- If the spell was interrupted, we'll mark it as incomplete so it can be rescheduled. Refer to
     -- the executeBattleAction function to see how action.incomplete is handled.
     local complete = not interrupted or ignoreIncomplete == true
+    if type(target) == 'number' then
+        complete = explicitCompleted and (not interrupted or ignoreIncomplete == true)
+    end
     if context and context.action then
         context.action.complete = complete
         context.action.incomplete = not complete

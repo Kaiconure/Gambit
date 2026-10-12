@@ -8,15 +8,14 @@
       "not vars.black_magic_burst.targets or vars.black_magic_burst.targets[bt.name]",
       "me.mpp >= vars.black_magic_burst.min_mpp",
       "not hasBuff('Immanence')",
-      "skillchaining(vars.black_magic_burst.skillchains)",
-      "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
+      "skillchaining(vars.black_magic_burst.skillchains)"
     ],
     "exec_magic_burst": [
       "log('Magic bursting', skillchain.name, 'with', spell.name)",
       "equipMany(vars.black_magic_burst.gear.casting)",
       "vars.black_magic_burst.gear[skillchain.name] and equipMany(vars.black_magic_burst.gear[skillchain.name])",
       "not vars.black_magic_burst.abilities_blacklist[bt.name] and canUseAbility(vars.black_magic_burst.abilities) and useAbility(me)",
-      "useSpell()",
+      "useSpell(bt)",
       "equipMany(vars.black_magic_burst.gear.battle)",
       "vars.black_magic_burst.frequency and vars.black_magic_burst.frequency > 0 and postpone(vars.black_magic_burst.frequency)"
     ]

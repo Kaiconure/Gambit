@@ -702,10 +702,12 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-state_manager.setSpellStart = function(self, spell)
+state_manager.setSpellStart = function(self, spell, targetId)
     self.currentSpell = {
         time = os.clock(),
         spell = spell,
+        spellId = spell and spell.id,
+        targetId = targetId,
         interrupted = false
     }
     return self.currentSpell.time
@@ -717,6 +719,8 @@ state_manager.setSpellCompleted = function(self, interrupted)
     self.currentSpell = {
         time = os.clock(),
         spell = nil,
+        spellId = self.currentSpell and self.currentSpell.spellId,
+        targetId = self.currentSpell and self.currentSpell.targetId,
         interrupted = interrupted
     }
 end
@@ -809,8 +813,18 @@ state_manager.getMemberBuffsFor = function (self, member)
     return self:getMemberBuffs()[member.id] or { }
 end
 
+-- ID-based buff operations accept either an entity or its numeric ID.
+local function mobBuffId(value)
+    if type(value) == 'table' then value = value.id end
+    if type(value) == 'number' and value > 0 and value < math.huge and value == math.floor(value) then
+        return value
+    end
+end
+
 -- Validate the buff state for the given trust
 state_manager.validateBuffsForMob = function (self, id)
+    id = mobBuffId(id)
+    if not id then return false end
     local value = self.mobBuffs[id]
     if value then
         local mob = windower.ffxi.get_mob_by_id(value.id)
@@ -870,6 +884,8 @@ end
 
 -- Remove all tracked buffs for this mob
 state_manager.removeBuffsForMob = function(self, id)
+    id = mobBuffId(id)
+    if not id then return end
     if self.mobBuffs and self.mobBuffs[id] then
         self.mobBuffs[id] = nil
     end
@@ -945,6 +961,8 @@ end
 
 -- Get the active buffs for the specified trust
 state_manager.getBuffsForMob = function(self, id)
+    id = mobBuffId(id)
+    if not id then return {} end
     self:validateBuffsForMob(id)
 
     if self.mobBuffs[id] then
@@ -994,6 +1012,7 @@ state_manager.getBuffedMobs = function(self)
 end
 
 state_manager.getBuffInfoForMob = function(self, id)
+    id = mobBuffId(id)
     self:validateBuffsForMob(id)
 
     local result = {
@@ -1039,6 +1058,8 @@ end
 -- Just get the direct mob buffs array for the given mob, without any extra
 -- validation. Always returns an array, empty if no data is tracked.
 state_manager.getRawBuffsForMob = function(self, id)
+    id = mobBuffId(id)
+    if not id then return {} end
     return self.mobBuffs and self.mobBuffs[id] and self.mobBuffs[id].buffs or {}
 end
 

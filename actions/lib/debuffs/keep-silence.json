@@ -4,21 +4,35 @@
   },
   "vars": {
     "keep_silence": {
-      "spells": ["Silence"]
+      "spells": ["Silence"],
+      "targets": null
     }
   },
   "actions": [
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
-        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)",
         "hasSpell(vars.keep_silence.spells) and canUse(spell)",
         "not hasEffectOf(bt, spell)"
       ],
       "commands": [
-        "useSpell()",
+        "useSpell(bt)",
         "postpone((spellRecast(spell.name) or 0) + 5)"
       ],
+      "precondition": ["arrayCount(vars.keep_silence.targets) <= 0"],
+      "frequency": 1,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "hasSpell(vars.keep_silence.spells) and canUse(spell)",
+        "findMobWhere(vars.keep_silence.targets, 'not hasEffectOf(mob, spell)', constants.spell_distance, true) or postpone(5)"
+      ],
+      "commands": [
+        "useSpell(mob)",
+        "postpone((spellRecast(spell.name) or 0) + 5)"
+      ],
+      "precondition": ["arrayCount(vars.keep_silence.targets) > 0"],
       "frequency": 1,
       "scope": "battle"
     }

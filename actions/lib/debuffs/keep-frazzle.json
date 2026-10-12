@@ -4,21 +4,36 @@
   },
   "vars": {
     "keep_frazzle": {
-      "spells": ["Frazzle III", "Frazzle II", "Frazzle"]
+      "spells": ["Frazzle III", "Frazzle II", "Frazzle"],
+      "targets": null
     }
   },
   "actions": [
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
-        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)",
+        "bt and bt.valid_target",
         "hasSpell(vars.keep_frazzle.spells) and canUse(spell)",
         "not hasEffectOf(bt, spell)"
       ],
       "commands": [
-        "useSpell()",
+        "useSpell(bt)",
         "postpone((spellRecast(spell.name) or 0) + 5)"
       ],
+      "precondition": ["arrayCount(vars.keep_frazzle.targets) <= 0"],
+      "frequency": 1,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "hasSpell(vars.keep_frazzle.spells) and canUse(spell)",
+        "findMobWhere(vars.keep_frazzle.targets, 'not hasEffectOf(mob, spell)', constants.spell_distance, true) or postpone(5)"
+      ],
+      "commands": [
+        "useSpell(mob)",
+        "postpone((spellRecast(spell.name) or 0) + 5)"
+      ],
+      "precondition": ["arrayCount(vars.keep_frazzle.targets) > 0"],
       "frequency": 1,
       "scope": "battle"
     }

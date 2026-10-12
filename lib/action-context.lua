@@ -1,4 +1,12 @@
 local targetSelectors = require('./lib/target-selectors')
+local targetedAction = require('./lib/targeted-action')
+
+-- A mob need not have observed buffs yet. Resource objects have an ID but
+-- no mob index, so they remain valid spell/ability arguments rather than targets.
+local function isEffectTarget(value)
+    return type(value) == 'table' and (type(value.buffs) == 'table' or
+        (type(value.id) == 'number' and type(value.index) == 'number'))
+end
 
 local PARTY_MEMBER_FIELD_NAMES = {
     'p0', 'p1', 'p2', 'p3', 'p4', 'p5',         -- Party
@@ -3375,6 +3383,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.useAbility = function (target, ability)
+        local explicitId = type(target) == 'table' and type(target.id) == 'number'
+            and type(target.index) == 'number' and target.id
         local bypass_target_check = false
         if is_known_targeting_symbol(target) then 
             local t = windower.ffxi.get_mob_by_target(target)
@@ -3387,10 +3397,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             bypass_target_check = true
         end
 
-        -- If we're passed a "raw" mob, we'll just use <t>
+        -- Raw mobs do not have context target flags; preserve their explicit ID.
         if type(target) == 'table' and not target.symbol then
             bypass_target_check = true
-            target.symbol = 't'
+            if not explicitId then return end
         end
 
         if ability == nil then
@@ -3414,12 +3424,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 target = context.bt
             end
 
-            if not target or not target.symbol then
+            if not target or (not explicitId and not target.symbol) then
                 return
             end
 
             if not bypass_target_check and target.targets then
                 if target == nil or not hasAnyFlagMatch(target.targets, ability.targets) then
+                    if explicitId then return end
                     target = context.me
                     if not hasAnyFlagMatch(target.targets, ability.targets) then
                         writeDebug(' **A valid target for [%s] could not be identified.':format(text_ability(ability.name, Colors.debug)))
@@ -3442,11 +3453,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 stopWalk = false
             end
 
-            local command = 'input %s "%s" <%s>':format(
+            if explicitId then
+                local current = windower.ffxi.get_mob_by_id(explicitId)
+                if not current or not current.valid_target then return end
+            end
+            local command = 'input %s "%s" %s':format(
                 ability.prefix, -- /jobability, /pet, etc.
                 ability.name,
-                target.symbol
+                explicitId and tostring(explicitId) or ('<' .. target.symbol .. '>')
             )
+            if explicitId then
+                command = function() return targetedAction.send(9, ability, explicitId) end
+            end
 
             writeVerbose('Using ability: %s':format(text_ability(ability.name)))
 
@@ -3601,6 +3619,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Uses the specified spell on the specified target
     context.useSpell = function (target, spell, ignoreIncomplete)
+        local explicitId = type(target) == 'table' and type(target.id) == 'number'
+            and type(target.index) == 'number' and target.id
         local bypass_target_check = false
 
         -- If we're passed a known targeting string, use it
@@ -3615,10 +3635,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             bypass_target_check = true
         end
 
-        -- If we're passed a "raw" mob, we'll just use <t>
+        -- Raw mobs do not have context target flags; preserve their explicit ID.
         if type(target) == 'table' and not target.symbol then
             bypass_target_check = true
-            target.symbol = 't'
+            if not explicitId then return end
         end
 
 
@@ -3651,7 +3671,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 spell.id == 140 or  -- Raise III
                 spell.id == 494     -- Arise
 
-            if target ~= nil and target.symbol then
+            if target ~= nil and (explicitId or target.symbol) then
                 if not bypass_target_check and target.targets then
                     local original_effect = context.effect
                     local original_effect_count = context.effect_count
@@ -3685,6 +3705,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             -- Allow corpse targeted spells on the dead
                         else
                             if not hasAnyFlagMatch(target.targets, spell.targets) then
+                                if explicitId then return end
                                 target = context.me
                                 if not hasAnyFlagMatch(target.targets, spell.targets) then
                                     -- At this point, if we still don't have a target then we're out of targeting options
@@ -3711,7 +3732,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 -- spells to complete (fast cast, interruption, and so on can impact this).
 
                 -- Returns a flag indicating whether the action completed successfully
-                local success = sendSpellCastingCommand(spell, target.symbol, context, ignoreIncomplete)
+                if explicitId then
+                    local current = windower.ffxi.get_mob_by_id(explicitId)
+                    if not current or not current.valid_target then return end
+                end
+                local success = sendSpellCastingCommand(spell, explicitId or target.symbol, context, ignoreIncomplete)
 
                 if success then
                     -- Raise doesn't have a special status, so we'll track it manually
@@ -4772,38 +4797,65 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
-    context.findMob = function(identifier, distance, withAggro)
+    local function matchesMobIdentifier(mob, identifier)
+        if type(identifier) == 'table' then
+            for _, value in ipairs(identifier) do
+                if matchesMobIdentifier(mob, value) then return true end
+            end
+        elseif type(identifier) == 'number' then
+            return mob.id == identifier
+        elseif type(identifier) == 'string' then
+            if string.lower(identifier) == 'bt' then
+                return context.bt ~= nil and type(context.bt.id) == 'number' and mob.id == context.bt.id
+            end
+            return string.lower(mob.name) == string.lower(identifier)
+        end
+        return false
+    end
+
+    local function findMobMatching(identifier, distance, withAggro, predicate)
         if distance == nil then distance = 50 end
 
         if 
             type(distance) == 'number' and
             distance > 0 and
-            (type(identifier) == 'number' or type(identifier) == 'string')
+            (type(identifier) == 'number' or type(identifier) == 'string' or type(identifier) == 'table')
         then
             local mobs = windower.ffxi.get_mob_array()
             local distanceSquared = distance * distance
-            local isIndex = type(identifier) == 'number'
-            local isName = not isIndex
             local nearest = nil
-
-            if isName then identifier = string.lower(identifier) end
 
             for key, mob in pairs(mobs) do
                 if mob.distance <= distanceSquared then
                     if
                         mob.spawn_type == SPAWN_TYPE_MOB and
                         mob.valid_target and
-                        mob.hpp > 0
+                        mob.hpp > 0 and
+                        partyInfo:canShareClaimOnMob(mob)
                     then
                         if
-                            (isIndex and identifier == mob.index) or
-                            (isName and identifier == string.lower(mob.name))
+                            matchesMobIdentifier(mob, identifier)
                         then
                             if
                                 (not withAggro or mob.status == STATUS_ENGAGED) and
                                 (nearest == nil or nearest.distance > mob.distance)
                             then
-                                nearest = mob
+                                local accepted = true
+                                if predicate then
+                                    local candidate = {}
+                                    for field, value in pairs(mob) do candidate[field] = value end
+                                    candidate.distance = math.sqrt(mob.distance)
+                                    candidate.buffs = actionStateManager:getBuffsForMob(mob.id)
+                                    local environment = setmetatable({mob = candidate}, {
+                                        __index = function(_, key)
+                                            if candidate[key] ~= nil then return candidate[key] end
+                                            return context[key]
+                                        end,
+                                    })
+                                    setfenv(predicate, environment)
+                                    accepted = predicate()
+                                end
+                                if accepted then nearest = mob end
                             end
                         end
                     end
@@ -4812,7 +4864,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             if nearest then
                 -- Store actual distance
-                nearest.distance = math.sqrt(distance)
+                nearest.distance = math.sqrt(nearest.distance)
 
                 -- Store any managed buffs
                 nearest.buffs = actionStateManager:getBuffsForMob(nearest.id)
@@ -4830,6 +4882,51 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
         end
     end
+
+    context.findMob = function(identifier, distance, withAggro)
+        return findMobMatching(identifier, distance, withAggro)
+    end
+
+    context.findMobWhere = function(identifier, expression, distance, withAggro)
+        if type(expression) ~= 'string' or not expression:find('%S') then
+            error('findMobWhere: expected a non-empty predicate expression')
+        end
+        local predicate = executionFactory.get(expression)
+        return findMobMatching(identifier, distance, withAggro, predicate)
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Resolve an explicit entity without changing selection or member enumeration.
+    -- Never return nil: optional-target helpers interpret nil as a default target.
+    context.mobById = function(id)
+        if type(id) ~= 'number' or id <= 0 or id ~= math.floor(id) or id == math.huge then
+            error('mobById: expected a positive numeric entity ID')
+        end
+        local mob = windower.ffxi.get_mob_by_id(id)
+        if not mob or mob.id ~= id or type(mob.index) ~= 'number' then
+            error('mobById: entity not available: ' .. tostring(id))
+        end
+        local known = context.alliance_by_id and context.alliance_by_id[id]
+        local entity = {
+            symbol='entity', mob=mob, member=known and known.member,
+            in_party=mob.in_party, in_alliance=mob.in_alliance,
+        }
+        initContextTargetSymbol(context, entity)
+        entity.buffs = entity.buffs or {}
+        return entity
+    end
+
+    context.mobByIndex = function(index)
+        if type(index) ~= 'number' or index <= 0 or index ~= math.floor(index) or index == math.huge then
+            error('mobByIndex: expected a positive numeric entity index')
+        end
+        local mob = windower.ffxi.get_mob_by_index(index)
+        if not mob or mob.index ~= index or type(mob.id) ~= 'number' then
+            error('mobByIndex: entity not available: ' .. tostring(index))
+        end
+        return context.mobById(mob.id)
+    end
+
 
     --------------------------------------------------------------------------------------
     -- Returns the number of mobs within [distance] of you
@@ -4927,7 +5024,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Returns all mobs with the given name(s) within the specified distance. If the 
+    -- Returns all mobs with the given names/IDs within the specified distance. If the
     -- first argument is a number, it will be treated as the search radius; otherwise,
     -- a distance value of 50 will be used by default.
     context.findMobs = function(...)
@@ -4935,12 +5032,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local distance = 50
         local names = varargs({...})
         local results = { }
-        local start = nil
+        local start = 1
 
         if type(names[1]) == 'number' then
             distance = names[1]
             start = 2
         end
+
+        local identifiers = {}
+        for i = start, #names do identifiers[#identifiers + 1] = names[i] end
 
         if distance > 0 then
             local mobs = windower.ffxi.get_mob_array()
@@ -4951,11 +5051,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     mob.spawn_type == SPAWN_TYPE_MOB and
                     mob.valid_target and
                     mob.hpp > 0 and
-                    mob.distance <= distanceSquared
+                    mob.distance <= distanceSquared and
+                    partyInfo:canShareClaimOnMob(mob)
                 then
                     if 
                         names[1] == nil or
-                        arrayIndexOfStrI(names, mob.name, start) 
+                        matchesMobIdentifier(mob, identifiers)
                     then
                         mob.buffs = actionStateManager:getBuffsForMob(mob)
                         arrayAppend(results, mob)
@@ -5146,15 +5247,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         -- Find a target override
         if
-            type(args[start_index]) == 'table' and
-            type(args[start_index].buffs) == 'table'
+            isEffectTarget(args[start_index])
         then
             target = args[start_index]
             start_index = start_index + 1
         elseif
             type(args[start_index]) == 'string' and
-            type(context[args[start_index]]) == 'table' and
-            type(context[args[start_index]].buffs) == 'table'
+            isEffectTarget(context[args[start_index]])
         then
             target = context[args[start_index]]
             start_index = start_index + 1
@@ -5246,15 +5345,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         -- Find a target override
         if
-            type(args[start_index]) == 'table' and
-            type(args[start_index].buffs) == 'table'
+            isEffectTarget(args[start_index])
         then
             target = args[start_index]
             start_index = start_index + 1
         elseif
             type(args[start_index]) == 'string' and
-            type(context[args[start_index]]) == 'table' and
-            type(context[args[start_index]].buffs) == 'table'
+            isEffectTarget(context[args[start_index]])
         then
             target = context[args[start_index]]
             start_index = start_index + 1

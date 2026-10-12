@@ -4,7 +4,8 @@
   },
   "vars": {
     "use_dispel": {
-      "buffs": null
+      "buffs": null,
+      "targets": null
     }
   },
   "actions": [
@@ -13,10 +14,20 @@
         "bt and bt.distance <= constants.spell_distance",
         "canUseSpell('Dispel')",
         "arrayCount(vars.use_dispel.buffs) > 0",
-        "hasBuff(bt, vars.use_dispel.buffs)",
-        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
+        "hasBuff(bt, vars.use_dispel.buffs)"
       ],
-      "commands": ["canUseSpell()"],
+      "commands": ["useSpell(bt)"],
+      "precondition": ["arrayCount(vars.use_dispel.targets) <= 0"],
+      "frequencies": 1
+    },
+    {
+      "when": [
+        "canUseSpell('Dispel')",
+        "arrayCount(vars.use_dispel.buffs) > 0",
+        "findMobWhere(vars.use_dispel.targets, 'hasBuff(mob, vars.use_dispel.buffs)', constants.spell_distance, true) or postpone(5)"
+      ],
+      "commands": ["useSpell(mob)"],
+      "precondition": ["arrayCount(vars.use_dispel.targets) > 0"],
       "frequencies": 1
     }
   ]

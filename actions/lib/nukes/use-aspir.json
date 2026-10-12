@@ -73,8 +73,7 @@
         "bt.distance <= 20",
         "me.mpp <= vars.use_aspir.max_mpp",
         "(me.mpp <= vars.use_aspir.max_ws_mpp and not skillchaining('Light', 'Darkness')) or not partyUsingWeaponSkill()",
-        "canUse(vars.use_aspir.spells)",
-        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
+        "canUse(vars.use_aspir.spells)"
       ],
       "commands": [
         "arrayCount(vars.use_aspir.gear.casting) > 0 and equipMany(vars.use_aspir.gear.casting)",
