@@ -39,6 +39,12 @@ local function isSelf(context, member)
         (member == me or (me.id ~= nil and member.id == me.id)))
 end
 
+local function matches(member, key, group)
+    if key == 'LEADER' then return member.is_party_leader == true end
+    local job = type(member.main_job) == 'string' and member.main_job:upper()
+    return job and (job == key or (group and group[job]))
+end
+
 -- Expand jobs/groups from current party context symbols, not raw IPC/trust metadata.
 -- Preserve other selectors for the existing name/semantic-marker matcher.
 function selectors.resolve(context, targets)
@@ -55,13 +61,12 @@ function selectors.resolve(context, targets)
     for _, target in ipairs(targets or {}) do
         local key, excludeSelf = parseSelector(target)
         local group = key and groups[key]
-        if key and (jobs[key] or group) then
+        if key and (jobs[key] or group or key == 'LEADER') then
             for i = 0, 5 do
                 local member = context['p' .. i]
-                if member and type(member.main_job) == 'string'
+                if member
                     and (not excludeSelf or not isSelf(context, member))
-                    and (member.main_job:upper() == key or
-                        (group and group[member.main_job:upper()])) then
+                    and matches(member, key, group) then
                     add(member.name or (member.mob and member.mob.name))
                 end
             end
@@ -78,13 +83,12 @@ function selectors.partyHasJob(context, targets)
     for _, target in ipairs(targets or {}) do
         local key, excludeSelf = parseSelector(target)
         local group = key and groups[key]
-        if key and (jobs[key] or group) then
+        if key and (jobs[key] or group or key == 'LEADER') then
             for i = 0, 5 do
                 local member = context['p' .. i]
-                local job = member and type(member.main_job) == 'string' and member.main_job:upper()
-                if job and member.is_participant == true
+                if member and member.is_participant == true
                     and (not excludeSelf or not isSelf(context, member))
-                    and (job == key or (group and group[job])) then return true end
+                    and matches(member, key, group) then return true end
             end
         end
     end

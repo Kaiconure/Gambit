@@ -147,6 +147,8 @@ Windower supplies parsed command arguments, which are joined with spaces. Preser
 
 #### Target job selectors
 
+`leader` selects the current party member marked `is_party_leader`, without requiring known job information. Matching is case-insensitive; `^leader` excludes yourself. If no party member is marked as leader, it produces no matches. It can be combined with other selectors, for example `["^leader", "WHM"]`, with normal deduplication. `partyHasJob('leader')` and `partyHasJob('^leader')` also support this selector, retaining their alive/within-20-yalms participant requirement. Selection follows the context's existing leader fallback rules.
+
 `mobById(id)` resolves a numeric entity ID into a context entity suitable for `hasBuff`, `hasEffectOf`, `useSpell`, and `useAbility`, without changing cursor or enumeration state. It uses the existing context initialization for target flags and tracked buffs (including party/self handling). For example: `hasEffectOf(mobById(id), 'Silence')`. Missing buff information produces no known effect, not proof that an effect is absent. Invalid or unavailable IDs raise an error rather than returning nil and accidentally selecting yourself through optional-target defaults; inside a gambit, the normal error guard quarantines that action. Use `findMob` for normal conditional searches where a missing enemy is expected.
 
 `useSpell(mob, 'Silence')` and `useAbility(mob, 'Provoke')` send outgoing action packets when explicitly passed a mob/context symbol object with numeric `id` and `index`. They refresh the target index before dispatch and do not switch the cursor or broadcast a battle-target change. This does not require GearSwap, and bypasses its normal outgoing-text precast/midcast pipeline; use explicit Gambit equipment commands if needed. Invalid explicit targets are skipped, and incompatible context target flags do not fall back to yourself. Spell completion is checked against the requested spell and target; no matching completion or an interruption reports failure. Ability success indicates submission, as with the existing timed ability path, not server-confirmed effect application. Semantic strings such as `'me'` and `'t'`, and omitted-target behavior, retain their existing command path. To supply a spell/ability with a default target, use `useSpell(nil, spell)` or `useAbility(nil, ability)`: the first parameter is always the target. Normal server restrictions still apply; weapon skill targeting is unchanged. `setTargetCursor` remains available for intentional target/engagement changes.
@@ -249,6 +251,12 @@ Controls the chat log output level. Gambit will only show output that is at or b
 TBD
 
 ### Prioritized variable defaults
+
+Variable definitions have three load-time priority levels: `!name` (high), `name` (ordinary), and `^name` (fallback default). Higher priority wins regardless of load order; conflicting definitions at the same priority retain the first loaded value. Prefixes are removed from runtime names.
+
+For example, a reusable library can declare `"^allow_cleave": false`, and an imported user configuration can set `"allow_cleave": true` without depending on which file loads first. `"^keep_silence": {"targets": ["bt"], "spells": ["Silence"]}` gives the supplied descendants fallback priority while still allowing normal recursive merging. Explicit nested prefixes override inherited priority, so `"^settings": {"!enabled": true}` supplies a high-priority `enabled` value.
+
+Arrays remain whole values. A higher-priority definition replaces a lower-priority array; equally prioritized arrays retain the first loaded list. Clearing markers honor priority too: a `^` clearing marker cannot erase ordinary or high-priority values. Ordinary unprefixed clearing markers retain their pre-existing special behavior of clearing earlier ordinary definitions; this is an explicit clearing operation, rather than a normal conflicting assignment.
 
 `getOriginalVar(name)` reads the variable value from the most recent action load/compilation, before loading actions execute. It supports the same dotted paths, optional `vars.` prefix, numeric array indexes, and computed `$length`/`$type` queries as `getVar`. Tables are returned as fresh deep copies; missing values return nil.
 

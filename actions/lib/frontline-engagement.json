@@ -94,6 +94,10 @@
       "commands": [
         "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance) or postpone(10)"
       ],
+      "comment": [
+        "Angle supports an exact number, frontside/backside/left/right/side, or a range such as 180+/-30.",
+        "A value of null allows alternate directions after a movement timeout."
+      ],
       "frequency": 1,
       "scope": "battle",
       "delay": 2

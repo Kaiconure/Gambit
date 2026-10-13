@@ -80,3 +80,37 @@ Here's an example:
 In plain English, this says:
 
 > If I'm silenced, remove it with Healing Waltz (first choice) or some Echo Drops.
+# Flexible alignment
+
+`align(target, angle, distance, duration, noFace)` supports exact angles and flexible positioning. The same angle values work with `aligned` and `aligning`, and with `vars.frontline_engagement.angle` in `frontline-engagement`.
+
+| Angle | Meaning, relative to the target's facing |
+| --- | --- |
+| `nil` / JSON `null` | Try your current direction from the target, then +45° and -45° if movement times out. Any direction at the requested distance counts as aligned. |
+| A number, such as `180` | Exact angle; no alternate destination. Numeric strings also work. |
+| `"rear"` | Alias for numeric `180`, using the normal positional tolerance and exact-angle timeout. |
+| `"face"`, `"front"`, `"facing"` | Aliases for numeric `0`, using the normal positional tolerance and exact-angle timeout. |
+| `"frontside"` | 0° ± 30°. |
+| `"backside"` | 180° ± 30°. This is a positioning region, not a guarantee that positional ability requirements are met. |
+| `"left"` | 90° ± 30°, relative to the target. |
+| `"right"` | -90° ± 30°, relative to the target. |
+| `"side"` | Either the left or right region. |
+| `"180+/-30"` | A center and half-width, from 0 through 180 degrees of half-width. |
+| `"150-210"` | An arc from the first angle to the second in increasing angle order. Wraparound works: `"330-30"` crosses zero. A span of 360° permits the full circle. |
+
+Semantic names are case-insensitive. Invalid specifications raise an error rather than silently becoming unrestricted alignment.
+
+For flexible ranges, the first preferred angle is randomized and remembered on the executing action for the current battle scope, target, and angle specification. A later successful fallback becomes the preference. If already at the requested distance anywhere in an allowed arc, no repositioning is needed. This reduces clustering but does not coordinate character positions or guarantee separation.
+
+On a movement timeout, alignment tries other allowed destinations, including arc endpoints. `side` can try the other side. The default total attempt budget is six seconds for flexible alignment and three seconds for an exact angle; supplying `duration` overrides it. Scheduling, polling, and movement cleanup can add some overhead. Cancellation or replacement of the movement job ends the attempt without starting another fallback. Failure returns false; success returns true. This is bounded destination retrying, not wall detection or pathfinding.
+
+```json
+"vars": {
+  "frontline_engagement": {
+    "angle": "backside",
+    "distance": 8
+  }
+}
+```
+
+The frontline action still applies its existing `canAlign` checks, model-size distance handling, and failure postponement. Movement paths themselves are not constrained to remain inside the permitted arc; the arcs describe destinations. With `align2`, flexible string angles use the same retry behavior without final facing.

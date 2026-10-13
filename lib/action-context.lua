@@ -1,3 +1,4 @@
+local alignment = require('./lib/alignment')
 local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
 local targetedAction = require('./lib/targeted-action')
@@ -3851,72 +3852,73 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    context.aligned = function(target, angle, distance)
-        -- Convert degrees to radians if an angle was provided
-        angle = tonumber(angle)
-        if type(angle) == 'number' then
-            angle = angle * math.pi / 180
-        end
-
-        return smartMove:atMobOffset(target, angle, distance)
+    local function alignmentPositionMatches(target, spec, distance, position)
+        if not target or not position then return false end
+        local bearing = alignment.bearing(target, position)
+        if not alignment.contains(spec, bearing) and not spec.exact then return false end
+        local angle = spec.exact or bearing
+        local desired = smartMove:findMobOffset(target, angle * math.pi / 180, distance)
+        local dx, dy = position.x - desired[1], position.y - desired[2]
+        return dx * dx + dy * dy <= smartMove.tolerance * smartMove.tolerance
     end
 
-    --------------------------------------------------------------------------------------
-    --
+    context.aligned = function(target, angle, distance)
+        return alignmentPositionMatches(target, alignment.parse(angle), distance,
+            windower.ffxi.get_mob_by_target('me'))
+    end
+
     context.aligning = function(target, angle, distance)
-        -- Convert degrees to radians if an angle was provided
-        angle = tonumber(angle)
-        if type(angle) == 'number' then
-            angle = angle * math.pi / 180
-        end
-
         local job = smartMove:getJobInfo()
-        if job and job.position then
-            local position = smartMove:findMobOffset(target, angle, distance)
-            local deltax = math.abs(job.position[1] - position[1])
-            local deltay = math.abs(job.position[2] - position[2])
+        return job and job.position and alignmentPositionMatches(target, alignment.parse(angle), distance,
+            {x=job.position[1], y=job.position[2]}) or false
+    end
 
-            if deltax < 0.5 and deltay < 0.5 then
+    context.align = function(target, angle, distance, duration, noFace)
+        local spec = alignment.parse(angle)
+        if context.aligned(target, angle, distance) then return true end
+        if not target or not target.id then return false end
+        local me = windower.ffxi.get_mob_by_target('me')
+        if not me then return false end
+        local cache = context.action and context.action._alignment
+        local key = tostring(angle)
+        if not cache or cache.target ~= target.id or cache.scope ~= context.battleScope or cache.key ~= key then
+            cache = {target=target.id, scope=context.battleScope, key=key}
+            if context.action then context.action._alignment = cache end
+        end
+        local candidates = alignment.candidates(spec, alignment.bearing(target,me), cache.preferred)
+        cache.preferred = candidates[1]
+        local deadline = os.clock() + math.max(tonumber(duration) or (spec.exact and 3 or 6), 1)
+        for i, candidate in ipairs(candidates) do
+            local remaining = deadline - os.clock()
+            if remaining <= 0 then break end
+            local current = windower.ffxi.get_mob_by_id(target.id)
+            if not current or not current.valid_target or current.hpp <= 0 then return false end
+            local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance)
+            local success, reason = context.move({x=position[1], y=position[2],
+                duration=remaining / (#candidates-i+1),
+                tolerance=not spec.exact and smartMove.tolerance or nil})
+            local updated = windower.ffxi.get_mob_by_id(target.id)
+            if success and updated and (spec.exact or context.aligned(updated,angle,distance)) then
+                cache.preferred = candidate
+                if not noFace then directionality.faceTarget(updated) end
                 return true
             end
+            -- A cancelled/replaced job must never be restarted by a fallback.
+            if not success and reason ~= 'timeout' then return false end
         end
-    end
-
-    --------------------------------------------------------------------------------------
-    --
-    context.align = function(target, angle, distance, duration, noFace)
-        -- Nothing to do if we're already aligned
-        if context.aligned(target, angle, distance) then
-            return true
-        end
-
-        -- Convert degrees to radians if an angle was provided
-        angle = tonumber(angle)
-        if type(angle) == 'number' then
-            angle = angle * math.pi / 180
-        end
-
-        local position = smartMove:findMobOffset(target, angle, distance)
-        local success = context.move(
-            position[1],
-            position[2],
-            math.max(tonumber(duration or 3), 1))
-        
         if not noFace then
-            directionality.faceTarget(target)
+            local current = windower.ffxi.get_mob_by_id(target.id)
+            if current then directionality.faceTarget(current) end
         end
-        if not success then
-            -- TODO: Make this configurable? Parameterized?
-            context.postpone(2)
-            return false
-        end
-
-        return true
+        context.postpone(2)
+        return false
     end
 
     --------------------------------------------------------------------------------------
-    --
     context.align2 = function(target, angle, distance, duration)
+        if angle ~= nil and tonumber(angle) == nil then
+            return context.align(target, angle, distance, duration, true)
+        end
         -- Nothing to do if we're already aligned
         if context.aligned(target, angle, distance) then
             return true
@@ -4479,7 +4481,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- If there's an existing job that exactly matches the newly requested one,
         -- then let's just let that job continue.
         local existingJob = smartMove:getJobInfo()
-        if existingJob then
+        if existingJob and (tonumber(duration) or 0) <= 0 then
             if existingJob.mode == 'position' then
                 local jp = existingJob.position
                 if 
@@ -4499,14 +4501,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 return true
             end
 
-            local start = os.time()
-            duration = math.max(duration, 0.5)
+            local start = os.clock()
+            duration = math.max(duration, 0.01)
 
             coroutine.sleep(0.5)
 
             while true do
-                local now = os.time()
+                local now = os.clock()
                 local job = smartMove:getJobInfo()
+                local timedOut = false
 
                 -- If the job is still running and our duration has ellapsed, cancel it
                 if 
@@ -4516,10 +4519,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 then
                     smartMove:cancelJob(jobId)
                     job = nil
+                    timedOut = true
                 end
 
                 -- If we're already in position, we can stop
-                if context.checkPosition(x, y) then
+                local arrived
+                if type(pos.tolerance) == 'number' then
+                    local actualDistance = context.distanceTo(x, y)
+                    arrived = type(actualDistance) == 'number' and actualDistance <= pos.tolerance
+                else
+                    arrived = context.checkPosition(x, y)
+                end
+                if arrived then
                     -- If the current job is still the one we started, we can cancel that
                     if job and job.jobId == jobId then
                         smartMove:cancelJob(jobId)
@@ -4535,7 +4546,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     job.jobId ~= jobId
                 then
                     --context.log('The movement operation was not completed.')
-                    return
+                    return nil, timedOut and 'timeout' or 'cancelled'
                 end
 
                 coroutine.sleep(0.25)

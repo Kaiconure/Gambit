@@ -31,3 +31,32 @@ assert(legacy.a[1]==3 and legacy.b==false and legacy.c[2]==2 and legacy.object.y
 normal.merge(legacy,{c='$array.empty',b='$object.null'},'clear')
 assert(next(legacy.c)==nil and legacy.b==nil)
 print('PASS: variable priority, nested defaults, arrays, clearing, conflicts, same-file order and runtime writes')
+
+for _, reverseOrder in ipairs({false,true}) do
+    local defaults={['^flag']=false,['^config']={list={'default'},extra=4},['^count']=1}
+    local specific={flag=true,config={list={'specific'}}}
+    local result={};local merge=loader.new().merge
+    merge(result,reverseOrder and specific or defaults,'first')
+    merge(result,reverseOrder and defaults or specific,'second')
+    assert(result.flag and result.config.list[1]=='specific' and result.config.extra==4)
+    merge(result,{['^count']=2,['^flag']=false},'later-default')
+    assert(result.count==1 and result.flag)
+    merge(result,{['!flag']=false},'important')
+    merge(result,{flag=true,['^flag']=true},'later')
+    assert(result.flag==false and result['^flag']==nil)
+end
+local mixed={};local merge=loader.new().merge
+merge(mixed,{['^x']=1,x=2,['!x']=3,['^obj']={a=1,['!b']=2}},'same-file')
+merge(mixed,{obj={a=3,b=4}},'ordinary')
+assert(mixed.x==3 and mixed.obj.a==3 and mixed.obj.b==2)
+merge(mixed,{['^cleared']='$object.null',['^empty']='$array.empty'},'weak-clear')
+merge(mixed,{['^cleared']=1,['^empty']={1}},'equal')
+assert(mixed.cleared==nil and next(mixed.empty)==nil)
+merge(mixed,{cleared={a=1},empty={2}},'stronger')
+assert(mixed.cleared.a==1 and mixed.empty[1]==2)
+merge(mixed,{['^obj']='$object.empty',['^x']='$object.null'},'weak-clear')
+assert(mixed.obj.b==2 and mixed.x==3)
+merge(mixed,{ordinaryClear='$object.null'},'clear')
+merge(mixed,{ordinaryClear=5},'default-after-clear')
+assert(mixed.ordinaryClear==5)
+print('PASS: default priority in both load orders, equal priorities, nested overrides, arrays and clearing')

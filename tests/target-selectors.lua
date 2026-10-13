@@ -1,4 +1,23 @@
 local selectors = require('./lib/target-selectors')
+local leaderParty = {
+    me={id=1},
+    p0={id=1,name='Self',is_party_leader=true,is_participant=true},
+    p1={id=2,name='Other',is_participant=true},
+}
+assert(table.concat(selectors.resolve(leaderParty,'LeAdEr'),',')=='Self')
+assert(#selectors.resolve(leaderParty,'^LEADER')==0)
+assert(selectors.partyHasJob(leaderParty,'leader'))
+assert(not selectors.partyHasJob(leaderParty,'^leader'))
+leaderParty.p0.is_party_leader=false
+leaderParty.p1.is_party_leader=true
+assert(table.concat(selectors.resolve(leaderParty,{'^leader','Other'}),',')=='Other')
+assert(selectors.partyHasJob(leaderParty,'^leader'))
+leaderParty.p1.is_participant=false
+assert(not selectors.partyHasJob(leaderParty,'leader'))
+assert(#selectors.resolve(leaderParty,'leader')==1)
+leaderParty.p1=nil
+assert(#selectors.resolve(leaderParty,'leader')==0)
+assert(not selectors.partyHasJob(leaderParty,'leader'))
 local me, first, last = {id=1}, {id=2}, {id=3}
 local members = {first, me, last}
 assert(selectors.selfFirst({me={id=1}}, members) == members)

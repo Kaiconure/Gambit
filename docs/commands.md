@@ -141,6 +141,8 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 
 `touch` and `tap` operate at close range (the helpers default to 6 yalms); they do not automatically approach distant targets. Both accept `-all` to forward the interaction through the external Send addon to all characters. Without a target option, they do nothing.
 
+`align -angle` also accepts `frontside`, `backside`, `left`, `right`, `side`, or a range such as `"180+/-30"` / `"150-210"`. Flexible ranges permit alternate destinations after movement timeouts. See [flexible alignment](functions.md#flexible-alignment). The command's default `-wait` remains 10 seconds, shared across attempts.
+
 ```text
 //gbt follow -t -d 3
 //gbt follow -c

@@ -1555,7 +1555,7 @@ handlers['align'] = function(args)
     local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
 
     distance = tonumber(tonumber(distance) and args[tonumber(distance) + 1]) or 1
-    angle = tonumber(tonumber(angle) and args[tonumber(angle) + 1])
+    angle = angle and args[angle + 1] or nil
     wait = tonumber(tonumber(wait) and args[tonumber(wait) + 1]) or 10
 
     if cancel then
@@ -1579,7 +1579,7 @@ handlers['align'] = function(args)
             if context then
                 if angle then
                     writeMessage('Aligning within %s of the %s position of %s...':format(
-                        text_number('%03d degree':format(angle)),
+                        text_number(tostring(angle) .. ' degrees'),
                         text_number('%.1f':format(distance)),
                         text_mob(target.name)
                     ))
