@@ -2,6 +2,7 @@
 local paths = {}
 local namespace = nil
 local loadedNamespace = nil
+local loadedPrecedence = {}
 
 local SETTINGS_ROOT = './settings'
 local NS_ROOT       = SETTINGS_ROOT .. '/.ns/'
@@ -20,6 +21,16 @@ function paths.validateNamespace(name)
     ) then
         return false, 'Namespace names must be slash-separated folder names containing only letters, numbers, underscores, and hyphens.'
     end
+    for segment in (name or ''):gmatch('[^/]+') do
+        local normalized = segment:lower()
+        if normalized == 'actions' or normalized == 'players' then
+            return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
+        end
+        if normalized == 'con' or normalized == 'nul' or normalized == 'aux' or normalized == 'prn'
+            or normalized:match('^com[1-9]$') or normalized:match('^lpt[1-9]$') then
+            return false, 'Namespace folder name "' .. segment .. '" is a reserved Windows device name.'
+        end
+    end
     return true
 end
 
@@ -34,8 +45,41 @@ function paths.getLoadedNamespace()
     return loadedNamespace
 end
 
-function paths.setLoadedNamespace(name)
+-- Highest priority first. Keep resolution separate from lookup so a future
+-- multiple-parent linearizer can supply the same list without changing consumers.
+function paths.resolveInheritance(name, readConfig, exists)
+    local result, visiting = {}, {}
+    local function visit(current, parent)
+        local valid, message = paths.validateNamespace(current)
+        assert(valid, message)
+        assert(not visiting[current], 'Namespace inheritance cycle at ' .. current)
+        if parent then assert(exists(current), 'Inherited namespace does not exist: ' .. current) end
+        visiting[current] = true
+        local config = readConfig(current)
+        if config == nil then config = {} end
+        assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current .. ': expected an object')
+        assert(config.inheritable == nil or type(config.inheritable) == 'boolean', 'inheritable must be boolean in ' .. current)
+        if parent then assert(config.inheritable == true, 'Namespace ' .. current .. ' must declare inheritable: true') end
+        result[#result+1] = current
+        if config.inherits_from ~= nil then
+            assert(type(config.inherits_from) == 'string', 'inherits_from must be a single namespace string in ' .. current)
+            visit(config.inherits_from, true)
+        end
+        visiting[current] = nil
+    end
+    if name then visit(name, false) end
+    return result
+end
+
+function paths.getLoadedPrecedence()
+    local copy = {}
+    for i, name in ipairs(loadedPrecedence) do copy[i] = name end
+    return copy
+end
+
+function paths.setLoadedNamespace(name, precedence)
     loadedNamespace = name
+    loadedPrecedence = precedence or (name and {name} or {})
 end
 
 function paths.ensureNamespaceFolders(playerName, name)
@@ -46,18 +90,26 @@ function paths.ensureNamespaceFolders(playerName, name)
     end
 
     local root = NS_ROOT .. name .. '/'
-    for _, folder in ipairs({'actions', 'actions/lib', playerName}) do
+    -- Character folders are created by the file writer only when an override is saved.
+    for _, folder in ipairs({'actions', 'actions/lib'}) do
         -- create_path creates missing parents and leaves existing folders intact.
         local created, err = files.create_path(root .. folder)
         if not created then
             return false, 'Unable to create namespace folder ' .. root .. folder .. ': ' .. tostring(err)
         end
     end
+    local config = files.new(root .. '.nsconfig')
+    if not config:exists() then
+        local ok, result, err = pcall(function() return config:write('{}\n') end)
+        if not ok or not result then
+            return false, 'Unable to create namespace configuration ' .. root .. '.nsconfig: ' .. tostring(ok and err or result)
+        end
+    end
     return true
 end
 
 function paths.writePath(playerName, relative)
-    local root = loadedNamespace and (NS_ROOT .. loadedNamespace) or './settings'
+    local root = loadedNamespace and (NS_ROOT .. loadedNamespace .. '/players') or './settings'
     return root .. '/' .. playerName .. '/' .. relative
 end
 
@@ -65,11 +117,14 @@ end
 -- An explicit scope limits lookup to character or common files in both roots.
 function paths.candidates(playerName, relative, scope)
     local roots = {}
-    if loadedNamespace then roots[#roots + 1] = NS_ROOT .. loadedNamespace end
+    for _, name in ipairs(loadedPrecedence) do roots[#roots + 1] = NS_ROOT .. name end
     roots[#roots + 1] = SETTINGS_ROOT
     local result = {}
     for _, root in ipairs(roots) do
-        if scope ~= 'common' then result[#result + 1] = root .. '/' .. playerName .. '/' .. relative end
+        if scope ~= 'common' then
+            local characterRoot = root == SETTINGS_ROOT and root or (root .. '/players')
+            result[#result + 1] = characterRoot .. '/' .. playerName .. '/' .. relative
+        end
         if scope ~= 'character' then result[#result + 1] = root .. '/' .. relative end
     end
     return result
@@ -88,10 +143,10 @@ function paths.commonFiles(playerName, mainJob)
         SETTINGS_ROOT .. '/actions/lib',
         SETTINGS_ROOT .. '/' .. playerName .. '/actions/lib',
     }
-    if loadedNamespace then
-        local root = NS_ROOT .. loadedNamespace
+    for i = #loadedPrecedence, 1, -1 do
+        local root = NS_ROOT .. loadedPrecedence[i]
         libraries[#libraries + 1] = root .. '/actions/lib'
-        libraries[#libraries + 1] = root .. '/' .. playerName .. '/actions/lib'
+        libraries[#libraries + 1] = root .. '/players/' .. playerName .. '/actions/lib'
     end
     local result = {}
     for _, library in ipairs(libraries) do

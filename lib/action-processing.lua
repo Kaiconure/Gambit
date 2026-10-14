@@ -589,6 +589,7 @@ local function compileAllActions()
     actionStateManager:keybindFunctions()
 
     actionStateManager.needsRecompile = false
+    reportLoadedSettings()
 end
 
 --------------------------------------------------------------------------------------
@@ -1042,7 +1043,7 @@ function cr_actionProcessor()
                 player and
                 me and
                 me.valid_target and
-                zoneTime >= 5
+                zoneTime >= 7
             then
                 local playerStatus = player.status
                 local isMounted = (playerStatus == 85 or playerStatus == 5)     -- 85 is mount, 5 is chocobo

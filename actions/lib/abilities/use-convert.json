@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "use_convert": {
+    "^use_convert": {
       "disabled": null,
       "max_mpp": 20,
       "min_mp": 15,

@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_frazzle": {
+    "^keep_frazzle": {
       "spells": ["Frazzle III", "Frazzle II", "Frazzle"],
       "targets": null
     }

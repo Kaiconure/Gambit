@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_slow": {
+    "^keep_slow": {
       "spells": ["Slow II", "Slow"],
       "targets": null
     }

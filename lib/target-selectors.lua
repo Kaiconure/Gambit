@@ -1,4 +1,10 @@
 local selectors = {}
+function selectors.alphabetical(a, b)
+    local an = (a.name or ''):lower()
+    local bn = (b.name or ''):lower()
+    if an == bn then return (a.id or 0) < (b.id or 0) end
+    return an < bn
+end
 local jobs = {}
 for job in ('WAR MNK WHM BLM RDM THF PLD DRK BST BRD RNG SAM NIN DRG SMN BLU COR PUP DNC SCH GEO RUN'):gmatch('%S+') do
     jobs[job] = true
@@ -47,7 +53,7 @@ end
 
 -- Expand jobs/groups from current party context symbols, not raw IPC/trust metadata.
 -- Preserve other selectors for the existing name/semantic-marker matcher.
-function selectors.resolve(context, targets)
+local function resolvePositive(context, targets)
     if type(targets) == 'string' then targets = {targets} end
     local result, seen = {}, {}
     local function add(value)
@@ -62,14 +68,17 @@ function selectors.resolve(context, targets)
         local key, excludeSelf = parseSelector(target)
         local group = key and groups[key]
         if key and (jobs[key] or group or key == 'LEADER') then
+            local matching = {}
             for i = 0, 5 do
                 local member = context['p' .. i]
                 if member
                     and (not excludeSelf or not isSelf(context, member))
                     and matches(member, key, group) then
-                    add(member.name or (member.mob and member.mob.name))
+                    matching[#matching + 1] = member
                 end
             end
+            table.sort(matching, selectors.alphabetical)
+            for _, member in ipairs(matching) do add(member.name or (member.mob and member.mob.name)) end
         else
             add(target)
         end
@@ -77,9 +86,54 @@ function selectors.resolve(context, targets)
     return result
 end
 
+-- Keep exclusions separate until the caller matches actual members. This lets
+-- exclusions remove matches supplied by names, semantic markers, or '*'.
+function selectors.resolve(context, targets)
+    if type(targets) == 'string' then targets = {targets} end
+    local positive, negative = {}, {}
+    for _, target in ipairs(targets or {}) do
+        if type(target) == 'string' and target:sub(1,1) == '~' then
+            negative[#negative+1] = target:sub(2)
+        else
+            positive[#positive+1] = target
+        end
+    end
+    return resolvePositive(context, positive), resolvePositive(context, negative)
+end
+
+-- Sort already-filtered matches by selector precedence, then shared entity identity.
+function selectors.order(context, members, targets)
+    local positive = selectors.resolve(context, targets)
+    local function rank(member)
+        for i, name in ipairs(positive) do
+            if name == '*' or member.isNameMatch(name:lower()) then return i end
+        end
+        return math.huge
+    end
+    table.sort(members, function(a, b)
+        local ar, br = rank(a), rank(b)
+        if ar ~= br then return ar < br end
+        return selectors.alphabetical(a, b)
+    end)
+    return members
+end
+
+local function excluded(context, member, negatives)
+    for _, name in ipairs(negatives) do
+        local key = name:lower()
+        if key == '*' or (key == 'me' and isSelf(context, member)) or
+            key == (member.name or (member.mob and member.mob.name) or ''):lower() or
+            key == (member.symbol or ''):lower() or key == (member.symbol2 or ''):lower() then
+            return true
+        end
+    end
+    return false
+end
+
 -- Presence-only check: never modifies the action's member enumeration.
 function selectors.partyHasJob(context, targets)
     if type(targets) == 'string' then targets = {targets} end
+    local _, negatives = selectors.resolve(context, targets)
     for _, target in ipairs(targets or {}) do
         local key, excludeSelf = parseSelector(target)
         local group = key and groups[key]
@@ -87,6 +141,7 @@ function selectors.partyHasJob(context, targets)
             for i = 0, 5 do
                 local member = context['p' .. i]
                 if member and member.is_participant == true
+                    and not excluded(context, member, negatives)
                     and (not excludeSelf or not isSelf(context, member))
                     and matches(member, key, group) then return true end
             end
@@ -95,7 +150,20 @@ function selectors.partyHasJob(context, targets)
     return false
 end
 
--- Only reorder existing matches; retain everyone else's randomized order.
+-- Apply opt-in ordering once, after expansion, filtering and deterministic ordering.
+function selectors.applyOptions(context, members, options)
+    options = options or {}
+    if options.randomize then
+        for i = #members, 2, -1 do
+            local j = math.random(i)
+            members[i], members[j] = members[j], members[i]
+        end
+    end
+    if options.self_first then selectors.selfFirst(context, members) end
+    return members
+end
+
+-- Promote self without changing the relative order of the other matches.
 function selectors.selfFirst(context, members)
     local me = context.me
     if not me then return members end

@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_distract": {
+    "^keep_distract": {
       "spells": ["Distract III", "Distract II", "Distract"],
       "targets": null
     }

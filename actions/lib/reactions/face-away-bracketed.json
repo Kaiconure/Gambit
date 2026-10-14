@@ -8,7 +8,7 @@
     ]
   },
   "vars": {
-    "face_away_bracketed": {
+    "^face_away_bracketed": {
       "Amphitrite": {
         "initiators": { "Palsynyxis": true },
         "terminators": { "Painful Whip": true }

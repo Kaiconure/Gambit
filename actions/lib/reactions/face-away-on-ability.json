@@ -7,7 +7,7 @@
     ]
   },
   "vars": {
-    "face_away_on_ability": {
+    "^face_away_on_ability": {
       "gear_removal": {
         "abilities": {
           "Hurricane Breath": true,

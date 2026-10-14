@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_paralyze": {
+    "^keep_paralyze": {
       "spells": ["Paralyze II", "Paralyze"],
       "targets": null
     }

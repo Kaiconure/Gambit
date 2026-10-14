@@ -57,7 +57,7 @@
     }
   ],
   "vars": {
-    "use_xp_cp_rings": {
+    "^use_xp_cp_rings": {
       "ignore_master_levels": null,
       "ignore_xp_level_cap": null,
       "min_xp_level": 10,

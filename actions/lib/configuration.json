@@ -1,6 +1,6 @@
 {
   "vars": {
-    "configuration": {
+    "^configuration": {
       "commands": [],
       "disabled": false
     }

@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "use_erase": {
+    "^use_erase": {
       "debuffs": null,
       "targets": null
     }

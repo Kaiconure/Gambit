@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_dia": {
+    "^keep_dia": {
       "spells": ["Dia III", "Dia II", "Dia"],
       "targets": null
     }

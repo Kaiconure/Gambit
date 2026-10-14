@@ -1,6 +1,6 @@
 {
   "vars": {
-    "use_aspir": {
+    "^use_aspir": {
       "frequency": 10,
       "max_mpp": 80,
       "max_ws_mpp": 30,

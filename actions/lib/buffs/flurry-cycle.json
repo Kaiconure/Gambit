@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "flurry_cycle": {
+    "^flurry_cycle": {
       "spells": ["Flurry II", "Flurry"],
       "targets": []
     }

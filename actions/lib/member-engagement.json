@@ -1,0 +1,31 @@
+{
+  "vars": {
+    "^member_engagement": {
+      "^targets": [],
+      "^distance": 2,
+      "^duration": 3,
+      "retry_delay": 10,
+      "^max_distance": 30,
+      "^tolerance": 1
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "movementAvailable()",
+        "partyAnchorByName(vars.member_engagement.targets, vars.member_engagement.max_distance, true)",
+        "not hasBuff('Bind', 'Sleep', 'Stun', 'Petrification', 'Terror')",
+        "member.distance > vars.member_engagement.distance + vars.member_engagement.tolerance"
+      ],
+      "commands": [
+        "align(member, nil, vars.member_engagement.distance, vars.member_engagement.duration, true) or postpone(vars.member_engagement.retry_delay)"
+      ],
+      "frequency": 3,
+      "comment": [
+        "Stay near a living party member selected by name, job, role, or semantic marker. Empty targets disable positioning.",
+        "Choose the first eligible member in selector order; never select yourself. Standing closer is acceptable.",
+        "Only positions the player; does not engage, change battle targets, or force facing. Avoid competing movement imports."
+      ]
+    }
+  ]
+}

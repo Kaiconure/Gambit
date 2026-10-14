@@ -4,7 +4,7 @@
     "notes": "This action should be placed at the top of your idle actions list. Set the vars.ensure_trusts.spells variable in your actions file to customize the trusts."
   },
   "vars": {
-    "ensure_trusts": {
+    "^ensure_trusts": {
       "spells": [],
       "recall_on_mpp": 20,
       "recall_on_hpp": 40,

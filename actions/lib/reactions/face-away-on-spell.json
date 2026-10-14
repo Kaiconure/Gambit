@@ -7,7 +7,7 @@
     ]
   },
   "vars": {
-    "face_away_on_spell": {
+    "^face_away_on_spell": {
       "Glavoid": {
         "spells": {
           "*": {

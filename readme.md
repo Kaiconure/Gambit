@@ -137,7 +137,7 @@ Forces the addon to reload all settings and actions, resetting the action proces
 - `-ns {namespace}` - Load once from this namespace without changing the session selection reported by `gbt ns`. For example, `gbt r -a xp-leveler -ns common`. Cannot be combined with `-settings-only`.
 - `-r`, `-reload` - Reload the currently loaded action name and its namespace, including a previous one-time namespace override. An explicit `-ns` takes precedence over the remembered namespace.
 
-A plain `gbt r` returns to job-based actions in the session-selected namespace. Saves and processed output use the loaded configuration's namespace; settings-only reloads retain that context too. Neither namespace is persisted across addon reloads.
+A plain `gbt r` returns to job-based actions in the selected namespace. Saves and processed output use the loaded configuration's namespace; settings-only reloads retain that context too. `gbt ns -set` remembers the selection as `default_namespace` in the base `settings/<character>/main.json`; `gbt ns -clear` removes that preference. Startup reads it only from this base character file, ignoring namespace copies. Job changes retain the selection. Every successful settings load reports its job and namespace. Invalid startup selections fall back to base settings with an error, preserving the preference for correction. `reload -ns` overrides only the current load and does not change the saved preference.
 
 #### **eval** <Lua expression or script>
 
@@ -146,6 +146,8 @@ A plain `gbt r` returns to job-based actions in the session-selected namespace. 
 Windower supplies parsed command arguments, which are joined with spaces. Preserve Lua string quotes when entering expressions; this command cannot restore quoting or whitespace already removed by Windower's command parser.
 
 #### Target job selectors
+
+Prefix a selector with `~` to exclude its matches from the entire selection. Positive matches are combined first, then all exclusions apply, regardless of list order: `["melee", "~support"]`. Explicit names do not override an exclusion. Exclusions accept jobs, roles, names, and semantic markers such as `me` and `leader`. Use `["*", "~ranged"]` for everyone except ranged; a list containing only exclusions selects nobody. `^` remains local self-exclusion; `~^mages` removes other mages while leaving yourself eligible if a positive selector includes you. Existing job/role expansion remains party-based, including when used with alliance selectors. Randomization and self-first ordering apply to the surviving matches. `partyHasJob` also honors exclusions while retaining its positive job/role/leader and participant requirements.
 
 `leader` selects the current party member marked `is_party_leader`, without requiring known job information. Matching is case-insensitive; `^leader` excludes yourself. If no party member is marked as leader, it produces no matches. It can be combined with other selectors, for example `["^leader", "WHM"]`, with normal deduplication. `partyHasJob('leader')` and `partyHasJob('^leader')` also support this selector, retaining their alive/within-20-yalms participant requirement. Selection follows the context's existing leader fallback rules.
 
@@ -177,7 +179,7 @@ Job categories are also case-insensitive and can overlap. For example, `partyByN
 | `support` | RDM, BRD, COR, SMN, DNC, SCH, GEO |
 | `tank` | PLD, NIN, RUN |
 
-Fresh `partyByName` and `alliesByName` enumerations put your character first when included among the matches (by marker, name, job, or wildcard). Other matches retain their randomized relative order. Continuing an existing enumeration does not reorder it, and general expression-based party/alliance enumeration remains unchanged.
+Fresh `partyByName` and `alliesByName` enumerations preserve explicit selector order. Each job/role expands alphabetically (case-insensitive); entity ID breaks name ties. Duplicates retain their first position and exclusions apply last. Yourself is not automatically promoted: use `["me", "mages"]` to prefer yourself. Continuing enumerations retain their order. Expression-based party/alliance selection is alphabetical too. Selection is not automatically randomized. To opt in, pass a trailing options table to `partyByName` or `alliesByName`: `partyByName(vars.targets, {randomize = true, self_first = true})`. Both options default to false. Randomization shuffles resolved, filtered members once per fresh enumeration; `self_first` then promotes yourself only if already selected. Continuing an enumeration does not reshuffle. Separate target arguments also work: `partyByName("WHM", "SCH", {randomize = true})`. Empty target arrays still select nobody. Existing actions do not enable these options.
 
 `partyByName` and `alliesByName` accept case-insensitive main-job abbreviations alongside names and semantic markers: for example, `partyByName({'me', 'PLD', 'rdm'})`. Job selectors expand to matching members of the current party using context job information (including trusts and IPC-connected alts). Unknown jobs and unmatched job selectors contribute no targets. Explicit names and markers keep their existing behavior. Job expansion is limited to the party even when using `alliesByName`; explicit alliance names remain supported. Repeated names are deduplicated, and job membership is resolved on each fresh enumeration.
 
@@ -214,13 +216,13 @@ Protected execution uses a coroutine boundary to catch errors while forwarding y
 Namespaces group activity-specific settings under `settings/.ns/{name}/`, mirroring the normal settings structure. For example, `settings/.ns/abyssea/Carbonite/actions/pld.json` supplies Carbonite's PLD actions, while `settings/.ns/abyssea/actions/lib/` holds shared library gambits.
 
 - `gbt ns` reports the current namespace (or global).
-- `gbt ns -set abyssea` ensures the namespace contains `actions`, `actions/lib`, and the current character's folder, then selects Abyssea and fully reloads settings and job-based actions. Existing folders are preserved; no settings files are created by this folder initialization. If folder creation fails, the previous namespace remains active and no reload occurs.
+- `gbt ns -set abyssea` initializes `actions`, `actions/lib`, and a missing `.nsconfig` containing `{}`, then selects the namespace and reloads settings and job-based actions. Character folders are created only when needed for a write; existing configuration is preserved.
 - `gbt ns -clear` returns to global settings and fully reloads.
 - `gbt r` and other settings reloads retain the current namespace. Reloading the addon resets it to global. Selection is local to each character and is never saved to disk.
 
 Lookup order is namespace character, namespace common, base character, base common, then shipped defaults where applicable. This applies to `main.json`, action entry points, explicit library imports, and default actions. The first matching file wins; namespace files do not merge with lower-priority versions. Automatic common imports are the additive exception described below. Existing action-import variable merging is unchanged.
 
-Explicit `$(PlayerLib)` and `$(SettingsLib)` imports search their respective scope in the namespace and then base settings; `$(GlobalLib)` continues to reference shipped libraries directly. Action saves and processed action output go to the active namespace's character folder. Main settings saves update the highest-priority existing `main.json` in the search paths, including shared or base files. A new character-specific `main.json` is created in the active namespace (or base character folder when no namespace is active) only when none exists.
+Explicit `$(PlayerLib)` and `$(SettingsLib)` imports search their respective scope through the namespace inheritance chain and then base settings; `$(GlobalLib)` references shipped libraries directly. Namespace character files live under `players/<character>/`: `main.json`, `actions/`, `actions/lib/`, and `.output/`. Shared namespace files remain at the root and under `actions/`. Saves stay in the active namespace, updating its existing character or shared `main.json`, or creating `players/<character>/main.json` when neither exists. Unchanged saves do not create an override. Global character files retain `settings/<character>/`.
 
 Names may contain letters, numbers, underscores, and hyphens, with forward slashes separating folders. For example, `gbt ns -set ambuscade/dragon` selects `settings/.ns/ambuscade/dragon/`. These folders are purely organizational: the parent `ambuscade` namespace is not searched as an additional fallback. Leading, trailing, or repeated slashes and `.` or `..` segments are not allowed. A namespace need not exist yet: missing files fall back to base settings, and normal saves can populate its character folder.
 
@@ -253,6 +255,8 @@ TBD
 ### Prioritized variable defaults
 
 Variable definitions have three load-time priority levels: `!name` (high), `name` (ordinary), and `^name` (fallback default). Higher priority wins regardless of load order; conflicting definitions at the same priority retain the first loaded value. Prefixes are removed from runtime names.
+
+Shipped variable defaults under `actions/lib`, `actions/standard`, and `actions/defaults` use `^` on their top-level variable names. Ordinary character and namespace configuration can override these defaults, including nested fields, regardless of import order. User files under `settings/` retain their explicitly chosen priorities.
 
 For example, a reusable library can declare `"^allow_cleave": false`, and an imported user configuration can set `"allow_cleave": true` without depending on which file loads first. `"^keep_silence": {"targets": ["bt"], "spells": ["Silence"]}` gives the supplied descendants fallback priority while still allowing normal recursive merging. Explicit nested prefixes override inherited priority, so `"^settings": {"!enabled": true}` supplies a high-priority `enabled` value.
 
@@ -288,3 +292,18 @@ The finders `findMob`, `findMobWhere`, and `findMobs` also accept the case-insen
 `findMobWhere(identifier, expression, distance, withAggro)` returns the nearest matching enemy whose Lua predicate is truthy, or nil if none matches. It accepts the same names/IDs and defaults as `findMob`. For example: `findMobWhere({'Boss A', 'Boss B'}, "not hasEffectOf(mob, 'Silence')", 20, true)`. Within the predicate, `mob` is the candidate with tracked buffs; its fields are also available directly (for example, `distance < 15`, in yalms), with other names resolved from the action context. Pass `mob` explicitly to target-taking helpers. Unknown buffs mean no known effect, not proof of absence. Compilation is cached; predicate errors propagate to the action error guard. Predicates should be free of side effects: evaluation order is unspecified and candidates farther than an accepted match may be skipped. Only the successful result is assigned to the action context's `mob`, as with `findMob`.
 
 `findMob(identifier, distance, withAggro)` accepts a name, entity ID, or array of names/IDs and returns the nearest matching enemy. Names are case-insensitive; numeric selectors now mean IDs, not indexes. For an index, use `findMob(mobByIndex(index).id, 20)`. `findMobs` retains its optional leading numeric search radius and accepts names/IDs afterward, including arrays: `findMobs(20, {123456, 'Enemy Name'})`. Its existing array-or-nil return behavior is unchanged.
+Namespace path segments `actions` and `players` are reserved for namespace contents. Windows device names (`CON`, `NUL`, `AUX`, `PRN`, `COM1`–`COM9`, and `LPT1`–`LPT9`) are also rejected. These checks are case-insensitive and apply to every segment, including names in `inherits_from`. Names such as `actions-test`, `common`, and `lib` remain allowed.
+
+# Namespace inheritance
+
+A namespace may declare one parent in `settings/.ns/<namespace>/.nsconfig`:
+
+```json
+{ "inherits_from": "bcnm/single" }
+```
+
+The parent must explicitly opt in with its own `.nsconfig` containing `{"inheritable": true}`. This permission is not inherited. A namespace can both inherit from a parent and opt in to being a parent itself. Missing configuration preserves standalone behavior. Parent names are relative to `settings/.ns`, not the current namespace folder.
+
+Ordinary settings, action files, and imports search the active namespace, then its parent chain, then the existing global fallbacks. Imports inside inherited files use the active namespace's search chain too. Automatic common files load additively from base to derived priority, preserving character-over-shared precedence within each namespace. Explicit variable priorities (`!` and `^`) still apply. This is file fallback, not automatic merging of ordinary job or main configuration files.
+
+Saving settings in a namespace writes to an existing main configuration in that active namespace, or creates a character override there; it does not modify an inherited or global file. Cycles, missing parents, and parents without `inheritable: true` fail with an error. Only a single string is supported for `inherits_from`; arrays are rejected. Internally, lookups use a resolved precedence list to allow future multiple-inheritance support.

@@ -28,7 +28,7 @@ handlers['eval'] = function(args)
 end
 
 -------------------------------------------------------------------------------
--- Namespace selection is session state, never a persisted setting.
+-- Explicit namespace selection is remembered in the base character settings.
 handlers['namespace'] = function(args)
     if #args == 0 then
         writeMessage('Current namespace: ' .. text_green(settingsPaths.getNamespace() or '(global)'))
@@ -60,7 +60,16 @@ handlers['namespace'] = function(args)
     end
 
     -- Match a normal full settings reload: select actions for the current job.
-    reloadSettings()
+    local loaded, err = pcall(reloadSettings)
+    if not loaded then
+        settingsPaths.setNamespace(previousNamespace)
+        writeMessage('Could not switch namespace: ' .. tostring(err))
+        return
+    end
+    local saved, saveError = pcall(saveDefaultNamespace, name)
+    if not saved then
+        writeMessage('Namespace changed for this session, but could not be remembered: ' .. tostring(saveError))
+    end
 end
 handlers['ns'] = handlers['namespace']
 

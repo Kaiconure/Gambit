@@ -1,6 +1,6 @@
 {
   "vars": {
-    "crafting": {
+    "^crafting": {
       "food": null,
       "crystal": null,
       "name": null,

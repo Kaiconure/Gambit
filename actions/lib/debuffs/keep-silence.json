@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_silence": {
+    "^keep_silence": {
       "spells": ["Silence"],
       "targets": null
     }
@@ -19,7 +19,7 @@
         "useSpell(bt)",
         "postpone((spellRecast(spell.name) or 0) + 5)"
       ],
-      "precondition": ["arrayCount(vars.keep_silence.targets) <= 0"],
+      "precondition": ["vars.keep_silence.targets == nil"],
       "frequency": 1,
       "scope": "battle"
     },

@@ -45,7 +45,7 @@
     }
   ],
   "vars": {
-    "black_magic_nuke": {
+    "^black_magic_nuke": {
       "max_tier": "VI",
       "min_tier": "I",
       "frequency": 20,

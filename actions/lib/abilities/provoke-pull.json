@@ -1,6 +1,6 @@
 {
   "vars": {
-    "provoke_pull": {
+    "^provoke_pull": {
       "blacklist": null,
       "frequency": null,
       "min_distance": null,

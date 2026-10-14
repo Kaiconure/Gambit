@@ -50,7 +50,7 @@
     }
   ],
   "vars": {
-    "black_magic_burst": {
+    "^black_magic_burst": {
       "max_age_by_tier": {
         "1": 7,
         "2": 7,

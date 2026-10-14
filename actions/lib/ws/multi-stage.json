@@ -6,7 +6,7 @@
     ]
   },
   "vars": {
-    "ws": {
+    "^ws": {
       "multi_stage": {
         "disabled": null,
         "stages": null,

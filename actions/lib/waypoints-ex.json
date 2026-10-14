@@ -4,7 +4,7 @@
     "description": "Provides a mechanism for scripted movement between points."
   },
   "vars": {
-    "waypoints_ex": {
+    "^waypoints_ex": {
       "leader_only": null,
       "data": null
     }

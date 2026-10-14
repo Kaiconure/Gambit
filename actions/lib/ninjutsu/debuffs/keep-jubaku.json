@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "ninjutsu": {
+    "^ninjutsu": {
       "debuffs": {
         "jubaku": {
           "spells": ["Jubaku: San", "Jubaku: Ni", "Jubaku: Ichi"]

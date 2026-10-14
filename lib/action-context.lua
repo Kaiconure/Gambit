@@ -1,4 +1,5 @@
 local alignment = require('./lib/alignment')
+local movementReservations = require('./lib/movement-reservations')
 local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
 local targetedAction = require('./lib/targeted-action')
@@ -897,10 +898,9 @@ local function enumerateContextByExpression(context, keys, expression, ...)
     local fn = loadstring('return ' .. expression)
     if type(fn) == 'function' then
 
-        -- We'll always start at a random location in the key array, and iterate around from there.
-        -- This means order will always be the same, but the start point will be random.
+        -- Evaluate in field order, then sort matches by shared entity identity.
         local num_keys = #keys
-        local index = math.random(1, num_keys)
+        local index = 1
 
         for i = 1, num_keys do
             local key = keys[index]
@@ -925,6 +925,7 @@ local function enumerateContextByExpression(context, keys, expression, ...)
         end
     end
 
+    table.sort(retVal, targetSelectors.alphabetical)
     return retVal
 end
 
@@ -971,37 +972,34 @@ end
 -- Gets the expression required to match all of the given names. If no names are
 -- provided, the expression will always evaluate to true.
 local function createMemberNamesExpression(context, names)
-    local expression = ''
-
-    if type(names) ~= 'table' or #names == 0 or names == "*" or names[1] == '*' then
-        expression = 'true'
-    else
-        local first = true
-        for i, name in ipairs(targetSelectors.resolve(context, names)) do
-            if type(name) == 'string' then
-                name = string.lower(name)
-                if name == '*' then
-                    expression = 'true'
-                    break
-                else
-                    expression = expression .. (first and ' ' or ' or ') .. 'isNameMatch("%s")':format(name)
-                end
-                first = false
-            end
+    local positive, negative = targetSelectors.resolve(context, names)
+    local function expressionFor(values)
+        local expressions = {}
+        for _, name in ipairs(values) do
+            if name == '*' then return 'true' end
+            expressions[#expressions+1] = ('isNameMatch(%q)'):format(name:lower())
         end
+        return #expressions > 0 and table.concat(expressions, ' or ') or 'false'
     end
-
-    -- If it somehow wasn't set at all, we'll just never evaluate to true
-    if expression == '' then
-        expression = 'false'
+    local expression = (type(names) ~= 'table' or #names == 0) and 'true' or expressionFor(positive)
+    if #negative > 0 then
+        expression = '(' .. expression .. ') and not (' .. expressionFor(negative) .. ')'
     end
-
     return expression
 end
-
 -----------------------------------------------------------------------------------------
 -- 
 local function setPartyEnumerators(context)
+    local function selectionArguments(...)
+        local args = {...}
+        local options = args[#args]
+        if type(options) == 'table' and (options.randomize ~= nil or options.self_first ~= nil) then
+            table.remove(args)
+        else
+            options = nil
+        end
+        return args, options
+    end
     -- An explicitly empty target array cancels even an existing enumeration.
     -- Keep no-argument/nil calls as the existing unrestricted selection.
     local function clearEmptySelection(...)
@@ -1081,17 +1079,38 @@ local function setPartyEnumerators(context)
     end
 
     -----------------------------------------------------------------------------------------
-    -- Find all party members with the specified names
+    -- Choose the first currently eligible member in selector order.
+    context.partyAnchorByName = function(targets, maxDistance, excludeSelf)
+        local results = {}
+        if targets ~= nil and not (type(targets) == 'table' and next(targets) == nil) then
+            local expression = createMemberNamesExpression(context, type(targets) == 'table' and targets or {targets})
+            results = enumerateContextByExpression(context, PARTY_MEMBER_FIELD_NAMES, expression)
+            targetSelectors.order(context, results, targets)
+        end
+        local selected
+        for _, candidate in ipairs(results) do
+            if (not excludeSelf or candidate.id ~= context.me.id) and candidate.valid_target and not candidate.is_dead
+                and type(candidate.distance) == 'number' and candidate.distance <= (maxDistance or 30) then
+                selected = candidate
+                break
+            end
+        end
+        context.member = selected
+        return selected
+    end
+
     context.partyByName = function (...)
-        if clearEmptySelection(...) then return nil end
+        local args, options = selectionArguments(...)
+        if clearEmptySelection(unpack(args)) then return nil end
         local nextMember = getNextMemberEnumerator(context)
         if nextMember then return nextMember end
         context.partyAny(
             createMemberNamesExpression(context, 
-                varargs({...})
+                varargs(args)
             )
         )
-        targetSelectors.selfFirst(context, context.members)
+        targetSelectors.order(context, context.members, varargs(args))
+        targetSelectors.applyOptions(context, context.members, options)
         context.member = context.members[1]
         return context.member
     end
@@ -1118,15 +1137,17 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- Find all allies with the specified names
     context.alliesByName = function (...)
-        if clearEmptySelection(...) then return nil end
+        local args, options = selectionArguments(...)
+        if clearEmptySelection(unpack(args)) then return nil end
         local nextMember = getNextMemberEnumerator(context)
         if nextMember then return nextMember end
         context.allyAny(
             createMemberNamesExpression(context, 
-                varargs({...})
+                varargs(args)
             )
         )
-        targetSelectors.selfFirst(context, context.members)
+        targetSelectors.order(context, context.members, varargs(args))
+        targetSelectors.applyOptions(context, context.members, options)
         context.member = context.members[1]
         return context.member
     end
@@ -2076,6 +2097,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     }
 
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
+    movementReservations.attach(context, function() smartMove:cancelJob() end)
     context.settings = context.gambit
 
     context.skillchain_trigger_time = 
@@ -3874,6 +3896,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     context.align = function(target, angle, distance, duration, noFace)
+        if not context.movementAvailable() then return nil, 'reserved' end
         local spec = alignment.parse(angle)
         if context.aligned(target, angle, distance) then return true end
         if not target or not target.id then return false end
@@ -3916,6 +3939,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     context.align2 = function(target, angle, distance, duration)
+        if not context.movementAvailable() then return nil, 'reserved' end
         if angle ~= nil and tonumber(angle) == nil then
             return context.align(target, angle, distance, duration, true)
         end
@@ -4278,6 +4302,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- 
     context.follow = function (target, distance)
+        if not context.movementAvailable() then return nil, 'reserved' end
         target = target or context.member or context.bt
 
         local _mob, _job_id = context.following(target)
@@ -4456,6 +4481,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     ---------------------------------------------------------------------------
     --
     context.move = function(...)
+        if not context.movementAvailable() then return nil, 'reserved' end
         local pos = context_makeXYDO(...)
         if not pos then return end
 
@@ -4507,6 +4533,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             coroutine.sleep(0.5)
 
             while true do
+                if not context.movementAvailable() then return nil, 'reserved' end
                 local now = os.clock()
                 local job = smartMove:getJobInfo()
                 local timedOut = false
@@ -4559,6 +4586,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- 
     context.cancelFollow = function ()
+        if not context.movementAvailable() then return nil, 'reserved' end
         -- local command = makeSelfCommand('follow')
         -- sendActionCommand(command, context, 0.5)
         smartMove:cancelJob()
@@ -6511,9 +6539,46 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Executes a Lua string or an array of independent expressions in order.
     -- Arrays return the final expression's results; use a string for full scripts.
     context.execute = function(code, ...)
+        if type(code) == 'number' or type(code) == 'boolean' then
+            code = tostring(code)
+        end
         if type(code) == 'string' or type(code) == 'table' then
             return executionFactory.execute(code, context, ...)
         end
+    end
+
+    -- Unlike execute, condition arrays short-circuit and combine results with AND.
+    context.evaluateAll = function(conditions, ...)
+        local function evaluate(condition, ...)
+            local kind = type(condition)
+            if kind == 'nil' then return false end
+            if kind == 'boolean' then return condition end
+            if kind == 'number' then return true end -- Lua numbers, including zero, are truthy.
+            if kind ~= 'string' then error('evaluateAll expects expressions or scalar conditions', 2) end
+            return not not context.execute(condition, ...)
+        end
+        if type(conditions) ~= 'table' then return evaluate(conditions, ...) end
+        local count = 0
+        for key in pairs(conditions) do
+            if type(key) ~= 'number' or key % 1 ~= 0 or key < 1 or key > #conditions then
+                error('evaluateAll expects a contiguous array of conditions', 2)
+            end
+            count = count + 1
+        end
+        if count ~= #conditions then error('evaluateAll expects a contiguous array of conditions', 2) end
+        if count == 0 then return false end
+        for _, condition in ipairs(conditions) do
+            if not evaluate(condition, ...) then return false end
+        end
+        return true
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Missing optional conditions impose no restriction.
+    context.evaluateAllConditions = function(conditions, ...)
+        if conditions == nil then return true end
+        if type(conditions) == 'table' and next(conditions) == nil then return true end
+        return context.evaluateAll(conditions, ...)
     end
 
     --------------------------------------------------------------------------------------

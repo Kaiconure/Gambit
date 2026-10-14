@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_bio": {
+    "^keep_bio": {
       "spells": ["Bio III", "Bio II", "Bio"],
       "targets": null
     }

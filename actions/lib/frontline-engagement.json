@@ -3,10 +3,12 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "frontline_engagement": {
+    "^frontline_engagement": {
       "prioritize_melee_engagement": true,
       "angle": null,
       "distance": null,
+      "duration": null,
+      "retry_delay": 10,
       "engage_trusts": null,
       "camp": {
         "min_distance": null,
@@ -33,6 +35,7 @@
       "max_iterations": 1
     },
     {
+      "precondition": "movementAvailable()",
       "when": [
         "vars.frontline_engagement.camp",
         "vars.frontline_engagement.camp.location",
@@ -56,6 +59,7 @@
       "scope": "battle"
     },
     {
+      "precondition": "movementAvailable()",
       "when": "bt and not facingEnemy()",
       "commands": "faceEnemy()",
       "delay": 0,
@@ -70,6 +74,7 @@
         " adhering to the configured engagement distance rules.",
         "========================================================================="
       ],
+      "precondition": "movementAvailable()",
       "when": [
         "bt and me.is_party_leader",
         "vars.frontline_engagement.engage_trusts and waiting_for_trusts",
@@ -86,13 +91,14 @@
       "delay": 0
     },
     {
+      "precondition": "movementAvailable()",
       "when": [
         "actionType == 'battle'",
         "bt and bt.distance <= vars.frontline_engagement._distance + 2",
         "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance)"
       ],
       "commands": [
-        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance) or postpone(10)"
+        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.duration) or postpone(vars.frontline_engagement.retry_delay)"
       ],
       "comment": [
         "Angle supports an exact number, frontside/backside/left/right/side, or a range such as 180+/-30.",
@@ -103,18 +109,21 @@
       "delay": 2
     },
     {
+      "precondition": "movementAvailable()",
       "when": "bt and bt.distance <= vars.frontline_engagement._distance and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
+      "precondition": "movementAvailable()",
       "when": "bt and bt.distance <= vars.frontline_engagement._distance and not facingEnemy()",
       "commands": ["faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
+      "precondition": "movementAvailable()",
       "when": "bt and bt.distance > vars.frontline_engagement._distance and not following(bt)",
       "commands": [
         "faceEnemy()",
@@ -125,6 +134,7 @@
       "comment": "Maintain a minimum distance from the enemy."
     },
     {
+      "precondition": "movementAvailable()",
       "when": [
         "vars.frontline_engagement.prioritize_melee_engagement",
         "bt and bt.distance > (vars.frontline_engagement._distance + 2)",

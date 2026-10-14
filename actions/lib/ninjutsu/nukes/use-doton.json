@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "ninjutsu": {
+    "^ninjutsu": {
       "nukes": {
         "doton": {
           "spells": ["Doton: San", "Doton: Ni", "Doton: Ichi"]

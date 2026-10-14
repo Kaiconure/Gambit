@@ -1,6 +1,6 @@
 {
   "vars": {
-    "abyssea": {
+    "^abyssea": {
       "weapons": null,
       "red_proc": {
         "all_ws": [

@@ -76,7 +76,7 @@ Without `-a` or `-r`, a normal full reload selects actions for your current job.
 | `namespace -set <name>` | Select a namespace, ensure its folders exist, and perform a full settings reload for the current job. |
 | `namespace -clear` | Clear namespace selection and perform a full settings reload. |
 
-Namespace selection is session state, not a persisted setting.
+`namespace -set` and `namespace -clear` remember the selection in `settings/<character>/main.json` as `default_namespace`, after a successful reload. Startup reads this field only from that base character file; namespace copies are ignored. Job changes retain the selection, and each settings load reports the active namespace. Invalid startup selections report an error and fall back to base settings without deleting the saved preference. `reload -ns` remains a temporary override.
 
 ## Target selection
 

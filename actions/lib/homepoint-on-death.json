@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "homepoint_on_death": {
+    "^homepoint_on_death": {
       "block_on_buffs": [
         "Battlefield",
         "Voidwatcher",

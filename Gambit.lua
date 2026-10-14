@@ -282,8 +282,6 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         resetCurrentMob(nil, true)
     end
 
-    writeMessage(text_green('Settings have been reloaded!', Colors.default))
-
     smartMove:applySettings(settings)
     smartMove:setMobLookupFunctions(getMobById, getMobByIndex)
 
@@ -293,6 +291,10 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
 
     if settings.debugging then
         inventory.printDebug = printDebug
+    end
+    -- Full reloads report after the action processor finishes compilation.
+    if not actionStateManager.needsRecompile then
+        reportLoadedSettings()
     end
 end
 
@@ -486,6 +488,7 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    resetNamespaceStartup()
     globals.logged_in = false
     globals.suppress_logging = true
 

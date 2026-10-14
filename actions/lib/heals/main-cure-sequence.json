@@ -3,11 +3,11 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "roles": {
+    "^roles": {
       "main_healer": true,
       "backup_healer": false
     },
-    "cure_sequence": {
+    "^cure_sequence": {
       "suppress_curaga": null,
       "curaga_hpp": null,
       "curaga_member_count": null,

@@ -2,6 +2,47 @@ local settings_counter = 0
 local settingsPaths = require('./lib/settings-paths')
 local variableLoader = require('./lib/variable-loader')
 local actionPreconditions = require('./lib/action-preconditions')
+local lastSavedSettings
+local namespacePlayer
+
+local function readBaseSettings(playerName)
+    local fileName = './settings/' .. playerName .. '/main.json'
+    local file = files.new(fileName)
+    local value = {}
+    if file:exists() then value = json.parse(file:read()) end
+    assert(type(value) == 'table', 'Invalid base character main.json')
+    return value, fileName
+end
+
+function saveDefaultNamespace(name)
+    local player = assert(windower.ffxi.get_player(), 'No character is logged in')
+    local valid, message = settingsPaths.validateNamespace(name)
+    assert(valid, message)
+    local value, fileName = readBaseSettings(player.name)
+    value.default_namespace = name
+    writeJsonToFile(fileName, value)
+end
+
+function resetNamespaceStartup()
+    namespacePlayer = nil
+end
+
+local function settingsSnapshot(value)
+    local snapshot = json.parse(json.stringify(value))
+    snapshot.actions = nil
+    snapshot.default_namespace = nil
+    return snapshot
+end
+
+local function sameSettings(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= 'table' then return a == b end
+    for key, value in pairs(a) do
+        if not sameSettings(value, b[key]) then return false end
+    end
+    for key in pairs(b) do if a[key] == nil then return false end end
+    return true
+end
 
 local function firstSettingsPath(paths)
     return settingsPaths.firstExisting(paths, function(path)
@@ -819,7 +860,6 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
         return tempSettings
     end
 
-    writeMessage('Settings namespace: ' .. text_green(settingsPaths.getLoadedNamespace() or '(global)'))
     local fileName = getSettingsFileName(player.name)
 
     local file = files.new(fileName)
@@ -837,6 +877,9 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
             end
         end
     end
+
+    -- Startup preferences belong only to the base character file.
+    tempSettings.default_namespace = nil
 
     -- Validate the schema
 
@@ -988,7 +1031,31 @@ end
 -- Save settings
 -- nil selects the session namespace; false explicitly selects global settings.
 function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProcessed)
+    local player = windower.ffxi.get_player()
+    if player and namespacePlayer ~= player.name then
+        namespacePlayer = player.name
+        settingsPaths.setNamespace(nil)
+        if namespaceOverride == nil then
+            local ok, result = pcall(function()
+                local base = readBaseSettings(player.name)
+                local name = base.default_namespace
+                if name == nil then return nil end
+                local valid, message = settingsPaths.validateNamespace(name)
+                assert(valid, message)
+                assert(windower.dir_exists(windower.addon_path .. 'settings/.ns/' .. name), 'Saved namespace does not exist: ' .. name)
+                local loaded = loadSettings(actionsName, settingsOnly, name, outputProcessed)
+                settingsPaths.setNamespace(name)
+                return loaded
+            end)
+            if ok and result then return result end
+            if not ok then
+                writeMessage('Could not load default namespace; loading base settings: ' .. tostring(result))
+                namespaceOverride = false
+            end
+        end
+    end
     local previous = settingsPaths.getLoadedNamespace()
+    local previousPrecedence = settingsPaths.getLoadedPrecedence()
     local name = namespaceOverride
     if name == nil then
         if settingsOnly then name = previous else name = settingsPaths.getNamespace() end
@@ -996,34 +1063,64 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     name = name or nil
     local valid, message = settingsPaths.validateNamespace(name)
     if not valid then error(message) end
+    local precedence = settingsPaths.resolveInheritance(name, function(ns)
+        local file = files.new('./settings/.ns/' .. ns .. '/.nsconfig')
+        if not file:exists() then return nil end
+        local ok, config = pcall(json.parse, file:read())
+        if not ok or type(config) ~= 'table' then error('Invalid .nsconfig for ' .. ns .. ': ' .. tostring(config)) end
+        return config
+    end, function(ns)
+        return windower.dir_exists(windower.addon_path .. 'settings/.ns/' .. ns)
+    end)
     if name then
         local player = windower.ffxi.get_player()
         local success, err = settingsPaths.ensureNamespaceFolders(player and player.name, name)
         if not success then error(err) end
     end
-    settingsPaths.setLoadedNamespace(name)
+    settingsPaths.setLoadedNamespace(name, precedence)
     local success, result = pcall(loadSettingsInternal, actionsName, settingsOnly, outputProcessed)
     if not success then
-        settingsPaths.setLoadedNamespace(previous)
+        settingsPaths.setLoadedNamespace(previous, previousPrecedence)
         error(result)
     end
+    lastSavedSettings = settingsSnapshot(result)
     return result
 end
 
-function saveSettings(settingsToSave)
+function reportLoadedSettings()
+    local player = windower.ffxi.get_player()
+    if not player then return end
+    local namespace = settingsPaths.getLoadedNamespace() or '(base settings)'
+    writeMessage(text_green('Settings loaded from namespace: ' .. text_namespace(namespace)))
+    print('Gambit: Settings loaded from namespace: ' .. namespace)
+end
+
+function saveSettings(settingsToSave, force)
     local player = windower.ffxi.get_player()
     local fileName = getSettingsFileName(player.name)
+    if settingsPaths.getLoadedNamespace() then
+        fileName = settingsPaths.firstExisting({
+            settingsPaths.writePath(player.name, 'main.json'),
+            './settings/.ns/' .. settingsPaths.getLoadedNamespace() .. '/main.json'
+        }, function(path) return files.new(path):exists() end)
+            or settingsPaths.writePath(player.name, 'main.json')
+    end
 
-    settingsToSave = settingsToSave or settings
-
-    -- Make a deep copy
-    settingsToSave = json.parse(json.stringify(settingsToSave))
-
-    -- Strip out the actions
-    settingsToSave.actions = nil
+    settingsToSave = settingsSnapshot(settingsToSave or settings)
+    -- Reapplying configuration after loading must not materialize an override.
+    if not force and lastSavedSettings and sameSettings(settingsToSave, lastSavedSettings) then
+        return false
+    end
 
     -- Save the result
-    writeJsonToFile(fileName, settingsToSave)
+    -- Preserve the independent startup preference when saving the base file.
+    local output = settingsSnapshot(settingsToSave)
+    if fileName == './settings/' .. player.name .. '/main.json' then
+        output.default_namespace = readBaseSettings(player.name).default_namespace
+    end
+    writeJsonToFile(fileName, output)
+    lastSavedSettings = settingsToSave
+    return true
 end
 
 ----------------------------------------------------------------------------------------

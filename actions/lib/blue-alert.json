@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "blue_alert": {
+    "^blue_alert": {
       "learnable_spell_used": false
     }
   },

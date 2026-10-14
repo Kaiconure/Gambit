@@ -4,7 +4,7 @@
     "description": "Ensures that your battle target always lines up with the party leader."
   },
   "vars": {
-    "leader_sync": {
+    "^leader_sync": {
       "disabled": null,
       "idle_disengage": true
     }

@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "use_cover": {
+    "^use_cover": {
       "targets": null,
       "trigger_hpp": 30
     }

@@ -1,12 +1,13 @@
 {
   "vars": {
-    "follow_leader": {
+    "^follow_leader": {
       "distance": null,
       "suppress_on_leader_engaged": null
     }
   },
   "actions": [
     {
+      "precondition": "movementAvailable()",
       "when": [
         "me.can_follow",
         "vars.follow_leader.target or (not me.is_party_leader and party_leader)",

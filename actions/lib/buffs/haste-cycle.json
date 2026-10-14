@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "haste_cycle": {
+    "^haste_cycle": {
       "spells": ["Haste II", "Haste"],
       "targets": ["me"]
     }

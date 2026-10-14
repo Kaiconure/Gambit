@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_addle": {
+    "^keep_addle": {
       "spells": ["Addle II", "Addle"],
       "targets": null
     }

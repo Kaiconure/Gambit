@@ -3,10 +3,10 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "roles": {
+    "^roles": {
       "backup_healer": true
     },
-    "cure_sequence": {
+    "^cure_sequence": {
       "silena_targets": null,
       "suppress_curaga": null,
       "gear": null

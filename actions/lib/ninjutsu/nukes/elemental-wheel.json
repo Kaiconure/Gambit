@@ -1,6 +1,6 @@
 {
   "vars": {
-    "ninjutsu": {
+    "^ninjutsu": {
       "nukes": {
         "frequency": 30
       }

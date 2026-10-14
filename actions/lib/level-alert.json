@@ -1,6 +1,6 @@
 {
   "vars": {
-    "level_alert": {
+    "^level_alert": {
       "levels": {
         "all": null,
         "99": null

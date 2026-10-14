@@ -1,6 +1,6 @@
 {
   "vars": {
-    "abyssea": {
+    "^abyssea": {
       "weapons": null,
       "blue_proc": {
         "weapon_set_name": null,

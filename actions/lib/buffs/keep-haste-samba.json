@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_haste_samba": {
+    "^keep_haste_samba": {
       "min_tp": 0,
       "reapply_when_tp": 3500,
       "reapply_when_recast": 30

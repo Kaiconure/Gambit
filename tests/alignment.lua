@@ -23,7 +23,7 @@ assert(c[1]==10 and c[2]==55 and c[3]==-35)
 
 local f=assert(io.open('lib/action-context.lua'));local source=f:read('*all');f:close()
 local block=assert(source:match('(local function alignmentPositionMatches.-)    context%.align2 ='))
-local context={action={},battleScope=1}
+local context={action={},battleScope=1,movementAvailable=function() return true end}
 local mob={id=1,x=0,y=0,heading=0,valid_target=true,hpp=100}
 local me={x=1,y=0}
 local clock=0
@@ -71,7 +71,7 @@ assert(not context.aligned(mob,'frontside',10))
 print('PASS: angle parsing, signed geometry, arcs, fallback, budget, cancellation and stable preference')
 
 local moveBlock=assert(source:match('(context%.move = function.-)\n    %-%-%-%-'))
-local movement={}
+local movement={movementAvailable=function() return true end}
 local current, nextId, elapsed, gap, cancelCount, replace = nil,0,0,10,0,false
 local movementSmart={}
 function movementSmart:getJobInfo() return current end

@@ -1,6 +1,6 @@
 {
   "vars": {
-    "ninjutsu": {
+    "^ninjutsu": {
       "yellow_proc_only": true,
       "debuffs": {
         "kurayami": {
@@ -28,7 +28,7 @@
         }
       }
     },
-    "abyssea": {
+    "^abyssea": {
       "yellow_proc": {
         "bypass_auto_init": null,
         "days_by_id": {

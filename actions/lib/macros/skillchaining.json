@@ -6,7 +6,7 @@
     ]
   },
   "vars": {
-    "ws": {
+    "^ws": {
       "partner_tp_threshold": 700,
       "partner2_tp_threshold": 800,
       "partner3_tp_threshold": 800,

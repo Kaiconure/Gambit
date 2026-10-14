@@ -4,7 +4,7 @@
     "notes": "Cycle the best available regen over all configured targets by name."
   },
   "vars": {
-    "regen_cycle": {
+    "^regen_cycle": {
       "targets": ["me"],
       "spells": ["Regen V", "Regen IV", "Regen III", "Regen II", "Regen"]
     }

@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_protectra_shellra": {
+    "^keep_protectra_shellra": {
       "align_leader": true,
       "check_members": null
     }
