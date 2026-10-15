@@ -4,6 +4,7 @@ local variableLoader = require('./lib/variable-loader')
 local actionPreconditions = require('./lib/action-preconditions')
 local actionEntryPoints = require('./lib/action-entry-points')
 local targetSelectors = require('./lib/target-selectors')
+local variableScopes = require('./lib/variable-scopes')
 local leaderLoadState = require('./lib/leader-load-state')
 local loadedLeaderState
 local loadingLeader
@@ -293,6 +294,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
 
         for i = #actions, 1, -1 do
             local action = actions[i]
+            variableScopes.prepare(baseActions, action)
             action.filter = action.filter or {}
 
             -- Let's just wipe out any comments on this action to save some memory
@@ -409,6 +411,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                         if type(fn) == 'table' then
                                             fn.as_function = true
                                             actionPreconditions.inherit(action, fn)
+                                            variableScopes.inherit(action, fn)
                                             fn.importedFrom = action_import
                                             table.insert(actions, i, fn)
                                         end
@@ -424,6 +427,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                         if type(ld) == 'table' then
                                             ld.on_load = true
                                             actionPreconditions.inherit(action, ld)
+                                            variableScopes.inherit(action, ld)
                                             ld.importedFrom = action_import
                                             table.insert(actions, i, ld)
                                         end
@@ -443,6 +447,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                             imported = true
                                             importedAction.importedFrom = action_import
                                             actionPreconditions.inherit(action, importedAction)
+                                            variableScopes.inherit(action, importedAction)
 
                                             -- The id uniquely identifies this import action regardless of context.
                                             -- The discriminator takes into account the action type as well.

@@ -1,4 +1,5 @@
 local handlers = {}
+local jobInfoRecords = require('./lib/job-info')
 local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
@@ -571,6 +572,18 @@ handlers['iteminfo'] = function(args)
     end
 end
 handlers['ii'] = handlers['iteminfo']
+
+handlers['jobset'] = function(args)
+        local name, nameError = jobInfoRecords.name(args[1])
+        local record, specError = jobInfoRecords.parse(args[2])
+        if not name or not record or #args ~= 2 then
+            writeMessage(nameError or specError or 'Usage: gbt jobset <name> <job-spec>')
+            return
+        end
+        jobInfoRecords.apply(globals.ipc_job_info, name, record)
+        windower.send_ipc_message(jobInfoRecords.message(name, record))
+        writeMessage('Job information updated and broadcast for ' .. name .. '.')
+end
 
 handlers['jobinfo'] = function(args)
 

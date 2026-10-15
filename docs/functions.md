@@ -116,7 +116,7 @@ In plain English, this says:
 > If I'm silenced, remove it with Healing Waltz (first choice) or some Echo Drops.
 # Flexible alignment
 
-`align(target, angle, distance, duration, noFace)` supports exact angles and flexible positioning. The same angle values work with `aligned` and `aligning`, and with `vars.frontline_engagement.angle` in `frontline-engagement`.
+`align(target, angle, distance, duration, noFace, tolerance)` supports exact angles and flexible positioning. Optional positional tolerance is in yalms; `aligned` and `aligning` accept it as their fourth argument. Frontline engagement uses `vars.frontline_engagement.tolerance`, defaulting to 0.5, for its alignment check and movement completion. Other callers retain their existing defaults. The same angle values work with `vars.frontline_engagement.angle`.
 
 | Angle | Meaning, relative to the target's facing |
 | --- | --- |
@@ -134,7 +134,7 @@ In plain English, this says:
 
 Semantic names are case-insensitive. Invalid specifications raise an error rather than silently becoming unrestricted alignment.
 
-For flexible ranges, the first preferred angle is randomized and remembered on the executing action for the current battle scope, target, and angle specification. A later successful fallback becomes the preference. If already at the requested distance anywhere in an allowed arc, no repositioning is needed. This reduces clustering but does not coordinate character positions or guarantee separation.
+For flexible ranges, a character already inside an allowed arc keeps its current bearing when correcting distance. Otherwise, a preferred angle is randomized and remembered on the executing action for the current battle scope, target, and angle specification. A later successful fallback becomes the preference. If already at the requested distance anywhere in an allowed arc, no repositioning is needed. Target movement or turning during an unsuccessful attempt defers correction to a later evaluation instead of trying arc extremes. This reduces clustering but does not coordinate character positions or guarantee separation.
 
 On a movement timeout, alignment tries other allowed destinations, including arc endpoints. `side` can try the other side. The default total attempt budget is six seconds for flexible alignment and three seconds for an exact angle; supplying `duration` overrides it. Scheduling, polling, and movement cleanup can add some overhead. Cancellation or replacement of the movement job ends the attempt without starting another fallback. Failure returns false; success returns true. This is bounded destination retrying, not wall detection or pathfinding.
 

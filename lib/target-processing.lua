@@ -404,7 +404,7 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                 -- end
                 skip_packet_targeting = false
 
-                if not skip_packet_targeting and mob.distance <= (30 * 30) then
+                if not skip_packet_targeting then
                     local num_attempted = 0
                     local max_attempts = 10
 

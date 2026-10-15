@@ -8,6 +8,7 @@
       "angle": null,
       "distance": null,
       "duration": null,
+      "tolerance": 0.5,
       "retry_delay": 10,
       "engage_trusts": null,
       "camp": {
@@ -95,10 +96,10 @@
       "when": [
         "actionType == 'battle'",
         "bt and bt.distance <= vars.frontline_engagement._distance + 2",
-        "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance)"
+        "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.tolerance)"
       ],
       "commands": [
-        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.duration) or postpone(vars.frontline_engagement.retry_delay)"
+        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.duration, false, vars.frontline_engagement.tolerance) or postpone(vars.frontline_engagement.retry_delay)"
       ],
       "comment": [
         "Angle supports an exact number, frontside/backside/left/right/side, or a range such as 180+/-30.",

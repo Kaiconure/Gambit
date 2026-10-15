@@ -245,6 +245,8 @@ Configuration changes normally save automatically. The raw-distance exception is
 | `iteminfo [-verbose]` | `ii`; option `-v` | Inventory occupancy and gil; verbose adds stored currency information and other bags/wardrobes. |
 | `jobinfo [-name <character>]` | `ji`; option `-n` | Show your job information, or another character's cached IPC job information. |
 | `jobinfo -send` | — | Broadcast your job information to other local Gambit instances. |
+| `jobset <character> <job-spec>` | — | Set and broadcast a character's job information. Examples: `WHM`, `WHM/RDM`, `WHM75`, `WHM75/BLM37`. Omitted levels default to 1. |
+
 | `targetinfo [-target <symbol>] [-save]` | `ti`; option `-t` | Show entity details. Defaults to `t`; examples include `me`, `p1`, and `player`. `-save` writes JSON under `data/`. |
 | `rollinfo` | `ri` | Show tracked Corsair rolls; the latest roll is marked with `*`. |
 | `buffs` | — | List your active buffs and their IDs. |
@@ -253,6 +255,14 @@ Configuration changes normally save automatically. The raw-distance exception is
 | `cancelbuff -name <buff>` | `cb` | Queue cancellation of a buff. Option aliases: `-names`, `-buff`, `-buffs`, `-n`, `-b`. Always supply one of these options. |
 | `colortest [number]` | — | Display the chat color palette, optionally printing a selected color first. |
 | `exp` | — | Development diagnostic: prints language and a Refresh spell lookup. It does not manage experience points. |
+
+Manual job records are session-only and use the same cache as live IPC updates.
+Names are normalized (for example, `sTERIS` becomes `Steris`), and job abbreviations
+are case-insensitive. Each update replaces the whole record; omitting a subjob
+removes the previously recorded subjob. Subsequent live IPC broadcasts overwrite
+manual entries normally. Your own context still uses live player information.
+There is no clear option. Existing inspection (`jobinfo -n Steris`) and `-send`
+remain available; level-up-triggered broadcasts are not introduced by this command.
 | `face` | — | Registered placeholder; prints “Not implemented.” |
 | `showfollow` | — | Registered placeholder; prints “Not implemented.” |
 

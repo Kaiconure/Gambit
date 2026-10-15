@@ -3,6 +3,7 @@ local movementReservations = require('./lib/movement-reservations')
 local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
 local targetedAction = require('./lib/targeted-action')
+local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
 -- A mob need not have observed buffs yet. Resource objects have an ID but
 -- no mob index, so they remain valid spell/ability arguments rather than targets.
@@ -529,140 +530,154 @@ end
 -----------------------------------------------------------------------------------------
 -- Sets an action context variable by name, allowing for dot ('.') syntax. The leading
 -- 'vars' name is implicit, and can be either provided or omitted with the same result.
-local function context_set_var(name, value)
-    local levels = get_action_variable_path(name)
-    if #levels == 0 then return nil end
-
-    -- Bail if we're trying to set a computed field
-    local last_level = levels[#levels]
-    if last_level == '$length' or last_level == '$type' then
-        return nil
-    end
-
-    -- If only one level is necessary, we'll just set it now and be done
-    if #levels == 1 then
-        actionStateManager.vars[levels[1]] = value
-        return value
-    end
-
-    local ref = actionStateManager.vars
-
-    -- Go through all levels --except-- the final one that we'll actually set below
-    for i = 1, #levels - 1 do
-        local level = levels[i]
-        local cur = ref[level]
-        
-        if type(cur) == 'nil' then
-            -- If the current level does not exist, we will create it
-            ref[level] = { }
-            cur = ref[level]            
-        elseif type(cur) ~= 'table' then
-            -- We will not allow a scalar to be overwritten with a table as part of this
+local function attachVariableHelpers(context)
+    local function context_set_var(name, value)
+        local levels = get_action_variable_path(name)
+        if #levels == 0 then return nil end
+    
+        -- Bail if we're trying to set a computed field
+        local last_level = levels[#levels]
+        if last_level == '$length' or last_level == '$type' then
             return nil
         end
-
-        ref = cur
-    end
-
-    ref[levels[#levels]] = value
-    return value
-end
-
------------------------------------------------------------------------------------------
--- Gets an action context variable by name, allowing for dot ('.') syntax. The leading
--- 'vars' name is implicit, and can be either provided or omitted with the same result.
-local function context_get_var(name)
-    return variableValues.get(actionStateManager.vars, name)
-end
-
-local function context_get_original_var(name)
-    return actionStateManager:getOriginalVar(name)
-end
-
-local function context_reset_var(name)
-    return context_set_var(name, context_get_original_var(name))
-end
-
------------------------------------------------------------------------------------------
--- Creates or updates a field under the specified variable name.
-local function context_set_var_field(name, field, value)
-    if 
-        type(name) == 'string' and
-        type(field) == 'string'
-    then
-        local val = context_get_var(name)
-        if val == nil then
-            val = context_set_var(name, {})
-        elseif type(val) ~= 'table' then
-            return
+    
+        -- If only one level is necessary, we'll just set it now and be done
+        if #levels == 1 then
+            context.vars[levels[1]] = value
+            return value
         end
-
-        val[field] = value
+    
+        local ref = context.vars
+    
+        -- Go through all levels --except-- the final one that we'll actually set below
+        for i = 1, #levels - 1 do
+            local level = levels[i]
+            local cur = ref[level]
+            
+            if type(cur) == 'nil' then
+                -- If the current level does not exist, we will create it
+                ref[level] = { }
+                cur = ref[level]            
+            elseif type(cur) ~= 'table' then
+                -- We will not allow a scalar to be overwritten with a table as part of this
+                return nil
+            end
+    
+            ref = cur
+        end
+    
+        ref[levels[#levels]] = value
         return value
     end
-end
-
------------------------------------------------------------------------------------------
--- Gets a field under the specified variable name.
-local function context_get_var_field(name, field)
-    if 
-        type(name) == 'string' and
-        type(field) == 'string' 
-    then
-        local val = context_get_var(name)
-        if type(val) == 'table' then
-            return val[field]
+    
+    -----------------------------------------------------------------------------------------
+    -- Gets an action context variable by name, allowing for dot ('.') syntax. The leading
+    -- 'vars' name is implicit, and can be either provided or omitted with the same result.
+    local function context_get_var(name)
+        return variableValues.get(context.vars, name)
+    end
+    
+    local function context_get_original_var(name)
+        return variableValues.copy(variableValues.get(context._originalVars, name))
+    end
+    
+    local function context_reset_var(name)
+        return context_set_var(name, context_get_original_var(name))
+    end
+    
+    -----------------------------------------------------------------------------------------
+    -- Creates or updates a field under the specified variable name.
+    local function context_set_var_field(name, field, value)
+        if 
+            type(name) == 'string' and
+            type(field) == 'string'
+        then
+            local val = context_get_var(name)
+            if val == nil then
+                val = context_set_var(name, {})
+            elseif type(val) ~= 'table' then
+                return
+            end
+    
+            val[field] = value
+            return value
         end
     end
-end
-
------------------------------------------------------------------------------------------
--- Increments a numeric variable value by a specified amount, or 1 if no amount is provided.
--- Defaults to 1 if the variable does not exist yet.
-local function context_var_increment(name, amount, default)
-    local value = context_get_var(name)
-    if value == nil then
-        value = tonumber(default) or 1
-    elseif type(value) == 'number' then
-        value = value + (tonumber(amount) or 1)
-    else
-        return
+    
+    -----------------------------------------------------------------------------------------
+    -- Gets a field under the specified variable name.
+    local function context_get_var_field(name, field)
+        if 
+            type(name) == 'string' and
+            type(field) == 'string' 
+        then
+            local val = context_get_var(name)
+            if type(val) == 'table' then
+                return val[field]
+            end
+        end
     end
-    return context_set_var(name, value)
-end
-
------------------------------------------------------------------------------------------
--- Decrements a numeric variable value by a specified amount, or 1 if no amount is provided.
--- Defaults to 0 if the variable does not exist yet.
-local function context_var_decrement(name, amount, default)
-    return context_var_increment(
-        name,
-        -1 * (tonumber(amount) or 1),
-        0)
-end
-
-local function context_var_cycle_up(name, max)
-    local value = tonumber(context_get_var(name)) or 0
-    value = value + 1
-    if value > max then
-        value = 1
+    
+    -----------------------------------------------------------------------------------------
+    -- Increments a numeric variable value by a specified amount, or 1 if no amount is provided.
+    -- Defaults to 1 if the variable does not exist yet.
+    local function context_var_increment(name, amount, default)
+        local value = context_get_var(name)
+        if value == nil then
+            value = tonumber(default) or 1
+        elseif type(value) == 'number' then
+            value = value + (tonumber(amount) or 1)
+        else
+            return
+        end
+        return context_set_var(name, value)
     end
-
-    return context_set_var(name, value)
-end
-
-local function context_var_cycle_down(name, max)
-    local value = tonumber(context_get_var(name)) or 1
-    value = value - 1
-    if value < 1 then
-        value = max
+    
+    -----------------------------------------------------------------------------------------
+    -- Decrements a numeric variable value by a specified amount, or 1 if no amount is provided.
+    -- Defaults to 0 if the variable does not exist yet.
+    local function context_var_decrement(name, amount, default)
+        return context_var_increment(
+            name,
+            -1 * (tonumber(amount) or 1),
+            0)
     end
+    
+    local function context_var_cycle_up(name, max)
+        local value = tonumber(context_get_var(name)) or 0
+        value = value + 1
+        if value > max then
+            value = 1
+        end
+    
+        return context_set_var(name, value)
+    end
+    
+    local function context_var_cycle_down(name, max)
+        local value = tonumber(context_get_var(name)) or 1
+        value = value - 1
+        if value < 1 then
+            value = max
+        end
+    
+        return context_set_var(name, value)
+    end
+    
+    -----------------------------------------------------------------------------------------
+    --
+    context.setVar = context_set_var
+    context.getVar = context_get_var
+    context.getOriginalVar = context_get_original_var
+    context.resetVar = context_reset_var
+    context.setVarField = context_set_var_field
+    context.getVarField = context_get_var_field
+    context.varIncrement = context_var_increment
+    context.varDecrement = context_var_decrement
+    context.varCycleUp = context_var_cycle_up
+    context.varCycleDown = context_var_cycle_down
 
-    return context_set_var(name, value)
 end
 
------------------------------------------------------------------------------------------
---
 local function context_iif(condition, ifYes, ifNo)
     if condition then
         return ifYes
@@ -2099,6 +2114,31 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
     movementReservations.attach(context, function() smartMove:cancelJob() end)
     context.settings = context.gambit
+
+    local globalVars = actionStateManager.vars
+    local scopeState = actionStateManager.variableScopes
+    local function scopeId() return context.action and context.action._variableScope end
+    context._originalVars = actionStateManager.originalVars
+    if scopeState then
+        local scopedVars = scopeState.view(scopeId)
+        local scopedOriginal = scopeState.view(scopeId, true)
+        local globalOriginal = actionStateManager.originalVars
+        context.vars = nil
+        context._originalVars = nil
+        setmetatable(context, {__index=function(_, key)
+            if key == 'vars' then return scopeId() and scopedVars or globalVars end
+            if key == '_originalVars' then return scopeId() and scopedOriginal or globalOriginal end
+        end})
+        -- Lua 5.1 does not honor __pairs. Expressions can still iterate vars.
+        context.pairs = function(value)
+            if value == scopedVars then return pairs(scopeState.snapshot(scopeId)) end
+            return pairs(value)
+        end
+    end
+    context.getVarGlobal = function(name) return variableValues.get(globalVars, name) end
+    local globalHelpers = {vars=globalVars, _originalVars=actionStateManager.originalVars}
+    attachVariableHelpers(globalHelpers)
+    context.setVarGlobal = globalHelpers.setVar
 
     context.skillchain_trigger_time = 
         (context.skillchain and context.skillchain.time) or 
@@ -3577,6 +3617,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         -- There's a bit of a gray area here, mainly around curative spells cast on undead, but
                         -- this logic should be correct in 99% of cases or more.
                         local suppress = context.vars.__suppress_offensive_magic and
+                            not offensiveMagicExceptions[spell.id] and
                             spell.targets.Enemy and 
                             not spell.targets.Self and
                             not spell.targets.Party and
@@ -3874,31 +3915,32 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    local function alignmentPositionMatches(target, spec, distance, position)
+    local function alignmentPositionMatches(target, spec, distance, position, tolerance)
         if not target or not position then return false end
         local bearing = alignment.bearing(target, position)
         if not alignment.contains(spec, bearing) and not spec.exact then return false end
         local angle = spec.exact or bearing
         local desired = smartMove:findMobOffset(target, angle * math.pi / 180, distance)
         local dx, dy = position.x - desired[1], position.y - desired[2]
-        return dx * dx + dy * dy <= smartMove.tolerance * smartMove.tolerance
+        tolerance = tonumber(tolerance) or smartMove.tolerance
+        return dx * dx + dy * dy <= tolerance * tolerance
     end
 
-    context.aligned = function(target, angle, distance)
+    context.aligned = function(target, angle, distance, tolerance)
         return alignmentPositionMatches(target, alignment.parse(angle), distance,
-            windower.ffxi.get_mob_by_target('me'))
+            windower.ffxi.get_mob_by_target('me'), tolerance)
     end
 
-    context.aligning = function(target, angle, distance)
+    context.aligning = function(target, angle, distance, tolerance)
         local job = smartMove:getJobInfo()
         return job and job.position and alignmentPositionMatches(target, alignment.parse(angle), distance,
-            {x=job.position[1], y=job.position[2]}) or false
+            {x=job.position[1], y=job.position[2]}, tolerance) or false
     end
 
-    context.align = function(target, angle, distance, duration, noFace)
+    context.align = function(target, angle, distance, duration, noFace, tolerance)
         if not context.movementAvailable() then return nil, 'reserved' end
         local spec = alignment.parse(angle)
-        if context.aligned(target, angle, distance) then return true end
+        if context.aligned(target, angle, distance, tolerance) then return true end
         if not target or not target.id then return false end
         local me = windower.ffxi.get_mob_by_target('me')
         if not me then return false end
@@ -3917,17 +3959,23 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local current = windower.ffxi.get_mob_by_id(target.id)
             if not current or not current.valid_target or current.hpp <= 0 then return false end
             local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance)
+            local startX, startY, startHeading = current.x, current.y, current.heading
             local success, reason = context.move({x=position[1], y=position[2],
                 duration=remaining / (#candidates-i+1),
-                tolerance=not spec.exact and smartMove.tolerance or nil})
+                tolerance=tonumber(tolerance) or (not spec.exact and smartMove.tolerance or nil)})
             local updated = windower.ffxi.get_mob_by_id(target.id)
-            if success and updated and (spec.exact or context.aligned(updated,angle,distance)) then
+            if success and updated and context.aligned(updated,angle,distance,tolerance) then
                 cache.preferred = candidate
                 if not noFace then directionality.faceTarget(updated) end
                 return true
             end
             -- A cancelled/replaced job must never be restarted by a fallback.
             if not success and reason ~= 'timeout' then return false end
+            -- A moving/turning target is not evidence of an obstructed route.
+            -- Re-evaluate next iteration instead of traversing the arc extremes.
+            if updated and (updated.x ~= startX or updated.y ~= startY or updated.heading ~= startHeading) then
+                return false
+            end
         end
         if not noFace then
             local current = windower.ffxi.get_mob_by_id(target.id)
@@ -6637,16 +6685,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.hasAllFieldNames = context_table_has_all_field_names
     context.inRange = context_in_range
     context.wait = context_wait
-    context.setVar = context_set_var
-    context.getVar = context_get_var
-    context.getOriginalVar = context_get_original_var
-    context.resetVar = context_reset_var
-    context.setVarField = context_set_var_field
-    context.getVarField = context_get_var_field
-    context.varIncrement = context_var_increment
-    context.varDecrement = context_var_decrement
-    context.varCycleUp = context_var_cycle_up
-    context.varCycleDown = context_var_cycle_down
+    attachVariableHelpers(context)
 
     context.smallnum = compress_number
     context.fnum = format_number

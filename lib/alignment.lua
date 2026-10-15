@@ -69,7 +69,8 @@ function alignment.candidates(spec, bearing, preferred)
         for _,old in ipairs(result) do if math.abs(delta(old,angle))<0.001 then return end end
         result[#result+1]=angle
     end
-    if preferred and alignment.contains(spec,preferred) then add(preferred) else
+    if alignment.contains(spec,bearing) then add(bearing)
+    elseif preferred and alignment.contains(spec,preferred) then add(preferred) else
         local arc=spec.arcs[math.random(#spec.arcs)]
         add(arc[1]+(math.random()*2-1)*arc[2])
     end

@@ -561,6 +561,7 @@ end
 
 --------------------------------------------------------------------------------------
 -- Recompiles all action types
+local variableScopes = require('./lib/variable-scopes')
 local function compileAllActions()
     local settingsCopy = json.parse(json.stringify(settings))
 
@@ -581,6 +582,8 @@ local function compileAllActions()
     compileActions('functions',     actions, actions and actions.functions or {})
 
     actionStateManager:initializeVars(actions and actions.vars or {})
+    actionStateManager.variableScopes = variableScopes.build(
+        actionStateManager.vars, actionStateManager.originalVars, actions and actions._variableScopes)
 
     -- Internal variables are stored here
     actionStateManager.vars._ = {}
@@ -934,11 +937,12 @@ local function doNextActionCycle(time, player, party)
 
                     -- Lock on if necessary
                     local target = windower.ffxi.get_mob_by_target('t')
+                    local lockSuccessful = false
                     --if player.target_index ~= mob.index then
                     if target == nil or target.id ~= mob.id then
                         
                         --printDebug('Pull targeting start')
-                        lockTarget(player, mob, true)
+                        lockSuccessful = lockTarget(player, mob, true)
                         --printDebug('Pull targeting completed')
 
                         --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
@@ -946,9 +950,11 @@ local function doNextActionCycle(time, player, party)
                     end
 
                     -- Engage if necessary
-                    if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
-                        command = command .. string.format('input /attack <t>; ')
-                        hasCommand = true
+                    if lockSuccessful then
+                        if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
+                            command = command .. string.format('input /attack <t>; ')
+                            hasCommand = true
+                        end
                     end
 
                     if hasCommand then

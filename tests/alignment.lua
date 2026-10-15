@@ -20,6 +20,7 @@ assert(c[1]==90 and #c==5)
 for _,a in ipairs(c) do assert(contains('side',a)) end
 c=alignment.candidates(alignment.parse(nil),10)
 assert(c[1]==10 and c[2]==55 and c[3]==-35)
+assert(alignment.candidates(alignment.parse('backside'),165,200)[1]==165)
 
 local f=assert(io.open('lib/action-context.lua'));local source=f:read('*all');f:close()
 local block=assert(source:match('(local function alignmentPositionMatches.-)    context%.align2 ='))
@@ -36,8 +37,11 @@ end
 context.move=function(pos)
     local x,y,duration=pos.x,pos.y,pos.duration
     attempts[#attempts+1]={x=x,y=y,duration=duration}
+    attempts[#attempts].tolerance=pos.tolerance
     clock=clock+duration
     if mode=='cancel' then return nil,'cancelled' end
+    if mode=='moving' then mob.x=mob.x+1;return nil,'timeout' end
+    if mode=='success' then me.x,me.y=x,y;return true end
     if mode=='fail' or #attempts==1 then return nil,'timeout' end
     me.x,me.y=x,y
     return true
@@ -68,6 +72,14 @@ mode='fallback';attempts={};clock=0
 assert(context.align(mob,'side',10,3) and #attempts==2)
 assert(context.aligned(mob,'side',10))
 assert(not context.aligned(mob,'frontside',10))
+me.x,me.y=-10.4,0
+assert(not context.aligned(mob,'backside',10))
+assert(context.aligned(mob,'backside',10,0.5))
+mode='success';attempts={};clock=0;me.x,me.y=-12,0
+assert(context.align(mob,'backside',10,3,false,0.5))
+assert(#attempts==1 and attempts[1].tolerance==0.5 and math.abs(attempts[1].y)<0.0001)
+mode='moving';attempts={};clock=0;me.x,me.y=1,0
+assert(not context.align(mob,'backside',10,3,false,0.5) and #attempts==1)
 print('PASS: angle parsing, signed geometry, arcs, fallback, budget, cancellation and stable preference')
 
 local moveBlock=assert(source:match('(context%.move = function.-)\n    %-%-%-%-'))

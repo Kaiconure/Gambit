@@ -8,11 +8,15 @@ local manager={}
 local env=setmetatable({variableValues=values,state_manager=manager}, {__index=_G})
 local fn=assert(loadstring(methods));setfenv(fn,env);fn()
 local source=read('lib/action-context.lua')
-local setter=assert(source:match('(local function context_set_var%(.-)\n%-%-%-%-'))
-local getters=assert(source:match('(local function context_get_var%(.-)\n%-%-%-%-'))
-local helpers=assert(loadstring(setter .. '\n' .. getters .. '\nreturn context_set_var, context_get_var, context_get_original_var, context_reset_var'))
+local body=assert(source:match('(local function attachVariableHelpers%(.-)local function context_iif'))
+local helpers=assert(loadstring(body .. '\nreturn attachVariableHelpers'))
 setfenv(helpers,setmetatable({variableValues=values,get_action_variable_path=values.path,actionStateManager=manager},{__index=_G}))
-local set,get,original,reset=helpers()
+local context=setmetatable({}, {__index=function(_,key)
+    if key=='vars' then return manager.vars end
+    if key=='_originalVars' then return manager.originalVars end
+end})
+helpers()(context)
+local set,get,original,reset=context.setVar,context.getVar,context.getOriginalVar,context.resetVar
 local initial={flag=false,config={list={'a','b'},limit=3}}
 manager:initializeVars(initial)
 assert(manager.originalVars.config.list[1]=='a' and manager.originalVars.config ~= initial.config)

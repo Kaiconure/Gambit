@@ -1122,6 +1122,7 @@ state_manager.reset = function (self)
     self.functions = {}
     self.vars = { }
     self.originalVars = {}
+    self.variableScopes = nil
     --self.meritPointInfo = { current = 0, max = 30, limits = 0 }
     --self.capacityPointInfo = { capacityPoints = 0, jobPoints = 0, spentJobPoints = 0, totalJobPoints = 0 }
     -- self.memberBuffs = { }   -- Don't remove these; maintain state across reloads (of settings, NOT addon) since they are independent of that

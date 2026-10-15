@@ -50,6 +50,7 @@ require('actions')
 json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
 executionFactory = require('./lib/execution-factory')
+local jobInfoRecords = require('./lib/job-info')
 
 meta = meta or {}
 meta.erase = require('./meta/erase') or {}
@@ -842,32 +843,11 @@ windower.register_event('ipc message', function (msg)
             globals.ipc_positions_by_index[tostring(index)] = globals.ipc_positions[key]
         end
     elseif command == 'job' then
-        local name = getArgValue(args, '-n')
-        local main_job = getArgValue(args, '-main')
-        local main_level = tonumber(getArgValue(args, '-main-l')) or 0
-        local sub_job = getArgValue(args, '-sub')
-        local sub_level = tonumber(getArgValue(args, '-sub-l')) or 0
-
-        if 
-            name and
-            main_job and
-            main_level > 0
-        then
-            globals.ipc_job_info[name] = {
-                t = os.clock(),
-                main_job = main_job,
-                main_job_level = main_level,
-                sub_job = sub_job,
-                sub_job_level = sub_level
-            }
-            printDebug('IPC job info updated for %s: %s%d/%s%d':format(
-                name,
-                main_job,
-                main_level,
-                sub_job,
-                sub_level
-            ))
-            --partyInfo:updateMemberJobInfo(name, main_job, main_level, sub_job, sub_level)
+        local record = jobInfoRecords.record(
+            getArgValue(args, '-main'), getArgValue(args, '-main-l'),
+            getArgValue(args, '-sub'), getArgValue(args, '-sub-l'))
+        if record then
+            jobInfoRecords.apply(globals.ipc_job_info, getArgValue(args, '-n'), record)
         end
     elseif command == 'set_bt' then
         -- set_bt -from %s -id %s -index %s -zone %s
