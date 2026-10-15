@@ -59,7 +59,9 @@ function paths.resolveInheritance(name, readConfig, exists)
         if config == nil then config = {} end
         assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current .. ': expected an object')
         assert(config.inheritable == nil or type(config.inheritable) == 'boolean', 'inheritable must be boolean in ' .. current)
-        if parent then assert(config.inheritable == true, 'Namespace ' .. current .. ' must declare inheritable: true') end
+        if parent and config.inheritable == false then
+            error('Namespace ' .. text_namespace(current, Colors.red) .. ' explicitly disables inheritance (inheritable: false)', 0)
+        end
         result[#result+1] = current
         if config.inherits_from ~= nil then
             assert(type(config.inherits_from) == 'string', 'inherits_from must be a single namespace string in ' .. current)
@@ -82,14 +84,43 @@ function paths.setLoadedNamespace(name, precedence)
     loadedPrecedence = precedence or (name and {name} or {})
 end
 
-function paths.ensureNamespaceFolders(playerName, name)
+function paths.ensureNamespaceFolders(playerName, name, parent)
     name = name or namespace
     if not name then return true end
     if type(playerName) ~= 'string' or playerName == '' then
         return false, 'A logged-in character is required to initialize a namespace.'
     end
 
+    local valid, message = paths.validateNamespace(name)
+    if not valid then return false, message end
     local root = NS_ROOT .. name .. '/'
+    local initialConfig = '{}\n'
+    if parent ~= nil then
+        local ok, err = pcall(function()
+            local validParent, parentMessage = paths.validateNamespace(parent)
+            assert(validParent, parentMessage)
+            paths.resolveInheritance(name, function(current)
+                local file = files.new(NS_ROOT .. current .. '/.nsconfig')
+                local config
+                if file:exists() then
+                    config = json.parse(file:read())
+                    assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current)
+                    if current == name then
+                        if config.inherits_from ~= parent then
+                            error('Namespace ' .. text_namespace(name, Colors.error) .. ' already has a different or missing parent.', 0)
+                        end
+                    end
+                elseif current == name then
+                    config = {inherits_from = parent}
+                end
+                return config
+            end, function(current)
+                return windower.dir_exists(windower.addon_path .. 'settings/.ns/' .. current)
+            end)
+            initialConfig = json.stringify({inherits_from = parent}) .. '\n'
+        end)
+        if not ok then return false, tostring(err) end
+    end
     -- Character folders are created by the file writer only when an override is saved.
     for _, folder in ipairs({'actions', 'actions/lib'}) do
         -- create_path creates missing parents and leaves existing folders intact.
@@ -100,7 +131,7 @@ function paths.ensureNamespaceFolders(playerName, name)
     end
     local config = files.new(root .. '.nsconfig')
     if not config:exists() then
-        local ok, result, err = pcall(function() return config:write('{}\n') end)
+        local ok, result, err = pcall(function() return config:write(initialConfig) end)
         if not ok or not result then
             return false, 'Unable to create namespace configuration ' .. root .. '.nsconfig: ' .. tostring(ok and err or result)
         end
@@ -137,7 +168,7 @@ function paths.firstExisting(candidates, exists)
 end
 
 -- Automatic common files are additive, listed from lowest to highest priority.
-function paths.commonFiles(playerName, mainJob)
+function paths.commonFiles(playerName, mainJob, groups)
     local libraries = {
         './actions/lib',
         SETTINGS_ROOT .. '/actions/lib',
@@ -150,7 +181,13 @@ function paths.commonFiles(playerName, mainJob)
     end
     local result = {}
     for _, library in ipairs(libraries) do
-        for _, relative in ipairs({'common/common', 'common/' .. mainJob, 'common'}) do
+        local relatives = {'common/common'}
+        for _, group in ipairs(groups or {}) do
+            relatives[#relatives + 1] = 'common/(' .. group .. ')'
+        end
+        relatives[#relatives + 1] = 'common/' .. mainJob
+        relatives[#relatives + 1] = 'common'
+        for _, relative in ipairs(relatives) do
             result[#result + 1] = library .. '/' .. relative .. '.json'
         end
     end

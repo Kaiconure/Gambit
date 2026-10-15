@@ -31,6 +31,18 @@ groups.HEALERS = groups.HEALER
 groups.NUKERS = groups.NUKER
 groups.TANKS = groups.TANK
 
+-- Stable filename selectors for automatic job entry points.
+function selectors.entryPointGroups(job, isLeader)
+    local result = {}
+    job = (job or ''):upper()
+    for name, members in pairs(groups) do
+        if members[job] then result[#result + 1] = name:lower() end
+    end
+    if isLeader then result[#result + 1] = 'leader' end
+    table.sort(result)
+    return result
+end
+
 local function parseSelector(target)
     if type(target) ~= 'string' then return nil end
     local key = target:upper()

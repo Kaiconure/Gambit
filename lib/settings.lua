@@ -2,6 +2,44 @@ local settings_counter = 0
 local settingsPaths = require('./lib/settings-paths')
 local variableLoader = require('./lib/variable-loader')
 local actionPreconditions = require('./lib/action-preconditions')
+local actionEntryPoints = require('./lib/action-entry-points')
+local targetSelectors = require('./lib/target-selectors')
+local leaderLoadState = require('./lib/leader-load-state')
+local loadedLeaderState
+local loadingLeader
+
+local function currentLeaderStatus(ignoreZoning)
+    if not ignoreZoning and globals and globals.zoneEntryTime and os.clock() - globals.zoneEntryTime < 10 then return nil end
+    local player = windower.ffxi.get_player()
+    local info = windower.ffxi.get_info()
+    local party = windower.ffxi.get_party()
+    if not player or not info or not info.logged_in or not party or
+        not party.p0 or not party.p0.mob or not party.party1_leader or party.party1_leader == 0 then
+        return nil
+    end
+    return party.party1_leader == player.id
+end
+
+function checkLeaderSettings()
+    if loadedLeaderState and loadedLeaderState.update(currentLeaderStatus(), os.clock()) then
+        local message = 'Party leadership changed; reload Gambit to update leader-specific settings.'
+        writeMessage(message)
+        print('Gambit: ' .. message)
+    end
+end
+
+local function leaderFilesPresent(player)
+    local locations = settingsPaths.candidates(player.name, 'actions')
+    locations[#locations + 1] = './actions/standard'
+    for _, location in ipairs(locations) do
+        if files.new(location .. '/(leader).json'):exists() or
+            files.new(location .. '/(!leader).json'):exists() then return true end
+    end
+    for _, path in ipairs(settingsPaths.commonFiles(player.name, player.main_job, {'leader'})) do
+        if path:find('/(leader).json', 1, true) and files.new(path):exists() then return true end
+    end
+    return false
+end
 local lastSavedSettings
 local namespacePlayer
 
@@ -682,7 +720,8 @@ local function loadActionImports(playerName, actions, player, sourceFile)
 
         -- Keep common files in low-to-high priority order before explicit imports.
         -- The loader walks backward and preserves existing variable/macro values.
-        local commonFiles = settingsPaths.commonFiles(playerName, player.main_job)
+        local commonFiles = settingsPaths.commonFiles(playerName, player.main_job,
+            targetSelectors.entryPointGroups(player.main_job, loadingLeader))
         for i = #commonFiles, 1, -1 do
             local fileName = commonFiles[i]
             table.insert(actions.imports, 1, {
@@ -848,6 +887,7 @@ end
 ----------------------------------------------------------------------------------------
 -- Load settings
 local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
+    loadingLeader = currentLeaderStatus(true)
     local player = windower.ffxi.get_player()
     if not player then
         tempSettings = json.parse(json.stringify(defaultSettings))
@@ -969,18 +1009,14 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     local subJob = player.sub_job
 
     if actions == nil then
-        -- Load main/sub job-specific actions if present
-        if subJob then
-            actionsName = '%s-%s':format(mainJob, subJob):lower()
-            jobActionsName = actionsName
-            actions, actionsFileName = loadActions(player.name, actionsName)
-        end
-
-        -- If no actions were found, load the main job actions (default)
-        if actions == nil then
-            actionsName = '%s':format(mainJob):lower()
-            jobActionsName = actionsName
-            actions, actionsFileName = loadActions(player.name, actionsName)
+        local locations = settingsPaths.candidates(player.name, 'actions')
+        locations[#locations + 1] = './actions/standard'
+        actionsFileName, actionsName = actionEntryPoints.find(
+            locations, mainJob, subJob, targetSelectors.entryPointGroups(mainJob, loadingLeader),
+            function(path) return files.new(path):exists() end)
+        jobActionsName = mainJob:lower()
+        if actionsFileName then
+            actions = loadActionsFromFile(player.name, actionsFileName)
         end
 
         -- Load the default actions if nothing else has worked
@@ -1023,6 +1059,10 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     
     settings_counter = settings_counter + 1
     tempSettings.settings_counter = settings_counter
+
+    if not settingsOnly then
+        loadedLeaderState = leaderLoadState.new(leaderFilesPresent(player), loadingLeader == true)
+    end
 
     return tempSettings
 end

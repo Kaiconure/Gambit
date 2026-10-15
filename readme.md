@@ -296,14 +296,16 @@ Namespace path segments `actions` and `players` are reserved for namespace conte
 
 # Namespace inheritance
 
+Use `gbt ns -set xp -parent base` to initialize a missing `xp/.nsconfig` with `{"inherits_from":"base"}` and switch to it. The parent must exist, must not explicitly set `inheritable: false`, and must have a valid inheritance chain. Validation happens before namespace folders or configuration are created. An existing `.nsconfig` is preserved: it must already name the requested parent, otherwise the command reports a conflict (including when it contains only `{}`). The child is inheritable by default; no explicit flag is written. Omitting `-parent` retains normal namespace creation behavior.
+
 A namespace may declare one parent in `settings/.ns/<namespace>/.nsconfig`:
 
 ```json
 { "inherits_from": "bcnm/single" }
 ```
 
-The parent must explicitly opt in with its own `.nsconfig` containing `{"inheritable": true}`. This permission is not inherited. A namespace can both inherit from a parent and opt in to being a parent itself. Missing configuration preserves standalone behavior. Parent names are relative to `settings/.ns`, not the current namespace folder.
+Namespaces are inheritable by default, including those with an empty or missing `.nsconfig`. Set `{"inheritable": false}` to prevent other namespaces from inheriting one; direct selection remains allowed. This flag is local to each namespace, and every ancestor in an inheritance chain must permit inheritance. Explicit `true` remains supported; other non-boolean values are rejected. A missing `inherits_from` still means no parent is selected automatically. Parent names are relative to `settings/.ns`, not the current namespace folder.
 
 Ordinary settings, action files, and imports search the active namespace, then its parent chain, then the existing global fallbacks. Imports inside inherited files use the active namespace's search chain too. Automatic common files load additively from base to derived priority, preserving character-over-shared precedence within each namespace. Explicit variable priorities (`!` and `^`) still apply. This is file fallback, not automatic merging of ordinary job or main configuration files.
 
-Saving settings in a namespace writes to an existing main configuration in that active namespace, or creates a character override there; it does not modify an inherited or global file. Cycles, missing parents, and parents without `inheritable: true` fail with an error. Only a single string is supported for `inherits_from`; arrays are rejected. Internally, lookups use a resolved precedence list to allow future multiple-inheritance support.
+Saving settings in a namespace writes to an existing main configuration in that active namespace, or creates a character override there; it does not modify an inherited or global file. Cycles, missing parents, and parents explicitly declaring `inheritable: false` fail with an error. Only a single string is supported for `inherits_from`; arrays are rejected. Internally, lookups use a resolved precedence list to allow future multiple-inheritance support.

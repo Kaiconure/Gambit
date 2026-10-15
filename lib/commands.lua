@@ -36,8 +36,9 @@ handlers['namespace'] = function(args)
     end
 
     local option = (args[1] or ''):lower()
-    if not ((option == '-set' and #args == 2) or (option == '-clear' and #args == 1)) then
-        writeMessage('Usage: gbt namespace [-set <name> | -clear] (alias: ns)')
+    if not ((option == '-set' and (#args == 2 or (#args == 4 and args[3]:lower() == '-parent')))
+        or (option == '-clear' and #args == 1)) then
+        writeError('Usage: gbt namespace [-set <name> [-parent <namespace>] | -clear] (alias: ns)')
         return
     end
 
@@ -45,16 +46,16 @@ handlers['namespace'] = function(args)
     local previousNamespace = settingsPaths.getNamespace()
     local success, message = settingsPaths.setNamespace(name)
     if not success then
-        writeMessage(message)
+        writeError(message)
         return
     end
 
     if name then
         local player = windower.ffxi.get_player()
-        success, message = settingsPaths.ensureNamespaceFolders(player and player.name)
+        success, message = settingsPaths.ensureNamespaceFolders(player and player.name, name, args[4])
         if not success then
             settingsPaths.setNamespace(previousNamespace)
-            writeMessage(message)
+            writeError(message)
             return
         end
     end
@@ -63,12 +64,12 @@ handlers['namespace'] = function(args)
     local loaded, err = pcall(reloadSettings)
     if not loaded then
         settingsPaths.setNamespace(previousNamespace)
-        writeMessage('Could not switch namespace: ' .. tostring(err))
+        writeError('Could not switch namespace: ' .. tostring(err))
         return
     end
     local saved, saveError = pcall(saveDefaultNamespace, name)
     if not saved then
-        writeMessage('Namespace changed for this session, but could not be remembered: ' .. tostring(saveError))
+        writeError('Namespace changed for this session, but could not be remembered: ' .. tostring(saveError))
     end
 end
 handlers['ns'] = handlers['namespace']
@@ -341,13 +342,13 @@ handlers['reload'] = function (args)
     local namespaceOverride
     if nsIndex then
         if bypassActions then
-            writeMessage('The -ns option cannot be combined with -settings-only.')
+            writeError('The -ns option cannot be combined with -settings-only.')
             return
         end
         namespaceOverride = args[nsIndex + 1]
         local valid, message = settingsPaths.validateNamespace(namespaceOverride)
         if not namespaceOverride or namespaceOverride:sub(1, 1) == '-' or not valid then
-            writeMessage(message or 'Usage: gbt r -ns <namespace>')
+            writeError(message or 'Usage: gbt r -ns <namespace>')
             return
         end
     elseif reload then

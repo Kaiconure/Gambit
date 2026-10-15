@@ -1,10 +1,25 @@
 local paths = dofile('lib/settings-paths.lua')
+Colors = {red=1}
+text_namespace = function(value) return value end
 local configs = {fight={inherits_from='base'},base={inheritable=true,inherits_from='root'},root={inheritable=true}}
 local function resolve(name)
     return paths.resolveInheritance(name, function(n) return configs[n] end, function(n) return configs[n] ~= nil end)
 end
 local chain=resolve('fight')
 assert(table.concat(chain,',')=='fight,base,root')
+configs.base.inheritable=nil
+configs.root.inheritable=nil
+assert(table.concat(resolve('fight'),',')=='fight,base,root')
+configs.root.inheritable=false
+assert(not pcall(resolve,'fight')) -- Opt-out is enforced throughout the chain.
+configs.root.inheritable=nil
+configs.base.inheritable='true'
+assert(not pcall(resolve,'fight')) -- Still require boolean values when specified.
+configs.base.inheritable=nil
+local unconfigured=paths.resolveInheritance('child',function(n)
+    if n=='child' then return {inherits_from='unconfigured'} end
+end,function(n) return n=='unconfigured' end)
+assert(table.concat(unconfigured,',')=='child,unconfigured')
 paths.setLoadedNamespace('fight',chain)
 local candidates=paths.candidates('Player','actions/war.json')
 assert(candidates[1]=='./settings/.ns/fight/players/Player/actions/war.json')
@@ -15,7 +30,9 @@ assert(common[10]=='./settings/.ns/root/actions/lib/common/common.json')
 assert(common[#common]=='./settings/.ns/fight/players/Player/actions/lib/common.json')
 assert(paths.writePath('Player','main.json')=='./settings/.ns/fight/players/Player/main.json')
 configs.base.inheritable=false
-assert(not pcall(resolve,'fight'))
+local ok, message = pcall(resolve,'fight')
+assert(not ok and message == 'Namespace base explicitly disables inheritance (inheritable: false)')
+assert(resolve('base')[1]=='base') -- Opt-out does not prevent direct selection.
 configs.base.inheritable=true
 configs.root.inherits_from='fight'
 configs.fight.inheritable=true
@@ -29,7 +46,7 @@ configs.fight.inherits_from='../base'
 assert(not pcall(resolve,'fight'))
 assert(#resolve(nil)==0)
 assert(resolve('standalone')[1]=='standalone')
-print('PASS: recursive precedence, additive common ordering, writes, opt-in, cycles, missing parents and array rejection')
+print('PASS: recursive precedence, common ordering, writes, default inheritability, explicit opt-out, cycles and invalid inputs')
 
 local imports=paths.importCandidates('Player','$(PlayerLib)/buff')
 assert(imports[1]=='./settings/.ns/fight/players/Player/actions/lib/buff.json')

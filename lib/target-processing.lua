@@ -404,7 +404,7 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                 -- end
                 skip_packet_targeting = false
 
-                if not skip_packet_targeting then
+                if not skip_packet_targeting and mob.distance <= (30 * 30) then
                     local num_attempted = 0
                     local max_attempts = 10
 
@@ -437,6 +437,12 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                             then
                                 printDebug('Exiting targeting loop due to stolen claim.')
                                 fail_fast = true
+                                break
+                            elseif
+                                current.distance >= (30 * 30)
+                            then
+                                -- If the mob moves out of engagement range, this packet won't work. Fall back.
+                                fail_fast = false
                                 break
                             end
                         end

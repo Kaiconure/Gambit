@@ -299,6 +299,14 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
 end
 
 -- Player status change
+local lastLeaderSettingsCheck = 0
+windower.register_event('prerender', function()
+    local now = os.clock()
+    if now - lastLeaderSettingsCheck < 1 then return end
+    lastLeaderSettingsCheck = now
+    if checkLeaderSettings then checkLeaderSettings() end
+end)
+
 windower.register_event('status change', function(new_id, previous_id)
 
     local previous_status   = previous_id and resources.statuses[previous_id]
