@@ -10,7 +10,7 @@
         "distance": 5,
         "range": 7,
         "duration": 3,
-        "timeout": 30
+        "timeout": 90
       },
       "rolls": ["Corsair's Roll", "Chaos Roll"],
       "allow_crooked_cards": ["Corsair's Roll"],
@@ -161,12 +161,17 @@
     "Optional use_rolls.alignment: enabled defaults false; targets are party selectors in preference order.",
     "distance is approach distance, range is accepted recipient distance (default 7 yalms), duration bounds each move.",
     "timeout bounds the shared movement reservation across the roll and Double-Up sequence; it is not extended by Double-Up.",
+    "After a roll attempt, loss of Double-Up Chance releases the reservation; a temporary ability recast does not.",
     "Only the selected recipient is range-checked. Keep other intended recipients nearby; this is not a group coverage guarantee.",
     "Use distance <= range, and a range safely inside your actual roll radius. Context movement helpers honor the reservation in idle and battle."
   ],
   "macros": {
+    "roll_alignment_start": [
+      "not vars.use_rolls.alignment.enabled or reserveMovement(vars.use_rolls.alignment.timeout)",
+      "$macro:roll_alignment"
+    ],
     "roll_alignment": [
-      "not vars.use_rolls.alignment.enabled or (partyAnchorByName(vars.use_rolls.alignment.targets, 30, true) and not hasBuff('Bind', 'Sleep', 'Stun', 'Petrification', 'Terror') and (member.distance <= vars.use_rolls.alignment.range or align(member, nil, vars.use_rolls.alignment.distance, vars.use_rolls.alignment.duration, true))) or execute('releaseMovement(); postpone(10); return false')"
+      "not vars.use_rolls.alignment.enabled or alignWithReservation(partyAnchorByName(vars.use_rolls.alignment.targets, 30, true) and member or nil, nil, vars.use_rolls.alignment.distance, vars.use_rolls.alignment, true)"
     ],
     "roll_alignment_window": [
       "not vars.use_rolls.alignment.enabled or resumeMovement(vars.use_rolls.alignment.timeout)"
@@ -177,9 +182,9 @@
       "movement_owner": "corsair-rolls",
       "when": [
         "hasMovementReservation()",
-        "not vars.use_rolls.alignment.enabled or (getLatestRoll() and latestRoll.name == vars.use_rolls._alignment_roll and vars.use_rolls.logic[latestRoll.name] and not any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up or {}) and not any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye or {}))"
+        "not vars.use_rolls.alignment.enabled or (vars.use_rolls._alignment_roll and not hasBuff('Double-Up Chance')) or (getLatestRoll() and latestRoll.name == vars.use_rolls._alignment_roll and vars.use_rolls.logic[latestRoll.name] and not any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up or {}) and not (any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye or {}) and canUse('Snake Eye')))"
       ],
-      "commands": ["releaseMovement()"],
+      "commands": ["releaseMovement()", "setVar('use_rolls._alignment_roll', nil)"],
       "frequency": 1
     },
     {
@@ -187,8 +192,8 @@
       "when": [
         "iterate(vars.use_rolls.rolls)",
         "canUse(result) and not hasEffectOf(result)",
-        "not vars.use_rolls.alignment.enabled or reserveMovement(vars.use_rolls.alignment.timeout)",
-        "$macro:roll_alignment"
+        "not vars.use_rolls.alignment.enabled or hasMovementReservation() or setVar('use_rolls._alignment_roll', nil) or true",
+        "$macro:roll_alignment_start"
       ],
       "commands": [
         "vars.use_rolls.alignment.enabled and setVar('use_rolls._alignment_roll', result)",

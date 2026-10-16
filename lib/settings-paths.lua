@@ -5,7 +5,34 @@ local loadedNamespace = nil
 local loadedPrecedence = {}
 
 local SETTINGS_ROOT = './settings'
-local NS_ROOT       = SETTINGS_ROOT .. '/.ns/'
+local function directoryExists(path)
+    return windower and windower.dir_exists and
+        windower.dir_exists((windower.addon_path or '') .. path:gsub('^%./', '')) or false
+end
+
+function paths.namespaceRoot()
+    if directoryExists('./settings/_ns') then return './settings/_ns' end
+    if directoryExists('./settings/.ns') then return './settings/.ns' end
+    return './settings/_ns'
+end
+
+function paths.namespacePath(name)
+    local valid, message = paths.validateNamespace(name)
+    assert(valid, message)
+    local root = paths.namespaceRoot()
+    for segment in (name or ''):gmatch('[^/]+') do
+        local exact = root .. '/' .. segment
+        if not directoryExists(exact) and segment:sub(1,1) ~= '_' and directoryExists(root .. '/_' .. segment) then
+            exact = root .. '/_' .. segment
+        end
+        root = exact
+    end
+    return root
+end
+
+function paths.namespaceExists(name)
+    return directoryExists(paths.namespacePath(name))
+end
 
 function paths.getNamespace()
     return namespace
@@ -22,7 +49,7 @@ function paths.validateNamespace(name)
         return false, 'Namespace names must be slash-separated folder names containing only letters, numbers, underscores, and hyphens.'
     end
     for segment in (name or ''):gmatch('[^/]+') do
-        local normalized = segment:lower()
+        local normalized = segment:lower():gsub('^_+', '')
         if normalized == 'actions' or normalized == 'players' then
             return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
         end
@@ -52,9 +79,10 @@ function paths.resolveInheritance(name, readConfig, exists)
     local function visit(current, parent)
         local valid, message = paths.validateNamespace(current)
         assert(valid, message)
-        assert(not visiting[current], 'Namespace inheritance cycle at ' .. current)
+        local identity = paths.namespacePath(current):lower()
+        assert(not visiting[identity], 'Namespace inheritance cycle at ' .. current)
         if parent then assert(exists(current), 'Inherited namespace does not exist: ' .. current) end
-        visiting[current] = true
+        visiting[identity] = true
         local config = readConfig(current)
         if config == nil then config = {} end
         assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current .. ': expected an object')
@@ -67,7 +95,7 @@ function paths.resolveInheritance(name, readConfig, exists)
             assert(type(config.inherits_from) == 'string', 'inherits_from must be a single namespace string in ' .. current)
             visit(config.inherits_from, true)
         end
-        visiting[current] = nil
+        visiting[identity] = nil
     end
     if name then visit(name, false) end
     return result
@@ -93,20 +121,21 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
 
     local valid, message = paths.validateNamespace(name)
     if not valid then return false, message end
-    local root = NS_ROOT .. name .. '/'
+    local root = paths.namespacePath(name) .. '/'
     local initialConfig = '{}\n'
     if parent ~= nil then
         local ok, err = pcall(function()
             local validParent, parentMessage = paths.validateNamespace(parent)
             assert(validParent, parentMessage)
             paths.resolveInheritance(name, function(current)
-                local file = files.new(NS_ROOT .. current .. '/.nsconfig')
+                local file = files.new(paths.namespacePath(current) .. '/.nsconfig')
                 local config
                 if file:exists() then
                     config = json.parse(file:read())
                     assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current)
                     if current == name then
-                        if config.inherits_from ~= parent then
+                        if type(config.inherits_from) ~= 'string' or
+                            paths.namespacePath(config.inherits_from):lower() ~= paths.namespacePath(parent):lower() then
                             error('Namespace ' .. text_namespace(name, Colors.error) .. ' already has a different or missing parent.', 0)
                         end
                     end
@@ -115,7 +144,7 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
                 end
                 return config
             end, function(current)
-                return windower.dir_exists(windower.addon_path .. 'settings/.ns/' .. current)
+                return paths.namespaceExists(current)
             end)
             initialConfig = json.stringify({inherits_from = parent}) .. '\n'
         end)
@@ -140,7 +169,7 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
 end
 
 function paths.writePath(playerName, relative)
-    local root = loadedNamespace and (NS_ROOT .. loadedNamespace .. '/players') or './settings'
+    local root = loadedNamespace and (paths.namespacePath(loadedNamespace) .. '/players') or './settings'
     return root .. '/' .. playerName .. '/' .. relative
 end
 
@@ -148,7 +177,7 @@ end
 -- An explicit scope limits lookup to character or common files in both roots.
 function paths.candidates(playerName, relative, scope)
     local roots = {}
-    for _, name in ipairs(loadedPrecedence) do roots[#roots + 1] = NS_ROOT .. name end
+    for _, name in ipairs(loadedPrecedence) do roots[#roots + 1] = paths.namespacePath(name) end
     roots[#roots + 1] = SETTINGS_ROOT
     local result = {}
     for _, root in ipairs(roots) do
@@ -175,7 +204,7 @@ function paths.commonFiles(playerName, mainJob, groups)
         SETTINGS_ROOT .. '/' .. playerName .. '/actions/lib',
     }
     for i = #loadedPrecedence, 1, -1 do
-        local root = NS_ROOT .. loadedPrecedence[i]
+        local root = paths.namespacePath(loadedPrecedence[i])
         libraries[#libraries + 1] = root .. '/actions/lib'
         libraries[#libraries + 1] = root .. '/players/' .. playerName .. '/actions/lib'
     end

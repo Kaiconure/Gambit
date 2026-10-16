@@ -1,3 +1,4 @@
+windower={addon_path='',dir_exists=function(path) return path=='settings/.ns' end}
 local paths = dofile('lib/settings-paths.lua')
 Colors = {red=1}
 text_namespace = function(value) return value end

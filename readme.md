@@ -197,6 +197,8 @@ Missing/nil `else`, empty arrays, and arrays containing only nil or blank string
 
 `import` and `imports` are interchangeable: either accepts a single reference string or an array of references. If both are present, `import` entries come first, followed by `imports` entries, preserving order within each array. Preconditions apply to every referenced branch.
 
+Named `slot` placeholders allow common files and imported libraries to insert actions through a top-level `contributions` object. See [Action slots](docs/action-slots.md) for placement, ordering, scopes, and examples.
+
 Any action or import can specify `"precondition": "isBattlefield()"` or an array such as `"precondition": ["isBattlefield()", "player.hpp > 50"]`. Each entry is a Lua expression evaluated in the same context as `when`.
 
 Preconditions accumulate through nested imports: outer conditions run first, followed by inner conditions, the action's own preconditions, and finally its `when`. Every expression must be truthy; false or nil skips the action without evaluating later conditions or commands. Each import branch inherits its own conditions, including imported loading actions and named functions. Variables and macro definitions are still imported normally.

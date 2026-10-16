@@ -5,6 +5,7 @@ local actionPreconditions = require('./lib/action-preconditions')
 local actionEntryPoints = require('./lib/action-entry-points')
 local targetSelectors = require('./lib/target-selectors')
 local variableScopes = require('./lib/variable-scopes')
+local actionSlots = require('./lib/action-slots')
 local leaderLoadState = require('./lib/leader-load-state')
 local loadedLeaderState
 local loadingLeader
@@ -339,7 +340,12 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                 action.disabled = disable
             end
 
-            if not action.disabled then
+            if not action.disabled and (action.slot ~= nil or action.slots ~= nil) then
+                assert(not action._slotContribution, 'Contributions cannot import files containing slots')
+                actionSlots.names(action)
+                assert(not action.import and not action.imports and not action.when and not action.commands,
+                    'A slot must be a standalone placeholder')
+            elseif not action.disabled then
                 action.disabled = nil
 
                 -- Both spellings accept a string or array. If both are present,
@@ -386,6 +392,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                             import = json.parse(file:read())
 
                             if import then
+                                baseActions._slots.collect(import, fileName, action)
                                 --
                                 -- Pull in any variables defined in this import. Existing values are not overwritten.
                                 if import.vars then
@@ -410,6 +417,8 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                     for _, fn in ipairs(import.functions) do
                                         if type(fn) == 'table' then
                                             fn.as_function = true
+                                            imported = true
+                                            fn._slotContribution = action._slotContribution
                                             actionPreconditions.inherit(action, fn)
                                             variableScopes.inherit(action, fn)
                                             fn.importedFrom = action_import
@@ -426,6 +435,8 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                     for _, ld in ipairs(import.loading) do
                                         if type(ld) == 'table' then
                                             ld.on_load = true
+                                            imported = true
+                                            ld._slotContribution = action._slotContribution
                                             actionPreconditions.inherit(action, ld)
                                             variableScopes.inherit(action, ld)
                                             ld.importedFrom = action_import
@@ -446,12 +457,16 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                         if importedAction then
                                             imported = true
                                             importedAction.importedFrom = action_import
+                                            importedAction._slotContribution = action._slotContribution
                                             actionPreconditions.inherit(action, importedAction)
                                             variableScopes.inherit(action, importedAction)
 
                                             -- The id uniquely identifies this import action regardless of context.
                                             -- The discriminator takes into account the action type as well.
                                             importedAction.id = string.lower('$path=%s,$index=%d':format(fileName, j))
+                                            if importedAction._slotContribution then
+                                                importedAction.id = importedAction.id .. ',slot=' .. importedAction._slotContribution
+                                            end
                                             importedAction.discriminator = string.lower('%s,$type=%s':format(importedAction.id, string.lower(actionType)))
 
                                             table.insert(actions, i, importedAction)
@@ -711,6 +726,12 @@ local function loadActionImports(playerName, actions, player, sourceFile)
     -- imports which have their own imports will work.
     if actions then
         local variables = variableLoader.new(writeWarning)
+        local precedence = settingsPaths.getLoadedPrecedence()
+        actions._slots = actionSlots.new(actions, function(source)
+            return actionSlots.priority(source, precedence, playerName, player.main_job)
+        end, writeWarning)
+        actions._slots.collect(actions, sourceFile or '(entry point)')
+        actions.contributions = nil
         local initialVars = actions.vars
         actions.vars = {}
         variables.merge(actions.vars, initialVars, sourceFile)
@@ -759,6 +780,26 @@ local function loadActionImports(playerName, actions, player, sourceFile)
             end
         end
 
+        actions._slots.expand(types)
+        -- Resolve contributed imports through the same loader as ordinary imports.
+        for _, actionType in ipairs(types) do
+            local passes = 0
+            while _loadActionImportsInternal(playerName, actions, actionType, passes + 1, player, variables) do
+                passes = passes + 1
+                assert(passes <= MAX_PASSES, 'Maximum contribution import depth exceeded')
+            end
+        end
+        actions._slots = nil
+        -- Distinct occurrences must not share discriminator-based scheduler/error state.
+        for _, actionType in ipairs(types) do
+            for index, action in ipairs(actions[actionType]) do
+                if action._slotContribution then
+                    action.id = (action.id or 'slot') .. ',slot=' .. action._slotContribution .. ',index=' .. index
+                    action.discriminator = action.id .. ',type=' .. actionType
+                    action._slotContribution = nil
+                end
+            end
+        end
         _processMacros(actions)
 
         actions._processed = nil
@@ -1087,7 +1128,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
                 if name == nil then return nil end
                 local valid, message = settingsPaths.validateNamespace(name)
                 assert(valid, message)
-                assert(windower.dir_exists(windower.addon_path .. 'settings/.ns/' .. name), 'Saved namespace does not exist: ' .. name)
+                assert(settingsPaths.namespaceExists(name), 'Saved namespace does not exist: ' .. name)
                 local loaded = loadSettings(actionsName, settingsOnly, name, outputProcessed)
                 settingsPaths.setNamespace(name)
                 return loaded
@@ -1109,13 +1150,13 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     local valid, message = settingsPaths.validateNamespace(name)
     if not valid then error(message) end
     local precedence = settingsPaths.resolveInheritance(name, function(ns)
-        local file = files.new('./settings/.ns/' .. ns .. '/.nsconfig')
+        local file = files.new(settingsPaths.namespacePath(ns) .. '/.nsconfig')
         if not file:exists() then return nil end
         local ok, config = pcall(json.parse, file:read())
         if not ok or type(config) ~= 'table' then error('Invalid .nsconfig for ' .. ns .. ': ' .. tostring(config)) end
         return config
     end, function(ns)
-        return windower.dir_exists(windower.addon_path .. 'settings/.ns/' .. ns)
+        return settingsPaths.namespaceExists(ns)
     end)
     if name then
         local player = windower.ffxi.get_player()
@@ -1146,7 +1187,7 @@ function saveSettings(settingsToSave, force)
     if settingsPaths.getLoadedNamespace() then
         fileName = settingsPaths.firstExisting({
             settingsPaths.writePath(player.name, 'main.json'),
-            './settings/.ns/' .. settingsPaths.getLoadedNamespace() .. '/main.json'
+            settingsPaths.namespacePath(settingsPaths.getLoadedNamespace()) .. '/main.json'
         }, function(path) return files.new(path):exists() end)
             or settingsPaths.writePath(player.name, 'main.json')
     end

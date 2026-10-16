@@ -1,5 +1,6 @@
 local alignment = require('./lib/alignment')
 local movementReservations = require('./lib/movement-reservations')
+local engagementHelpers = require('./lib/engagement-helpers')
 local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
 local targetedAction = require('./lib/targeted-action')
@@ -2113,6 +2114,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
     movementReservations.attach(context, function() smartMove:cancelJob() end)
+    engagementHelpers.attach(context)
     context.settings = context.gambit
 
     local globalVars = actionStateManager.vars
@@ -3945,12 +3947,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local me = windower.ffxi.get_mob_by_target('me')
         if not me then return false end
         local cache = context.action and context.action._alignment
-        local key = tostring(angle)
+        local key = tostring(angle) .. ':' .. tostring(distance)
         if not cache or cache.target ~= target.id or cache.scope ~= context.battleScope or cache.key ~= key then
             cache = {target=target.id, scope=context.battleScope, key=key}
             if context.action then context.action._alignment = cache end
         end
-        local candidates = alignment.candidates(spec, alignment.bearing(target,me), cache.preferred)
+        local candidates = cache.pending or alignment.candidates(spec, alignment.bearing(target,me), cache.preferred)
+        cache.pending = nil
         cache.preferred = candidates[1]
         local deadline = os.clock() + math.max(tonumber(duration) or (spec.exact and 3 or 6), 1)
         for i, candidate in ipairs(candidates) do
@@ -3960,21 +3963,40 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if not current or not current.valid_target or current.hpp <= 0 then return false end
             local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance)
             local startX, startY, startHeading = current.x, current.y, current.heading
+            local startMe = windower.ffxi.get_mob_by_target('me')
+            local startGap = startMe and math.sqrt((startMe.x-position[1])^2 + (startMe.y-position[2])^2)
             local success, reason = context.move({x=position[1], y=position[2],
-                duration=remaining / (#candidates-i+1),
+                duration=remaining,
                 tolerance=tonumber(tolerance) or (not spec.exact and smartMove.tolerance or nil)})
             local updated = windower.ffxi.get_mob_by_id(target.id)
             if success and updated and context.aligned(updated,angle,distance,tolerance) then
                 cache.preferred = candidate
+                cache.pending = nil
                 if not noFace then directionality.faceTarget(updated) end
                 return true
             end
             -- A cancelled/replaced job must never be restarted by a fallback.
             if not success and reason ~= 'timeout' then return false end
+            local endMe = windower.ffxi.get_mob_by_target('me')
+            local endGap = endMe and math.sqrt((endMe.x-position[1])^2 + (endMe.y-position[2])^2)
+            if startGap and endGap and startGap - endGap >= 0.1 then
+                -- A short movement budget expired while approaching the destination.
+                -- Let the scheduler reconsider healing before continuing this route.
+                cache.preferred = candidate
+                cache.pending = {}
+                for nextIndex = i, #candidates do cache.pending[#cache.pending+1] = candidates[nextIndex] end
+                return false, 'progress'
+            end
             -- A moving/turning target is not evidence of an obstructed route.
             -- Re-evaluate next iteration instead of traversing the arc extremes.
             if updated and (updated.x ~= startX or updated.y ~= startY or updated.heading ~= startHeading) then
                 return false
+            end
+            -- Continue untried directions on a later call after a blocked attempt.
+            cache.pending = nil
+            if i < #candidates then
+                cache.pending = {}
+                for nextIndex = i+1, #candidates do cache.pending[#cache.pending+1] = candidates[nextIndex] end
             end
         end
         if not noFace then

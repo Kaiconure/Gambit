@@ -5,6 +5,7 @@
       "^distance": 2,
       "^duration": 3,
       "retry_delay": 10,
+      "progress_retry_delay": 3,
       "^max_distance": 30,
       "^tolerance": 1
     }
@@ -18,9 +19,9 @@
         "member.distance > vars.member_engagement.distance + vars.member_engagement.tolerance"
       ],
       "commands": [
-        "align(member, nil, vars.member_engagement.distance, vars.member_engagement.duration, true) or postpone(vars.member_engagement.retry_delay)"
+        "alignWithRetry(member, nil, vars.member_engagement.distance, vars.member_engagement, true, 3)"
       ],
-      "frequency": 3,
+      "frequency": 1,
       "comment": [
         "Stay near a living party member selected by name, job, role, or semantic marker. Empty targets disable positioning.",
         "Choose the first eligible member in selector order; never select yourself. Standing closer is acceptable.",

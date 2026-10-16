@@ -162,3 +162,40 @@ Use `evaluateAllConditions(vars.idle_precondition)` for an optional reusable lis
 `execute` remains unchanged: it evaluates every expression in an array and returns the final expression's results, rather than combining them with AND.
 
 `evaluateAllConditions(conditions, ...)` is the optional-condition variant: `nil` or an empty array returns `true` (no restrictions). All other inputs delegate to `evaluateAll`, preserving explicit `false`, short-circuiting, argument forwarding, and validation of malformed tables. An expression that returns `nil` still fails. For example, `evaluateAllConditions(vars.idle_precondition)` permits execution when the policy is absent, while respecting a policy explicitly set to `false`.
+# Short alignment attempts
+
+The first direction receives the full configured movement budget rather than a
+share divided among candidate angles. When a timed-out attempt makes progress,
+the next call continues that direction. When it is blocked, untried directions
+are retained for later calls. This preserves scheduler opportunities between
+attempts without shortening each movement to reserve time for alternatives.
+
+`align` returns `false, 'progress'` when its movement budget expires after making
+measurable progress toward the destination. It does not try another angle or apply
+its internal failure postponement in that case. Existing boolean callers remain
+compatible. The engagement libraries use `progress_retry_delay` for this outcome
+and `retry_delay` for other unsuccessful attempts.
+
+`frontline_engagement.initial_delay` defaults to 2 seconds since entering battle;
+set it to 0 to permit immediate alignment. Boss mage settings currently restore
+the two-second delay, default frontline duration (3 seconds for exact angles,
+6 for flexible angles), three-second member duration, and ten-second failure retries.
+Healing still needs to precede movement: alignment returns between short attempts,
+but does not interrupt an attempt when someone takes damage.
+
+`alignWithRetry(target, angle, distance, options, noFace, successDelay)` forwards
+`duration` and `tolerance` from options to `align`. On failure it postpones using
+`progress_retry_delay` (default 1) or `retry_delay` (default 10). Optional
+`successDelay` postpones after arrival. It returns the alignment result and reason.
+
+`alignWithReservation(target, angle, distance, options, noFace)` positions a resolved
+target under an existing movement reservation. Options include `duration`,
+`tolerance`, optional acceptable `range`, `progress_retry_delay` (default 1), and
+`retry_delay` (default 10). Arrival or already being within `range` returns true
+and retains the reservation. Partial progress returns false, retains the lease,
+and postpones briefly. Missing/invalid targets, movement-blocking statuses, and
+other failures release the reservation and back off. The caller must pass nil
+when target selection fails, rather than short-circuiting before the helper.
+Callers acquire/resume reservations separately; this helper never acquires or
+extends them, even when the selected target changes. Roll actions use this helper
+after resolving their party anchor on each attempt.

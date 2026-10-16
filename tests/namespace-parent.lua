@@ -15,7 +15,7 @@ files = {
     } end,
 }
 windower={addon_path='',dir_exists=function(path)
-    return directories[path:gsub('^settings/%.ns/','')] == true
+    return path=='settings/.ns' or directories[path:gsub('^settings/%.ns/','')] == true
 end}
 assert(paths.ensureNamespaceFolders('Player','child','base'))
 assert(json.parse(disk[config('child')]).inherits_from=='base')

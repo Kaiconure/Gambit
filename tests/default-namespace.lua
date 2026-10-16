@@ -10,6 +10,7 @@ local base='./settings/Player/main.json'
 local disk={[base]={default_namespace='fight', distance=18, nested={keep=true}}}
 local player={name='Player',main_job='PLD'}
 local paths=dofile('lib/settings-paths.lua')
+windower={addon_path='',dir_exists=function(path) return path=='settings/.ns' or path=='settings/.ns/fight' end}
 paths.ensureNamespaceFolders=function() return true end
 local messages={}
 local env=setmetatable({

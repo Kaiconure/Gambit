@@ -41,6 +41,7 @@ context.move=function(pos)
     clock=clock+duration
     if mode=='cancel' then return nil,'cancelled' end
     if mode=='moving' then mob.x=mob.x+1;return nil,'timeout' end
+    if mode=='progress' then me.x=me.x+(x-me.x)*0.25;me.y=me.y+(y-me.y)*0.25;return nil,'timeout' end
     if mode=='success' then me.x,me.y=x,y;return true end
     if mode=='fail' or #attempts==1 then return nil,'timeout' end
     me.x,me.y=x,y
@@ -58,6 +59,9 @@ assert(not context.aligned(mob,'rear',10))
 me.x,me.y=10,0.2
 for _,name in ipairs({'face','front','facing'}) do assert(context.aligned(mob,name,10)) end
 me.x,me.y=1,0
+assert(not context.align(mob,nil,10,3))
+assert(#attempts==1 and attempts[1].duration==3 and clock==3)
+clock=0
 assert(context.align(mob,nil,10,3))
 assert(#attempts==2 and context.aligned(mob,nil,10))
 assert(clock<=3)
@@ -69,6 +73,8 @@ assert(context.action._alignment.preferred==preferred)
 mode='fail';attempts={};clock=0
 assert(not context.align(mob,180,10,3) and #attempts==1)
 mode='fallback';attempts={};clock=0
+assert(not context.align(mob,'side',10,3) and #attempts==1)
+clock=0
 assert(context.align(mob,'side',10,3) and #attempts==2)
 assert(context.aligned(mob,'side',10))
 assert(not context.aligned(mob,'frontside',10))
@@ -81,6 +87,16 @@ assert(#attempts==1 and attempts[1].tolerance==0.5 and math.abs(attempts[1].y)<0
 mode='moving';attempts={};clock=0;me.x,me.y=1,0
 assert(not context.align(mob,'backside',10,3,false,0.5) and #attempts==1)
 print('PASS: angle parsing, signed geometry, arcs, fallback, budget, cancellation and stable preference')
+mode='progress';attempts={};clock=0;me.x,me.y=1,0
+local reached, progressReason=context.align(mob,'backside',10,1,false,0.5)
+assert(not reached and progressReason=='progress' and #attempts==1)
+assert(attempts[1].duration==1)
+local destination=attempts[1]
+attempts={};clock=0
+context.align(mob,'backside',10,1,false,0.5)
+assert(#attempts==1 and attempts[1].duration==1)
+assert(attempts[1].x==destination.x and attempts[1].y==destination.y)
+print('PASS: partial movement returns to scheduler without obstruction fallback')
 
 local moveBlock=assert(source:match('(context%.move = function.-)\n    %-%-%-%-'))
 local movement={movementAvailable=function() return true end}
@@ -115,3 +131,9 @@ assert(not ok and reason=='timeout') -- Flexible alignment needs tighter arrival
 gap=0.1
 assert(movement.move({x=10,y=0,duration=1,tolerance=0.33}))
 print('PASS: move timeout/cancellation reasons and optional alignment arrival tolerance')
+for _, path in ipairs({'actions/lib/frontline-engagement.json', 'actions/lib/member-engagement.json'}) do
+    local f=assert(io.open(path));local text=f:read('*a');f:close()
+    local command=assert(text:match('"(alignWithRetry%([^\r\n"]+)"'))
+    assert(loadstring('return ' .. command))
+end
+print('PASS: engagement command expressions compile with the scheduler return prefix')

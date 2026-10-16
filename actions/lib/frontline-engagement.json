@@ -8,6 +8,8 @@
       "angle": null,
       "distance": null,
       "duration": null,
+      "initial_delay": 2,
+      "progress_retry_delay": 1,
       "tolerance": 0.5,
       "retry_delay": 10,
       "engage_trusts": null,
@@ -95,11 +97,12 @@
       "precondition": "movementAvailable()",
       "when": [
         "actionType == 'battle'",
+        "state_time >= (vars.frontline_engagement.initial_delay or 2)",
         "bt and bt.distance <= vars.frontline_engagement._distance + 2",
         "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.tolerance)"
       ],
       "commands": [
-        "align(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.duration, false, vars.frontline_engagement.tolerance) or postpone(vars.frontline_engagement.retry_delay)"
+        "alignWithRetry(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement, false)"
       ],
       "comment": [
         "Angle supports an exact number, frontside/backside/left/right/side, or a range such as 180+/-30.",
@@ -107,7 +110,7 @@
       ],
       "frequency": 1,
       "scope": "battle",
-      "delay": 2
+      "delay": 0
     },
     {
       "precondition": "movementAvailable()",
