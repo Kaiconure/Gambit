@@ -4,7 +4,7 @@
     "description": "Provides a mechanism for scripted movement between points."
   },
   "vars": {
-    "waypoints": {
+    "^waypoints": {
       "routes": {},
       "active": "",
       "mode": "bounce",

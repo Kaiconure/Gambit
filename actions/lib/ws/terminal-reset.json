@@ -1,6 +1,6 @@
 {
   "vars": {
-    "ws": {
+    "^ws": {
       "terminal_reset": {
         "disabled": null,
         "on_skillchains": null,

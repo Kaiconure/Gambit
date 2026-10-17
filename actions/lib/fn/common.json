@@ -1,5 +1,5 @@
 {
-  "actions": [
+  "functions": [
     {
       "name": "warp_all",
       "when": [
@@ -12,14 +12,32 @@
       ]
     },
     {
+      "name": "invis_self",
+      "when": [
+        "not hasBuff('Invisible') and canUse('Invisible', 'Spectral Jig')"
+      ],
+      "commands": [
+        "use(me) or log('Failed to use', (spell or ability).name)",
+        "stopFunction()"
+      ]
+    },
+    {
+      "name": "sneak_self",
+      "when": ["not hasBuff('Sneak') and canUse('Sneak', 'Spectral Jig')"],
+      "commands": [
+        "use(me) or log('Failed to use', (spell or ability).name)",
+        "stopFunction()"
+      ]
+    },
+    {
       "name": "sneak_all",
       "when": [
         "not bt",
         "hasSpell('Sneak')",
-        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")') or (me and not hasBuff('Sneak'))"
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")') or (me and not hasBuff('Sneak'))"
       ],
       "commands": [
-        "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
+        "canUseSpell() and useSpell(member or me) and wait(3) or wait(1)"
       ]
     },
     {
@@ -27,11 +45,112 @@
       "when": [
         "not bt",
         "hasSpell('Invisible')",
-        "partyAll('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")') or (me and not hasBuff('Invisible'))"
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")') or (me and not hasBuff('Invisible'))"
       ],
       "commands": [
-        "canUseSpell() and useSpell(member or me) and wait(5) or wait(1)"
+        "canUseSpell() and useSpell(member or me) and wait(3) or wait(1)"
       ]
+    },
+    {
+      "name": "sneak_pt",
+      "when": [
+        "not bt",
+        "hasSpell('Sneak')",
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Sneak\")')"
+      ],
+      "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
+    },
+    {
+      "name": "invis_pt",
+      "when": [
+        "not bt",
+        "hasSpell('Invisible')",
+        "partyAny('is_player and distance < 15 and not is_me and not hasBuff(\"Invisible\")')"
+      ],
+      "commands": ["canUseSpell() and useSpell(member) and wait(5) or wait(1)"]
+    },
+    {
+      "name": "use_ambu_ws",
+      "when": "bt and canUseWeaponSkill('Tachi: Kasha', 'Savage Blade', 'Steel Cyclone')",
+      "commands": ["facingEnemy() or faceEnemy()", "useWeaponSkill()"]
+    },
+    {
+      "name": "use_ws",
+      "when": [
+        "bt and vars.use_ws and arrayCount(vars.use_ws.with) > 0",
+        "canUseWeaponSkill(vars.use_ws.with)"
+      ],
+      "commands": ["facingEnemy() or faceEnemy()", "useWeaponSkill()"]
+    },
+    {
+      "name": "follow",
+      "when": [
+        "not gambit.enabled",
+        "-- =================================================================================================",
+        "-- Ensure we have a valid target ",
+        "params.player or params.name or (log('No player parameter was specified. Use player:<player-name>.') and false)",
+        "-- =================================================================================================",
+        "-- Ensure we're not following ourself",
+        "not any(me.name, params.player or params.name) or (log('Cannot follow yourself.') and false)"
+      ],
+      "commands": [
+        "findPlayer(params.player or params.name)",
+        "player_result and params._iter == 1 and \\",
+        "  logf('Following player %s at distance=%.2f', player_result.name, params.distance or params.d or gambit.follow_distance)",
+        "-- =================================================================================================",
+        "-- We'll try to cancel the follow temporarily if we're casting or shooting",
+        "(is_casting or is_ranged_attacking) and \\",
+        "  cancelFollow()",
+        "-- =================================================================================================",
+        "-- If conditions allow, we'll make sure we restart or continue the follow",
+        "player_result and \\",
+        "  (me.is_idle or me.is_mounted) and \\",
+        "  (not is_casting and not is_ranged_attacking) and \\",
+        "  (not bt and player_result) and \\",
+        "  ((params._iter > 1 and following(player_result)) or follow(player_result, params.distance or params.d or gambit.follow_distance))",
+        "-- =================================================================================================",
+        "-- If we're not idle or mounted, we will ",
+        "not (me.is_idle or me.is_mounted) and player_result and \\",
+        "  following(player_result) and cancelFollow()"
+      ],
+      "on_exit": "cancel_follow -silent",
+      "allow_reentry": true,
+      "reentry_time": 2,
+      "frequency": 1.0,
+      "silent": true
+    },
+    {
+      "name": "cancel_follow",
+      "commands": [
+        "cancelFollow()",
+        "log('Your follow operation has been cancelled.')"
+      ],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "suppress_magic",
+      "commands": ["suppressOffensiveMagic()"],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "suppress_ws",
+      "commands": ["suppressWeaponSkills()"],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "resume_magic",
+      "commands": ["resumeOffensiveMagic()"],
+      "silent": true,
+      "max_iterations": 1
+    },
+    {
+      "name": "resume_ws",
+      "commands": ["resumeWeaponSkills()"],
+      "silent": true,
+      "max_iterations": 1
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "vars": {
-    "use_aspir": {
+    "^use_aspir": {
       "frequency": 10,
       "max_mpp": 80,
       "max_ws_mpp": 30,
@@ -18,12 +18,13 @@
         "Apex Idle Drifter": true,
         "Asb": true,
         "Azure-toothed Clawberry": true,
-        "Bozzetto High Vicar": true,
-        "Bozzetto Elementalist": true,
-        "Bozzetto Disruptor": true,
-        "Bozzetto Devout": true,
-        "Bozzetto Defiler": true,
+        "Bozzetto's Avatar": true,
         "Bozzetto Conjurer": true,
+        "Bozzetto Defiler": true,
+        "Bozzetto Devout": true,
+        "Bozzetto Disruptor": true,
+        "Bozzetto Elementalist": true,
+        "Bozzetto High Vicar": true,
         "Bozzetto Stormbringer": true,
         "Darkness Elemental": true,
         "Earth Elemental": true,
@@ -34,7 +35,9 @@
         "Locus Ghost Crab": true,
         "Locus Tomb Worm": true,
         "Mukasura": true,
+        "Perfidien": true,
         "Pil": true,
+        "Plouton": true,
         "Rukh": true,
         "Sarbaz": true,
         "Shah": true,
@@ -72,8 +75,7 @@
         "bt.distance <= 20",
         "me.mpp <= vars.use_aspir.max_mpp",
         "(me.mpp <= vars.use_aspir.max_ws_mpp and not skillchaining('Light', 'Darkness')) or not partyUsingWeaponSkill()",
-        "canUse(vars.use_aspir.spells)",
-        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)"
+        "canUse(vars.use_aspir.spells)"
       ],
       "commands": [
         "arrayCount(vars.use_aspir.gear.casting) > 0 and equipMany(vars.use_aspir.gear.casting)",

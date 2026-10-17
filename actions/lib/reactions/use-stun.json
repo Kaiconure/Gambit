@@ -1,6 +1,6 @@
 {
   "vars": {
-    "use_stun": {
+    "^use_stun": {
       "abilities": {
         "Aqua Ball": true,
         "Bomb Toss": true,

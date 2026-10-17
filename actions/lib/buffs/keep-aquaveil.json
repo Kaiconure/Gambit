@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_aquaveil": {
+    "^keep_aquaveil": {
       "spells": ["Aquaveil"]
     }
   },

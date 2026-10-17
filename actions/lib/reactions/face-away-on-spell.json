@@ -7,7 +7,7 @@
     ]
   },
   "vars": {
-    "face_away_on_spell": {
+    "^face_away_on_spell": {
       "Glavoid": {
         "spells": {
           "*": {
@@ -17,6 +17,16 @@
               "Glavoid absorbs magic damage (including those from weapon skills) while casting spells.",
               "The no_turn flag means we won't actually face away, which may seem counter to the point; however",
               "we will benefit from the cesation of weapon skills and offensive magic, which would heal Glavoid."
+            ]
+          }
+        }
+      },
+      "Urmahlullu": {
+        "spells": {
+          "*": {
+            "no_turn": true,
+            "comment": [
+              "Weapon skills should not be used when Urmahlullu is casting."
             ]
           }
         }

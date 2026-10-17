@@ -1,0 +1,13 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "vars": {},
+  "actions": [
+    {
+      "when": ["canUseAbility('Afflatus Solace') and not hasEffectOf(ability)"],
+      "commands": ["useAbility(me) and postpone(10)"],
+      "frequencies": 10
+    }
+  ]
+}

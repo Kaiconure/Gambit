@@ -4,7 +4,7 @@
     "notes": "Cycle the best available regen over all configured targets by name."
   },
   "vars": {
-    "regen_cycle": {
+    "^regen_cycle": {
       "targets": ["me"],
       "spells": ["Regen V", "Regen IV", "Regen III", "Regen II", "Regen"]
     }
@@ -13,7 +13,7 @@
     {
       "when": [
         "hasSpell(vars.regen_cycle.spells) and canUse(spell)",
-        "partyByName(vars.regen_cycle.targets) and not hasEffectOf(member, spell)"
+        "partyByName(vars.regen_cycle.targets) and member.in_spell_range and not hasEffectOf(member, spell)"
       ],
       "commands": [
         "useSpell()",

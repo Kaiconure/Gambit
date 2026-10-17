@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_temper": {
+    "^keep_temper": {
       "spells": ["Temper II", "Temper"]
     }
   },

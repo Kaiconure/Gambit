@@ -3,23 +3,38 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_blind": {
-      "spells": ["Blind II", "Blind"]
+    "^keep_blind": {
+      "spells": ["Blind II", "Blind"],
+      "targets": null
     }
   },
   "actions": [
     {
       "when": [
         "bt and bt.distance <= constants.spell_distance",
-        "(cursor and cursor.id == bt.id) or setTargetCursor(bt)",
         "hasSpell(vars.keep_blind.spells) and canUse(spell)",
         "not hasEffectOf(bt, spell)"
       ],
       "commands": [
-        "useSpell()",
+        "useSpell(bt)",
         "postpone((spellRecast(spell.name) or 0) + 5)"
       ],
-      "frequency": 1
+      "precondition": ["arrayCount(vars.keep_blind.targets) <= 0"],
+      "frequency": 1,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "hasSpell(vars.keep_blind.spells) and canUse(spell)",
+        "findMobWhere(vars.keep_blind.targets, 'not hasEffectOf(mob, spell)', constants.spell_distance, true) or postpone(5)"
+      ],
+      "commands": [
+        "useSpell(mob)",
+        "postpone((spellRecast(spell.name) or 0) + 5)"
+      ],
+      "precondition": ["arrayCount(vars.keep_blind.targets) > 0"],
+      "frequency": 1,
+      "scope": "battle"
     }
   ]
 }

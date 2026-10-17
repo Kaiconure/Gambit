@@ -1,0 +1,19 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": ["hasBuff('Poison') and (canUseSpell('Poisona'))"],
+      "commands": ["use(me)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    },
+    {
+      "when": ["canUse('Poisona') and partyHasBuff('Poison')"],
+      "commands": ["removeEffect(member)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    }
+  ]
+}

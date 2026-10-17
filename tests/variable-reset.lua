@@ -1,0 +1,45 @@
+local values = dofile('lib/variable-values.lua')
+local function read(path)
+    local f=assert(io.open(path)); local s=f:read('*all');f:close();return s
+end
+local managerSource=read('lib/action-state-manager.lua')
+local methods=assert(managerSource:match('(function state_manager:initializeVars.-)\nreturn state_manager'))
+local manager={}
+local env=setmetatable({variableValues=values,state_manager=manager}, {__index=_G})
+local fn=assert(loadstring(methods));setfenv(fn,env);fn()
+local source=read('lib/action-context.lua')
+local body=assert(source:match('(local function attachVariableHelpers%(.-)local function context_iif'))
+local helpers=assert(loadstring(body .. '\nreturn attachVariableHelpers'))
+setfenv(helpers,setmetatable({variableValues=values,get_action_variable_path=values.path,actionStateManager=manager},{__index=_G}))
+local context=setmetatable({}, {__index=function(_,key)
+    if key=='vars' then return manager.vars end
+    if key=='_originalVars' then return manager.originalVars end
+end})
+helpers()(context)
+local set,get,original,reset=context.setVar,context.getVar,context.getOriginalVar,context.resetVar
+local initial={flag=false,config={list={'a','b'},limit=3}}
+manager:initializeVars(initial)
+assert(manager.originalVars.config.list[1]=='a' and manager.originalVars.config ~= initial.config)
+local second = setmetatable({}, {__index=manager})
+second:initializeVars({flag='separate'})
+assert(second:getOriginalVar('flag')=='separate' and manager:getOriginalVar('flag')==false)
+set('flag',true)
+set('config.list.1','changed')
+assert(original('flag')==false and original('vars.config.list.1')=='a')
+local copy=original('config');copy.list[1]='mutated'
+assert(original('config.list.1')=='a')
+assert(original('config.list.$length')==2 and original('config.$type')=='table')
+assert(reset('flag')==false and get('flag')==false)
+reset('config.list');get('config.list')[1]='again';reset('config.list')
+assert(get('config.list.1')=='a')
+set('config.extra',4);reset('config');assert(get('config.extra')==nil)
+set('new',5);reset('new');assert(get('new')==nil)
+set('config',false);assert(reset('config.limit')==nil and get('config')==false)
+reset('config');assert(get('config.limit')==3)
+assert(reset('vars')==nil and reset('config.$length')==nil)
+manager:initializeVars({flag='new baseline'})
+assert(original('flag')=='new baseline' and original('config')==nil)
+assert(source:find('context.getOriginalVar = context_get_original_var',1,true))
+assert(source:find('context.resetVar = context_reset_var',1,true))
+assert(read('lib/action-processing.lua'):find('actionStateManager:initializeVars(actions and actions.vars or {})',1,true))
+print('PASS: snapshot isolation, nested paths, arrays, computed fields, reset, missing values and refreshed baseline')
