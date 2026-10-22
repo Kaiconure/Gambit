@@ -51,7 +51,7 @@ Colors = {
 }
 
 Colors.default  = Colors.lavender
-Colors.warning  = Colors.yellow
+Colors.warning  = Colors.gold
 Colors.error    = Colors.red
 
 Colors.verbose  = Colors.powderblue

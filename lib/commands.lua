@@ -37,13 +37,46 @@ handlers['namespace'] = function(args)
     end
 
     local option = (args[1] or ''):lower()
-    if not ((option == '-set' and (#args == 2 or (#args == 4 and args[3]:lower() == '-parent')))
-        or (option == '-clear' and #args == 1)) then
-        writeError('Usage: gbt namespace [-set <name> [-parent <namespace>] | -clear] (alias: ns)')
+    if option == '-v' and #args == 1 then
+        reportNamespaceDescriptions()
+        return
+    end
+    local force, parent = false, nil
+    local validArgs = option == '-clear' and #args == 1
+    if option == '-set' and args[2] then
+        validArgs = true
+        local index = 3
+        while index <= #args do
+            local flag = args[index]:lower()
+            if flag == '-force' and not force then
+                force = true
+                index = index + 1
+            elseif flag == '-parent' and not parent and args[index + 1] then
+                parent = args[index + 1]
+                index = index + 2
+            else
+                validArgs = false
+                break
+            end
+        end
+    end
+    if not validArgs then
+        writeError('Usage: gbt namespace [-v | -set <name> [-force] [-parent <namespace>] | -clear] (alias: ns)')
         return
     end
 
     local name = option == '-set' and args[2] or nil
+    if name then
+        local valid, message = settingsPaths.validateNamespace(name)
+        if not valid then writeError(message); return end
+        local exists = settingsPaths.namespaceExists(name)
+        if not exists and not force then
+            writeWarning('Namespace ' .. text_namespace(name, Colors.warning) .. ' does not exist. Use [gbt ns -set ' .. text_namespace(name, Colors.warning) .. ' -force] to create it.')
+            return
+        elseif exists and force then
+            writeWarning('Namespace ' .. text_namespace(name, Colors.warning) .. ' already exists. Continuing with load...')
+        end
+    end
     local previousNamespace = settingsPaths.getNamespace()
     local success, message = settingsPaths.setNamespace(name)
     if not success then
@@ -53,7 +86,7 @@ handlers['namespace'] = function(args)
 
     if name then
         local player = windower.ffxi.get_player()
-        success, message = settingsPaths.ensureNamespaceFolders(player and player.name, name, args[4])
+        success, message = settingsPaths.ensureNamespaceFolders(player and player.name, name, parent)
         if not success then
             settingsPaths.setNamespace(previousNamespace)
             writeError(message)

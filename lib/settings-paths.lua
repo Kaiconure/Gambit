@@ -86,6 +86,19 @@ function paths.resolveInheritance(name, readConfig, exists)
         local config = readConfig(current)
         if config == nil then config = {} end
         assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current .. ': expected an object')
+        for _, field in ipairs({'description', '!description'}) do
+            if config[field] ~= nil then
+                local description = config[field]
+                assert(type(description) == 'string' or type(description) == 'table',
+                    field .. ' must be a string or array of strings in ' .. current)
+                if type(description) == 'table' then
+                    for key, line in pairs(description) do
+                        assert(type(key) == 'number' and key >= 1 and key <= #description and key % 1 == 0
+                            and type(line) == 'string', field .. ' must be a string or array of strings in ' .. current)
+                    end
+                end
+            end
+        end
         assert(config.inheritable == nil or type(config.inheritable) == 'boolean', 'inheritable must be boolean in ' .. current)
         if parent and config.inheritable == false then
             error('Namespace ' .. text_namespace(current, Colors.red) .. ' explicitly disables inheritance (inheritable: false)', 0)

@@ -1,4 +1,12 @@
 local selectors = require('./lib/target-selectors')
+local requiredPlayer={name='Tester',main_job='GEO'}
+assert(selectors.matchesPlayer(requiredPlayer,{'BLM','GEO'}))
+assert(selectors.matchesPlayer(requiredPlayer,{'mages'}))
+assert(not selectors.matchesPlayer(requiredPlayer,{'WAR'}))
+assert(not selectors.matchesPlayer(requiredPlayer,{'*','~GEO'}))
+assert(not selectors.matchesPlayer(requiredPlayer,{'^mages'}))
+assert(selectors.matchesPlayer(requiredPlayer,{'leader'},true))
+assert(not selectors.matchesPlayer(requiredPlayer,{'leader'},false))
 local leaderParty = {
     me={id=1},
     p0={id=1,name='Self',is_party_leader=true,is_participant=true},

@@ -199,6 +199,8 @@ Missing/nil `else`, empty arrays, and arrays containing only nil or blank string
 
 Named `slot` placeholders allow common files and imported libraries to insert actions through a top-level `contributions` object. See [Action slots](docs/action-slots.md) for placement, ordering, scopes, and examples.
 
+Executable sections also get automatic `<action-type>-setup`, `<action-type>-priority`, and `<action-type>-fallback` slots: setup and priority precede normal actions, and fallback follows them. For example, contribute to `battle-setup` without adding a placeholder to every job file. These hooks exist even for omitted sections; `imports` and `functions` are excluded. An explicit reference to the same slot retains its placement and suppresses the automatic copy. Slot names control ordering; once-per-battle behavior still requires an appropriate scope and frequency. See [Automatic section slots](docs/action-slots.md#automatic-section-slots) for details.
+
 Any action or import can specify `"precondition": "isBattlefield()"` or an array such as `"precondition": ["isBattlefield()", "player.hpp > 50"]`. Each entry is a Lua expression evaluated in the same context as `when`.
 
 Preconditions accumulate through nested imports: outer conditions run first, followed by inner conditions, the action's own preconditions, and finally its `when`. Every expression must be truthy; false or nil skips the action without evaluating later conditions or commands. Each import branch inherits its own conditions, including imported loading actions and named functions. Variables and macro definitions are still imported normally.
@@ -218,7 +220,7 @@ Protected execution uses a coroutine boundary to catch errors while forwarding y
 Namespaces group activity-specific settings under `settings/.ns/{name}/`, mirroring the normal settings structure. For example, `settings/.ns/abyssea/Carbonite/actions/pld.json` supplies Carbonite's PLD actions, while `settings/.ns/abyssea/actions/lib/` holds shared library gambits.
 
 - `gbt ns` reports the current namespace (or global).
-- `gbt ns -set abyssea` initializes `actions`, `actions/lib`, and a missing `.nsconfig` containing `{}`, then selects the namespace and reloads settings and job-based actions. Character folders are created only when needed for a write; existing configuration is preserved.
+- `gbt ns -set abyssea` selects an existing namespace and reloads settings and job-based actions. If it does not exist, the command warns and leaves selection and files unchanged. Add `-force` to create it: this initializes `actions`, `actions/lib`, and a missing `.nsconfig` containing `{}`. If it already exists, `-force` warns and continues, preserving existing configuration. Character folders are created only when needed for a write.
 - `gbt ns -clear` returns to global settings and fully reloads.
 - `gbt r` and other settings reloads retain the current namespace. Reloading the addon resets it to global. Selection is local to each character and is never saved to disk.
 
@@ -298,7 +300,15 @@ Namespace path segments `actions` and `players` are reserved for namespace conte
 
 # Namespace inheritance
 
-Use `gbt ns -set xp -parent base` to initialize a missing `xp/.nsconfig` with `{"inherits_from":"base"}` and switch to it. The parent must exist, must not explicitly set `inheritable: false`, and must have a valid inheritance chain. Validation happens before namespace folders or configuration are created. An existing `.nsconfig` is preserved: it must already name the requested parent, otherwise the command reports a conflict (including when it contains only `{}`). The child is inheritable by default; no explicit flag is written. Omitting `-parent` retains normal namespace creation behavior.
+`sortie/leshonn` also inherits `sortie/boss`. Load it before fighting Sector B's boss after obtaining Shard B and preferably Metal B. It enables all-out melee restricted to Savage Blade, with cleaving disabled; all melee must equip a main-hand sword and have Savage Blade available. Planned chain contributions, bursts, and the priority/normal debuff slots are disabled. On each nuker, select the visible aura with `gbt eval vars.leshonn.mode = 'wind'` (Blizzard) or `'thunder'` (Stone), updating it when the aura changes. The default `'unknown'` prevents nuking; visual aura detection is not automated. Wind/Thunder damage and Light/Fragmentation chains can heal this boss. WHM prepares Baraera and Barsilencera through inherited idle actions. Bring Echo Drops and review Leshonn's buff-stealing and debuff-copying mechanics before engaging.
+
+The Sortie configurations use two explicit chains: `sortie` inherits `base` for ordinary objectives, while `sortie/ghatjot` inherits `sortie/boss`, then `boss`, then `base`. The shared Sortie boss layer supplies casting contributions and disables free offensive weapon skills; individual bosses supply their chains and mechanics. The boss chain does not inherit the ordinary Sortie two-part chain. Select Ghatjot with `gbt ns -set sortie/ghatjot`.
+
+Use `!description` instead of `description` to hide descriptions from all ancestors above that namespace. It accepts the same string or array of strings. Output starts at the closest `!description` in the selected namespace's inheritance chain and continues down to the selected namespace. An empty array suppresses ancestor descriptions without adding text. If both keys are present, `!description` takes precedence. Settings inheritance is unaffected.
+
+An optional `description` in `.nsconfig` is printed to chat after settings load successfully. Use a string or an array of strings for separate lines, for example `{"description": ["Recommended jobs: PLD, WHM, BLM", "Enable magic bursts."]}`. Descriptions appear in inheritance order, oldest ancestor first and selected namespace last. Each block is labeled "Description from namespace:" to identify its source. Namespaces without descriptions or with empty description arrays are skipped.
+
+Use `gbt ns -set xp -force -parent base` to create `xp`, initialize a missing `xp/.nsconfig` with `{"inherits_from":"base"}`, and switch to it. The parent must exist, must not explicitly set `inheritable: false`, and must have a valid inheritance chain. Validation happens before namespace folders or configuration are created. An existing `.nsconfig` is preserved: it must already name the requested parent, otherwise the command reports a conflict (including when it contains only `{}`). The child is inheritable by default; no explicit flag is written. `-force` and `-parent` may appear in either order.
 
 A namespace may declare one parent in `settings/.ns/<namespace>/.nsconfig`:
 

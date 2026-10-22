@@ -114,6 +114,21 @@ function selectors.resolve(context, targets)
 end
 
 -- Sort already-filtered matches by selector precedence, then shared entity identity.
+-- Load-time selector matching for the character whose actions are being loaded.
+function selectors.matchesPlayer(player, targets, isLeader)
+    local member = {name=player.name, main_job=player.main_job, is_me=true, is_party_leader=isLeader}
+    local context = {me=member, p0=member}
+    local positive, negative = selectors.resolve(context, targets)
+    local function includes(names)
+        for _, name in ipairs(names) do
+            local key = name:lower()
+            if key == '*' or key == 'me' or key == (member.name or ''):lower() then return true end
+        end
+        return false
+    end
+    return includes(positive) and not includes(negative)
+end
+
 function selectors.order(context, members, targets)
     local positive = selectors.resolve(context, targets)
     local function rank(member)

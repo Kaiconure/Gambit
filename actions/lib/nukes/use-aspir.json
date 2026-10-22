@@ -26,6 +26,7 @@
         "Bozzetto Elementalist": true,
         "Bozzetto High Vicar": true,
         "Bozzetto Stormbringer": true,
+        "Dark Elemental": true,
         "Darkness Elemental": true,
         "Earth Elemental": true,
         "Fire Elemental": true,
@@ -71,12 +72,13 @@
     },
     {
       "when": [
-        "bt and vars.use_aspir.targets[bt.name]",
+        "bt and (vars.use_aspir.targets[bt.name] or (vars.use_aspir.targets[bt.name] == nil and vars.use_aspir.targets[bt.name:match('(%a+ Elemental)$') or '']))",
         "bt.distance <= 20",
         "me.mpp <= vars.use_aspir.max_mpp",
         "(me.mpp <= vars.use_aspir.max_ws_mpp and not skillchaining('Light', 'Darkness')) or not partyUsingWeaponSkill()",
         "canUse(vars.use_aspir.spells)"
       ],
+      "comment": "Prefixed elementals inherit eligibility from their base elemental name. An explicit target entry, including false, takes precedence.",
       "commands": [
         "arrayCount(vars.use_aspir.gear.casting) > 0 and equipMany(vars.use_aspir.gear.casting)",
         "use(bt)",

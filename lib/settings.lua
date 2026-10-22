@@ -9,6 +9,7 @@ local actionSlots = require('./lib/action-slots')
 local leaderLoadState = require('./lib/leader-load-state')
 local loadedLeaderState
 local loadingLeader
+local loadedNamespaceDescriptions
 
 local function currentLeaderStatus(ignoreZoning)
     if not ignoreZoning and globals and globals.zoneEntryTime and os.clock() - globals.zoneEntryTime < 10 then return nil end
@@ -729,7 +730,9 @@ local function loadActionImports(playerName, actions, player, sourceFile)
         local precedence = settingsPaths.getLoadedPrecedence()
         actions._slots = actionSlots.new(actions, function(source)
             return actionSlots.priority(source, precedence, playerName, player.main_job)
-        end, writeWarning)
+        end, writeWarning, function(selectors)
+            return targetSelectors.matchesPlayer(player, selectors, loadingLeader)
+        end)
         actions._slots.collect(actions, sourceFile or '(entry point)')
         actions.contributions = nil
         local initialVars = actions.vars
@@ -780,6 +783,7 @@ local function loadActionImports(playerName, actions, player, sourceFile)
             end
         end
 
+        actionSlots.addAutomatic(actions, types)
         actions._slots.expand(types)
         -- Resolve contributed imports through the same loader as ordinary imports.
         for _, actionType in ipairs(types) do
@@ -1149,11 +1153,21 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     name = name or nil
     local valid, message = settingsPaths.validateNamespace(name)
     if not valid then error(message) end
+    local descriptions = {}
+    local descriptionsClosed = false
     local precedence = settingsPaths.resolveInheritance(name, function(ns)
         local file = files.new(settingsPaths.namespacePath(ns) .. '/.nsconfig')
         if not file:exists() then return nil end
         local ok, config = pcall(json.parse, file:read())
         if not ok or type(config) ~= 'table' then error('Invalid .nsconfig for ' .. ns .. ': ' .. tostring(config)) end
+        if not descriptionsClosed then
+            local description = config['!description']
+            if description == nil then description = config.description end
+            if description ~= nil then
+                descriptions[#descriptions + 1] = {namespace=ns, lines=description}
+            end
+            descriptionsClosed = config['!description'] ~= nil
+        end
         return config
     end, function(ns)
         return settingsPaths.namespaceExists(ns)
@@ -1170,6 +1184,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
         error(result)
     end
     lastSavedSettings = settingsSnapshot(result)
+    loadedNamespaceDescriptions = descriptions
     return result
 end
 
@@ -1179,6 +1194,24 @@ function reportLoadedSettings()
     local namespace = settingsPaths.getLoadedNamespace() or '(base settings)'
     writeMessage(text_green('Settings loaded from namespace: ' .. text_namespace(namespace)))
     print('Gambit: Settings loaded from namespace: ' .. namespace)
+    reportNamespaceDescriptions()
+end
+
+function reportNamespaceDescriptions()
+    local descriptions = loadedNamespaceDescriptions or {}
+    for index = #descriptions, 1, -1 do
+        local description = descriptions[index]
+        local lines = description.lines
+        if type(lines) == 'string' then lines = {lines} end
+        if #lines > 0 then
+            writeMessage(text_gray('Description from namespace: ') .. text_namespace(description.namespace))
+        end
+        for _, line in ipairs(lines) do
+            for text in (line .. '\n'):gmatch('(.-)\n') do
+                writeMessage(' ' .. text_cornsilk((text:gsub('\r$', ''))))
+            end
+        end
+    end
 end
 
 function saveSettings(settingsToSave, force)

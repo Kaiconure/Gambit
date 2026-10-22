@@ -83,6 +83,40 @@ local empty={battle={{slot='empty'},{commands={'ok()'}}}}
 load('Tester',empty,player,'entry')
 assert(#empty.battle==1 and empty.battle[1].commands[1]=='ok()')
 print('PASS: real import loader slot placement, namespace priority, repeated instances, scopes, conditions, warnings and recursion rejection')
+local executableTypes={'loading','battle','idle_battle','pull','idle','resting','event','dead','mounted'}
+local automatic={contributions={}}
+for _, kind in ipairs(executableTypes) do
+    automatic[kind]={{commands={'normal()'}}}
+    for _, suffix in ipairs({'setup','priority','fallback'}) do
+        automatic.contributions[kind .. '-' .. suffix]={{commands={suffix .. '()'}}}
+    end
+end
+load('Tester',automatic,player,'entry')
+for _, kind in ipairs(executableTypes) do
+    assert(#automatic[kind]==4)
+    assert(automatic[kind][1].commands[1]=='setup()')
+    assert(automatic[kind][2].commands[1]=='priority()')
+    assert(automatic[kind][3].commands[1]=='normal()')
+    assert(automatic[kind][4].commands[1]=='fallback()')
+end
+assert(#automatic.imports==0 and #automatic.functions==0)
+documents.nativeHooks={actions={{commands={'imported()'}}}}
+local explicit={battle={{import='nativeHooks'},{slot='battle-priority',precondition='guard()'}},
+    contributions={['battle-priority']={{commands={'priority()'}}},
+        ['battle-setup']={{commands={'setup()'}}},['battle-fallback']={{commands={'fallback()'}}}}}
+load('Tester',explicit,player,'entry')
+assert(#explicit.battle==4 and explicit.battle[1].commands[1]=='setup()')
+assert(explicit.battle[2].commands[1]=='imported()' and explicit.battle[3].commands[1]=='priority()')
+assert(preconditions.collect(explicit.battle[3])[1].expression=='guard()')
+local absent={contributions={['battle-setup']={{commands={'absent-section()'}}}}}
+load('Tester',absent,player,'entry')
+assert(#absent.battle==1 and absent.battle[1].commands[1]=='absent-section()')
+local placeholders={battle={{slots={'battle-setup',{'battle-priority','alternative'}}}},imports={},functions={}}
+slots.addAutomatic(placeholders,{'battle','imports','functions'})
+slots.addAutomatic(placeholders,{'battle','imports','functions'})
+assert(#placeholders.battle==2 and placeholders.battle[2].slot=='battle-fallback')
+assert(#placeholders.imports==0 and #placeholders.functions==0)
+print('PASS: automatic hooks in every executable section, missing sections, explicit placement, imports and idempotence')
 for _, placeholder in ipairs({
     {slots={'burst','nuke','burst'}},
     {slot={'burst','nuke','burst'}},
@@ -209,3 +243,37 @@ fallbacks.collect({contributions={['^specific']={},generic=command('generic')}},
 fallbacks.expand({'battle'})
 assert(#fallbackBlank.battle==0)
 print('PASS: fallback contributions, explicit/empty suppression, closest defaults, aliases, ties and prefix validation')
+local function optionalTest(definitions, expectedWarnings, expectedActions)
+    local container={battle={{slot='present'}}}
+    local notices={}
+    local instance=slots.new(container,function() return 1 end,function(message) notices[#notices+1]=message end,
+        function(required) return require('./lib/target-selectors').matchesPlayer({name='Tester',main_job='BLM'},required) end)
+    for index, definition in ipairs(definitions) do instance.collect({contributions=definition},tostring(index)) end
+    instance.expand({'battle'})
+    assert(#notices==expectedWarnings)
+    assert(#container.battle==(expectedActions or 0))
+end
+optionalTest({{['present,missing']={optional=true,actions=command('optional')}}},0,1)
+optionalTest({{missing={optional=true,actions={}}}},0)
+optionalTest({{missing={actions={}}}},1)
+optionalTest({{missing={optional=false,actions={}}}},1)
+optionalTest({{missing={}}},1)
+optionalTest({{missing={optional=true,actions={}}},{missing={}}},1)
+optionalTest({{['^missing']={}},{missing={optional=true,actions={}}}},0)
+optionalTest({{['!missing']={optional=true,actions={}}},{missing={}}},0)
+for _, invalid in ipairs({{optional=true},{optional='true',actions={}},
+    {optional=true,actions='bad'},{optional=true,actions={},silent=true},
+    {optional=true,actions={named='bad'}}}) do
+    assert(not pcall(optionalTest,{{missing=invalid}},0))
+end
+print('PASS: optional contribution objects, aliases, mixed warnings, replacements, fallbacks and invalid objects')
+optionalTest({{missing={required_for={'BLM','GEO'},actions={}}}},1)
+optionalTest({{missing={required_for={'WAR'},actions={}}}},0)
+optionalTest({{missing={optional=true,required_for={'mages'},actions={}}}},1)
+optionalTest({{missing={required_for={'*','~BLM'},actions={}}}},0)
+optionalTest({{['present,missing']={required_for={'BLM'},actions=command('required')}}},0,1)
+optionalTest({{['absent,missing']={required_for={'BLM'},actions={}}}},2)
+for _, required in ipairs({'BLM', {true}, {named='BLM'}, {''}}) do
+    assert(not pcall(optionalTest,{{missing={required_for=required,actions={}}}},0))
+end
+print('PASS: required_for job/group selectors, exclusions, optional override and shared-slot satisfaction')

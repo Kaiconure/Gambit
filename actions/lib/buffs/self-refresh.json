@@ -1,0 +1,21 @@
+{
+  "about": {
+    "notes": "Maintain Refresh on yourself. RDM always retains responsibility for self Refresh. Other jobs can set self_refresh.allow_with_rdm to true to retain responsibility when an RDM is in the party. Uses refresh_cycle spell and MP settings."
+  },
+  "vars": {
+    "^self_refresh": {
+      "enabled": true,
+      "allow_with_rdm": false
+    }
+  },
+  "actions": [
+    {
+      "import": "buffs/refresh-cycle",
+      "with_vars": { "refresh_cycle": { "targets": ["me"] } },
+      "precondition": [
+        "vars.self_refresh.enabled",
+        "me.main_job == 'RDM' or vars.self_refresh.allow_with_rdm or not partyHasJob('RDM')"
+      ]
+    }
+  ]
+}

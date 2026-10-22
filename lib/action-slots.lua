@@ -4,6 +4,28 @@ local scopes = require('./lib/variable-scopes')
 local slots = {}
 local settingsPaths = require('./lib/settings-paths')
 
+-- Add native hooks once, after imports expand. Explicit placements take precedence
+-- so existing files do not execute the same contributions twice.
+function slots.addAutomatic(container, types)
+    for _, kind in ipairs(types) do
+        if kind ~= 'imports' and kind ~= 'functions' then
+            local actions = container[kind]
+            local present = {}
+            for _, action in ipairs(actions) do
+                for _, entry in ipairs(slots.names(action)) do
+                    if type(entry) == 'table' then
+                        for _, name in ipairs(entry) do present[name] = true end
+                    else present[entry] = true end
+                end
+            end
+            local setup, priority, fallback = kind .. '-setup', kind .. '-priority', kind .. '-fallback'
+            if not present[priority] then table.insert(actions, 1, {slot=priority}) end
+            if not present[setup] then table.insert(actions, 1, {slot=setup}) end
+            if not present[fallback] then actions[#actions+1] = {slot=fallback} end
+        end
+    end
+end
+
 -- Lower values have higher precedence. Namespace proximity precedes file specificity.
 function slots.priority(source, namespaces, playerName, mainJob)
     source = source:gsub('\\', '/'):gsub('^%./', ''):lower()
@@ -70,7 +92,7 @@ function slots.names(action)
     return result
 end
 
-function slots.new(container, priority, warn)
+function slots.new(container, priority, warn, matchesRequired)
     local groups, seen, used = {}, {}, {}
     local serial = 0
     local result = {}
@@ -84,6 +106,28 @@ function slots.new(container, priority, warn)
         local declared = {}
         for names, actions in pairs(document.contributions) do
             validateName(names)
+            local optional = false
+            local requiredAliases
+            if type(actions) == 'table' and (actions.actions ~= nil or actions.optional ~= nil or actions.required_for ~= nil) then
+                assert(actions.optional == nil or type(actions.optional) == 'boolean',
+                    'Contribution optional must be boolean')
+                for key in pairs(actions) do
+                    assert(key == 'actions' or key == 'optional' or key == 'required_for', 'Unknown contribution field: ' .. tostring(key))
+                end
+                optional = actions.optional == true
+                if actions.required_for ~= nil then
+                    requiredAliases = {}
+                    assert(type(actions.required_for) == 'table', 'Contribution required_for must be an array of selectors')
+                    for index, selector in pairs(actions.required_for) do
+                        assert(type(index) == 'number' and index >= 1 and index <= #actions.required_for and index % 1 == 0
+                            and type(selector) == 'string' and selector:match('%S'),
+                            'Contribution required_for must be an array of selectors')
+                    end
+                    -- Explicit requirements override optional, including for matching jobs.
+                    optional = not (matchesRequired and matchesRequired(actions.required_for))
+                end
+                actions = actions.actions
+            end
             assert(type(actions) == 'table', 'Slot contributions must be arrays')
             for index in pairs(actions) do
                 assert(type(index) == 'number' and index >= 1 and index <= #actions and index % 1 == 0,
@@ -98,10 +142,12 @@ function slots.new(container, priority, warn)
             assert(not name:match('^[!^]'), 'Only one ! or ^ prefix is allowed on a contribution name')
             assert(not declared[name], 'Duplicate contribution name: ' .. name)
             declared[name] = true
+            if requiredAliases then requiredAliases[#requiredAliases+1] = name end
             groups[name] = groups[name] or {}
             groups[name][#groups[name]+1] = {
                 actions=values.copy(actions), parent=values.copy(parent or {}),
-                source=source, priority=priority(source), order=#groups[name]+1, replace=replace, fallback=fallback,
+                source=source, priority=priority(source), order=#groups[name]+1, replace=replace, fallback=fallback, optional=optional,
+                requiredAliases=requiredAliases,
             }
             end
         end
@@ -178,7 +224,17 @@ function slots.new(container, priority, warn)
             container[kind] = output
         end
         local names = {}
-        for name in pairs(groups) do if not used[name] then names[#names+1]=name end end
+        for name, group in pairs(groups) do
+            if not used[name] then
+                for _, contribution in ipairs(group) do
+                    local satisfied = false
+                    for _, alias in ipairs(contribution.requiredAliases or {}) do
+                        if used[alias] then satisfied = true; break end
+                    end
+                    if not contribution.optional and not satisfied then names[#names+1]=name; break end
+                end
+            end
+        end
         table.sort(names)
         for _, name in ipairs(names) do warn('No action slot found for contributions: ' .. name) end
     end

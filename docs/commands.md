@@ -75,7 +75,8 @@ Without `-a` or `-r`, a normal full reload selects actions for your current job.
 | Command | Behavior |
 | --- | --- |
 | `namespace` | Show the selected namespace, or global mode. |
-| `namespace -set <name> [-parent <namespace>]` | Select a namespace, ensure its folders exist, and perform a full settings reload for the current job. `-parent` initializes a missing `.nsconfig` with `inherits_from` after validating the parent chain. Existing configuration must already name that parent; otherwise selection is rejected without changing it. |
+| `namespace -v` | Replay the loaded namespace's description sequence, respecting `!description`, without reloading settings. Outputs nothing when no descriptions are available. |
+| `namespace -set <name> [-force] [-parent <namespace>]` | Select an existing namespace and perform a full settings reload for the current job. Missing namespaces warn and leave selection unchanged unless `-force` is supplied. `-force` ensures the namespace exists; if it already exists, it warns and continues. `-parent` initializes a missing `.nsconfig` with `inherits_from` after validating the parent chain. Existing configuration must already name that parent; otherwise selection is rejected without changing it. |
 | `namespace -clear` | Clear namespace selection and perform a full settings reload. |
 
 `namespace -set` and `namespace -clear` remember the selection in `settings/<character>/main.json` as `default_namespace`, after a successful reload. Startup reads this field only from that base character file; namespace copies are ignored. Job changes retain the selection, and each settings load reports the active namespace. Invalid startup selections report an error and fall back to base settings without deleting the saved preference. `reload -ns` remains a temporary override.

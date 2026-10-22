@@ -1,6 +1,98 @@
 # Action slots
 
+## Automatic section slots
+
+Every executable action section has three native insertion points, even when the
+entry point does not declare the section or show any slot placeholders:
+
+```text
+<action-type>-setup
+<action-type>-priority
+actions from the entry point and its imports
+<action-type>-fallback
+```
+
+This applies to `loading`, `battle`, `idle_battle`, `pull`, `idle`, `resting`,
+`event`, `dead`, and `mounted`. `functions` and `imports` are collections and do
+not receive automatic slots. For example, a namespace common file can supply:
+
+```json
+{
+  "contributions": {
+    "battle-setup": [
+      {
+        "commands": ["vars.user.hold_ws = false"],
+        "scope": "battle",
+        "frequency": "infinity"
+      }
+    ]
+  }
+}
+```
+
+The loader inserts these hooks once per top-level section after ordinary imports
+expand and before contributions resolve. Imported files do not each receive a
+new set of hooks. Empty hooks disappear. Contributions use the same precedence,
+replacement, conditions, and variable scopes as explicit slots, and their
+expanded actions appear in processed action output.
+
+For compatibility, an explicit reference to the same slot in that section
+suppresses its automatic insertion and retains the explicit position and guards.
+This includes references in slot lists and alternatives. Explicit repeated
+references still create repeated occurrences. Remove an old explicit
+`idle-priority`, for example, to adopt the automatic top-of-section position.
+Other slots such as `ws-priority` and `finisher` retain their explicit placement.
+
+These names control evaluation order, not lifecycle. A setup action does not
+automatically execute once or block the rest of the section. Use appropriate
+conditions, frequency, and scope. In the example, battle scope and infinite
+frequency make the reset eligible once per battle scope; put optional cleanup
+checks in commands so an initially false condition does not defer the reset until
+after another action changes state. A fallback action follows normal actions but
+is not guaranteed to run if higher-priority actions keep consuming opportunities.
+
 ## Contribution replacements and shorthand
+
+Contributions may use the existing action array or an object with `actions` and
+an optional boolean `optional`:
+
+```json
+{
+  "contributions": {
+    "geo/black-magic-nuke, blm/black-magic-nuke": {
+      "optional": true,
+      "actions": [{ "import": "nukes/elemental-mitigation" }]
+    }
+  }
+}
+```
+
+`optional: true` suppresses missing-slot warnings for that contribution. It does
+not change execution, precedence, or validation. The flag applies to every
+comma-separated name and works with `!` and `^` prefixes and empty action arrays.
+Arrays and objects omitting `optional` continue to warn by default. If a missing
+slot has multiple selected contributions, it warns when any is non-optional;
+discarded fallback/replaced definitions do not affect this decision. The object
+requires an `actions` array; unknown fields are rejected.
+
+Use `required_for` instead of `optional` for shared, job-dependent requirements:
+
+```json
+"geo/black-magic-nuke, blm/black-magic-nuke": {
+  "required_for": ["BLM", "GEO"],
+  "actions": [{ "import": "nukes/elemental-mitigation" }]
+}
+```
+
+Missing-slot warnings are enabled only when the character loading the actions
+matches the selector array. Matching uses current main job and supports existing
+job/group selectors (such as `mages`), character names, `me`, `*`, `leader`, and
+`~` exclusions. This is not a test of other party members' jobs. An empty array
+requires nothing. `required_for` overrides `optional` when both are present.
+For a comma-separated declaration, any listed slot satisfies the requirement;
+this lets GEO and BLM share one declaration without requiring both job slots on
+each character. Without `required_for`, comma-separated warnings retain their
+existing independent behavior. Requirements affect warnings only, not execution.
 
 Prefix a contribution name with `^` to supply a fallback definition. If any
 ordinary or `!` definition exists for that name, all `^` definitions are ignored,
