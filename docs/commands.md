@@ -49,7 +49,13 @@ Both `enable` and `disable` cancel an active smart-movement job. `-quiet` suppre
 
 ## Reloading and namespaces
 
-Namespaces can be inherited by default. Set `"inheritable": false` in a namespace's `.nsconfig` to opt out; this does not prevent selecting that namespace directly. Empty or missing configuration permits inheritance, provided the namespace exists.
+Namespaces may declare `"abstract": true` in `.nsconfig` to indicate they are
+intended as inheritance bases. `ns -list` shows them in gray with `(abstract)`.
+Direct loading still succeeds but prints a warning. Abstract ancestors do not
+make their children abstract; the flag applies only to the namespace declaring
+it. Omitted or `false` means concrete; non-boolean values are rejected.
+
+Namespaces can be inherited by default. Set `"inheritable": false` in a namespace's `.nsconfig` to opt out; this does not prevent selecting that namespace directly. An existing `.nsconfig` containing `{}` permits inheritance. Missing folders or `.nsconfig` files are rejected for both selected namespaces and inherited parents; initialize them explicitly with `gbt ns -set <name> -force`.
 
 `reload` has the alias `r`. It reloads settings/actions, not the addon itself.
 
@@ -75,8 +81,9 @@ Without `-a` or `-r`, a normal full reload selects actions for your current job.
 | Command | Behavior |
 | --- | --- |
 | `namespace` | Show the selected namespace, or global mode. |
+| `namespace -list` | List namespaces containing `.nsconfig`, alphabetically by full name (case-insensitive). Searches nested folders under the active namespace root, skipping reserved content folders. Underscore aliases are shortened when unambiguous. Does not change selection or reload settings. |
 | `namespace -v` | Replay the loaded namespace's description sequence, respecting `!description`, without reloading settings. Outputs nothing when no descriptions are available. |
-| `namespace -set <name> [-force] [-parent <namespace>]` | Select an existing namespace and perform a full settings reload for the current job. Missing namespaces warn and leave selection unchanged unless `-force` is supplied. `-force` ensures the namespace exists; if it already exists, it warns and continues. `-parent` initializes a missing `.nsconfig` with `inherits_from` after validating the parent chain. Existing configuration must already name that parent; otherwise selection is rejected without changing it. |
+| `namespace -set <name> [-force] [-parent <namespace>]` | Select an existing namespace and perform a full settings reload for the current job. Missing folders or `.nsconfig` files warn with an initialization hint and leave selection unchanged unless `-force` is supplied. `-force` ensures the folder and `.nsconfig` exist; if it already exists, it warns and continues. `-parent` initializes a missing `.nsconfig` with `inherits_from` after validating the parent chain. Existing configuration must already name that parent; otherwise selection is rejected without changing it. |
 | `namespace -clear` | Clear namespace selection and perform a full settings reload. |
 
 `namespace -set` and `namespace -clear` remember the selection in `settings/<character>/main.json` as `default_namespace`, after a successful reload. Startup reads this field only from that base character file; namespace copies are ignored. Job changes retain the selection, and each settings load reports the active namespace. Invalid startup selections report an error and fall back to base settings without deleting the saved preference. `reload -ns` remains a temporary override.

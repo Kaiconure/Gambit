@@ -37,6 +37,22 @@ handlers['namespace'] = function(args)
     end
 
     local option = (args[1] or ''):lower()
+    if option == '-list' and #args == 1 then
+        local names, abstract = settingsPaths.listNamespaces()
+        if #names == 0 then
+            writeMessage('No namespaces with a .nsconfig file found.')
+        else
+            writeMessage('Available namespaces:')
+            for _, name in ipairs(names) do
+                if abstract and abstract[name] then
+                    writeMessage('  ' .. text_gray(name .. ' (abstract)', Colors.default))
+                else
+                    writeMessage('  ' .. text_namespace(name, Colors.default))
+                end
+            end
+        end
+        return
+    end
     if option == '-v' and #args == 1 then
         reportNamespaceDescriptions()
         return
@@ -61,7 +77,7 @@ handlers['namespace'] = function(args)
         end
     end
     if not validArgs then
-        writeError('Usage: gbt namespace [-v | -set <name> [-force] [-parent <namespace>] | -clear] (alias: ns)')
+        writeError('Usage: gbt namespace [-list | -v | -set <name> [-force] [-parent <namespace>] | -clear] (alias: ns)')
         return
     end
 
@@ -69,9 +85,9 @@ handlers['namespace'] = function(args)
     if name then
         local valid, message = settingsPaths.validateNamespace(name)
         if not valid then writeError(message); return end
-        local exists = settingsPaths.namespaceExists(name)
+        local exists = settingsPaths.isNamespaceInitialized(name)
         if not exists and not force then
-            writeWarning('Namespace ' .. text_namespace(name, Colors.warning) .. ' does not exist. Use [gbt ns -set ' .. text_namespace(name, Colors.warning) .. ' -force] to create it.')
+            writeWarning('Namespace ' .. text_namespace(name, Colors.warning) .. ' is missing its folder or .nsconfig. Use [gbt ns -set ' .. text_namespace(name, Colors.warning) .. ' -force] to initialize it.')
             return
         elseif exists and force then
             writeWarning('Namespace ' .. text_namespace(name, Colors.warning) .. ' already exists. Continuing with load...')
@@ -84,7 +100,7 @@ handlers['namespace'] = function(args)
         return
     end
 
-    if name then
+    if name and (force or parent) then
         local player = windower.ffxi.get_player()
         success, message = settingsPaths.ensureNamespaceFolders(player and player.name, name, parent)
         if not success then

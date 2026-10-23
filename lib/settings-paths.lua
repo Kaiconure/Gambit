@@ -34,6 +34,50 @@ function paths.namespaceExists(name)
     return directoryExists(paths.namespacePath(name))
 end
 
+function paths.isNamespaceInitialized(name)
+    return paths.namespaceExists(name) and files.new(paths.namespacePath(name) .. '/.nsconfig'):exists()
+end
+
+function paths.namespaceInitializationError(name)
+    return 'Namespace ' .. name .. ' is missing its folder or .nsconfig. Use gbt ns -set ' .. name .. ' -force to initialize it.'
+end
+
+-- A .nsconfig marks a listable namespace; unmarked organizational folders
+-- are still traversed. Never descend into reserved namespace content folders.
+function paths.listNamespaces()
+    local result, abstract = {}, {}
+    local root = paths.namespaceRoot()
+    if not directoryExists(root) then return result, abstract end
+    local function visit(directory, parent)
+        local absolute = (windower.addon_path or '') .. directory:gsub('^%./', '') .. '/'
+        for _, segment in ipairs(windower.get_dir(absolute) or {}) do
+            local physical = directory .. '/' .. segment
+            local name = parent and (parent .. '/' .. segment) or segment
+            if paths.validateNamespace(name) and directoryExists(physical) then
+                if segment:sub(1,1) == '_' then
+                    local short = segment:sub(2)
+                    local alias = parent and (parent .. '/' .. short) or short
+                    if short ~= '' and paths.validateNamespace(alias)
+                        and paths.namespacePath(alias):lower() == physical:lower() then name = alias end
+                end
+                local configFile = files.new(physical .. '/.nsconfig')
+                if configFile:exists() then
+                    result[#result+1] = name
+                    local ok, config = pcall(function() return json.parse(configFile:read()) end)
+                    abstract[name] = ok and type(config) == 'table' and config.abstract == true or false
+                end
+                visit(physical, name)
+            end
+        end
+    end
+    visit(root)
+    table.sort(result, function(a,b)
+        if a:lower() == b:lower() then return a < b end
+        return a:lower() < b:lower()
+    end)
+    return result, abstract
+end
+
 function paths.getNamespace()
     return namespace
 end
@@ -81,10 +125,10 @@ function paths.resolveInheritance(name, readConfig, exists)
         assert(valid, message)
         local identity = paths.namespacePath(current):lower()
         assert(not visiting[identity], 'Namespace inheritance cycle at ' .. current)
-        if parent then assert(exists(current), 'Inherited namespace does not exist: ' .. current) end
+        if parent then assert(exists(current), paths.namespaceInitializationError(current)) end
         visiting[identity] = true
         local config = readConfig(current)
-        if config == nil then config = {} end
+        assert(config ~= nil, paths.namespaceInitializationError(current))
         assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current .. ': expected an object')
         for _, field in ipairs({'description', '!description'}) do
             if config[field] ~= nil then
@@ -100,6 +144,7 @@ function paths.resolveInheritance(name, readConfig, exists)
             end
         end
         assert(config.inheritable == nil or type(config.inheritable) == 'boolean', 'inheritable must be boolean in ' .. current)
+        assert(config.abstract == nil or type(config.abstract) == 'boolean', 'abstract must be boolean in ' .. current)
         if parent and config.inheritable == false then
             error('Namespace ' .. text_namespace(current, Colors.red) .. ' explicitly disables inheritance (inheritable: false)', 0)
         end
@@ -136,17 +181,19 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
     if not valid then return false, message end
     local root = paths.namespacePath(name) .. '/'
     local initialConfig = '{}\n'
-    if parent ~= nil then
+    do
         local ok, err = pcall(function()
-            local validParent, parentMessage = paths.validateNamespace(parent)
-            assert(validParent, parentMessage)
+            if parent ~= nil then
+                local validParent, parentMessage = paths.validateNamespace(parent)
+                assert(validParent, parentMessage)
+            end
             paths.resolveInheritance(name, function(current)
                 local file = files.new(paths.namespacePath(current) .. '/.nsconfig')
                 local config
                 if file:exists() then
                     config = json.parse(file:read())
                     assert(type(config) == 'table', 'Invalid .nsconfig for ' .. current)
-                    if current == name then
+                    if current == name and parent ~= nil then
                         if type(config.inherits_from) ~= 'string' or
                             paths.namespacePath(config.inherits_from):lower() ~= paths.namespacePath(parent):lower() then
                             error('Namespace ' .. text_namespace(name, Colors.error) .. ' already has a different or missing parent.', 0)
@@ -159,7 +206,7 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
             end, function(current)
                 return paths.namespaceExists(current)
             end)
-            initialConfig = json.stringify({inherits_from = parent}) .. '\n'
+            if parent ~= nil then initialConfig = json.stringify({inherits_from = parent}) .. '\n' end
         end)
         if not ok then return false, tostring(err) end
     end

@@ -8,12 +8,16 @@ local function copy(v)
 end
 local base='./settings/Player/main.json'
 local disk={[base]={default_namespace='fight', distance=18, nested={keep=true}}}
+disk['./settings/.ns/fight/.nsconfig']={}
 local player={name='Player',main_job='PLD'}
 local paths=dofile('lib/settings-paths.lua')
 windower={addon_path='',dir_exists=function(path) return path=='settings/.ns' or path=='settings/.ns/fight' end}
-paths.ensureNamespaceFolders=function() return true end
+paths.ensureNamespaceFolders=function() error('Normal loads must not initialize namespaces') end
 local messages={}
+local abstractWarnings={}
 local env=setmetatable({
+    Colors={warning=1},
+    writeWarning=function(message) abstractWarnings[#abstractWarnings+1]=message end,
     settingsPaths=paths, json={parse=copy,stringify=copy},
     files={new=function(path) return {
         exists=function() return disk[path]~=nil end,
@@ -35,12 +39,26 @@ local env=setmetatable({
     getSettingsFileName=function() return base end,
     loadSettingsInternal=function() return {distance=5} end,
 }, {__index=_G})
+files=env.files
 local chunk=assert(loadstring(helpers..loader..saver)); setfenv(chunk,env); chunk()
 env.loadSettings()
 assert(paths.getNamespace()=='fight' and paths.getLoadedNamespace()=='fight')
 env.reportLoadedSettings()
 assert(messages[#messages] == 'Gambit: Settings loaded from namespace: fight')
 local nsconfig='./settings/.ns/fight/.nsconfig'
+disk[nsconfig]=nil
+local missingLoaded, missingError=pcall(env.loadSettings)
+assert(not missingLoaded and missingError:find('gbt ns -set fight -force',1,true))
+assert(paths.getLoadedNamespace()=='fight' and disk[nsconfig]==nil)
+disk[nsconfig]={}
+disk[nsconfig].abstract=true
+env.loadSettings()
+env.reportLoadedSettings()
+assert(#abstractWarnings==1 and abstractWarnings[1]:find('is abstract',1,true))
+disk[nsconfig].abstract='true'
+assert(not pcall(env.loadSettings))
+disk[nsconfig]={}
+assert(not pcall(env.loadSettings,nil,false,'missing')) -- Explicit reload override cannot create namespaces.
 disk[nsconfig]={description={'Recommended jobs: BLM, WHM', 'First line\r\nSecond line'}}
 env.loadSettings()
 env.reportLoadedSettings()

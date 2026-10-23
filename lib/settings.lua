@@ -10,6 +10,7 @@ local leaderLoadState = require('./lib/leader-load-state')
 local loadedLeaderState
 local loadingLeader
 local loadedNamespaceDescriptions
+local loadedNamespaceAbstract = false
 
 local function currentLeaderStatus(ignoreZoning)
     if not ignoreZoning and globals and globals.zoneEntryTime and os.clock() - globals.zoneEntryTime < 10 then return nil end
@@ -1132,7 +1133,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
                 if name == nil then return nil end
                 local valid, message = settingsPaths.validateNamespace(name)
                 assert(valid, message)
-                assert(settingsPaths.namespaceExists(name), 'Saved namespace does not exist: ' .. name)
+                assert(settingsPaths.isNamespaceInitialized(name), settingsPaths.namespaceInitializationError(name))
                 local loaded = loadSettings(actionsName, settingsOnly, name, outputProcessed)
                 settingsPaths.setNamespace(name)
                 return loaded
@@ -1154,12 +1155,14 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     local valid, message = settingsPaths.validateNamespace(name)
     if not valid then error(message) end
     local descriptions = {}
+    local abstract = false
     local descriptionsClosed = false
     local precedence = settingsPaths.resolveInheritance(name, function(ns)
         local file = files.new(settingsPaths.namespacePath(ns) .. '/.nsconfig')
         if not file:exists() then return nil end
         local ok, config = pcall(json.parse, file:read())
         if not ok or type(config) ~= 'table' then error('Invalid .nsconfig for ' .. ns .. ': ' .. tostring(config)) end
+        if ns == name then abstract = config.abstract == true end
         if not descriptionsClosed then
             local description = config['!description']
             if description == nil then description = config.description end
@@ -1172,11 +1175,6 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     end, function(ns)
         return settingsPaths.namespaceExists(ns)
     end)
-    if name then
-        local player = windower.ffxi.get_player()
-        local success, err = settingsPaths.ensureNamespaceFolders(player and player.name, name)
-        if not success then error(err) end
-    end
     settingsPaths.setLoadedNamespace(name, precedence)
     local success, result = pcall(loadSettingsInternal, actionsName, settingsOnly, outputProcessed)
     if not success then
@@ -1185,6 +1183,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     end
     lastSavedSettings = settingsSnapshot(result)
     loadedNamespaceDescriptions = descriptions
+    loadedNamespaceAbstract = abstract
     return result
 end
 
@@ -1194,6 +1193,10 @@ function reportLoadedSettings()
     local namespace = settingsPaths.getLoadedNamespace() or '(base settings)'
     writeMessage(text_green('Settings loaded from namespace: ' .. text_namespace(namespace)))
     print('Gambit: Settings loaded from namespace: ' .. namespace)
+    if loadedNamespaceAbstract then
+        writeWarning('Namespace ' .. text_namespace(namespace, Colors.warning)
+            .. ' is abstract and is intended for inheritance rather than direct loading.')
+    end
     reportNamespaceDescriptions()
 end
 

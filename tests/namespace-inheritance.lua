@@ -17,10 +17,12 @@ configs.root.inheritable=nil
 configs.base.inheritable='true'
 assert(not pcall(resolve,'fight')) -- Still require boolean values when specified.
 configs.base.inheritable=nil
-local unconfigured=paths.resolveInheritance('child',function(n)
+local validUnconfigured, missingMessage=pcall(paths.resolveInheritance,'child',function(n)
     if n=='child' then return {inherits_from='unconfigured'} end
 end,function(n) return n=='unconfigured' end)
-assert(table.concat(unconfigured,',')=='child,unconfigured')
+assert(not validUnconfigured and missingMessage:find('gbt ns -set unconfigured -force',1,true))
+local rootConfigured, rootMessage=pcall(paths.resolveInheritance,'missing',function() return nil end,function() return false end)
+assert(not rootConfigured and rootMessage:find('gbt ns -set missing -force',1,true))
 paths.setLoadedNamespace('fight',chain)
 local candidates=paths.candidates('Player','actions/war.json')
 assert(candidates[1]=='./settings/.ns/fight/players/Player/actions/war.json')
@@ -46,6 +48,7 @@ assert(not pcall(resolve,'fight'))
 configs.fight.inherits_from='../base'
 assert(not pcall(resolve,'fight'))
 assert(#resolve(nil)==0)
+configs.standalone={}
 assert(resolve('standalone')[1]=='standalone')
 print('PASS: recursive precedence, common ordering, writes, default inheritability, explicit opt-out, cycles and invalid inputs')
 

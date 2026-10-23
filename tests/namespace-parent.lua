@@ -38,11 +38,15 @@ rejected('self','self')
 directories.closed=true; disk[config('closed')]='{"inheritable":false}'
 rejected('new','closed')
 directories.unconfigured=true
+rejected('from-unconfigured','unconfigured')
+assert(paths.ensureNamespaceFolders('Player','unconfigured'))
+assert(disk[config('unconfigured')]=='{}\n')
 assert(paths.ensureNamespaceFolders('Player','from-unconfigured','unconfigured'))
 disk[config('base')]='{"inheritable":true,"inherits_from":"new"}'
 rejected('new','base')
 disk[config('base')]='not json'
 rejected('new','base')
+rejected('base',nil) -- Force must not bypass malformed existing configuration.
 assert(paths.ensureNamespaceFolders('Player','plain'))
 assert(disk[config('plain')]=='{}\n')
 print('PASS: parent initialization, existing config preservation, invalid parents/chains before writes, and plain creation')
