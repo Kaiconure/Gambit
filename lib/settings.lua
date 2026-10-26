@@ -226,7 +226,7 @@ local defaultSettings = {
 ----------------------------------------------------------------------------------------
 -- Determine the settings file name for this player
 local function getSettingsFileName(playerName)
-    -- Reuse the highest-priority existing file for both loading and saving.
+    -- Reuse the highest-priority existing file when loading.
     -- Only create a character override when no main.json exists in the search paths.
     return firstSettingsPath(settingsPaths.candidates(playerName, 'main.json'))
         or settingsPaths.writePath(playerName, 'main.json')
@@ -1219,8 +1219,14 @@ end
 
 function saveSettings(settingsToSave, force)
     local player = windower.ffxi.get_player()
-    local fileName = getSettingsFileName(player.name)
-    if settingsPaths.getLoadedNamespace() then
+    local fileName = './settings/' .. player.name .. '/main.json'
+    -- Keep namespace save routing available, but save shared character preferences
+    -- to the base file until per-namespace saves are enabled again.
+    local savePerNamespace = false
+    if savePerNamespace then
+        fileName = getSettingsFileName(player.name)
+    end
+    if savePerNamespace and settingsPaths.getLoadedNamespace() then
         fileName = settingsPaths.firstExisting({
             settingsPaths.writePath(player.name, 'main.json'),
             settingsPaths.namespacePath(settingsPaths.getLoadedNamespace()) .. '/main.json'

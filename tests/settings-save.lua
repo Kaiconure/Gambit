@@ -9,9 +9,17 @@ local writes=0
 local env=setmetatable({
     json={stringify=copy,parse=copy},
     windower={ffxi={get_player=function() return {name='Player'} end}},
-    getSettingsFileName=function() return 'main.json' end,
-    settingsPaths={getLoadedNamespace=function() return nil end},
-    writeJsonToFile=function(_,v) writes=writes+1; assert(v.actions==nil) end,
+    getSettingsFileName=function() error('Saves must bypass namespace file selection') end,
+    settingsPaths={getLoadedNamespace=function() error('Saves must bypass namespace routing') end},
+    files={new=function(path)
+        assert(path=='./settings/Player/main.json')
+        return {exists=function() return true end, read=function() return {default_namespace='xp'} end}
+    end},
+    writeJsonToFile=function(path,v)
+        assert(path=='./settings/Player/main.json')
+        assert(v.default_namespace=='xp')
+        writes=writes+1; assert(v.actions==nil)
+    end,
 }, {__index=_G})
 local chunk=assert(loadstring(helpers .. save .. '\nreturn function(value) lastSavedSettings=settingsSnapshot(value) end'))
 setfenv(chunk,env)

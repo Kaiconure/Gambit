@@ -12,6 +12,7 @@ end
 
 local groups = {
     MELEE = 'WAR MNK THF PLD DRK BST SAM NIN DRG BLU PUP DNC RUN',
+    MELEE_DPS = 'SAM WAR MNK DRG THF DRK DNC NIN',
     RANGED = 'RNG COR',
     MAGE = 'WHM BLM RDM BRD SMN BLU SCH GEO',
     HEALER = 'WHM RDM SCH',
@@ -114,6 +115,36 @@ function selectors.resolve(context, targets)
 end
 
 -- Sort already-filtered matches by selector precedence, then shared entity identity.
+-- Pure name expansion for coordination; does not touch context.member/members.
+function selectors.orderedNames(context, targets)
+    local positive, negative = selectors.resolve(context, targets)
+    local roster, result, seen = {}, {}, {}
+    for index = 0, 5 do
+        local member = context['p' .. index]
+        if member then roster[#roster+1] = member end
+    end
+    table.sort(roster, selectors.alphabetical)
+    local function matchesName(member, name)
+        local key = name:lower()
+        return key == '*' or (key == 'me' and isSelf(context, member))
+            or key == (member.name or ''):lower()
+            or key == (member.symbol or ''):lower() or key == (member.symbol2 or ''):lower()
+    end
+    for _, target in ipairs(positive) do
+        for _, member in ipairs(roster) do
+            local name = member.name or (member.mob and member.mob.name)
+            if name and not seen[name:lower()] and matchesName(member, target) then
+                local excluded = false
+                for _, exclusion in ipairs(negative) do
+                    if matchesName(member, exclusion) then excluded = true; break end
+                end
+                if not excluded then result[#result+1]=name; seen[name:lower()]=true end
+            end
+        end
+    end
+    return result
+end
+
 -- Load-time selector matching for the character whose actions are being loaded.
 function selectors.matchesPlayer(player, targets, isLeader)
     local member = {name=player.name, main_job=player.main_job, is_me=true, is_party_leader=isLeader}

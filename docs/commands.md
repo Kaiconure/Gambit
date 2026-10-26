@@ -253,6 +253,8 @@ Configuration changes normally save automatically. The raw-distance exception is
 | `iteminfo [-verbose]` | `ii`; option `-v` | Inventory occupancy and gil; verbose adds stored currency information and other bags/wardrobes. |
 | `jobinfo [-name <character>]` | `ji`; option `-n` | Show your job information, or another character's cached IPC job information. |
 | `jobinfo -send` | — | Broadcast your job information to other local Gambit instances. |
+| `jobinfo -all` | `ji -all` | List all cached characters and yourself alphabetically, using live job information for yourself. |
+| `jobinfo -sync` | `ji -sync` | Ask all local Gambit instances to broadcast their job information, including your own. Also runs automatically on addon load and login. |
 | `jobset <character> <job-spec>` | — | Set and broadcast a character's job information. Examples: `WHM`, `WHM/RDM`, `WHM75`, `WHM75/BLM37`. Omitted levels default to 1. |
 
 | `targetinfo [-target <symbol>] [-save]` | `ti`; option `-t` | Show entity details. Defaults to `t`; examples include `me`, `p1`, and `player`. `-save` writes JSON under `data/`. |

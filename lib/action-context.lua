@@ -3,6 +3,7 @@ local movementReservations = require('./lib/movement-reservations')
 local engagementHelpers = require('./lib/engagement-helpers')
 local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
+local multiStageParticipants = require('./lib/multi-stage-participants')
 local targetedAction = require('./lib/targeted-action')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
@@ -2636,9 +2637,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         if type(stage_meta) == 'table' and #stage_meta > 0 then
 
-            if not multi_stage._compiled then
-                compile_multi_stage(multi_stage)
-            end
+            multiStageParticipants.prepare(multi_stage, context, compile_multi_stage)
+            stage_meta = multi_stage.stages
 
             local party_using_weapon_skill = context.partyUsingWeaponSkill()
             local skillchaining = context.skillchaining()

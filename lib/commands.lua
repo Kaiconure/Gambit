@@ -636,10 +636,33 @@ end
 
 handlers['jobinfo'] = function(args)
 
+    if hasArg(args, '-sync') then
+        writeMessage('Requesting job info from all local characters...')
+        syncJobInfoIpc()
+        return
+    end
+
     local send = hasArg(args, '-send')
     if send then
         writeMessage('Sending job info to other alts...')
         sendJobInfoIpc()
+        return
+    end
+
+    local player = windower.ffxi.get_player()
+    if hasArg(args, '-all') then
+        local names, seen = {}, {}
+        for name in pairs(globals.ipc_job_info) do
+            names[#names + 1] = name
+            seen[name] = true
+        end
+        if player and player.name and not seen[player.name] then
+            names[#names + 1] = player.name
+        end
+        table.sort(names, function(a, b) return a:lower() < b:lower() end)
+        for _, name in ipairs(names) do
+            handlers['jobinfo']({'-name', name})
+        end
         return
     end
 
@@ -650,8 +673,7 @@ handlers['jobinfo'] = function(args)
     local sub_job = nil    
     local sub_job_level = nil
 
-    if name == nil or name == globals.me_name then
-        local player = windower.ffxi.get_player()
+    if name == nil or name == globals.me_name or (player and name == player.name) then
         if player then
             name = player.name
             main_job = player.main_job

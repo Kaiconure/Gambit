@@ -268,6 +268,12 @@ function sendJobInfoIpc(player)
     end
 end
 
+-- Request fresh job info from every local instance, including ourselves.
+function syncJobInfoIpc()
+    windower.send_ipc_message('job -sync')
+    sendJobInfoIpc()
+end
+
 function reloadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
     executionFactory.clear()
     inventory.printDebug = nil
@@ -435,10 +441,10 @@ windower.register_event('load', function()
 
         requestCurrencies()
 
-        -- Send our job info to other alts on the system via IPC. We'll wait a moment here, to handle the case where
+        -- Request everyone's job info via IPC. Wait a moment to handle the case where
         -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
         coroutine.schedule(function()
-            sendJobInfoIpc()
+            syncJobInfoIpc()
         end, 3.0)
     else
         globals.suppress_logging = true
@@ -493,7 +499,7 @@ windower.register_event('login', function ()
 
     requestCurrencies()
 
-    sendJobInfoIpc()
+    syncJobInfoIpc()
 end)
 
 windower.register_event('logout', function()
@@ -843,6 +849,10 @@ windower.register_event('ipc message', function (msg)
             globals.ipc_positions_by_index[tostring(index)] = globals.ipc_positions[key]
         end
     elseif command == 'job' then
+        if hasArg(args, '-sync') then
+            sendJobInfoIpc()
+            return
+        end
         local record = jobInfoRecords.record(
             getArgValue(args, '-main'), getArgValue(args, '-main-l'),
             getArgValue(args, '-sub'), getArgValue(args, '-sub-l'))

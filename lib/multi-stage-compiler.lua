@@ -2,6 +2,8 @@
 -- Converts an array of strings into a map, where the lower-case equivalent of
 -- each entry maps to its original location. Essentially this reverses the
 -- mapping of index->field to field->index instead.
+local participantRules = require('./lib/multi-stage-participants')
+
 local function string_array_to_map(array)
     local map = {}
     if array then
@@ -34,21 +36,23 @@ end
 -- return the properly pruned participant list.
 local function process_multi_stage_exclusions(exclusions, participants, current)
     if participants and #participants > 0 and exclusions then
-        participants = {unpack(participants)}
+        participants = participantRules.copyList(participants)
 
         -- Promote single value exclusions into a table format for ease of use
         if type(exclusions) ~= 'table' then
             exclusions = {exclusions}
         end
         
+        local hadParticipants = #participants > 0
         for player, player_exclusions in pairs(exclusions) do
             if arrayIndexOf(player_exclusions, current) then
                 local player_location = arrayIndexOfStrI(participants, player)
-                if player_location then
+                if player_location and not participantRules.isProtected(participants, player) then
                     table.remove(participants, player_location)
                 end
             end
         end
+        if hadParticipants and #participants == 0 then participants = {'--no-matching-participant--'} end
     end
 
     return participants
@@ -56,7 +60,7 @@ end
 
 local function shuffle_multi_stage_participants(stage_number, strategy, participants)
     if participants and #participants > 1 then
-        participants = {unpack(participants)}
+        participants = participantRules.copyList(participants)
         if strategy == 'rotate' or strategy == 'rotate-right' then
             
             -- Rotate Right: Moves the last element to the front
@@ -337,7 +341,7 @@ function compile_multi_stage(multi_stage)
             -- been defined, then perform the desired shuffle now.
             if 
                 not stage.participants and 
-                not multi_stage.stage_participants[i] and 
+                not (multi_stage.stage_participants[tostring(i)] or multi_stage.stage_participants[i]) and
                 multi_stage.participants and 
                 multi_stage.participant_shuffle 
             then
@@ -347,7 +351,7 @@ function compile_multi_stage(multi_stage)
             -- Threshold must always be a number between 0 and 1000
             stage.threshold = math.clamp(tonumber(stage.threshold) or tonumber(multi_stage.threshold) or 800, 0, 1000)
             stage.participants = process_multi_stage_exclusions(multi_stage.exclusions, 
-                stage.participants or multi_stage.stage_participants[tostring(i)] or multi_stage.participants or {}, 
+                stage.participants or multi_stage.stage_participants[tostring(i)] or multi_stage.stage_participants[i] or multi_stage.participants or {},
                 i
             )
 
@@ -357,11 +361,11 @@ function compile_multi_stage(multi_stage)
 
             -- Promote single use entry to on_ws array if needed (one-time setup)
             if i == 2 and not stage.on_ws and stage.use then
-                stage.on_ws = {
+                stage.on_ws = {{
                     party_using = stage.party_using,
                     use = stage.use,
                     threshold = stage.threshold
-                }
+                }}
 
                 stage.use = nil
                 stage.party_using = nil
@@ -386,7 +390,9 @@ function compile_multi_stage(multi_stage)
                         entry.party_using = string_array_to_lower(entry.party_using)
                         entry.use = skillchain_helper.filter_weapon_skills(string_array_to_lower(entry.use), known_weapon_skills, multi_stage.preferred_weapon_skills, multi_stage.blocked_weapon_skills)
 
-                        entry.participants = entry.participants or stage.participants or multi_stage.participants or {}
+                        entry.participants = entry.participants
+                            or multi_stage.stage_participants['2.' .. entry_i]
+                            or stage.participants or multi_stage.participants or {}
                         entry.participants = process_multi_stage_exclusions(stage.exclusions, entry.participants, entry_i)                                  -- Stage 2's own exclusion list
                         entry.participants = process_multi_stage_exclusions(multi_stage.exclusions, entry.participants, tonumber('2.%d':format(entry_i)))   -- The overall exclusion list for this exact phase of stage 2
                         entry.participants = process_multi_stage_exclusions(multi_stage.exclusions, entry.participants, 2)                                  -- The overall exclusion list for stage 2 as a whole
