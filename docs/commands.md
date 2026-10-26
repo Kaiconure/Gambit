@@ -1,5 +1,14 @@
 # Gambit command reference
 
+`gbt slots` lists the current configuration's contribution slots grouped by action
+type, with sections sorted alphabetically and slots in their placement order.
+Repeated slots appear once at their first occurrence; fallback alternatives retain
+their declared order. It includes automatic
+section hooks, empty slots, and all fallback alternatives, even when an alternative
+was not selected. Reload the configuration after adding or removing slots.
+Use `gbt slots -t <action-type>` to show only one section, for example
+`gbt slots -t battle`. The action type is case-insensitive.
+
 Use `//gbt` in the FFXI chat input, or `gbt` in the Windower console and scripts. `gambit` is an equivalent addon prefix. Examples below use chat syntax.
 
 `<value>` means a required value; `[option]` means optional. Do not type the angle or square brackets. Quote names containing spaces. Use lowercase command and option names as shown.

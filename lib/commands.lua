@@ -4,6 +4,56 @@ local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
 
+handlers['slots'] = function(args)
+    local actionType = getArgValue(args, '-t')
+    if hasArg(args, '-t') and (not actionType or actionType:sub(1,1) == '-') then
+        writeMessage('Usage: gbt slots [-t <action-type>]')
+        return
+    end
+    actionType = actionType and actionType:lower()
+    local available = settings and settings.actions and settings.actions._availableSlots
+    if not available then
+        writeMessage('Slot information is unavailable; reload the gambit configuration.')
+        return
+    end
+    local names = {}
+    for name in pairs(available) do names[#names+1] = name end
+    table.sort(names)
+    if #names == 0 then
+        writeMessage('No contribution slots are available.')
+        return
+    end
+    local grouped, sections = {}, {}
+    for _, name in ipairs(names) do
+        for section in pairs(available[name]) do
+            if not actionType or section:lower() == actionType then
+                if not grouped[section] then
+                    grouped[section] = {}
+                    sections[#sections+1] = section
+                end
+                grouped[section][#grouped[section]+1] = name
+            end
+        end
+    end
+    if #sections == 0 then
+        writeMessage('No contribution slots are available for action type ' .. text_action_type(actionType) .. '.')
+        return
+    end
+    writeMessage('Available contribution slots:')
+    table.sort(sections)
+    for _, section in ipairs(sections) do
+        table.sort(grouped[section], function(a, b)
+            local ap, bp = available[a][section], available[b][section]
+            ap = type(ap) == 'number' and ap or math.huge
+            bp = type(bp) == 'number' and bp or math.huge
+            if ap == bp then return a < b end
+            return ap < bp
+        end)
+        writeMessage('  ' .. text_action_type(section) .. ':')
+        for _, name in ipairs(grouped[section]) do writeMessage('    ' .. text_action_value(name)) end
+    end
+end
+
 handlers['eval'] = function(args)
     local code = table.concat(args or {}, ' ')
     if not code:match('%S') then

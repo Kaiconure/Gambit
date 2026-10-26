@@ -153,6 +153,25 @@ function slots.new(container, priority, warn, matchesRequired)
         end
     end
     function result.expand(types)
+        -- Keep discoverable hooks after placeholder expansion, including empty
+        -- hooks and unselected fallback alternatives.
+        container._availableSlots = {}
+        for _, kind in ipairs(types) do
+            local position = 0
+            for _, action in ipairs(container[kind] or {}) do
+                for _, entry in ipairs(slots.names(action)) do
+                    local names = type(entry) == 'table' and entry or {entry}
+                    for _, name in ipairs(names) do
+                        local sections = container._availableSlots[name] or {}
+                        container._availableSlots[name] = sections
+                        position = position + 1
+                        -- List repeated hooks at their first occurrence. Fallback
+                        -- alternatives retain their declared preference order.
+                        sections[kind] = sections[kind] or position
+                    end
+                end
+            end
+        end
         for _, group in pairs(groups) do
             table.sort(group, function(a,b)
                 if a.priority ~= b.priority then return a.priority < b.priority end

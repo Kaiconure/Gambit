@@ -338,6 +338,8 @@ text_namespace            = text_lightblue
 text_mob                  = text_lightcoral
 text_target               = text_gold
 text_buff                 = text_cornsilk
+text_action_type          = text_cornsilk
+text_action_value         = text_green
 
 --------------------------------------------------------------------------------------
 -- Current settings
