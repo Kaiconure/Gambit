@@ -14,6 +14,7 @@
       "retry_delay": 10,
       "engage_trusts": null,
       "camp": {
+        "leader_only": null,
         "min_distance": null,
         "max_distance": null,
         "max_duration": null,
@@ -42,7 +43,7 @@
       "when": [
         "vars.frontline_engagement.camp",
         "vars.frontline_engagement.camp.location",
-        "not vars.frontline_engagement.leader_only or me.is_party_leader",
+        "not vars.frontline_engagement.camp.leader_only or me.is_party_leader",
         "not vars.frontline_engagement.aggressor_only or any(gambit.strategy, 'aggressor', 'puller')",
         "vars.frontline_engagement.camp.zone and any(vars.frontline_engagement.camp.zone, zone_id, zone_name, zone_search)",
         "arrayCount(vars.frontline_engagement.camp.action_types) == 0 or any(actionType, vars.frontline_engagement.camp.action_types)",
