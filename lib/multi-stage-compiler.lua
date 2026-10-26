@@ -3,6 +3,9 @@
 -- each entry maps to its original location. Essentially this reverses the
 -- mapping of index->field to field->index instead.
 local participantRules = require('./lib/multi-stage-participants')
+local capabilities = require('./lib/weapon-skill-info')
+local configValues = require('./lib/variable-values')
+local capabilityExclusions = setmetatable({}, {__mode='k'})
 
 local function string_array_to_map(array)
     local map = {}
@@ -47,7 +50,9 @@ local function process_multi_stage_exclusions(exclusions, participants, current)
         for player, player_exclusions in pairs(exclusions) do
             if arrayIndexOf(player_exclusions, current) then
                 local player_location = arrayIndexOfStrI(participants, player)
-                if player_location and not participantRules.isProtected(participants, player) then
+                local automatic = capabilityExclusions[exclusions]
+                local incapable = automatic and automatic[player] and automatic[player][current]
+                if player_location and (incapable or not participantRules.isProtected(participants, player)) then
                     table.remove(participants, player_location)
                 end
             end
@@ -313,11 +318,54 @@ local function expand_skillchain_continuation(multi_stage, stage_number, known_w
     end
 end
 
-function compile_multi_stage(multi_stage)
+function compile_multi_stage(multi_stage, capabilityTemplate)
+    -- Build an unrestricted skill template before local skill filtering mutates
+    -- the configuration. Remote roles must not depend on our own weapon skills.
+    local template
+    if not capabilityTemplate then
+        template = configValues.copy(multi_stage)
+        compile_multi_stage(template, true)
+    end
     local stage_meta = multi_stage and multi_stage.stages or {}
 
     local abilities = windower.ffxi.get_abilities()
     local known_weapon_skills = abilities and abilities.weapon_skills or {}
+    if capabilityTemplate then
+        known_weapon_skills = {}
+        for id in pairs(require('resources').weapon_skills) do
+            if type(id) == 'number' then known_weapon_skills[#known_weapon_skills+1]=id end
+        end
+    end
+
+    if not capabilityTemplate then
+        local player = windower.ffxi.get_player()
+        local encoded = capabilities.encode(abilities and abilities.weapon_skills)
+        if player and encoded then capabilities.apply(player.name, encoded) end
+        multi_stage.exclusions = multi_stage.exclusions or {}
+        local automatic = {}
+        capabilityExclusions[multi_stage.exclusions] = automatic
+        local function derive(role, number)
+            local eligible = capabilities.filter(role.participants, role.use, skillchain_helper)
+            for _, name in ipairs(role.participants or {}) do
+                if name:sub(1,2) ~= '--' and not arrayIndexOfStrI(eligible, name) then
+                    automatic[name] = automatic[name] or {}
+                    automatic[name][number] = true
+                    local exclusions = multi_stage.exclusions[name] or {}
+                    multi_stage.exclusions[name] = exclusions
+                    if not arrayIndexOf(exclusions, number) then exclusions[#exclusions+1]=number end
+                end
+            end
+        end
+        for i, role in ipairs(template.stages or {}) do
+            if i == 2 then
+                for j, entry in ipairs(role.on_ws or {}) do
+                    derive(entry, tonumber('2.' .. j))
+                end
+            else
+                derive(role, i)
+            end
+        end
+    end
 
     multi_stage.stage_participants = multi_stage.stage_participants or {}
 
@@ -454,6 +502,23 @@ function compile_multi_stage(multi_stage)
                     stage.participants[j] = makePlayerName(stage.participants[j])
                 end
             end
+        end
+    end
+
+    if capabilityTemplate then return end
+
+    local player = windower.ffxi.get_player()
+    local encoded = capabilities.encode(abilities and abilities.weapon_skills)
+    if player and encoded then capabilities.apply(player.name, encoded) end
+    for i, stage in ipairs(stage_meta) do
+        local role = template.stages[i]
+        if i == 2 then
+            for j, entry in ipairs(stage.on_ws or {}) do
+                local candidate = role and role.on_ws and role.on_ws[j]
+                entry.participants = capabilities.filter(entry.participants, candidate and candidate.use, skillchain_helper)
+            end
+        else
+            stage.participants = capabilities.filter(stage.participants, role and role.use, skillchain_helper)
         end
     end
 

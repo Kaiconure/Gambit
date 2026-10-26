@@ -2608,6 +2608,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Determine if you are the multistage opener and are ready to go.
+    -- Prepare a multi-stage plan without checking combat readiness or selecting a skill.
+    context.compileMultiStage = function(multi_stage)
+        local stages = type(multi_stage) == 'table' and multi_stage.stages
+        if type(stages) ~= 'table' or #stages == 0 then return false end
+        local preset
+        if multi_stage.settings_name then
+            preset = context.getVar('ws.multi_stage_settings.' .. multi_stage.settings_name)
+            assert(type(preset) == 'table', 'Multi-stage settings preset not found: ' .. tostring(multi_stage.settings_name))
+        end
+        multiStageParticipants.prepare(multi_stage, context, compile_multi_stage, preset)
+        return true
+    end
+
     context.isNextMultiStageOpener = function(multi_stage)
         if not context.partyUsingWeaponSkill() then
             local stage = context.isNextMultiStager(multi_stage)
@@ -2637,7 +2650,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
         if type(stage_meta) == 'table' and #stage_meta > 0 then
 
-            multiStageParticipants.prepare(multi_stage, context, compile_multi_stage)
+            context.compileMultiStage(multi_stage)
             stage_meta = multi_stage.stages
 
             local party_using_weapon_skill = context.partyUsingWeaponSkill()

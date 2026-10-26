@@ -634,6 +634,40 @@ handlers['jobset'] = function(args)
         writeMessage('Job information updated and broadcast for ' .. name .. '.')
 end
 
+handlers['wsinfo'] = function(args)
+    if hasArg(args, '-sync') then
+        syncWeaponSkillInfoIpc()
+        writeMessage('Requesting weapon skill info from all local characters...')
+        return
+    elseif hasArg(args, '-send') then
+        sendWeaponSkillInfoIpc()
+        writeMessage('Sending weapon skill info to other local characters...')
+        return
+    end
+    sendWeaponSkillInfoIpc(true)
+    local info = require('./lib/weapon-skill-info')
+    local names = {}
+    if hasArg(args, '-all') then
+        for name in pairs(info.records) do names[#names+1]=name end
+        table.sort(names)
+    else
+        local player = windower.ffxi.get_player()
+        names[1] = makePlayerName(getArgValue(args, '-name') or getArgValue(args, '-n'))
+            or (player and player.name)
+    end
+    for _, name in ipairs(names) do
+        local record = info.records[name]
+        local skills = {}
+        for _, id in ipairs(record and record.ids or {}) do
+            local skill = resources.weapon_skills[id]
+            skills[#skills+1] = skill and skill.name or ('Unknown weapon skill (' .. id .. ')')
+        end
+        writeMessage('Weapon skills for ' .. text_player(name) .. ':')
+        writeMessage('  ' .. (not record and 'Unknown' or (#skills > 0 and text_weapon_skill(table.concat(skills, ', ')) or text_error('None'))))
+    end
+end
+handlers['wsi'] = handlers['wsinfo']
+
 handlers['jobinfo'] = function(args)
 
     if hasArg(args, '-sync') then

@@ -28,13 +28,7 @@
       "max_iterations": 1
     }
   ],
-  "actions": [
-    {
-      "import": "ws/terminal-reset"
-    },
-    {
-      "import": "macros/skillchaining"
-    },
+  "loading": [
     {
       "when": ["vars.ws.multi_stage.settings_name"],
       "commands": [
@@ -47,6 +41,22 @@
       "max_iterations": 1,
       "silent": true,
       "on_load": true
+    },
+    {
+      "name": "multi-stage-compile",
+      "when": ["vars.ws.multi_stage.stages"],
+      "commands": ["compileMultiStage(vars.ws.multi_stage)"],
+      "max_iterations": 1,
+      "silent": true,
+      "on_load": true
+    }
+  ],
+  "actions": [
+    {
+      "import": "ws/terminal-reset"
+    },
+    {
+      "import": "macros/skillchaining"
     },
     {
       "when": ["arrayCount(vars.ws.multi_stage.stages) == 0"],

@@ -254,6 +254,10 @@ Configuration changes normally save automatically. The raw-distance exception is
 | `jobinfo [-name <character>]` | `ji`; option `-n` | Show your job information, or another character's cached IPC job information. |
 | `jobinfo -send` | — | Broadcast your job information to other local Gambit instances. |
 | `jobinfo -all` | `ji -all` | List all cached characters and yourself alphabetically, using live job information for yourself. |
+| `wsinfo [-name <character>]` | option `-n` | Show a character heading followed by an indented list of weapon-skill names; defaults to yourself, refreshed from live abilities. |
+| `wsinfo -all` | — | Show every cached character's weapon-skill names, with characters ordered alphabetically. |
+| `wsinfo -send` | — | Broadcast your current weapon-skill capability IDs. |
+| `wsinfo -sync` | — | Ask every local Gambit instance to broadcast its weapon-skill capabilities, including yourself. |
 | `jobinfo -sync` | `ji -sync` | Ask all local Gambit instances to broadcast their job information, including your own. Also runs automatically on addon load and login. |
 | `jobset <character> <job-spec>` | — | Set and broadcast a character's job information. Examples: `WHM`, `WHM/RDM`, `WHM75`, `WHM75/BLM37`. Omitted levels default to 1. |
 

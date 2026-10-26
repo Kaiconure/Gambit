@@ -51,6 +51,7 @@ json = require('./lib/jsonlua')
 directionality = require('./lib/directionality')
 executionFactory = require('./lib/execution-factory')
 local jobInfoRecords = require('./lib/job-info')
+local weaponSkillInfo = require('./lib/weapon-skill-info')
 
 meta = meta or {}
 meta.erase = require('./meta/erase') or {}
@@ -274,6 +275,25 @@ function syncJobInfoIpc()
     sendJobInfoIpc()
 end
 
+local lastWeaponSkillSnapshot
+function sendWeaponSkillInfoIpc(onlyChanged)
+    local player = windower.ffxi.get_player()
+    local abilities = windower.ffxi.get_abilities()
+    local encoded = weaponSkillInfo.encode(abilities and abilities.weapon_skills)
+    if not player or not player.name or not encoded then return end
+    local snapshot = player.name .. ':' .. encoded
+    weaponSkillInfo.apply(player.name, encoded)
+    if not onlyChanged or snapshot ~= lastWeaponSkillSnapshot then
+        windower.send_ipc_message('wsinfo -n ' .. player.name .. ' -ids ' .. encoded)
+        lastWeaponSkillSnapshot = snapshot
+    end
+end
+
+function syncWeaponSkillInfoIpc()
+    windower.send_ipc_message('wsinfo -sync')
+    sendWeaponSkillInfoIpc()
+end
+
 function reloadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
     executionFactory.clear()
     inventory.printDebug = nil
@@ -445,6 +465,7 @@ windower.register_event('load', function()
         -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
         coroutine.schedule(function()
             syncJobInfoIpc()
+            syncWeaponSkillInfoIpc()
         end, 3.0)
     else
         globals.suppress_logging = true
@@ -500,6 +521,7 @@ windower.register_event('login', function ()
     requestCurrencies()
 
     syncJobInfoIpc()
+    syncWeaponSkillInfoIpc()
 end)
 
 windower.register_event('logout', function()
@@ -847,6 +869,12 @@ windower.register_event('ipc message', function (msg)
         -- Update the index table
         if index then
             globals.ipc_positions_by_index[tostring(index)] = globals.ipc_positions[key]
+        end
+    elseif command == 'wsinfo' then
+        if hasArg(args, '-sync') then
+            sendWeaponSkillInfoIpc()
+        else
+            weaponSkillInfo.apply(getArgValue(args, '-n'), getArgValue(args, '-ids'))
         end
     elseif command == 'job' then
         if hasArg(args, '-sync') then
@@ -1737,6 +1765,7 @@ function cr_ipcSender()
         if zone and zone.id > 0 and logged_in then
             local me = windower.ffxi.get_mob_by_target('me')
             if me and me.valid_target then
+                sendWeaponSkillInfoIpc(true)
 
                 local should_send = 
                     globals.last_broadcast_pos == nil or        -- Force send if we have no prior position

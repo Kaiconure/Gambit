@@ -96,6 +96,23 @@ nonmatching placeholder in compiled output. A genuinely empty participant list
 retains the previous behavior, including the initial readiness check's lack of a
 participant restriction; it does not select an executing closer by itself.
 
-Selector support does not add remote weapon-skill availability detection. Existing
-TP and priority rules still apply, and each client checks its own weapon skills.
-Use stage-specific jobs/names to assign candidates capable of their intended step.
+## Shared weapon-skill capabilities
+
+Gambit exchanges weapon-skill IDs over IPC on addon load and login. It also
+checks the local ability list for changes during the IPC sender loop and
+broadcasts only changed snapshots. Use `gbt wsinfo -sync` to request a fresh
+snapshot from every local instance, `-send` to broadcast yours, and `-all` to
+inspect the cache. Instances must have this support loaded to respond.
+
+Multi-stage compilation layers capability filtering onto configured participant
+lists and exclusions. Each stage and stage-2 alternative keeps only characters
+with at least one compatible weapon skill. Remote capabilities are compared
+against the full role, independently of the compiling character's skills.
+Unknown characters cannot be assigned until they advertise capabilities; an
+empty advertised list confirms no available weapon skills. Capability changes
+rebuild cached plans on their next evaluation. Derived exclusions stay in memory
+and compiled diagnostic output; source configuration files are never rewritten.
+
+Manual exclusions retain their existing behavior. Protected `!` participants
+still override manual exclusions, but cannot override missing capabilities.
+TP, range, engagement, and temporary restrictions remain runtime checks.

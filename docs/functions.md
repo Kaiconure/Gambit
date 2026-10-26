@@ -199,3 +199,17 @@ when target selection fails, rather than short-circuiting before the helper.
 Callers acquire/resume reservations separately; this helper never acquires or
 extends them, even when the selected target changes. Roll actions use this helper
 after resolving their party anchor on each attempt.
+
+### Multi-stage compilation
+
+`compileMultiStage(config)` prepares a multi-stage weapon-skill plan without
+checking combat readiness or selecting a weapon skill. It returns `true` for a
+valid nonempty stage list, including when the cached plan is current, and `false`
+when no stages are defined. Errors use the normal action error handling.
+
+The `ws/multi-stage` library includes an `on_load` action named
+`multi-stage-compile` after its settings initialization. The existing opener and
+closer checks still compile on demand and refresh plans after roster or
+capability changes. Initial compilation may exclude characters whose capability
+replies have not arrived yet; later evaluation refreshes the plan. Loading actions
+run when automation is enabled and eligible to process them.

@@ -1,6 +1,7 @@
 local selectors = require('./lib/target-selectors')
 local values = require('./lib/variable-values')
 local participants = {}
+local capabilities = require('./lib/weapon-skill-info')
 local cache = setmetatable({}, {__mode='k'})
 local protectedLists = setmetatable({}, {__mode='k'})
 
@@ -85,21 +86,44 @@ local function expand(config, context)
     for _, entry in ipairs(config.on_ws or {}) do expand(entry, context) end
 end
 
-function participants.prepare(config, context, compile)
+local function same(a, b)
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= 'table' then return a == b end
+    for key, value in pairs(a) do if not same(value, b[key]) then return false end end
+    for key in pairs(b) do if a[key] == nil then return false end end
+    return true
+end
+
+function participants.prepare(config, context, compile, preset)
     local state = cache[config]
     if not state then
         state = {source=values.copy(config)}
         cache[config] = state
     end
-    local key = rosterKey(context)
-    if config._compiled and state.key == key then return end
+    local key = rosterKey(context) .. ':' .. capabilities.revision
+    if config._compiled and state.key == key and same(state.preset, preset) then return end
     local resolved = values.copy(state.source)
+    -- Early/on-load callers can arrive before the override action. Resolve the
+    -- selected preset here, before selector expansion, rather than caching an
+    -- incomplete plan and relying on that action to mutate it later.
+    local function inherit(target, source)
+        for key, value in pairs(source or {}) do
+            if type(value) == 'table' then
+                if type(target[key]) ~= 'table' then target[key] = {} end
+                inherit(target[key], value)
+            else
+                target[key] = value
+            end
+        end
+    end
+    inherit(resolved, preset)
     expand(resolved, context)
     -- Compile a separate plan so a failure cannot destroy the last usable plan.
     compile(resolved)
     for field in pairs(config) do config[field] = nil end
     for field, value in pairs(resolved) do config[field] = value end
-    state.key = key
+    state.key = rosterKey(context) .. ':' .. capabilities.revision
+    state.preset = values.copy(preset)
 end
 
 return participants
