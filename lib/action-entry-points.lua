@@ -8,7 +8,7 @@ function entryPoints.find(locations, job, subJob, groups, exists)
     for i = 1, #locations do
         for _, group in ipairs(groups) do
             local name = '(!' .. group .. ')'
-            if exists(path(i, name)) then override = {path(i, name), name}; break end
+            if group:sub(1,1) ~= '~' and exists(path(i, name)) then override = {path(i, name), name}; break end
         end
         if not override and exists(path(i, '(!all)')) then
             override = {path(i, '(!all)'), '(!all)'}
@@ -27,7 +27,13 @@ function entryPoints.find(locations, job, subJob, groups, exists)
     for i = 1, #locations do
         for _, group in ipairs(groups) do
             local name = '(' .. group .. ')'
-            if exists(path(i, name)) then return path(i, name), name end
+            if group:sub(1,1) ~= '~' and exists(path(i, name)) then return path(i, name), name end
+        end
+    end
+    for i = 1, #locations do
+        for _, group in ipairs(groups) do
+            local name = '(' .. group .. ')'
+            if group:sub(1,1) == '~' and exists(path(i, name)) then return path(i, name), name end
         end
     end
     for i = 1, #locations do

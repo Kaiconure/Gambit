@@ -277,3 +277,27 @@ for _, required in ipairs({'BLM', {true}, {named='BLM'}, {''}}) do
     assert(not pcall(optionalTest,{{missing={required_for=required,actions={}}}},0))
 end
 print('PASS: required_for job/group selectors, exclusions, optional override and shared-slot satisfaction')
+-- Use actual generated common-file ordering with the real import/variable loader.
+for path in pairs(documents) do documents[path]=nil end
+local paths=dofile('lib/settings-paths.lua')
+local selectors=require('./lib/target-selectors')
+env.settingsPaths.commonFiles=function(name,job)
+    return paths.commonFiles(name,job,selectors.entryPointGroups(job))
+end
+documents['./actions/lib/common/common.json']={vars={choice='default',inverse_default='default'}}
+documents['./actions/lib/common/(~mages).json']={vars={choice='inverse',positive='inverse',inverse_default='inverse',['!explicit']='inverse'}}
+documents['./actions/lib/common/(melee).json']={vars={choice='positive',positive='positive',explicit='positive'}}
+documents['./actions/lib/common/PLD.json']={vars={choice='job',explicit='job'}}
+local layered={}
+load('Tester',layered,{name='Tester',main_job='PLD',main_job_level=99},'entry')
+assert(layered.vars.choice=='job')
+assert(layered.vars.positive=='positive')
+assert(layered.vars.inverse_default=='inverse')
+assert(layered.vars.explicit=='inverse')
+documents['./actions/lib/common/(~mages).json'].vars.layer='global-inverse'
+documents['./actions/lib/common/PLD.json'].vars.layer='global-job'
+documents['./settings/Tester/actions/lib/common/(~mages).json']={vars={layer='character-inverse'}}
+local scoped={}
+load('Tester',scoped,{name='Tester',main_job='PLD',main_job_level=99},'entry')
+assert(scoped.vars.layer=='character-inverse')
+print('PASS: common imports layer job over positive over inverse over defaults, preserve explicit priorities and character scope')

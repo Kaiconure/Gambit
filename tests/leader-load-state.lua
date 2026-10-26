@@ -22,8 +22,10 @@ assert(entry.find({'child','base'}, 'BLM', nil, roles.entryPointGroups('BLM',fal
 local paths = dofile('lib/settings-paths.lua')
 local common = paths.commonFiles('Player', 'BLM', roles.entryPointGroups('BLM',true))
 assert(common[1] == './actions/lib/common/common.json')
-assert(common[2] == './actions/lib/common/(leader).json')
-assert(common[3] == './actions/lib/common/(mage).json')
-assert(common[7] == './actions/lib/common/BLM.json')
-assert(common[8] == './actions/lib/common.json')
+local positions={}
+for i,path in ipairs(common) do positions[path]=i end
+assert(positions['./actions/lib/common/(~melee).json'] < positions['./actions/lib/common/(leader).json'])
+assert(positions['./actions/lib/common/(leader).json'] < positions['./actions/lib/common/(mage).json'])
+assert(positions['./actions/lib/common/(mage).json'] < positions['./actions/lib/common/BLM.json'])
+assert(positions['./actions/lib/common/BLM.json'] < positions['./actions/lib/common.json'])
 print('PASS: leadership notifications, transient data, role/common order and leader entry points')

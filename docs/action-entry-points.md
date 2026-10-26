@@ -6,8 +6,9 @@ in order:
 1. Job/sub-job, such as `blm-rdm.json`.
 2. Job, such as `blm.json`.
 3. Matching role selectors, such as `(mages).json`.
-4. `(all).json`.
-5. The existing `actions/defaults/default-actions.json` starter fallback.
+4. Matching inverse role selectors, such as `(~mages).json` for jobs outside the mages group.
+5. `(all).json`.
+6. The existing `actions/defaults/default-actions.json` starter fallback.
 
 Each stage searches all applicable locations: active namespace, inherited
 namespaces, base settings, and shipped standard actions. Character-specific
@@ -19,6 +20,12 @@ Role filenames reuse target-selector job membership: `melee`, `ranged`, `mage`,
 `nukers`, and `tanks`. Use these filenames inside an `actions` folder. On Windows,
 filename matching is case-insensitive. Multiple matching role files at one
 location are considered alphabetically. Only one entry point is loaded.
+
+Positive role matches across all locations take precedence over inverse matches,
+so an inherited `(melee).json` beats a local `(~mages).json` for PLD. Inverse
+matches search closest locations first, alphabetically within each location.
+Inverse selectors support the job groups and aliases listed above, including
+`melee_dps`; inverse leader and combined important/inverse syntax are not supported.
 
 ## Important entry points
 
@@ -37,8 +44,11 @@ the requested name; plain `all.json` has no automatic fallback meaning.
 ## Role and leader common files
 
 Inside each `actions/lib/common` folder, automatic imports are additive and
-ordered from lowest to highest priority: `common.json`, all matching role files
-in alphabetical order, then the job file (for example `BLM.json`). The existing
+ordered from lowest to highest priority: `common.json`, matching inverse role files
+in alphabetical order, matching positive role files in alphabetical order, then
+the job file (for example `BLM.json`). For PLD, `pld.json` wins over `(melee).json`,
+which wins over `(~mages).json` when ordinary variable definitions conflict. Explicit
+variable priorities still apply. The existing
 `actions/lib/common.json` follows these. Namespace inheritance priority is
 unchanged. Common files do not support `(all)` or important selector filenames;
 use `common.json` and variable assignment priority markers instead.

@@ -271,8 +271,12 @@ function paths.commonFiles(playerName, mainJob, groups)
     local result = {}
     for _, library in ipairs(libraries) do
         local relatives = {'common/common'}
+        -- Common imports run backward, so inverse defaults precede positives.
         for _, group in ipairs(groups or {}) do
-            relatives[#relatives + 1] = 'common/(' .. group .. ')'
+            if group:sub(1,1) == '~' then relatives[#relatives + 1] = 'common/(' .. group .. ')' end
+        end
+        for _, group in ipairs(groups or {}) do
+            if group:sub(1,1) ~= '~' then relatives[#relatives + 1] = 'common/(' .. group .. ')' end
         end
         relatives[#relatives + 1] = 'common/' .. mainJob
         relatives[#relatives + 1] = 'common'

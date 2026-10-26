@@ -34,13 +34,16 @@ groups.TANKS = groups.TANK
 
 -- Stable filename selectors for automatic job entry points.
 function selectors.entryPointGroups(job, isLeader)
-    local result = {}
+    local result, inverse = {}, {}
     job = (job or ''):upper()
     for name, members in pairs(groups) do
-        if members[job] then result[#result + 1] = name:lower() end
+        if members[job] then result[#result + 1] = name:lower()
+        else inverse[#inverse + 1] = '~' .. name:lower() end
     end
     if isLeader then result[#result + 1] = 'leader' end
     table.sort(result)
+    table.sort(inverse)
+    for _, name in ipairs(inverse) do result[#result + 1] = name end
     return result
 end
 
