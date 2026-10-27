@@ -1,4 +1,4 @@
-__version = '1.0.1'
+__version = '1.0.2'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -315,6 +315,11 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
     if globals.cloud_panel then
         globals.cloud_panel:configure(settings.cloudPanel)
     end
+    if globals.status_panel then
+        local ok, err = pcall(function() globals.status_panel:configure(loadPanelSettings()) end)
+        if ok then globals.status_panel_ready = true end
+        if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
+    end
 
     if settings.debugging then
         inventory.printDebug = printDebug
@@ -410,6 +415,20 @@ windower.register_event('load', function()
     initTrustData()
 
     globals.cloud_panel = ux.cloud_panel.new()
+    globals.status_panel_ready = false
+    globals.status_panel = require('./lib/ux/status-panel').new({
+        windower=windower, texts=texts, images=images,
+        enabled=function() return globals.enabled end,
+        loggedIn=function() return globals.logged_in end,
+        ready=function()
+            return globals.status_panel_ready and not actionStateManager.needsRecompile
+                and windower.ffxi.get_player()~=nil and windower.ffxi.get_mob_by_target('me')~=nil
+        end,
+        toggle=function() sendSelfCommand('toggle') end,
+        context=ActionContext.createTemporary,
+        subscribe=subscribeGambitLog,
+        save=savePanelSettings,
+    })
 
     smartMove:setLogger(writeDebug, writeTrace)
 
@@ -482,6 +501,7 @@ end)
 ---------------------------------------------------------------------
 -- Login
 windower.register_event('login', function ()
+    globals.status_panel_ready = false
     actionStateManager:setConquestInfo()
 
     if 
@@ -525,6 +545,7 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    globals.status_panel_ready = false
     resetNamespaceStartup()
     globals.logged_in = false
     globals.suppress_logging = true
@@ -541,6 +562,10 @@ windower.register_event('unload', function()
 
     globals.logged_in = false
     globals.shutting_down = true
+    if globals.status_panel then
+        globals.status_panel:destroy()
+        globals.status_panel = nil
+    end
 
     resetCurrentMob(nil, true)
     windower.send_command('unbind !~G;')    -- Unbind the automation toggle key

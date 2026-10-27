@@ -1,0 +1,198 @@
+local Panel=require('./lib/ux/panel')
+local Buffer=require('./lib/ux/log-buffer')
+local factory=require('./lib/execution-factory')
+local Config=require('./lib/ux/status-config')
+local copy=require('./lib/variable-values').copy
+local Theme=require('./lib/ux/theme')
+local Status={}
+Status.__index=Status
+Status.defaults=Config.defaults
+local function displayWidth(options)
+    return math.max(options.width,options.show_log and 600 or 0)
+end
+function Status.new(deps,options)
+    local self=setmetatable({deps=deps},Status)
+    self:configure(options)
+    self.unsubscribe=deps.subscribe(function(message) self.buffer:add(message) end)
+    self.frameEvent=deps.windower.register_event('prerender',function() self:update() end)
+    self.mouseEvent=deps.windower.register_event('mouse',function(kind,x,y,delta,blocked)
+        return self.panel:mouse(kind,x,y,blocked)
+    end)
+    return self
+end
+function Status:configure(options)
+    options=Config.normalize(options)
+    if self.panel then self.panel:destroy() end
+    self.options=options; self.entries={}; self.nextUpdate=0
+    self.buffer=self.buffer or Buffer.new(options.history_lines,self.deps.windower.from_shift_jis)
+    self.buffer.limit=options.history_lines
+    while #self.buffer.lines>options.history_lines do table.remove(self.buffer.lines,1); table.remove(self.buffer.ids,1) end
+    local tracking=options.tracking.sets[options.tracking.current]
+    local lineHeight=math.ceil(options.font_size*1.8)
+    local trackingLines=0
+    for _, entry in ipairs(tracking) do
+        trackingLines=trackingLines+((entry.expression==nil and type(entry.value)=='table') and math.max(1,#entry.value)+1 or 1)
+    end
+    -- Consolas advances roughly 0.8 screen pixels per point at standard DPI.
+    self.characterWidth=options.font_size*0.8
+    local width=displayWidth(options)
+    self.columns=math.max(8,math.floor((width-20)/self.characterWidth))
+    self.panel=Panel.new({x=options.x,y=options.y,width=width,
+        theme=options.theme,
+        height=options.height or (72+(trackingLines+options.history_lines+1)*lineHeight),
+        on_move=function(x,y)
+            self.options.x=x; self.options.y=y
+            self:persist()
+        end},self.deps)
+    self.panel:label(10,5,options.font_size,'heading').text:text(Buffer.clip('Gambit Status',
+        math.floor(self.columns*options.font_size/(options.font_size+2))))
+    self.toggle=self.panel:button(10,30,width-20,lineHeight,options.font_size,self.deps.toggle,'subheading')
+    local row=1
+    for _,definition in ipairs(tracking) do
+        local entry={definition=definition,label=self.panel:label(10,32+row*lineHeight,options.font_size,'subheading'),
+            valueLabel=self.panel:label(18,32+(row+1)*lineHeight,options.font_size,'body')}
+        row=row+((definition.expression==nil and type(definition.value)=='table') and math.max(1,#definition.value)+1 or 1)
+        if definition.expression~=nil then
+            local ok,fn=pcall(factory.get,definition.expression)
+            if ok then entry.fn=fn else entry.error=true end
+        end
+        self.entries[#self.entries+1]=entry
+    end
+    self.logHeading=self.panel:label(10,0,options.font_size,'subheading')
+    self.logs={}
+    for i=1,options.history_lines do self.logs[i]=self.panel:label(10,0,options.font_size,'body') end
+    self.log=self.logs[1] or self.panel:label(10,0,options.font_size,'body')
+    self.panel:layout(); self.panel:show(false)
+end
+function Status:persist()
+    if self.deps.save then self.deps.save(copy(self.options)) end
+end
+function Status:setVisible(visible)
+    self.options.visible=visible
+    self:update(); self:persist()
+end
+function Status:setLogVisible(visible)
+    self.options.show_log=visible
+    self.nextUpdate=0
+    self:update(); self:persist()
+end
+function Status:setTracking(name)
+    assert(self.options.tracking.sets[name], 'Unknown tracking set: '..tostring(name))
+    local options=copy(self.options); options.tracking.current=name
+    self:configure(options); self:update(); self:persist()
+end
+function Status:resetPosition()
+    self:setPosition(Status.defaults.x,Status.defaults.y)
+end
+function Status:setPosition(x,y)
+    local options=copy(self.options)
+    if x~=nil then options.x=x end
+    if y~=nil then options.y=y end
+    options=Config.normalize(options)
+    self.options.x=options.x; self.options.y=options.y
+    self.panel.x=self.options.x; self.panel.y=self.options.y; self.panel:layout()
+    self:persist()
+end
+function Status:setSize(width,height)
+    local options=copy(self.options)
+    if width~=nil then options.width=width end
+    if height=='auto' then options.height=nil
+    elseif height~=nil then options.height=height end
+    self:configure(options)
+    if height=='auto' then self.options.height=nil end
+    self:update(); self:persist()
+end
+function Status:setTheme(name)
+    local options=copy(self.options); options.theme=name
+    self:configure(options); self:update(); self:persist()
+end
+function Status:setText(item,text)
+    local lineHeight=math.ceil(self.options.font_size*1.8)
+    local capacity=math.max(0,math.floor((self.panel.height-item.y-8)/lineHeight))
+    local lines={}
+    for line in (text..'\n'):gmatch('(.-)\n') do
+        if #lines>=capacity then break end
+        local indent=math.ceil(math.max(0,item.x-10)/self.characterWidth)
+        lines[#lines+1]=Buffer.clip(line,self.columns-indent)
+    end
+    item.text:text(table.concat(lines,'\n'))
+end
+function Status:update()
+    local ready=not self.deps.ready or self.deps.ready()
+    local visible=ready and self.deps.loggedIn() and self.options.visible
+    if not visible then
+        if self.panel.visible then self.panel:show(false) end
+        return
+    end
+    self.panel.width=displayWidth(self.options)
+    self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
+    self.toggle.width=self.panel.width-20
+    local enabled=self.deps.enabled()
+    self:setText(self.toggle,enabled and 'Automation: [ON]' or 'Automation: [OFF]')
+    Theme.color(self.toggle.text,enabled and 'green' or 'red')
+    if self.panel.visible and os.clock()<self.nextUpdate then return end
+    self.nextUpdate=os.clock()+self.options.refresh_interval
+    for _, entry in ipairs(self.entries) do
+        local value=entry.definition.value
+        if entry.definition.expression~=nil then
+            value='[error]'
+            if entry.fn and not entry.error then
+                local ok,context=pcall(self.deps.context,'status panel')
+                if not ok or not context then value='[unavailable]'
+                else
+                    setfenv(entry.fn,context)
+                    local success,result=pcall(entry.fn)
+                    if success then value=result else entry.error=true end
+                end
+            end
+        end
+        entry.hidden=value==nil
+        local lines={}
+        local function append(text)
+            text=Buffer.plain(text,self.deps.windower.from_shift_jis)
+            for line in (text..'\n'):gmatch('(.-)\n') do lines[#lines+1]=line end
+        end
+        if type(value)=='table' then
+            for _, item in ipairs(value) do append(item) end
+        else append(value==nil and '' or value) end
+        entry.display=table.concat(lines,'\n'); entry.lineCount=math.max(1,#lines)
+    end
+    -- Expression arrays can change size at runtime: reflow rows and automatic
+    -- height before clipping, without rebuilding controls or disturbing dragging.
+    local lineHeight=math.ceil(self.options.font_size*1.8)
+    local y=52
+    for _, entry in ipairs(self.entries) do
+        entry.label.y=y; entry.valueLabel.y=y+lineHeight
+        if not entry.hidden then y=y+(1+entry.lineCount)*lineHeight end
+    end
+    local logLines=self.options.show_log and self.options.history_lines or 0
+    self.logHeading.y=y+12
+    local logY=self.logHeading.y+(logLines>0 and lineHeight or 0)
+    local requiredHeight=math.max(80,(logLines>0 and logY or y)+logLines*lineHeight+12)
+    self.panel.height=math.max(self.options.height or 0,requiredHeight)
+    for i,item in ipairs(self.logs) do item.y=logY+(i-1)*lineHeight end
+    self.panel:layout()
+    self:setText(self.logHeading,logLines>0 and 'Log' or '')
+    for _, entry in ipairs(self.entries) do
+        self:setText(entry.label,entry.hidden and '' or Buffer.plain(entry.definition.name,self.deps.windower.from_shift_jis))
+        self:setText(entry.valueLabel,entry.hidden and '' or entry.display)
+        Theme.color(entry.valueLabel.text,entry.error and 'red' or 'body')
+    end
+    local visibleLogLines=math.min(#self.logs,math.max(0,math.floor((self.panel.height-logY-8)/lineHeight)))
+    local firstLogLine=math.max(1,#self.buffer.lines-visibleLogLines+1)
+    for i,item in ipairs(self.logs) do
+        local index=firstLogLine+i-1
+        local id=self.buffer.ids[index] or index
+        Theme.color(item.text,index==#self.buffer.lines and 'log_latest' or (id%2==1 and 'log_odd' or 'log_even'))
+        self:setText(item,self.options.show_log and i<=visibleLogLines and (self.buffer.lines[index] or '') or '')
+    end
+    -- Reveal a newly built/reconfigured panel only after final sizing and text.
+    if not self.panel.visible then self.panel:show(true) end
+end
+function Status:destroy()
+    self.unsubscribe()
+    self.deps.windower.unregister_event(self.frameEvent)
+    self.deps.windower.unregister_event(self.mouseEvent)
+    self.panel:destroy()
+end
+return Status

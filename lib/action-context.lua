@@ -1,4 +1,5 @@
 local alignment = require('./lib/alignment')
+local settingsPaths = require('./lib/settings-paths')
 local movementReservations = require('./lib/movement-reservations')
 local engagementHelpers = require('./lib/engagement-helpers')
 local variableValues = require('./lib/variable-values')
@@ -2097,6 +2098,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         is_ranged_attacking = globals.isRangedAttacking,
         gambit = {
             enabled = globals.enabled,
+            namespace = settingsPaths.getLoadedNamespace(),
             strategy = settings.strategy,
             distance = settings.maxDistance,
             distance_z = settings.maxDistanceZ,
@@ -6685,6 +6687,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.bool = context_boolean
     context.number = context_number
     context.string = context_string
+    context.format = string.format
     context.recastTime = context_recastTime
     context.recastReady = context_recastReady
     context.noop = context_noop

@@ -4,6 +4,102 @@ local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
 
+handlers['panel'] = function(args)
+    local function showHelp()
+        writeMessage('Panel commands:')
+        writeMessage('  gbt panel show | hide - Show or hide the panel')
+        writeMessage('  gbt panel position [<x> <y>] - View or set position')
+        writeMessage('  gbt panel x [<x>] | y [<y>] - View or set one coordinate')
+        writeMessage('  gbt panel size [<width> <height>] - View or set size')
+        writeMessage('  gbt panel width [<width>] - View or set width')
+        writeMessage('  gbt panel height [<height>|auto] - View or set height')
+        writeMessage('  gbt panel log [show | hide] - View or change recent output visibility')
+        writeMessage('  gbt panel theme [<name> | -list] - View, list, or change background skin')
+        writeMessage('  gbt panel tracking [-list | -set <name>] - View, list, or switch tracking sets')
+        writeMessage('  gbt panel reset-position - Restore default position')
+        writeMessage('  gbt panel reload - Apply panel settings from main.json')
+    end
+    local command = (args[1] or ''):lower()
+    if command == 'help' or command == '-help' or command == '-h' then showHelp(); return end
+    local panel = globals.status_panel
+    if not panel then writeMessage('Status panel is unavailable.'); return end
+    local ok, err = pcall(function()
+        if command == '' then
+            writeMessage('Panel: ' .. (panel.options.visible and 'shown' or 'hidden')
+                .. '; tracking: ' .. panel.options.tracking.current)
+            showHelp()
+        elseif command == 'show' or command == 'hide' then
+            panel:setVisible(command == 'show')
+        elseif command == 'reset-position' then panel:resetPosition()
+        elseif command == 'position' or command == 'x' or command == 'y' then
+            if not args[2] then
+                writeMessage('Panel position: ' .. panel.options.x .. ', ' .. panel.options.y)
+                return
+            end
+            local x, y
+            if command == 'position' then
+                x=tonumber(args[2]); y=tonumber(args[3])
+                assert(x and y and #args==3,'Usage: gbt panel position <x> <y>')
+            elseif command == 'x' then
+                x=tonumber(args[2]); assert(x and #args==2,'Usage: gbt panel x <x>')
+            else
+                y=tonumber(args[2]); assert(y and #args==2,'Usage: gbt panel y <y>')
+            end
+            panel:setPosition(x,y)
+        elseif command == 'size' or command == 'width' or command == 'height' then
+            if not args[2] then
+                writeMessage('Panel size: ' .. panel.options.width .. ' x ' .. panel.panel.height
+                    .. (panel.options.height == nil and ' (automatic height)' or ''))
+                return
+            end
+            local width, height
+            if command == 'size' then
+                width=tonumber(args[2]); height=tonumber(args[3])
+                assert(width and height and #args==3,'Usage: gbt panel size <width> <height>')
+            elseif command == 'width' then
+                width=tonumber(args[2])
+                assert(width and #args==2,'Usage: gbt panel width <width>')
+            else
+                height=args[2]:lower()=='auto' and 'auto' or tonumber(args[2])
+                assert(height and #args==2,'Usage: gbt panel height <height|auto>')
+            end
+            panel:setSize(width,height)
+        elseif command == 'reload' then
+            panel:configure(loadPanelSettings()); panel:update()
+            writeMessage('Panel settings reloaded.')
+        elseif command == 'theme' then
+            if args[2] == '-list' then
+                local names={}
+                for name in pairs(require('./lib/ux/theme').reload()) do names[#names+1]=name end
+                table.sort(names)
+                writeMessage('Panel themes:')
+                for _,name in ipairs(names) do writeMessage('  '..name) end
+            elseif args[2] then panel:setTheme(args[2]:lower())
+            else writeMessage('Panel theme: ' .. panel.options.theme) end
+        elseif command == 'log' then
+            local action = (args[2] or ''):lower()
+            if action == 'show' or action == 'hide' then
+                panel:setLogVisible(action == 'show')
+            elseif action == '' then
+                writeMessage('Panel recent log: ' .. (panel.options.show_log and 'shown' or 'hidden'))
+            else writeMessage('Usage: gbt panel log [show | hide]') end
+        elseif command == 'tracking' then
+            if args[2] == '-list' then
+                local names = {}
+                for name in pairs(panel.options.tracking.sets) do names[#names+1]=name end
+                table.sort(names)
+                writeMessage('Tracking sets (current: ' .. panel.options.tracking.current .. '):')
+                for _, name in ipairs(names) do writeMessage('  ' .. name) end
+            elseif args[2] == '-set' and args[3] then
+                panel:setTracking(args[3])
+                writeMessage('Tracking set: ' .. panel.options.tracking.current)
+            elseif not args[2] then writeMessage('Tracking set: ' .. panel.options.tracking.current)
+            else writeMessage('Usage: gbt panel tracking [-list | -set <name>]') end
+        else showHelp() end
+    end)
+    if not ok then writeError('Panel: ' .. tostring(err)) end
+end
+
 handlers['slots'] = function(args)
     local actionType = getArgValue(args, '-t')
     if hasArg(args, '-t') and (not actionType or actionType:sub(1,1) == '-') then

@@ -155,9 +155,16 @@ function hasVerbosity(verbosity)
         verbosity <= (logging_settings and logging_settings.verbosity or 0)
 end
 
+local logSubscribers = {}
+function subscribeGambitLog(callback)
+    logSubscribers[callback] = true
+    return function() logSubscribers[callback] = nil end
+end
+
 function writeMessage(message, color, returnColor)
     -- This condition can be used to control logging
     if globals == nil or not globals.suppress_logging then
+        for callback in pairs(logSubscribers) do pcall(callback, message) end
         windower.add_to_chat(1, 
             colorize(color or Colors.default, 
                 colorize(Colors.gray, '[' .. globals.selfShortName .. '] ', color) .. (message ~= nil and message or ''), returnColor))

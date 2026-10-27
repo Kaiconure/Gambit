@@ -83,7 +83,7 @@ end
 
 function PanelUI:configure(settings)
     self.settings = json.parse(
-        json.stringify(settings or { enabled = true, duration = 3, top = 100 })
+        json.stringify(settings or { enabled = false, duration = 3, top = 100 })
     )
 end
 

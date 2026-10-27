@@ -134,6 +134,13 @@ env.saveSettings({distance=6},true)
 assert(disk[base].default_namespace=='fight') -- Ordinary saves preserve preference.
 env.saveDefaultNamespace(nil)
 assert(disk[base].default_namespace==nil and disk[base].distance==6)
+disk[base].ui={other={keep=true}}
+env.savePanelSettings({visible=false,tracking={current='notes',sets={notes={}}}})
+assert(env.loadPanelSettings().visible==false)
+assert(disk[base].ui.other.keep and disk[base].distance==6)
+env.saveSettings({distance=6,ui={status_panel={visible=true}}},true)
+assert(disk[base].ui.status_panel.visible==false and disk[base].ui.other.keep)
+
 disk[base]='malformed'
 assert(not pcall(env.saveDefaultNamespace,'fight'))
 assert(disk[base]=='malformed')

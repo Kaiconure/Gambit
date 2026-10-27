@@ -1,5 +1,11 @@
 # Gambit command reference
 
+Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
+`gbt panel reset-position`, and `gbt panel reload`. Tracking controls:
+`gbt panel tracking`, `gbt panel tracking -list`, and
+`gbt panel tracking -set <name>`. Panel settings persist per character in the
+global `main.json`; see [status panel configuration](status-panel.md).
+
 `gbt slots` lists the current configuration's contribution slots grouped by action
 type, with sections sorted alphabetically and slots in their placement order.
 Repeated slots appear once at their first occurrence; fallback alternatives retain
