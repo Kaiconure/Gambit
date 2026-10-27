@@ -306,3 +306,33 @@ local scoped={}
 load('Tester',scoped,{name='Tester',main_job='PLD',main_job_level=99},'entry')
 assert(scoped.vars.layer=='character-inverse')
 print('PASS: common imports layer job over positive over inverse over defaults, preserve explicit priorities and character scope')
+env.settingsPaths.commonFiles=function() return {} end
+documents['ordered-block']={actions={{commands={'block-first()'}},{commands={'block-second()'}}}}
+local prioritized={battle={{commands={'before-slot()'}},{slot='ordered'},{commands={'after-slot()'}}},
+    contributions={ordered={
+        {commands={'normal-first()'}},
+        {priority='low',commands={'low()'}},
+        {priority='high',import='ordered-block'},
+        {priority=0,commands={'normal-second()'}},
+        {priority=-100,commands={'high-tie()'}},
+        {priority=-2000,commands={'numeric-first()'}},
+    }}}
+load('Tester',prioritized,player,'entry')
+local expected={'before-slot()','numeric-first()','block-first()','block-second()',
+    'high-tie()','normal-first()','normal-second()','low()','after-slot()'}
+assert(#prioritized.battle==#expected)
+for i, command in ipairs(expected) do
+    assert(prioritized.battle[i].commands[1]==command, 'Priority ordering failed at '..i)
+    assert(prioritized.battle[i].priority==nil)
+end
+assert(prioritized._availableSlots.ordered.battle)
+for _, invalid in ipairs({'urgent','100',true,math.huge,-math.huge,0/0}) do
+    local invalidActions={battle={{slot='ordered'}},contributions={ordered={{priority=invalid,commands={'bad()'}}}}}
+    assert(not pcall(load,'Tester',invalidActions,player,'entry'))
+end
+local replacement= {battle={{slot='ordered'}},contributions={['!ordered']={{commands={'retained()'}}}}}
+documents['discarded-priority']={contributions={ordered={{priority='highest',commands={'discarded()'}}}}}
+replacement.imports={{import='discarded-priority'}}
+load('Tester',replacement,player,'entry')
+assert(#replacement.battle==1 and replacement.battle[1].commands[1]=='retained()')
+print('PASS: stable numeric/alias priorities, contiguous imported blocks, slot boundaries, replacement selection and validation')

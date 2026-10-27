@@ -221,3 +221,27 @@ be commands or imports. Contributions cannot contain slots, import libraries tha
 contain slots, or import further contribution definitions. Such configurations
 fail validation rather than recursively expanding. Imported `loading` actions and
 functions retain their ordinary destination semantics.
+
+## Contribution action priorities
+
+Each action or import in a contribution may specify `priority`. Lower numbers run
+first within that slot; omitted values mean `0`. Semantic aliases are `highest`
+(-1000), `high` (-100), `normal` (0), `low` (100), and `lowest` (1000).
+Aliases are case-insensitive; numeric values must be finite JSON numbers.
+
+Equal priorities preserve the existing file precedence and declaration order.
+Replacement and fallback selection happen before priority sorting. Priorities
+never move actions across slot boundaries. An import's priority positions its
+entire expanded block, preserving the imported actions' internal order. To keep
+a sequence together at a nondefault priority, assign priority to its import.
+Priorities are interpreted on contribution entries, not ordinary actions inside
+the imported library. An omitted priority always means normal; it does not
+inherit the preceding entry's priority. Slot listings retain their original names.
+
+```json
+"contributions": {
+  "battle-priority": [
+    { "priority": "high", "import": "priority-battle-actions" }
+  ]
+}
+```

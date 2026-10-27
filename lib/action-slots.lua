@@ -2,6 +2,14 @@ local values = require('./lib/variable-values')
 local preconditions = require('./lib/action-preconditions')
 local scopes = require('./lib/variable-scopes')
 local slots = {}
+local priorityAliases = {highest=-1000, high=-100, normal=0, low=100, lowest=1000}
+local function actionPriority(value)
+    if value == nil then return 0 end
+    if type(value) == 'string' then value = priorityAliases[value:lower()] end
+    assert(type(value) == 'number' and value == value and value ~= math.huge and value ~= -math.huge,
+        'Contribution priority must be a finite number or highest/high/normal/low/lowest')
+    return value
+end
 local settingsPaths = require('./lib/settings-paths')
 
 -- Add native hooks once, after imports expand. Explicit placements take precedence
@@ -129,6 +137,10 @@ function slots.new(container, priority, warn, matchesRequired)
                 actions = actions.actions
             end
             assert(type(actions) == 'table', 'Slot contributions must be arrays')
+            for _, action in ipairs(actions) do
+                assert(type(action) == 'table', 'Slot actions must be objects')
+                actionPriority(action.priority)
+            end
             for index in pairs(actions) do
                 assert(type(index) == 'number' and index >= 1 and index <= #actions and index % 1 == 0,
                     'Slot contributions must be arrays')
@@ -209,6 +221,7 @@ function slots.new(container, priority, warn, matchesRequired)
                         used[alternative] = true
                         if not name and groups[alternative] ~= nil then name = alternative end
                     end
+                    local contributed = {}
                     for _, group in ipairs((name and groups[name]) or {}) do
                         -- Each occurrence owns a copy of the contribution's scope chain.
                         local parent = values.copy(group.parent)
@@ -234,8 +247,17 @@ function slots.new(container, priority, warn, matchesRequired)
                             action._variableScope = parent._variableScope
                             action.importedFrom = group.source
                             action._slotContribution = serial
-                            output[#output+1] = action
+                            contributed[#contributed+1] = {action=action,
+                                priority=actionPriority(action.priority), order=#contributed+1}
                         end
+                    end
+                    table.sort(contributed, function(a,b)
+                        if a.priority ~= b.priority then return a.priority < b.priority end
+                        return a.order < b.order
+                    end)
+                    for _, item in ipairs(contributed) do
+                        item.action.priority = nil
+                        output[#output+1] = item.action
                     end
                     end
                 end
