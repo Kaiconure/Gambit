@@ -3,7 +3,7 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "keep_ammo": {
+    "^keep_ammo": {
       "ammo": null,
       "pouch": null
     }

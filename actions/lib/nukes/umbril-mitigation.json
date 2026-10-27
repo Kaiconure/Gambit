@@ -1,0 +1,62 @@
+{
+  "about": {
+    "notes": [
+      "Use single-target Fire against Umbril and names ending in ' Umbril', including Biune Umbril. Tries Fire IV before Fire III.",
+      "Empty casting/battle gear inherits from black_magic_burst by default, like black_magic_nuke."
+    ]
+  },
+  "vars": {
+    "^umbril_mitigation": {
+      "enabled": true,
+      "spells": ["Fire IV", "Fire III"],
+      "min_mpp": 30,
+      "min_hpp": 0,
+      "max_hpp": 100,
+      "frequency": 5,
+      "gear": {
+        "casting": [],
+        "battle": [],
+        "inherit_casting_from": "vars.black_magic_burst.gear.casting",
+        "inherit_battle_from": "vars.black_magic_burst.gear.battle"
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "arrayCount(vars.umbril_mitigation.gear.casting) == 0 and vars.umbril_mitigation.gear.inherit_casting_from"
+      ],
+      "commands": [
+        "setVar('vars.umbril_mitigation.gear.casting', getVar(vars.umbril_mitigation.gear.inherit_casting_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "arrayCount(vars.umbril_mitigation.gear.battle) == 0 and vars.umbril_mitigation.gear.inherit_battle_from"
+      ],
+      "commands": [
+        "setVar('vars.umbril_mitigation.gear.battle', getVar(vars.umbril_mitigation.gear.inherit_battle_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "vars.umbril_mitigation.enabled",
+        "bt and bt.valid_target and not bt.is_dead and bt.distance < 20",
+        "bt.name == 'Umbril' or bt.name:match(' Umbril$')",
+        "me.mpp >= vars.umbril_mitigation.min_mpp",
+        "bt.hpp >= vars.umbril_mitigation.min_hpp and bt.hpp <= vars.umbril_mitigation.max_hpp",
+        "not partyUsingWeaponSkill()",
+        "canUseSpell(vars.umbril_mitigation.spells)"
+      ],
+      "commands": [
+        "equipMany(vars.umbril_mitigation.gear.casting)",
+        "useSpell(bt)",
+        "equipMany(vars.umbril_mitigation.gear.battle)",
+        "postpone(vars.umbril_mitigation.frequency)"
+      ],
+      "scope": "battle"
+    }
+  ]
+}

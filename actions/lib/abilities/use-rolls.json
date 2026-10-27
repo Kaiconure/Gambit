@@ -3,9 +3,21 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "use_rolls": {
+    "^use_rolls": {
+      "alignment": {
+        "enabled": false,
+        "targets": [],
+        "distance": 5,
+        "range": 7,
+        "duration": 3,
+        "timeout": 90
+      },
       "rolls": ["Corsair's Roll", "Chaos Roll"],
       "allow_crooked_cards": ["Corsair's Roll"],
+      "gear": {
+        "roll": null,
+        "battle": null
+      },
       "logic": {
         "Allies' Roll": {
           "snake_eye": [2, 10],
@@ -145,28 +157,67 @@
       }
     }
   },
+  "comments": [
+    "Optional use_rolls.alignment: enabled defaults false; targets are party selectors in preference order.",
+    "distance is approach distance, range is accepted recipient distance (default 7 yalms), duration bounds each move.",
+    "timeout bounds the shared movement reservation across the roll and Double-Up sequence; it is not extended by Double-Up.",
+    "After a roll attempt, loss of Double-Up Chance releases the reservation; a temporary ability recast does not.",
+    "Only the selected recipient is range-checked. Keep other intended recipients nearby; this is not a group coverage guarantee.",
+    "Use distance <= range, and a range safely inside your actual roll radius. Context movement helpers honor the reservation in idle and battle."
+  ],
+  "macros": {
+    "roll_alignment_start": [
+      "not vars.use_rolls.alignment.enabled or reserveMovement(vars.use_rolls.alignment.timeout)",
+      "$macro:roll_alignment"
+    ],
+    "roll_alignment": [
+      "not vars.use_rolls.alignment.enabled or alignWithReservation(partyAnchorByName(vars.use_rolls.alignment.targets, 30, true) and member or nil, nil, vars.use_rolls.alignment.distance, vars.use_rolls.alignment, true)"
+    ],
+    "roll_alignment_window": [
+      "not vars.use_rolls.alignment.enabled or resumeMovement(vars.use_rolls.alignment.timeout)"
+    ]
+  },
   "actions": [
     {
+      "movement_owner": "corsair-rolls",
+      "when": [
+        "hasMovementReservation()",
+        "not vars.use_rolls.alignment.enabled or (vars.use_rolls._alignment_roll and not hasBuff('Double-Up Chance')) or (getLatestRoll() and latestRoll.name == vars.use_rolls._alignment_roll and vars.use_rolls.logic[latestRoll.name] and not any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up or {}) and not (any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye or {}) and canUse('Snake Eye')))"
+      ],
+      "commands": ["releaseMovement()", "setVar('use_rolls._alignment_roll', nil)"],
+      "frequency": 1
+    },
+    {
+      "movement_owner": "corsair-rolls",
       "when": [
         "iterate(vars.use_rolls.rolls)",
-        "canUse(result) and not hasEffectOf(result)"
+        "canUse(result) and not hasEffectOf(result)",
+        "not vars.use_rolls.alignment.enabled or hasMovementReservation() or setVar('use_rolls._alignment_roll', nil) or true",
+        "$macro:roll_alignment_start"
       ],
       "commands": [
+        "vars.use_rolls.alignment.enabled and setVar('use_rolls._alignment_roll', result)",
         "any(result, vars.use_rolls.allow_crooked_cards) and canUse('Crooked Cards') and use(me) and wait(0.5)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.roll and equipMany(vars.use_rolls.gear.roll)",
         "use(me, result)",
         "vars.use_rolls.logic[result] and vars.use_rolls.logic[result].data and vars.use_rolls.logic[result].data.summary and log(result .. ':', vars.use_rolls.logic[result].data.summary)",
-        "wait(1)"
+        "wait(1)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.battle and equipMany(vars.use_rolls.gear.battle)"
       ],
       "frequency": 15
     },
     {
+      "movement_owner": "corsair-rolls",
       "when": [
         "canUse('Snake Eye') and canUse('Double-Up')",
         "getLatestRoll()",
         "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].snake_eye",
-        "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye)"
+        "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].snake_eye)",
+        "$macro:roll_alignment_window",
+        "$macro:roll_alignment"
       ],
       "commands": [
+        "vars.use_rolls.alignment.enabled and setVar('use_rolls._alignment_roll', latestRoll.name)",
         "log('Rolling snake eyes on', latestRoll.name, 'from', latestRoll.count)",
         "use(me, 'Snake Eye')",
         "wait(1.0)",
@@ -175,19 +226,26 @@
       ]
     },
     {
+      "movement_owner": "corsair-rolls",
       "when": [
         "canUse('Double-Up')",
         "getLatestRoll()",
         "vars.use_rolls.logic[latestRoll.name] and vars.use_rolls.logic[latestRoll.name].double_up",
-        "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up)"
+        "any(latestRoll.count, vars.use_rolls.logic[latestRoll.name].double_up)",
+        "$macro:roll_alignment_window",
+        "$macro:roll_alignment"
       ],
       "commands": [
+        "vars.use_rolls.alignment.enabled and setVar('use_rolls._alignment_roll', latestRoll.name)",
         "log('Doubling up on', latestRoll.name, 'from', latestRoll.count)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.roll and equipMany(vars.use_rolls.gear.roll)",
         "use(me)",
-        "wait(1)"
+        "wait(1)",
+        "vars.use_rolls.gear and vars.use_rolls.gear.battle and equipMany(vars.use_rolls.gear.battle)"
       ]
     },
     {
+      "movement_owner": "corsair-rolls",
       "when": ["hasEffect('Bust')", "canUse('Fold')"],
       "commands": ["log('Busted, Folding!')", "use(me)", "wait(1)"],
       "frequency": 5

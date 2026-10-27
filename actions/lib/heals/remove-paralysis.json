@@ -1,0 +1,21 @@
+{
+  "about": {
+    "author": "@Kaiconure"
+  },
+  "actions": [
+    {
+      "when": [
+        "hasBuff('Paralysis') and (canUseSpell('Paralyna') or canUseItem('--Remedy'))"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 1,
+      "miss_frequency": 1
+    },
+    {
+      "when": ["canUse('Paralyna') and partyHasBuff('Paralysis')"],
+      "commands": ["removeEffect(member)"],
+      "frequency": 5,
+      "miss_frequency": 5
+    }
+  ]
+}

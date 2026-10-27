@@ -3,29 +3,49 @@
     "author": "@Kaiconure"
   },
   "vars": {
-    "roles": {
+    "^roles": {
       "main_healer": true,
       "backup_healer": false
+    },
+    "^cure_sequence": {
+      "suppress_curaga": null,
+      "curaga_hpp": null,
+      "curaga_member_count": null,
+      "curaga_override_hpp": null,
+      "gear": null
     }
   },
   "actions": [
+    {
+      "when": [
+        "not vars.cure_sequence.suppress_curaga",
+        "partyByMinField('hpp', vars.cure_sequence.curaga_hpp or 80)",
+        "member_count >= (vars.cure_sequence.curaga_member_count or 3)",
+        "not vars.cure_sequence.curaga_override_hpp or member.hpp > vars.cure_sequence.curaga_override_hpp",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Curaga IV', 'Curaga III', 'Curaga II', 'Curaga')"
+      ],
+      "commands": ["$macro:cure_member"],
+      "frequency": 10,
+      "comment": [
+        "Casts curaga if enough people have health below a configured threshold. This takes",
+        "priority over other healing, and can be overridden if a separate health level is",
+        "configured via curaga_override_hpp. If this is set, curaga casting will be bypassed",
+        "if the lowest member's health is below this number. This ensures that critically low",
+        "health can be addressed first before group healing."
+      ]
+    },
     {
       "import": "heals/backup-cure-sequence"
     },
     {
       "when": [
-        "partyCount('hpp <= 75 and distance <= 10') >= 3 and canUse('Curaga III', 'Curaga II', 'Curaga')"
+        "partyByMinField('hpp', 80)",
+        "member.distance <= constants.spell_distance",
+        "canUseSpell('Cure III', 'Cure II', 'Cure')"
       ],
-      "commands": "use(me)",
-      "frequency": 10
-    },
-    {
-      "when": [
-        "partyAny('hpp <= 80') and canUse('Cure III', 'Cure II', 'Cure')",
-        "member.distance <= constants.spell_distance"
-      ],
-      "commands": ["use()"],
-      "frequency": 1
+      "commands": ["$macro:cure_member"],
+      "frequency": 3
     }
   ]
 }

@@ -1,0 +1,71 @@
+{
+  "about": {
+    "notes": [
+      "Counter single-element enemies named '<element> Elemental', including prefixes such as Biune. Tries spells in listed order.",
+      "Light/Dark elementals and dual-element families are not mapped. Empty casting/battle gear inherits from black_magic_burst by default, like black_magic_nuke."
+    ]
+  },
+  "vars": {
+    "^elemental_mitigation": {
+      "enabled": true,
+      "min_mpp": 30,
+      "min_hpp": 0,
+      "max_hpp": 100,
+      "frequency": 5,
+      "gear": {
+        "casting": [],
+        "battle": [],
+        "inherit_casting_from": "vars.black_magic_burst.gear.casting",
+        "inherit_battle_from": "vars.black_magic_burst.gear.battle"
+      },
+      "spells": {
+        "Air": ["Blizzard IV", "Blizzard III"],
+        "Fire": ["Water IV", "Water III"],
+        "Ice": ["Fire IV", "Fire III"],
+        "Earth": ["Aero IV", "Aero III"],
+        "Thunder": ["Stone IV", "Stone III"],
+        "Water": ["Thunder IV", "Thunder III"]
+      }
+    }
+  },
+  "actions": [
+    {
+      "when": [
+        "arrayCount(vars.elemental_mitigation.gear.casting) == 0 and vars.elemental_mitigation.gear.inherit_casting_from"
+      ],
+      "commands": [
+        "false and log('Inheriting pre-elemental mitigation casting gear from:', vars.elemental_mitigation.gear.inherit_casting_from)",
+        "setVar('vars.elemental_mitigation.gear.casting', getVar(vars.elemental_mitigation.gear.inherit_casting_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "arrayCount(vars.elemental_mitigation.gear.battle) == 0 and vars.elemental_mitigation.gear.inherit_battle_from"
+      ],
+      "commands": [
+        "false and log('Inheriting post-elemental mitigation battle gear from:', vars.elemental_mitigation.gear.inherit_battle_from)",
+        "setVar('vars.elemental_mitigation.gear.battle', getVar(vars.elemental_mitigation.gear.inherit_battle_from))"
+      ],
+      "frequency": "infinity"
+    },
+    {
+      "when": [
+        "vars.elemental_mitigation.enabled",
+        "bt and bt.valid_target and not bt.is_dead and bt.distance < 20",
+        "vars.elemental_mitigation.spells[bt.name:match('(%a+) Elemental$') or '']",
+        "me.mpp >= vars.elemental_mitigation.min_mpp",
+        "bt.hpp >= vars.elemental_mitigation.min_hpp and bt.hpp <= vars.elemental_mitigation.max_hpp",
+        "not partyUsingWeaponSkill()",
+        "canUseSpell(vars.elemental_mitigation.spells[bt.name:match('(%a+) Elemental$') or ''])"
+      ],
+      "commands": [
+        "equipMany(vars.elemental_mitigation.gear.casting)",
+        "useSpell(bt)",
+        "equipMany(vars.elemental_mitigation.gear.battle)",
+        "postpone(vars.elemental_mitigation.frequency)"
+      ],
+      "scope": "battle"
+    }
+  ]
+}

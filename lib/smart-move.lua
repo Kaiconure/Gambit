@@ -1,4 +1,5 @@
 local function null_log() end
+local function passthrough(...) return ... end
 
 local smartMove = {
     started = false,
@@ -6,7 +7,12 @@ local smartMove = {
     queue = { },
     previousJob = nil,
     current = nil,
-    tolerance = 0.5,
+    tolerance = 0.33,
+    mob_positions = {},
+    mob_positions_by_index = {},
+    h_offset = 0,
+    getMobById = windower.ffxi.get_mob_by_id,
+    getMobByIndex = windower.ffxi.get_mob_by_index,
 
     log = null_log,
     debug = null_log
@@ -30,6 +36,8 @@ local MAX_JITTER        = 3                     -- The maximum duration we'll sp
 local HEADING_TOLERANCE = TWO_PI * 0.0125   -- 1.25% of a unit circle, or 4.5 degrees
 
 local resources = require('resources')
+
+local current_settings = {}
 
 -- ======================================================================================
 -- Helpers
@@ -93,7 +101,19 @@ local function vectorAngle(v, from)
     if len == 0 then return 0 end
 
     v = v:normalize()
-    from = (from or FORWARD):normalize()
+
+    -- If a from vector was provided, we'll try to normalize it. We will
+    -- treat a zero-length from vector as if no vector was provided.
+    if from then
+        local fromLen = from:length()
+        if fromLen == 0 then
+            from = FORWARD
+        else
+            from = from:scale(1 / fromLen)
+        end
+    else
+        from = FORWARD
+    end
 
     local dot = vector.dot(from, v)
     local det = (from[1] * v[2]) - (from[2] * v[1])
@@ -123,11 +143,29 @@ end
 -- Find the point at the given distance and angle offset from the mob
 local function findMobOffset(mob, angleOffset, distance)
     local player = windower.ffxi.get_mob_by_target('me')
+
+    if not player then
+        return V({0, 0})
+    end
     
     local vPlayer = V({player.x, player.y})
     local vMob = V({mob.x, mob.y})
 
     distance = (type(distance) == 'number') and distance or 2
+
+    if not current_settings or not current_settings.useRawDistances then
+        if not mob.model_size then
+            mob = windower.ffxi.get_mob_by_id(mob.id)
+        end
+
+        if mob then
+            local distance_offset = 
+                (player.model_size or 0) +      -- Player model size
+                (mob and mob.model_size or 0)   -- Mob model size
+            distance = 
+                distance + (distance_offset * 0.5)
+        end
+    end
 
     if type(angleOffset) == 'number' then
         -- When an angle offset was provided, we'll calculate that from the mob
@@ -138,14 +176,80 @@ local function findMobOffset(mob, angleOffset, distance)
         -- Calculate the vector from the mob to me. This is the line we should take.
         -- Normalize it and scale by the travel distance, and added to the mob position
         -- that will give us the target location we're aiming for.
-        local vOffset = vPlayer:subtract(vMob):normalize():scale(distance)
-        return vMob:add(vOffset)
+        local vOffset = vPlayer:subtract(vMob)
+        local length = vOffset:length()
+        if length > 0 then
+            -- The following operation is the same as normalizing the vector and multiplying by the desired distance
+            -- This was previously: 
+            --    local vOffset = vPlayer:subtract(vMob):normalize():scale(distance)
+            --
+            vOffset = vOffset:scale(distance / length)
+            return vMob:add(vOffset)
+        end
+
+        -- For zero-length vectors, just keep the player in their current spot
+        return vPlayer
     end
 end
 
 -- Find the point at the given distance behind the specified mob
 local function findMobRear(mob, distance)
     return findMobOffset(mob, math.pi, distance)
+end
+
+-- h_offset > 0: right, h_offset < 0: left (we pass the sign via angle)
+local function findLateralOffset(mob, h_offset)
+    if h_offset == 0 then
+        return V({mob.x, mob.y})
+    end
+    local angle = (h_offset > 0) and (math.pi / 2) or (-math.pi / 2)
+    return findMobOffset(mob, angle, math.abs(h_offset))
+end
+
+local teleporter_matches = {
+    '^Home Point #%d+$',        -- Home points
+    '^Ethereal Ingress #%d+$',  -- Eschan ingresses
+    '^Survival Guide$',         -- Survival guides
+    '^Waypoint$',               -- Adoulin Waypoints
+    '^Dimensional Portal$',     -- Eschan entry points
+    '^Veridical Conflux$',      -- Walk of Echoes
+    '^Veridical Conflux #%d+$', -- Walk of Echoes (numbered)
+    '^Affi$',                   -- Escha - Zi'tah NPC
+    '^Dremi$',                  -- Escha - Ru'Aun NPC
+    '^Shiftrix$',               -- Reisenjima NPC
+
+    '^Urbiolaine$',             -- Unity (San d'Oria)
+    '^Igsli$',                  -- Unity (Bastok)
+    '^Teldro%-Kesdrodo$',       -- Unity (Windurst)
+    '^Yonolala$',               -- Unity (Windurst)
+    '^Nunaarl Bthtrogg$',       -- Unity (Adoulin)
+
+    '^Horst$',      -- Abyssea
+    '^Ernst$',      -- Abyssea
+    '^Willis$',     -- Abyssea
+    '^Ivan$',       -- Abyssea
+    '^Vincent$',    -- Abyssea
+    '^Cyril$',      -- Abyssea
+    '^Kierron$',    -- Abyssea
+}
+
+local function isNearTeleporter(mobArray)
+    mobArray = mobArray or windower.ffxi.get_mob_array()
+    if type(mobArray) == 'table' then
+        for id, mob in pairs(mobArray) do
+            if
+                mob.valid_target and
+                mob.distance < 36 and
+                (mob.spawn_type == 2 or mob.spawn_type == 34)
+            then
+                for i, pattern in ipairs(teleporter_matches) do
+                    if mob.name:match(pattern) then
+                        return true
+                    end
+                end
+            end
+        end
+    end
 end
 
 -- ======================================================================================
@@ -168,7 +272,7 @@ local function sm_movement_exp(self, job)
     windower.ffxi.run(false)
 
     local me = windower.ffxi.get_mob_by_target('me')
-    if not me then return end
+    if not me or not me.x or not me.y then return end
     
     local vme = coordVector(me)
     local vto = job:pos():subtract(vme) -- to = target - me
@@ -199,6 +303,7 @@ local function sm_movement_exp(self, job)
 
         -- Update the 'me' mob
         me = windower.ffxi.get_mob_by_target('me')
+        if not me or not me.x or not me.y then return end
         
         -- Get the new vectors
         local vme2 = coordVector(me)
@@ -395,234 +500,6 @@ local function sm_movement_exp(self, job)
     end
 end
 
-local function sm_movement_orig(self, job)
-    local player_mob = windower.ffxi.get_mob_by_target('me')
-    
-    local vpos = coordVector(player_mob)
-    local toTarget = job:pos():subtract(vpos)
-    local distance = toTarget:length()
-
-    -- Prepare to get started: Clear our follow target, movement, and target lock, if any
-    local player = windower.ffxi.get_player()
-    local target_locked = player.target_locked
-    local follow_index = player.follow_index
-
-    windower.ffxi.follow(-1)
-    windower.ffxi.run(false)
-    if target_locked then
-        windower.send_command('input /lockon;')
-        coroutine.sleep(0.5)
-    end
-
-    -- Start moving toward the target
-    local heading = vectorAngle(toTarget)
-    if tostring(heading) == 'nan' then
-        heading = 0 
-    else
-        windower.ffxi.run(heading)
-    end
-
-    local sleepDuration = 0
-    local velocity = 0
-    local isJittering = false
-    local wasJittering = false
-    local jitterStopTime = 0
-    local jitterPause = 0
-
-    local continue = true
-    local pausing = false
-    local zeroSpeedCycles = 0
-
-    local startTime = os.clock()
-    local endTime = (job.max_duration and (startTime + job.max_duration)) or nil
-
-    local previousPosition = vpos
-
-    while 
-        continue and
-        job:cycle() and
-        (endTime == nil or os.clock() < endTime) and
-        not self.cancel
-    do
-        local pos = job:pos()
-
-        -- We can't freely move if we're target locked
-        local player = windower.ffxi.get_player()
-        if player.target_locked then
-            windower.send_command('input /lockon;')
-            coroutine.sleep(0.5)
-        else
-            coroutine.sleep(0.25)
-        end
-
-        -- Refresh our vectors
-        player_mob = windower.ffxi.get_mob_by_target('me')
-        vpos = V({player_mob.x, player_mob.y})
-        toTarget = pos:subtract(vpos)
-
-        -- Calculate the new heading to target and distance
-        local newDistance = toTarget:length()
-        local newHeading = vectorAngle(toTarget)
-        
-        if tostring(newHeading) == 'nan' then newHeading = heading end
-
-        -- Essentially start over if we're paused and our distance has increased
-        if pausing then
-            if newDistance > 1.5 then
-                pausing = false
-                sleepDuration = 0
-
-                windower.ffxi.run(newHeading)
-            else
-                windower.ffxi.turn(newHeading)
-            end
-        end
-
-        -- Calculate our current and averaged velocity
-        if sleepDuration > 0 then
-            local movement = vpos:subtract(previousPosition)
-            velocity = movement:length() / sleepDuration
-
-            --velocity = currentVelocity
-        end
-
-        local t = os.clock()
-
-        wasJittering = isJittering
-        isJittering = t < jitterStopTime
-
-        if not isJittering then
-            jitterPause = math.max(jitterPause - 0.025, 0)
-
-            -- We'll re-point at the target if:
-            --      1. Our aim is off, or
-            --      2. If just came off a random jitter and need to get back on track
-            local headingDelta = math.abs(newHeading - heading)
-            if 
-                headingDelta > HEADING_TOLERANCE
-                or wasJittering
-            then
-                jitterStopTime = 0
-                if not pausing then
-                    if wasJittering then
-                        local adjustment = randomRange(-math.pi / 4, math.pi / 4)
-                        ---print('Adjusting heading by %.1f degrees':format(adjustment * 180 / math.pi))
-                        sleepDuration = 0.5
-                        windower.ffxi.run(newHeading + adjustment)
-                    else
-                        windower.ffxi.run(newHeading)
-                    end
-                end
-            end
-        else
-            -- local adjustment = randomRange(-math.pi, math.pi)
-            -- print('Adjusting heading by %.1f degrees':format(adjustment * 180 / math.pi))
-            -- windower.ffxi.run(player_mob.heading + adjustment)
-        end
-
-        if 
-            pausing
-        then
-            -- Use a slightly longer sleep if we're paused, and stop tracking zero speed
-            sleepDuration = 0.5
-            zeroSpeedCycles = 0
-        elseif 
-            ((not wasJittering and not sharesHalfspace(heading, newHeading)) and newDistance < 1.25) or
-            newDistance < self.tolerance
-        then
-            -- We've reached our target distance, it's time to stop moving
-            windower.ffxi.run(false)
-
-            -- Reset other traversal states
-            jitterStopTime = 0
-            jitterPause = 0
-            zeroSpeedCycles = 0
-
-            if job.autoComplete then
-                -- This job has been configured to auto-complete on reaching the target,
-                -- clear the continuation flag and prepare to exit
-                continue = false
-            else
-                -- This job has been configured to keep at it after reaching the target. 
-                -- Flag as paused, face the target, and wait for the next cycle.
-                pausing = true
-                sleepDuration = 0.5
-                windower.ffxi.turn(newHeading)
-            end            
-        else
-            local isZeroSpeed = ((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.25))
-            if isZeroSpeed then
-                zeroSpeedCycles = zeroSpeedCycles + 1
-            else
-                zeroSpeedCycles = math.max(0, zeroSpeedCycles - 0.125)
-            end
-
-
-            -- Initiate some obstacle avoidance jitter if we're not making any forward progress
-            local canJitter = 
-                JITTER_ENABLED and
-                job.canJitter and
-                (isZeroSpeed and zeroSpeedCycles > 8) and
-                --((isJittering and velocity < 0.125) or (not isJittering and velocity < 0.5)) and 
-                distance > 2 and
-                sleepDuration > 0
-
-            if canJitter then
-                jitterPause = math.min(jitterPause + 0.5, MAX_JITTER)
-
-                self.log('Initiating obstacle avoidance measures with jitterPause=%.2f / zeroSpeed=%.2f':format(jitterPause, zeroSpeedCycles))
-
-                -- Apply a randomized escape angle based on our configured base value
-                local jitterAngle = JITTER_ANGLE * randomSign() * randomRange(0.95, 1.05)
-
-                -- Calculate our new heading, and start moving in that direction
-                newHeading = player_mob.heading + jitterAngle     -- Base new heading on the heading of the player. Which is better?
-                --newHeading = newHeading + jitterAngle               -- Base new heading on the trajectory to the mob. Which is better?
-                windower.ffxi.run(newHeading)
-
-                -- Give ourselves a bit of time to continue moving along
-                jitterStopTime = t + jitterPause
-            end
-
-            if newDistance < 3 then
-                sleepDuration = 0.125
-            else
-                sleepDuration = 0.25
-            end
-        end
-
-        -- Update our tracking info
-        heading = newHeading
-        distance = newDistance
-        previousPosition = vpos
-
-        -- local player = windower.ffxi.get_player()
-        -- if type(player.follow_index) == 'number' and player.follow_index > 0 then
-        --     print('follow index: %d':format(player.follow_index))
-        --     continue = false
-        -- end
-
-        -- Sleep a bit before continuing the next iteration
-        if continue and sleepDuration > 0 then
-            coroutine.sleep(sleepDuration)
-        end
-    end
-
-    -- Stop any follow more movement that may be active
-    windower.ffxi.follow(-1)
-    windower.ffxi.run(false)
-
-    if job:is_valid() then
-        -- If the job is still valid, we should make sure we're pointed at the target before exiting
-        vpos = V({player_mob.x, player_mob.y})
-        toTarget = job:pos():subtract(vpos)
-        windower.ffxi.turn(vectorAngle(toTarget))
-    end
-
-    -- We need to space this out a little bit
-    coroutine.sleep(0.25)
-end
-
 local sm_movement = sm_movement_exp
 
 function sm_coroutine(self)
@@ -715,21 +592,23 @@ local function sm_createBaseJob(self, mode, skipcancel)
             end
 
             if point then
-                local vme = coordVector(me)
-                local vto = point:subtract(vme)
+                if me and me.x and me.y then
+                    local vme = coordVector(me)
+                    local vto = point:subtract(vme)
 
-                if vto:length() > 0 then
-                    local heading = vectorAngle(vto)
-                    
-                    -- All of this is necessary because of some weirdness in the game actually honoring the
-                    -- heading change request. TODO: Investigate why.
-                    windower.ffxi.turn(heading)
-                    coroutine.sleep(0.125)
+                    if vto:length() > 0 then
+                        local heading = vectorAngle(vto)
+                        
+                        -- All of this is necessary because of some weirdness in the game actually honoring the
+                        -- heading change request. TODO: Investigate why.
+                        windower.ffxi.turn(heading)
+                        coroutine.sleep(0.125)
 
-                    -- windower.ffxi.turn(heading)
-                    -- coroutine.sleep(0.125)
-                    -- windower.ffxi.turn(heading)
-                    -- coroutine.sleep(0.125)                
+                        -- windower.ffxi.turn(heading)
+                        -- coroutine.sleep(0.125)
+                        -- windower.ffxi.turn(heading)
+                        -- coroutine.sleep(0.125)                
+                    end
                 end
             end
         end
@@ -850,23 +729,29 @@ end
 -- offset angle and distance relative to the mob.
 function smartMove:atMobOffset(mob, offsetAngle, offsetDistance)
     local target = self:findMobOffset(mob, offsetAngle, offsetDistance)
-    local player = windower.ffxi.get_mob_by_target('me')
+    local me = windower.ffxi.get_mob_by_target('me')
 
-    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
+    -- Cannot proceed if our own target is invalid
+    if not me or not me.x or not me.y then return end
+
+    return target:subtract(V({me.x, me.y})):length() <= self.tolerance
 end
 
 -----------------------------------------------------------------------------------------
 -- Check if we're at the mob's rear
 function smartMove:atMobRear(index)
-    local mob = windower.ffxi.get_mob_by_index(index or 0)
+    local mob = smartMove.getMobByIndex(index or 0)--windower.ffxi.get_mob_by_index(index or 0)
     if mob == nil or not mob.valid_target then
         return false
     end
 
     local target = findMobRear(mob, 2)
-    local player = windower.ffxi.get_mob_by_target('me')
+    local me = windower.ffxi.get_mob_by_target('me')
 
-    return target:subtract(V({player.x, player.y})):length() <= self.tolerance
+    -- Cannot proceed if our own target is invalid
+    if not me or not me.x or not me.y then return end
+
+    return target:subtract(V({me.x, me.y})):length() <= self.tolerance
 end
 
 -----------------------------------------------------------------------------------------
@@ -881,7 +766,7 @@ end
 -- Use atMobRear to determine if the movement completed successfully.
 function smartMove:moveBehindIndex(follow_index, maxDuration)
     -- Validate the target
-    local mob = windower.ffxi.get_mob_by_index(follow_index)
+    local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
         return
     end
@@ -914,7 +799,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
-        self.mob = windower.ffxi.get_mob_by_index(self.follow_index)
+        self.mob = smartMove.getMobByIndex(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
         return self:is_valid()
     end
 
@@ -952,8 +837,19 @@ end
 
 function smartMove:followIndex(follow_index, distance)
     -- Validate the target
-    local mob = windower.ffxi.get_mob_by_index(follow_index)
+    local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
+        return
+    end
+
+    -- Validate ourself. This can be nil on zoning, we'll just try again later.
+    local _me = windower.ffxi.get_mob_by_target('me')
+    if
+        _me == nil or
+        not _me.valid_target or
+        not _me.x or
+        not _me.y
+    then
         return
     end
 
@@ -973,6 +869,22 @@ function smartMove:followIndex(follow_index, distance)
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
     job.follow_distance =           -- How far behind the mob we should follow
         math.max(tonumber(distance) or 0, 0)
+
+    if not current_settings or not current_settings.useRawDistances then
+        local _p = windower.ffxi.get_mob_by_target('me')
+        local distance_offset = 
+            (_p and _p.model_size or 0) +           -- Player size offset
+            (mob.model_size or 0)                   -- Mob size offset
+        job.follow_distance = 
+            job.follow_distance + (distance_offset * 0.75)
+
+        -- local tick = os.clock()
+        -- if tick - (last_raw_output_tick or 0) > 3 then
+        --     print('base: %.2f, final: %.2f':format(distance, job.follow_distance))
+        --     last_raw_output_tick = tick
+        -- end
+    end
+
     --job.autolock = true             -- Automatically lock onto the target on completion
 
     job.lost_mob_time = nil
@@ -981,7 +893,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:followIndex(follow_index, distance)
+        return smartMove:followIndex(follow_index, job.follow_distance)
     end
 
     -- Determine if the job is still valid
@@ -1010,7 +922,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
-        self.mob = windower.ffxi.get_mob_by_index(self.follow_index)
+        self.mob = smartMove.getMobByIndex(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
 
         if 
             self.mob == nil or
@@ -1021,7 +933,7 @@ function smartMove:followIndex(follow_index, distance)
             if self.lost_mob_time == nil then
                 if 
                     self.last_mob and
-                    self.last_mob.spawn_type == SPAWN_TYPE_PLAYER and
+                    (self.last_mob.spawn_type == 13 or self.last_mob.spawn_type == 1) and   -- 13 = Player in party/alliance, 1 = Player out of party/alliance
                     self.last_mob.x and
                     self.last_mob.y and
                     self.last_mob.heading
@@ -1032,7 +944,27 @@ function smartMove:followIndex(follow_index, distance)
                     local vMob = V({self.last_mob.x, self.last_mob.y})
                     local vMobForward = vector.from_radian(self.last_mob.heading)
 
-                    self.lost_mob_pos = vMob:add(vMobForward:scale(2))
+                    local delta_t = self.last_mob.last_updated and (os.clock() - self.last_mob.last_updated) or 0
+
+                    --print('Lost player mob: %s (%d) with delta_t=%.2f':format(self.last_mob.name, self.last_mob.id, delta_t))
+
+                    if 
+                        delta_t <= 3 or
+                        not isNearTeleporter()
+                    then
+                        -- Don't try to follow the target if we're near a teleporter, or if they
+                        -- haven't moved in 2 seconds or more. We'll just stay put in those cases.
+                        self.lost_mob_pos = vMob:add(vMobForward:scale(2))
+                    else
+                        local player = windower.ffxi.get_mob_by_target('me')
+                        if player and player.valid_target then
+                            -- Use our own current position if available
+                            self.lost_mob_pos = V({player.x, player.y})
+                        else
+                            -- Otherwise just use the last known position of the mob
+                            self.lost_mob_pos = vMob
+                        end
+                    end
                 end
             end
         else
@@ -1057,17 +989,40 @@ function smartMove:followIndex(follow_index, distance)
         if job.follow_distance > 0 then
             local player = windower.ffxi.get_mob_by_target('me')
 
-            if player then
+            if player and player.x and player.y then
                 local vPlayer = V({player.x, player.y})
                 local vMob = V({self.mob.x, self.mob.y})
+
+                local follow_distance = job.follow_distance
+                local h_offset = smartMove.h_offset
+                
+                -- If the player is mounted, we'll increase the distances a bit to account
+                -- for the large mount model sizes and greater movement speed.
+                if player.status == 85 or player.status == 5 then
+                    -- Note: Status 85 is mount, 5 is chocobo
+                    follow_distance = follow_distance + 3
+                    h_offset = smartMove.h_offset_mounted
+                end
+
+                -- For players, we'll apply the horizontal offset if one is configured. This is a left or
+                -- right offset relative to the mob's heading.
+                if self.mob.spawn_type == 13 or self.mob.spawn_type == 1 then
+                    vMob = findLateralOffset(self.mob, h_offset)
+                end
 
                 local toTarget = vMob:subtract(vPlayer)
                 local distance = toTarget:length()
                 
                 local pos = vPlayer
                 local scale = 0
-                if distance > 0 then
-                    scale = (distance - job.follow_distance) / distance
+                if distance >= follow_distance + 2 then
+                    -- If we're further than the follow distance (by a certain margin),
+                    -- we will simply aim directly at the target. This gets us within
+                    -- the vicinity in a more direct way, and we'll worry about distance
+                    -- precision only when we're relatively close.
+                    scale = 1
+                elseif distance > 0 then
+                    scale = (distance - follow_distance) / distance
                     if scale < 0 then
                         scale = 0.01
                     end
@@ -1121,6 +1076,33 @@ function smartMove:setLogger(log, verbose)
     self.verbose    = (type(verbose) == 'function') and verbose or null_log
 end
 
+function smartMove:applySettings(settings)
+    self.settings = settings or {}
+    current_settings = self.settings
+
+    local h_offset_range = type(current_settings.followOffset) == 'number' and math.abs(current_settings.followOffset) or 1.0
+
+    -- NOTE: We'll set a random horizontal offset for follows. It will be within h_offset_range,
+    -- and will make the follow behavior a little less robotic. We will eventualy make this
+    -- configurable, but we're sticking it here for now because it'll make the future config
+    -- change thing seamless (just comment out this line at that point).
+    if h_offset_range > 0 then
+        smartMove.h_offset = (math.random() * h_offset_range * 2.0) - h_offset_range
+        smartMove.h_offset_mounted = smartMove.h_offset * 1.5
+            -- (math.random() * (h_offset_range + 2) * 2.0) - (h_offset_range + 2)
+    else
+        smartMove.h_offset = 0.0
+        smartMove.h_offset_mounted = 0
+    end
+
+    --print('h_off: %.2f':format(smartMove.h_offset))
+end
+
+function smartMove:setMobLookupFunctions(byId, byIndex)
+    smartMove.getMobById = byId or windower.ffxi.get_mob_by_id
+    smartMove.getMobByIndex = byIndex or windower.ffxi.get_mob_by_index
+end
+
 function smartMove:getJobInfo(jobId)
     local current = self.current
     if current and (jobId == nil or jobId == current.jobId) then
@@ -1136,25 +1118,6 @@ function smartMove:getJobInfo(jobId)
     end
 end
 
--- smartMove:onZoneChange = function ()
---     -- Stop on zone change
---     smartMove:cancelJob()
--- end
-
--- smartMove:onStatusChange = function (newStatus)
---     -- Stop if we've changed to a status that doesn't make sense. We can't follow if dead, sitting, resting, etc
---     if 
---         newStatus ~= STATUS_IDLE and
---         newStatus ~= STATUS_ENGAGED and 
---         newStatus ~= 5 and  -- Riding a chocobo
---         newStatus ~= 85     -- Riding a mount other than a chocobo
---     then
---         smartMove:cancelJob()
---     end
--- end
-
-
-
 -- -------------------------------------------------------------------------------
 -- Starts the pipeline processor
 
@@ -1162,22 +1125,5 @@ local cr = coroutine.schedule(function ()
     smartMove.started = true
     sm_coroutine(smartMove)
 end, 0)
-
--- windower.register_event('zone change', function ()
---     -- Stop on zone change
---     smartMove:cancelJob()
--- end)
-
--- windower.register_event('status change', function (newStatus)
---     -- Stop if we've changed to a status that doesn't make sense. We can't follow if dead, sitting, resting, etc
---     if 
---         newStatus ~= STATUS_IDLE and
---         newStatus ~= STATUS_ENGAGED and 
---         newStatus ~= 5 and  -- Riding a chocobo
---         newStatus ~= 85     -- Riding a mount other than a chocobo
---     then
---         smartMove:cancelJob()
---     end
--- end)
 
 return smartMove

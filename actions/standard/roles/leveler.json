@@ -1,0 +1,50 @@
+{
+  "about": {
+    "author": "@Kaiconure",
+    "description": [
+      "Standard leveler role that just sits in place, using XP/CP rings and common consumables.",
+      "Great for being power leveled in a safe spot. Can be configured to use Corsair's Roll."
+    ]
+  },
+  "vars": {
+    "configuration": {
+      "commands": ["gbt config -strat manual"]
+    },
+    "use_rolls": {
+      "rolls": ["Corsair's Roll"]
+    }
+  },
+  "idle": [
+    {
+      "import": "configuration"
+    },
+    {
+      "import": "use-xp-cp-rings",
+      "comment": "Uses the appropriate XP or CP rings based on current level and mastery."
+    },
+    {
+      "import": "abilities/use-rolls"
+    },
+    {
+      "when": [
+        "me.level == 99 and not me.is_mastered",
+        "findUnequippedItem('Aptitude Mantle +1') or findUnequippedItem('Barataria Ring')"
+      ],
+      "commands": ["equip()"],
+      "frequency": 180,
+      "miss_frequency": 10,
+      "scope": "battle"
+    },
+    {
+      "import": "common-consumables",
+      "comment": "Uses common usable item drops, such as silt and bead pouches, and UNM coffers (work in progress).",
+      "disabled": false
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader",
+      "comment": "Follows the party leader while mounted. Does nothing if you are the party leader."
+    }
+  ]
+}

@@ -1,157 +1,343 @@
-### Please refer to the [wiki](https://github.com/Kaiconure/Gambit/wiki) for my ongoing attempt at documenting the entire Gambit rules interface.
----
-
-| Tips                                                         |
-| ------------------------------------------------------------ |
-| *Shift+Alt+G* on the keyboard will toggle automation on or off. |
-| *Ctrl+F* on the keyboard will toggle a custom "follow" operation on your current target. Hitting the hotkey again will cancel your follow. |
-
-
-
 # Gambit
 
-## Overview
+Gambit is a Windower 4 addon for FFXI that runs customizable action sequences
+written in JSON, with Lua expressions for conditions and commands. Action sets
+can coordinate combat, healing, buffs, positioning, and other tasks across
+characters running the addon locally.
 
-Gambit is a Windower 4 addon that allows you to define data-driven, customizable, scripted action sequences for use in FFXI. It is used to automate all manner of operations within the game.
+## Documentation
 
-The automation documentation is broken down into several categories:
+| Guide | Covers |
+|---|---|
+| [Commands](docs/commands.md) | Commands, aliases, options, and examples |
+| [Actions](docs/actions.md) | Action files, conditions, and commands |
+| [Action properties](docs/properties.md) | Values available in action contexts |
+| [Action functions](docs/functions.md) | Lua helpers used by actions |
+| [Action slots](docs/action-slots.md) | Contributions, replacements, fallbacks, and priorities |
+| [Action entrypoints](docs/action-entry-points.md) | Job, group, inverse-group, and leader filenames |
+| [Namespace paths](docs/namespace-folders.md) | Folder layout and underscore aliases |
+| [Scoped variables](docs/scoped-variables.md) | Private configuration for imported branches |
+| [Multi-stage weapon skills](docs/multi-stage.md) | Participants, exclusions, and capability sharing |
 
-- Actions
-  - [An introduction to actions](./docs/actions.md) - An overview of the basic action structure; how they are defined, how they are triggered, and how they are configured.
-  - Libraries - Pre-defined actions ready for you to use
-- Lua interface
-  - [Action properties](./docs/properties.md) - An overview of the properties available for use in your action conditions and commands.
-  - [Action functions](./docs/functions.md) - An overview of the functions available for use in your action conditions and commands. 
+The [base-extension cheatsheet](docs/extending-base-cheatsheet.md) is a worked
+example based on the author's private namespace layout. Its `base`, `xp`, and
+encounter profiles are **not shipped configurations**. Use its patterns with
+namespaces and libraries you create yourself. The [wiki](https://github.com/Kaiconure/Gambit/wiki)
+provides additional interface documentation.
 
+## What is included
 
+Reusable action libraries live under `actions/lib`, and the starter action set
+is `actions/defaults/default-actions.json`. Files under `settings/` are local
+user configuration and are not distributed with Gambit. This includes character
+settings, namespaces, shared user libraries, and encounter profiles.
 
-## The Basics
+Names such as `base` and `my-event` below are examples, not built-in namespaces.
+Creating a namespace creates its structure; it does not install a ready-made
+combat profile or populate job actions.
 
-Once you've got the addon installed, it can be loaded in the standard way.
+## Getting started
 
-```bash
-//lua r gambit
+Place the addon in your Windower addons directory, then load it in FFXI:
+
+```text
+//lua load gambit
 ```
 
-Doing so, it will show you some information including how to enable automation with the `Shift+Alt+G` hotkey. The same hotkey will disable automation again, and the addon will output information about its current enabled/disabled state as you change it.
+| Control | Effect |
+|---|---|
+| Shift+Alt+G | Toggle automation |
+| Ctrl+F | Toggle Gambit's custom follow on the current target |
+| `//gbt enable` | Enable automation |
+| `//gbt disable` | Disable automation |
+| `//gbt status` | Show current status |
 
-The default actions will cause you to engage with any aggroing mob near you, and will use the best available XP or CP rings on hand.
+Use `//gbt` or `//gambit` in game chat. In the Windower console, omit the `//`.
+Examples below use chat syntax. Review the loaded action set before enabling it:
+behavior depends on your configuration and imported libraries.
 
-If you want to *initiate* aggro, you can change the *targeting strategy* to "aggressor". As the name suggests, the aggressor strategy will pick the nearest mob and fight it. If you already have aggro, the aggroing mob will take priority. That is, Gambit won't engage with an idle mob while another one is coming for you.
+Without a matching user entrypoint, Gambit uses its starter fallback. That set
+includes frontline engagement, idle leader following, configured trust summoning,
+and XP/CP ring use. It is a starting point for customization.
 
-To change the strategy to aggressor, run the following command:
+## Targeting and following
 
-```bash
-//gbt config -strategy aggressor
-```
+The default `leader` strategy follows the party leader's engaged target; when you
+are the leader, it falls back to nearby aggroing enemies. `aggressor` can initiate
+combat against idle enemies, prioritizing existing aggro.
 
-So switch back, you can use the following:
-
-```bash
+```text
 //gbt config -strategy leader
-```
-
-The "leader" strategy (default) will have you engage whatever mob your party leader is engaged with. It's smart enough to detect if you *are* the party leader, and will instead fall back to the default "nearest aggroing mob" behavior.
-
-By default, Gambit will only "see" mobs within 25 yalms of your position. You can set this to 50 (the max that FFXI allows) using the following command:
-
-```bash
-//gbt config -d 50
-```
-
-Any value between 5 and 50 (inclusive) is accepted; any other value will be clamped to this range.
-
-Similarly, Gambit gives you the ability to control the maximum vertical ("Z") distance it will look for. This is useful on multi-leveled areas (think of Escha Ru'Aun) where you wouldn't want to try to attack something 20 yalms directly below you.
-
-The default Z distance is 5.0 yalms, and it can be configured with the following command:
-
-```bash
-//gbt config -z 3
-```
-
-As you've likely already guessed, this will set the Z distance to 3 rather than the default 5.
-
-The custom follow mentioned in the tips at the very top of this document has a few added benefits. Firstly, it will try to "jitter" itself out of corners if it detects that it's stuck. This isn't true pathfinding, but it will try to backup for a bit and course correct. This won't get you out of a maze, but it will get you around pillars or sharp corners.
-
-The second thing that the custom follow will get you is a configurable follow distance. For example, if you run the following your follow will not get closer than 4 yalms from the target;
-
-```bash
+//gbt config -strategy aggressor
+//gbt config -d 25
+//gbt config -z 5
 //gbt config -fd 4
 ```
 
-Note that there will be some variation here while you're moving, as server latency can cause things to get out of sync. Once you're stationary, it will end up at roughly the distance you've set.
+`-d` controls horizontal targeting range, clamped to 5–50 yalms. `-z` controls
+vertical range. `-fd` sets custom follow distance. Follow includes stuck-recovery
+attempts, but does not provide full pathfinding or automatically follow someone
+through a zone boundary.
 
-***Note:*** *One weird thing about this is that you won't actually follow your target out of the zone. Once they exit, you'd stop 4 yalms from the zone line (if going by the above example). This may or may not be desirable, and I'll consider ways to change this in the future.*
+## Organize your configuration
 
-## Addon Commands
+You can use global character action files, namespace configurations, or both:
 
-Gambit provides a handful of commands and hotkeys to help you configure the addon from within FFXI. These are broken down into what I call *user commands* (those intended to be used by you) and *system commands* (those intended to be used by the addon itself to manage its own state).
-
-Windower addon commands can be executed directly via the FFXI chat. This is done by typing forward slashes, followed by the addon name (or alias), followed by the actual commands to send. For Gambit, this could look like the following:
-
-```bash
-//gambit verbosity -level verbose
+```text
+settings/
+  CharacterName/
+    main.json
+    actions/
+      whm.json
+      lib/
+  actions/
+    lib/
+  _ns/
+    my-event/
+      .nsconfig
+      actions/
+        whm.json
+        lib/
+          common/
+            common.json
+            whm.json
+            (mages).json
+            (~mages).json
+      players/
+        CharacterName/
+          main.json
+          actions/
+            lib/
 ```
 
-This would set the addon's chat log output level to `verbose`, which is the highest level recommended for non-developers.
+Only create the files you need. Ordinary file lookup uses the selected namespace,
+its explicit parent chain, then global user configuration and shipped fallbacks
+where applicable. Character-specific locations precede shared locations within a
+namespace. The first matching ordinary file wins; whole job entrypoints and
+`main.json` files are not automatically merged with their parent versions.
 
-Gambit can be aliased as `gbt`, so the following command is equivalent to the one above:
+For automatic action selection, job/subjob and job files take precedence over
+positive role selectors, inverse role selectors, and `(all).json`. For example,
+`whm-rdm.json` is more specific than `whm.json`; `(~mages).json` matches main jobs
+outside the mages group. Positive role matches across the hierarchy beat inverse
+matches. See [entrypoint rules](docs/action-entry-points.md) for important
+`(!group)` overrides and leader selectors.
 
-```bash
+An explicit library import such as `"import": "my-buffs"` searches the active
+hierarchy. `$(PlayerLib)` and `$(SettingsLib)` constrain lookup to character and
+shared user libraries; `$(GlobalLib)` addresses shipped `actions/lib` directly.
+`import` and `imports` each accept a string or an array of references.
+
+### Create and inherit namespaces
+
+```text
+//gbt ns -set my-event -force
+//gbt ns -list
+//gbt ns
+```
+
+Namespaces require a `.nsconfig`. `-force` initializes a missing namespace;
+without it, selecting a missing namespace leaves the current configuration
+unchanged. To build your own reusable parent, first create `base` and configure
+it, then create a child:
+
+```text
+//gbt ns -set base -force
+//gbt ns -set my-event -force -parent base
+```
+
+The child's `.nsconfig` can contain:
+
+```json
+{
+  "inherits_from": "base",
+  "description": ["My event configuration"]
+}
+```
+
+Parent names are relative to the namespace root. Folder nesting alone does not
+imply inheritance. Each namespace has at most one parent; missing parents and
+cycles are rejected. Existing namespaces are inheritable by default. Set
+`"inheritable": false` to forbid inheritance, or `"abstract": true` for a shared
+parent that cannot be selected directly.
+
+`settings/_ns` is preferred; an existing `settings/.ns` remains a compatibility
+fallback when `_ns` is absent. Exact directory names win, with underscore-prefixed
+aliases supported per segment: logical `base` can resolve to `_base`. Namespace
+segments cannot use reserved `actions`/`players` names or Windows device names.
+
+Selecting a namespace saves `default_namespace` in the character's global
+`settings/<character>/main.json`. Addon startup restores that preference; job
+changes retain it. `//gbt ns -clear` removes the preference and returns to global
+lookup. `//gbt r -ns my-event` performs a temporary namespace load instead.
+
+### Common files and variable precedence
+
+Automatic common imports are additive across scopes and inherited namespaces.
+They let a child extend a parent without copying its job entrypoints. Within the
+same namespace and scope, ordinary variable conflicts favor exact-job common
+files over positive groups, inverse groups, and general common defaults:
+
+```text
+common/pld.json > common/(melee).json > common/(~mages).json > common/common.json
+```
+
+The separate `actions/lib/common.json` path is also supported. More specific
+namespace and character scopes retain their precedence. Explicit action-file
+variables and imports retain their existing loading precedence. See the detailed
+references for ordering among overlapping groups.
+
+Variables support three explicit priorities:
+
+| Definition | Priority |
+|---|---|
+| `"!name": value` | High |
+| `"name": value` | Ordinary |
+| `"^name": value` | Fallback default |
+
+Higher priorities win regardless of load order; conflicting ordinary values at
+the same priority keep the first loaded definition. Prefixes are removed from
+runtime names. Shipped reusable defaults use fallback priority so user values
+can override them.
+
+Objects merge recursively; arrays are whole values. Use `$array.empty` or
+`$object.empty` for an explicit empty table, and `$object.null` to clear a value.
+Ordinary JSON `null` is discarded by parsing; `{}` does not erase inherited
+children. Clearing markers also support priority prefixes. `with_vars` provides
+private branch configuration for imports without changing shared defaults.
+
+`getOriginalVar()` reads the loaded value before initialization actions execute;
+`resetVar()` restores it. Runtime `setVar()` changes are not restricted by
+load-time priorities.
+
+### Saving and reloading
+
+Main configuration changes save to `settings/<character>/main.json`, even while
+using a namespace. Existing namespace `main.json` files can still override that
+file when loading; automatic saves do not create or update namespace overrides.
+Unchanged settings do not trigger a write.
+
+```text
+//gbt r
+//gbt r -r
+//gbt r -a my-actions
+//gbt r -settings-only
+//gbt r -r -v
+```
+
+- `r`: reload settings and job-based actions in the selected namespace.
+- `r -r`: reload the current action name and its loaded namespace.
+- `r -a my-actions`: load a named action set you provide.
+- `r -settings-only`: reload main settings without recompiling actions.
+- `r -r -v`: also write processed action JSON to the loaded configuration's
+  `.output` directory. This does not change logging verbosity.
+
+A full action reload resets action processing state without changing whether
+automation is enabled. Action saves and processed output use the loaded action
+configuration's namespace context. Lua code changes require an addon reload;
+reloading JSON settings does not reload Lua modules.
+
+## Extend actions with contribution slots
+
+```text
+//gbt slots
+//gbt slots -t battle
+```
+
+Slot listings show the current configuration's insertion points by action type,
+in placement order. They include empty hooks and fallback alternatives. Every
+executable section has automatic `<type>-setup`, `<type>-priority`, and
+`<type>-fallback` hooks; other names exist only when the loaded action set declares
+them. There is no built-in guarantee of private-profile slots such as `sc-priority`.
+
+For example, a user common file can add battle actions:
+
+```json
+{
+  "contributions": {
+    "battle-priority": [
+      { "priority": "high", "import": "my-battle-actions" }
+    ]
+  }
+}
+```
+
+This example requires you to supply `actions/lib/my-battle-actions.json` in a
+user library location. Normal contributions accumulate; `!slot-name` replaces
+lower-precedence contributions, and `^slot-name` supplies a fallback when no
+explicit definition exists. An empty replacement disables inherited contributions
+for that hook. `optional` and `required_for` control missing-slot warnings.
+
+Contribution action priorities accept finite numbers or `highest` (-1000),
+`high` (-100), `normal` (0), `low` (100), and `lowest` (1000). Lower runs first
+within the slot. Ties preserve existing order; an imported block stays together.
+Priority does not move an action across slot boundaries or change replacement
+and fallback selection. See [action slots](docs/action-slots.md) for complete rules.
+
+## Conditions, initialization, and errors
+
+Actions run in order within their section. An earlier eligible action can consume
+the cycle, so configure conditions and frequencies to allow later actions to run.
+`precondition` expressions accumulate through imports and run before an action's
+`when`; they do not prevent imported variable defaults from loading.
+
+`frequency` controls the execution interval, `miss_frequency` the failed-condition
+interval, and `frequencies` supplies a default for both. Explicit individual values
+win. An optional `else` command branch executes on a false condition and consumes
+the action opportunity too. Failed preconditions skip both branches.
+
+Use a `loading` array for initialization, or `"on_load": true` to promote an
+action into loading. Loading runs before ordinary state actions when automation
+is enabled and eligible after zone entry. Each loading action is evaluated once;
+false conditions are not retried. Dependent steps should use an explicitly
+ordered loading array. A settings-only reload does not rerun initialization.
+
+Runtime expression/command errors quarantine the affected action until a full
+action reload; commands after the failure are skipped. Errors are reported in
+chat and `.data/action-errors/<Character>-YYYYMMDD.log`. Named functions support
+explicit retry with `-retry`. Syntax errors omit the invalid action during
+compilation. See [commands](docs/commands.md) for diagnostics and retry syntax.
+
+```text
+//gbt eval getVar('my_settings')
 //gbt verbosity -level verbose
 ```
 
-For brevity, all commands listed below will omit the initial `//gambit` or `//gbt` part. Just keep in mind that these *are* required -- they are how Windower determines which addon to route the rest of the command to.
+`eval` executes Lua in a temporary action context and reports its first result.
+It can have real side effects; it is not a read-only expression viewer.
 
+## Character coordination and multi-stage weapon skills
 
+Local instances exchange job information and available weapon-skill IDs over IPC:
 
----
+```text
+//gbt jobinfo -sync
+//gbt jobinfo -all
+//gbt wsinfo -sync
+//gbt wsinfo -all
+```
 
-**Before we get into the actual commands,** I'll leave a few notes on how to read their description:
+Both commands support `-send` to broadcast local information. Sync requests run
+on addon load/login. The IPC loop broadcasts weapon-skill capability changes,
+including changes caused by equipment, when the available ability list changes.
+`wsinfo` displays weapon-skill names grouped by character.
 
-- Items in *[square brackets]* represent something that is optional.
-- Items in *{curly braces}* represent a placeholder for something you must fill in.
-- The vertical bar *|* can be thought of as "OR"; it separates a list of options that you can from.
+Multi-stage configurations can use job/group selectors, character names,
+stage-specific participants, static exclusions, and rotation. Capability filtering
+adds derived exclusions while preserving manual rules. Unknown characters cannot
+be assigned until their capabilities arrive. Capability/roster changes rebuild
+cached plans on their next evaluation. Compiled diagnostics are written under
+`.data/<character>/multi-stage/compiled/`.
 
+`compileMultiStage(config)` prepares a plan without checking combat readiness;
+normal opener/closer checks retain lazy compilation. The shipped
+`ws/multi-stage` library provides loading initialization and a named
+`test/multi-stage` function when imported. The sequence and participant settings
+are user-supplied: named encounter chains and namespace profiles are not included
+under `settings`. See [multi-stage documentation](docs/multi-stage.md).
 
-
-### User Commands
-
-#### **disable**
-
-Disables automation. Has no effect if automation is already disabled. See also: `enable`, `toggle`
-
-#### **enable**
-
-Enables automation. Has no effect if automation is already enabled. See also: `disable`, `toggle`
-
-#### **reload** [-settings-only] [-actions {action-name}]
-
-Forces the addon to reload all settings and actions, resetting the action processing state. This *does not* affect whether automation is enabled.
-
-- `-settings-only`, `-so` - Force the addon to reload settings but not actions. This is primarily useful if you've modified the settings file directly, and want to reload those without resetting the action state.
-- `-actions {action-name}` - Perform a full reload, but load the specified action set rather than the default job-based one. This is completely ignored if you've asked for a settings-only reload.
-
-#### **show**
-
-Displays all of your configured settings in the chat log.
-
-#### **toggle**
-
-Toggle automation on or off. This is identical to running `enable` when disabled, or `disable` when enabled. Se also: `disable`, `enable`
-
-> The `toggle` command is bound to the hotkey **Shift+Alt+G**
-
-#### **verbosity -level {normal|verbose|comment|debug|trace}**
-
-Controls the chat log output level. Gambit will only show output that is at or below the configured level. Valid values for *verbosity* are as follows:
-
-- ```normal``` - Minimal output. You don't want to see much at all.
-- ```verbose``` - More detailed output, helping you track what the addon is doing. This is the default, and is generally recommended.
-- `comment` - This is similar to verbose, but it will include things that could be considered more informational and noisy.
-- ```debug``` - This starts to get objectively noisy. This mode is mostly helpful if you're an addon developer, or if you're having trouble understanding what your actions are doing. This can be like drinking from a fire hose.
-- ```trace``` - This is the highest level of output. Think of it as similar to `debug`, but every triggered action is written to the chat. This can be like drinking from a fire hydrant. 
-
-## Settings
-
-TBD
+Target lists support job abbreviations and overlapping groups such as `melee`,
+`mages`, and `ranged`. `^mages` means other mages, while `["*", "~mages"]` means
+everyone except mages. These runtime selectors differ from inverse filenames.
+Use the [function reference](docs/functions.md) for targeting helpers and the
+[entrypoint reference](docs/action-entry-points.md) for filename matching.

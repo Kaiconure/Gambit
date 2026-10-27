@@ -118,13 +118,13 @@ directionality.faceTarget = function (target, calculationOnly)
                 
             }))
 
+            local original_heading = me.heading or 0
             local heading = -directionality.vectorAngle(forward, toTarget)
             if not calculationOnly then
                 windower.ffxi.turn(heading)
-                --return directionality.faceDirection(heading)
             end
 
-            return heading
+            return heading, directionality.angularDistance(heading, original_heading)
         end
     end
 

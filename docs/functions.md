@@ -4,6 +4,40 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Optional selector ordering
+
+`partyByName(targets, options)` and `alliesByName(targets, options)` accept a trailing options table: `{randomize = true, self_first = true}`. Targets may be an array or separate arguments. Both options default to false. Randomization shuffles the resolved matches once per fresh enumeration, after exclusions and deduplication; self-first then moves yourself to the front if included. Neither option changes membership. Continuing the cycle preserves its order. These options are not used by `partyAnchorByName`, which keeps deterministic preference ordering.
+
+## Member positioning
+
+### Movement reservations
+
+Cooperating actions can declare `"movement_owner": "corsair-rolls"` (or another unique owner name) and call `reserveMovement(seconds)` before starting a movement sequence. It returns false if another owner holds the reservation. Repeated acquisition by the same owner does not extend the deadline.
+
+`hasMovementReservation()` checks whether the current action owns the reservation; `releaseMovement()` releases only its own reservation. `movementAvailable()` is true when no reservation exists or the current action owns it. Use it as a precondition in ordinary movement actions to skip without consuming a scheduler hit.
+
+`resumeMovement(seconds)` keeps an existing reservation or acquires one for continuation in a new section/encounter context. It refuses to restart a reservation that expired or was released in the same context. A genuinely new operation uses `reserveMovement(seconds)`. Roll Double-Up actions use continuation only after checking ability availability and the roll policy, allowing an unfinished roll to continue across battles without repeatedly renewing a timed-out reservation.
+
+Reservations cancel existing addon movement when acquired, and cancel movement when released or invalidated. They expire on the next reservation check after the deadline, and are invalidated by action-section, encounter-scope, zone, or variable-state reload changes. `align`, `align2`, `move`, `follow`, and `cancelFollow` reject competing callers with `nil, 'reserved'`. Facing and non-movement actions remain available. Direct movement commands outside these context helpers bypass this mechanism.
+
+Optional roll alignment uses this reservation through its initial roll and Double-Up actions. Frontline engagement, member engagement, and idle follow-leader check availability before running. The configured roll alignment timeout bounds the entire reservation, including the initial approach.
+
+Import `member-engagement` into the section where you want to stay near a party member. Configure it with:
+
+```json
+"member_engagement": {
+  "targets": ["^WHM"],
+  "distance": 2,
+  "duration": 3,
+  "max_distance": 30,
+  "tolerance": 1
+}
+```
+
+These are the default distances and duration; targets default to an empty array, which disables movement. Normal party selectors, including jobs, roles and exclusions, are supported. The action moves when farther than `distance + tolerance` yalms, aiming for `distance`; being closer is acceptable. Its action frequency remains three seconds. `duration` defaults to three seconds per alignment attempt; `retry_delay` defaults to ten seconds of postponement after movement failure. Avoid importing competing positioning actions in the same section.
+
+`partyAnchorByName(targets, maxDistance, excludeSelf)` selects a living, valid party member within `maxDistance` yalms (default 30). Yourself is eligible when matched by the selectors unless `excludeSelf` is true; `member-engagement` explicitly passes true. Self-exclusion happens before selection so another eligible member can be chosen. It returns and sets `member`, or returns nil and clears `member` if nobody qualifies. Selection is reevaluated in deterministic selector order using fresh party data each time; a preferred member becoming eligible again takes precedence. It does not advance the normal member enumerator. Nil or empty targets select nobody. The helper supplies stable positioning targets; it does not engage or change the battle target.
+
 ## Ability Functions
 
 These functions are related to the use of job abilities.
@@ -80,3 +114,102 @@ Here's an example:
 In plain English, this says:
 
 > If I'm silenced, remove it with Healing Waltz (first choice) or some Echo Drops.
+# Flexible alignment
+
+`align(target, angle, distance, duration, noFace, tolerance)` supports exact angles and flexible positioning. Optional positional tolerance is in yalms; `aligned` and `aligning` accept it as their fourth argument. Frontline engagement uses `vars.frontline_engagement.tolerance`, defaulting to 0.5, for its alignment check and movement completion. Other callers retain their existing defaults. The same angle values work with `vars.frontline_engagement.angle`.
+
+| Angle | Meaning, relative to the target's facing |
+| --- | --- |
+| `nil` / JSON `null` | Try your current direction from the target, then +45° and -45° if movement times out. Any direction at the requested distance counts as aligned. |
+| A number, such as `180` | Exact angle; no alternate destination. Numeric strings also work. |
+| `"rear"` | Alias for numeric `180`, using the normal positional tolerance and exact-angle timeout. |
+| `"face"`, `"front"`, `"facing"` | Aliases for numeric `0`, using the normal positional tolerance and exact-angle timeout. |
+| `"frontside"` | 0° ± 30°. |
+| `"backside"` | 180° ± 30°. This is a positioning region, not a guarantee that positional ability requirements are met. |
+| `"left"` | 90° ± 30°, relative to the target. |
+| `"right"` | -90° ± 30°, relative to the target. |
+| `"side"` | Either the left or right region. |
+| `"180+/-30"` | A center and half-width, from 0 through 180 degrees of half-width. |
+| `"150-210"` | An arc from the first angle to the second in increasing angle order. Wraparound works: `"330-30"` crosses zero. A span of 360° permits the full circle. |
+
+Semantic names are case-insensitive. Invalid specifications raise an error rather than silently becoming unrestricted alignment.
+
+For flexible ranges, a character already inside an allowed arc keeps its current bearing when correcting distance. Otherwise, a preferred angle is randomized and remembered on the executing action for the current battle scope, target, and angle specification. A later successful fallback becomes the preference. If already at the requested distance anywhere in an allowed arc, no repositioning is needed. Target movement or turning during an unsuccessful attempt defers correction to a later evaluation instead of trying arc extremes. This reduces clustering but does not coordinate character positions or guarantee separation.
+
+On a movement timeout, alignment tries other allowed destinations, including arc endpoints. `side` can try the other side. The default total attempt budget is six seconds for flexible alignment and three seconds for an exact angle; supplying `duration` overrides it. Scheduling, polling, and movement cleanup can add some overhead. Cancellation or replacement of the movement job ends the attempt without starting another fallback. Failure returns false; success returns true. This is bounded destination retrying, not wall detection or pathfinding.
+
+```json
+"vars": {
+  "frontline_engagement": {
+    "angle": "backside",
+    "distance": 8
+  }
+}
+```
+
+The frontline action still applies its existing `canAlign` checks, model-size distance handling, and failure postponement. Movement paths themselves are not constrained to remain inside the permitted arc; the arcs describe destinations. With `align2`, flexible string angles use the same retry behavior without final facing.
+Both positioning imports expose `duration` and `retry_delay` under their respective variable objects. `frontline_engagement.duration` defaults to `null`, retaining `align`'s automatic budget (three seconds for exact angles, six for flexible positioning); `member_engagement.duration` defaults to three seconds. Both retry delays default to ten seconds. Durations are clamped to at least one second by `align`; retry delay controls failure postponement, not the action's frequency or a guaranteed retry time.
+
+For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
+
+## Evaluating reusable conditions
+
+
+`evaluateAll(conditions, ...)` returns a boolean. A string is evaluated through the existing execution cache; an array evaluates each condition in order and stops at the first falsy result. Boolean inputs are used directly, numbers are truthy (including zero), and both `nil` and an empty array return false. Arrays must be contiguous; nested arrays are not supported. Expression errors propagate to the action guard.
+
+Use `evaluateAllConditions(vars.idle_precondition)` for an optional reusable list of requirements, or `not evaluateAllConditions(vars.primary_tank_precondition)` for its inverse. Strings returned by expressions are treated as values, not executed recursively.
+
+`execute` remains unchanged: it evaluates every expression in an array and returns the final expression's results, rather than combining them with AND.
+
+`evaluateAllConditions(conditions, ...)` is the optional-condition variant: `nil` or an empty array returns `true` (no restrictions). All other inputs delegate to `evaluateAll`, preserving explicit `false`, short-circuiting, argument forwarding, and validation of malformed tables. An expression that returns `nil` still fails. For example, `evaluateAllConditions(vars.idle_precondition)` permits execution when the policy is absent, while respecting a policy explicitly set to `false`.
+# Short alignment attempts
+
+The first direction receives the full configured movement budget rather than a
+share divided among candidate angles. When a timed-out attempt makes progress,
+the next call continues that direction. When it is blocked, untried directions
+are retained for later calls. This preserves scheduler opportunities between
+attempts without shortening each movement to reserve time for alternatives.
+
+`align` returns `false, 'progress'` when its movement budget expires after making
+measurable progress toward the destination. It does not try another angle or apply
+its internal failure postponement in that case. Existing boolean callers remain
+compatible. The engagement libraries use `progress_retry_delay` for this outcome
+and `retry_delay` for other unsuccessful attempts.
+
+`frontline_engagement.initial_delay` defaults to 2 seconds since entering battle;
+set it to 0 to permit immediate alignment. Boss mage settings currently restore
+the two-second delay, default frontline duration (3 seconds for exact angles,
+6 for flexible angles), three-second member duration, and ten-second failure retries.
+Healing still needs to precede movement: alignment returns between short attempts,
+but does not interrupt an attempt when someone takes damage.
+
+`alignWithRetry(target, angle, distance, options, noFace, successDelay)` forwards
+`duration` and `tolerance` from options to `align`. On failure it postpones using
+`progress_retry_delay` (default 1) or `retry_delay` (default 10). Optional
+`successDelay` postpones after arrival. It returns the alignment result and reason.
+
+`alignWithReservation(target, angle, distance, options, noFace)` positions a resolved
+target under an existing movement reservation. Options include `duration`,
+`tolerance`, optional acceptable `range`, `progress_retry_delay` (default 1), and
+`retry_delay` (default 10). Arrival or already being within `range` returns true
+and retains the reservation. Partial progress returns false, retains the lease,
+and postpones briefly. Missing/invalid targets, movement-blocking statuses, and
+other failures release the reservation and back off. The caller must pass nil
+when target selection fails, rather than short-circuiting before the helper.
+Callers acquire/resume reservations separately; this helper never acquires or
+extends them, even when the selected target changes. Roll actions use this helper
+after resolving their party anchor on each attempt.
+
+### Multi-stage compilation
+
+`compileMultiStage(config)` prepares a multi-stage weapon-skill plan without
+checking combat readiness or selecting a weapon skill. It returns `true` for a
+valid nonempty stage list, including when the cached plan is current, and `false`
+when no stages are defined. Errors use the normal action error handling.
+
+The `ws/multi-stage` library includes an `on_load` action named
+`multi-stage-compile` after its settings initialization. The existing opener and
+closer checks still compile on demand and refresh plans after roster or
+capability changes. Initial compilation may exclude characters whose capability
+replies have not arrived yet; later evaluation refreshes the plan. Loading actions
+run when automation is enabled and eligible to process them.

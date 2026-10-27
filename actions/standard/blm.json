@@ -1,0 +1,227 @@
+{
+  "vars": {
+    "ensure_trusts": {
+      "spells": null
+    },
+    "black_magic_burst": {
+      "max_tier": "V",
+      "low_hpp_max_tier": "III",
+      "low_hpp": 5
+    },
+    "black_magic_nuke": {
+      "max_hpp": 10,
+      "max_tier": "III",
+      "min_tier": "I",
+      "frequency": 5
+    },
+    "use_aspir": {
+      "max_mpp": 75,
+      "frequency": 5,
+      "max_ws_mpp": 50
+    },
+    "frontline_engagement": {
+      "distance_offset": null,
+      "angle": null
+    },
+    "use_convert": {
+      "min_mp": 200
+    },
+    "waypoints_ex": {
+      "active": null
+    }
+  },
+  "imports": [],
+  "functions": [],
+  "pull": [
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "import": "heals/backup-cure-sequence"
+    }
+  ],
+  "battle": [
+    {
+      "import": "heals/backup-cure-sequence"
+    },
+    {
+      "import": "reactions/use-stun"
+    },
+    {
+      "import": "nukes/black-magic-nuke"
+    },
+    {
+      "import": "reactions/face-away"
+    },
+    {
+      "import": "debuffs/keep-dia"
+    },
+    {
+      "when": ["hasEffectOf('Silence') and canUse('Echo Drops')"],
+      "commands": ["use(me)"],
+      "frequency": 10
+    },
+    { "import": "nukes/use-aspir" },
+    {
+      "import": "nukes/black-magic-burst"
+    },
+    {
+      "import": "frontline-engagement"
+    },
+    {
+      "when": [
+        "me.mpp <= 70",
+        "canUseWeaponSkill('Myrkr', 'Spirit Taker', 'Starlight', 'Moonlight')"
+      ],
+      "commands": ["useWeaponSkill()"]
+    },
+    {
+      "when": [
+        "me.tp >= 1500 and me.mpp > 70",
+        "not partyUsingWeaponSkill()",
+        "canUseWeaponSkill('Judgment', 'Seraph Strike', 'Shining Strike')"
+      ],
+      "commands": ["useWeaponSkill()"]
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "not hasEffectOf('Sublimation') and canUse('Sublimation')"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 5
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "canUse('Ionohelix')",
+        "weather_element == 'Lightning' or hasEffectOf(bt, 'Thunderstorm')"
+      ],
+      "commands": ["use(bt)"],
+      "frequency": 30,
+      "scope": "battle"
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "not hasBuff('Addendum: Black') and canUse('Addendum: Black')"
+      ],
+      "commands": [
+        "log('Attempting to apply:', ability.name)",
+        "useAbility(me)"
+      ],
+      "frequency": 60
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "not hasBuff('Dark Arts') and not hasBuff('Addendum: Black') and canUseAbility('Dark Arts')"
+      ],
+      "commands": [
+        "useAbility(me)",
+        "wait(1)",
+        "useAbility(me, 'Addendum: Black')"
+      ],
+      "frequency": 60
+    },
+    {
+      "when": "partyHasBuff('Bind', 'Slow') and canUse('Erase')",
+      "commands": "use(member)",
+      "frequency": 3
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "bt.is_apex_tier and bt.hpp > 25",
+        "me.tp > 500 and canUse('Cascade')"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 5,
+      "comment": "Consumes TP to enhance the next BLM spell.",
+      "disabled": true
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "bt.is_apex_tier and bt.hpp > 25",
+        "hasBuff('Addendum: Black')",
+        "not hasBuff('Alacrity', 'Parsimony')",
+        "(me.mpp < 50 and canUse('Parsimony')) or canUse('Alacrity')"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 15
+    },
+    {
+      "when": [
+        "canUseItem('Pear Crepe', 'Chocolate Crepe', 'Grape Daifuku', 'Crab Sushi') and not hasBuff('Food')"
+      ],
+      "frequency": 1,
+      "commands": ["useItem(me)"],
+      "disabled": false
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "not hasEffectOf('Thunderstorm') and canUse('Thunderstorm')"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 10
+    }
+  ],
+  "idle": [
+    {
+      "import": "ensure-trusts"
+    },
+    {
+      "import": "follow-leader"
+    },
+    {
+      "import": "heals/backup-cure-sequence"
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "not hasEffectOf('Sublimation') and canUse('Sublimation')"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 5
+    },
+    {
+      "when": [
+        "me.sub_job == 'SCH'",
+        "hasEffectOf('Sublimation') and canUse('Sublimation') and me.mpp < 50"
+      ],
+      "commands": ["use(me)"],
+      "frequency": 240
+    },
+    {
+      "import": "use-xp-cp-rings",
+      "disabled": false
+    },
+    {
+      "import": "common-consumables",
+      "disabled": true
+    },
+    {
+      "import": "abilities/use-convert"
+    },
+    {
+      "import": "waypoints-ex",
+      "disabled": false
+    }
+  ],
+  "dead": [
+    {
+      "import": "homepoint-on-death",
+      "disabled": true
+    }
+  ],
+  "mounted": [
+    {
+      "import": "follow-leader"
+    }
+  ]
+}
