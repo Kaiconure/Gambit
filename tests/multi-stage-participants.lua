@@ -6,6 +6,7 @@ local function read(path)
     return source:gsub("('[^'\r\n]*'):format", '(%1):format')
 end
 local compileCount=0
+local unfilledWarnings={}
 local function indexOf(list,value,ignoreCase)
     for index,item in ipairs(list or {}) do
         if ignoreCase and type(item)=='string' and type(value)=='string' then
@@ -34,7 +35,10 @@ local env=setmetatable({
     },
     writeJsonToFile=function() compileCount=compileCount+1 end,
     writeVerbose=function() end, pluralize=function() return '' end,
-    writeWarning=function(message) error(message) end,
+    writeWarning=function(message)
+        if message:find('No participants can fill',1,true) then unfilledWarnings[#unfilledWarnings+1]=message
+        else error(message) end
+    end,
     text_number=tostring,text_weapon_skill=tostring,text_green=tostring,text_gray=tostring,
     Colors={warning=1},CHAR_RIGHT_ARROW='->',
 }, {__index=_G})
@@ -268,7 +272,10 @@ env.skillchain_helper.filter_weapon_skills=function(list, ids)
     end
     return #result>0 and result or nil
 end
-env.writeWarning=function(message) error('Unexpected warning for an excluded role: ' .. message) end
+env.writeWarning=function(message)
+    if message:find('No participants can fill',1,true) then unfilledWarnings[#unfilledWarnings+1]=message
+    else error('Unexpected warning for an excluded role: ' .. message) end
+end
 capabilities.apply('Beta','2')
 capabilities.apply('Theta','1')
 local capable={participants={'melee'}, stages={{use={'Upheaval'}},
@@ -281,13 +288,41 @@ assert(indexOf(capable.exclusions.Alpha,2.1))
 assert(indexOf(capable.exclusions.Theta,2.1))
 assert(indexOf(capable.exclusions.Beta,1))
 local previous=compileCount
+unfilledWarnings={}
 capabilities.apply('Beta','1')
 participation.prepare(capable,ctx,env.compile_multi_stage)
 assert(compileCount==previous+1)
 assert(capable.stages[2].on_ws[1].participants[1]=='--no-matching-participant--')
 assert(indexOf(capable.exclusions.Beta,2.1))
+assert(#unfilledWarnings==1 and unfilledWarnings[1]:find('#2.',1,true))
+assert(not unfilledWarnings[1]:find('#2.1',1,true))
+local warningCount=#unfilledWarnings
+participation.prepare(capable,ctx,env.compile_multi_stage)
+assert(#unfilledWarnings==warningCount, 'Cached plans must not repeat warnings')
 capabilities.apply('Beta','2')
+unfilledWarnings={}
 participation.prepare(capable,ctx,env.compile_multi_stage)
 assert(not indexOf(capable.exclusions.Beta,2.1))
 assert(capable.stages[2].on_ws[1].participants[1]=='Beta')
+assert(#unfilledWarnings==0)
+capabilities.records.Beta=nil
+capabilities.revision=capabilities.revision+1
+participation.prepare(capable,ctx,env.compile_multi_stage)
+assert(#unfilledWarnings==0, 'Pending capability information must not claim confirmed inability')
+capabilities.apply('Beta','1')
+unfilledWarnings={}
+local impossible={participants={'Beta'},stages={{use={'Savage Blade'}},
+    {on_ws={{party_using={'Savage Blade'},use={'Upheaval'}}}},
+    {on_sc={'Fusion'},use={'Savage Blade'}}}}
+participation.prepare(impossible,ctx,env.compile_multi_stage)
+assert(#unfilledWarnings==2)
+assert(unfilledWarnings[1]:find('#1',1,true) and unfilledWarnings[2]:find('#3',1,true))
+unfilledWarnings={}
+local partial={participants={'Beta'},stages={{use={'Upheaval'}},
+    {on_ws={{party_using={'Upheaval'},use={'Savage Blade'}},
+        {party_using={'Savage Blade'},use={'Upheaval'}}}}}}
+participation.prepare(partial,ctx,env.compile_multi_stage)
+assert(#unfilledWarnings==0, 'A fillable stage-2 alternative must suppress the stage warning')
+assert(partial.stages[2].on_ws[1].participants[1]=='--no-matching-participant--')
+assert(partial.stages[2].on_ws[2].participants[1]=='Beta')
 print('PASS: remote capabilities independent of local skills and capability updates rebuild plans')

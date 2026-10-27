@@ -510,15 +510,47 @@ function compile_multi_stage(multi_stage, capabilityTemplate)
     local player = windower.ffxi.get_player()
     local encoded = capabilities.encode(abilities and abilities.weapon_skills)
     if player and encoded then capabilities.apply(player.name, encoded) end
+    local function isUnfilled(participants, role)
+        -- Missing/empty lists have legacy unrestricted semantics. Only warn for
+        -- an explicitly restricted role whose final list has no real candidates.
+        if not participants or #participants == 0 then return end
+        for _, name in ipairs(participants) do
+            if name:sub(1,2) ~= '--' then return end
+        end
+        -- A pending capability reply cannot establish that someone lacks a skill.
+        for _, name in ipairs(role and role.participants or {}) do
+            if name:sub(1,2) ~= '--' and not capabilities.records[name] then return end
+        end
+        return true
+    end
+    local function warnUnfilled(participants, role, label)
+        if not isUnfilled(participants, role) then return end
+        local skills = role and role.use or {}
+        writeWarning('**No participants can fill multi-stage step %s. Required weapon skills: %s.':format(
+            text_number('#' .. label, Colors.warning),
+            text_weapon_skill(#skills > 0 and table.concat(skills, ', ') or 'none available', Colors.warning)))
+    end
     for i, stage in ipairs(stage_meta) do
         local role = template.stages[i]
         if i == 2 then
+            local allUnfilled, required, seenSkills = true, {}, {}
             for j, entry in ipairs(stage.on_ws or {}) do
                 local candidate = role and role.on_ws and role.on_ws[j]
                 entry.participants = capabilities.filter(entry.participants, candidate and candidate.use, skillchain_helper)
+                if not isUnfilled(entry.participants, candidate) then allUnfilled = false end
+                for _, skill in ipairs(candidate and candidate.use or {}) do
+                    if not seenSkills[skill] then
+                        seenSkills[skill] = true
+                        required[#required+1] = skill
+                    end
+                end
+            end
+            if allUnfilled then
+                warnUnfilled({'--no-capable-participant--'}, {use=required}, '2')
             end
         else
             stage.participants = capabilities.filter(stage.participants, role and role.use, skillchain_helper)
+            warnUnfilled(stage.participants, role, tostring(i))
         end
     end
 

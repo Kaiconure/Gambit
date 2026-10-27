@@ -98,6 +98,14 @@ participant restriction; it does not select an executing closer by itself.
 
 ## Shared weapon-skill capabilities
 
+Compilation warns when a restricted stage has no eligible participants after
+exclusions and capability filtering. Stage 2 produces one warning only when none
+of its alternatives can be filled; individual unavailable alternatives are silent.
+Warnings identify the step (such as `#2`) and its required weapon skills. Pending capability replies
+do not produce a confirmed-inability warning. Cached evaluations do not repeat
+warnings; a later recompilation reevaluates them. This diagnostic does not disable
+the whole sequence or add a full-sequence readiness check.
+
 Gambit exchanges weapon-skill IDs over IPC on addon load and login. It also
 checks the local ability list for changes during the IPC sender loop and
 broadcasts only changed snapshots. Use `gbt wsinfo -sync` to request a fresh
