@@ -101,6 +101,14 @@ least 600 pixels. This minimum does not change the configured or saved width;
 hiding the log restores that width. Widening/narrowing changes the
 horizontal clipping limit. This does not change font size or history capacity.
 
+Tracking headings and values can widen the panel beyond its configured width
+and the logging minimum. Each refresh sizes to the longest visible tracking
+line, including value indentation, using the same character-width estimate as
+clipping. Multiline values use their longest line; nil entries contribute no
+width. The panel shrinks toward its minimum when tracking content becomes
+shorter. Log text never drives automatic width. These width changes do not
+modify saved settings.
+
 Expressions use the ordinary action expression compiler and a fresh temporary
 context per entry. Strings accept expressions or scripts; arrays evaluate
 independent expressions in order and return the final result, matching
@@ -115,6 +123,47 @@ Syntax/runtime failures display `[error]` on the affected entry and stop retryin
 it until panel recreation (switch sets or run `gbt panel reload`). Unavailable contexts display
 `[unavailable]` and are retried. Failures do not quarantine automation actions or
 produce repeated chat errors.
+
+## Temporary tracking from actions
+
+Use `setPanelTracking(entries)` in an action to replace the displayed tracking
+rows. Pass an array with the same entry schema as a single configured tracking
+set; no set name or `sets` wrapper is needed. For example, in an action file:
+
+```json
+{
+  "vars": {
+    "panel_tracking": [
+      { "name": "Strategy", "expression": ["gambit.strategy"] },
+      { "name": "Phase", "value": "Preparing" }
+    ]
+  },
+  "loading": [
+    { "commands": ["setPanelTracking(vars.panel_tracking)"] }
+  ]
+}
+```
+
+The function returns `true` on success. Invalid entries raise an action error
+and leave the existing panel intact. Entry expressions use a fresh panel context,
+as ordinary configured tracking does, rather than capturing the calling action's
+local variables or parameters.
+
+Pass `true` as the second argument to append after the currently active rows:
+`setPanelTracking(vars.panel_tracking, true)`. This extends an existing temporary
+override when present, or the selected configured set otherwise. Repeated calls
+append again, so use a loading or one-time action to avoid duplicate rows.
+Omitting the argument or passing `false` replaces tracking as usual. Appending
+an empty array leaves the rows unchanged; passing `nil` restores configured
+tracking regardless of the append flag. Appended rows remain temporary.
+
+`setPanelTracking({})` clears tracking rows; `setPanelTracking(nil)` restores the
+selected configured set. Overrides do not change that selection, its saved
+entries, position, or log history. Later preference saves do not persist the
+override. Settings reloads, explicit panel/addon reloads, selecting a tracking
+set, or `setPanelTracking(nil)` restore configured tracking. Display
+reconfiguration, including size, theme, visibility, log visibility, and position
+changes, retains the temporary rows.
 
 ## Shared appearance and log text
 

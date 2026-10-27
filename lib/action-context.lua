@@ -6632,6 +6632,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
 
+    -- Replace status tracking for this session without saving panel preferences.
+    -- Passing nil restores the currently selected configured set.
+    context.setPanelTracking = function(entries, append)
+        assert(globals.status_panel, 'Status panel is not available')
+        return globals.status_panel:setTemporaryTracking(entries, append)
+    end
+
     -- Unlike execute, condition arrays short-circuit and combine results with AND.
     context.evaluateAll = function(conditions, ...)
         local function evaluate(condition, ...)

@@ -65,7 +65,7 @@ handlers['panel'] = function(args)
             end
             panel:setSize(width,height)
         elseif command == 'reload' then
-            panel:configure(loadPanelSettings()); panel:update()
+            panel:configure(loadPanelSettings(),false); panel:update()
             writeMessage('Panel settings reloaded.')
         elseif command == 'theme' then
             if args[2] == '-list' then

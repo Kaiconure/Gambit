@@ -10,6 +10,15 @@ Status.defaults=Config.defaults
 local function displayWidth(options)
     return math.max(options.width,options.show_log and 600 or 0)
 end
+local function longestLine(text)
+    local longest=0
+    for line in (text..'\n'):gmatch('(.-)\n') do
+        -- Count UTF-8 code points rather than bytes (e.g. the right arrow).
+        local _,count=line:gsub('[^\128-\191]','')
+        longest=math.max(longest,count)
+    end
+    return longest
+end
 function Status.new(deps,options)
     local self=setmetatable({deps=deps},Status)
     self:configure(options)
@@ -20,14 +29,22 @@ function Status.new(deps,options)
     end)
     return self
 end
-function Status:configure(options)
+function Status:configure(options,trackingOverride)
     options=Config.normalize(options)
+    if trackingOverride==nil then trackingOverride=self.trackingOverride end
+    if trackingOverride==false then trackingOverride=nil end
+    local tracking=options.tracking.sets[options.tracking.current]
+    if trackingOverride~=nil then
+        local temporary=copy(options)
+        temporary.tracking={current='temporary',sets={temporary=trackingOverride}}
+        tracking=Config.normalize(temporary).tracking.sets.temporary
+    end
+    self.trackingOverride=trackingOverride~=nil and copy(tracking) or nil
     if self.panel then self.panel:destroy() end
     self.options=options; self.entries={}; self.nextUpdate=0
     self.buffer=self.buffer or Buffer.new(options.history_lines,self.deps.windower.from_shift_jis)
     self.buffer.limit=options.history_lines
     while #self.buffer.lines>options.history_lines do table.remove(self.buffer.lines,1); table.remove(self.buffer.ids,1) end
-    local tracking=options.tracking.sets[options.tracking.current]
     local lineHeight=math.ceil(options.font_size*1.8)
     local trackingLines=0
     for _, entry in ipairs(tracking) do
@@ -79,7 +96,27 @@ end
 function Status:setTracking(name)
     assert(self.options.tracking.sets[name], 'Unknown tracking set: '..tostring(name))
     local options=copy(self.options); options.tracking.current=name
-    self:configure(options); self:update(); self:persist()
+    self:configure(options,false); self:update(); self:persist()
+end
+function Status:setTemporaryTracking(entries,append)
+    -- Keep temporary rows outside options so unrelated preference saves cannot
+    -- persist them. Display reconfiguration retains these rows until a reload
+    -- or explicit tracking selection/reset clears the override.
+    local override=entries
+    assert(append==nil or type(append)=='boolean','Panel tracking append must be boolean')
+    if append and entries~=nil then
+        -- Validate the incoming array before merging so malformed keys cannot
+        -- be silently discarded by ipairs. configure validates the result too.
+        local temporary=copy(self.options)
+        temporary.tracking={current='temporary',sets={temporary=entries}}
+        local incoming=Config.normalize(temporary).tracking.sets.temporary
+        override=copy(self.trackingOverride or self.options.tracking.sets[self.options.tracking.current])
+        for _,entry in ipairs(incoming) do override[#override+1]=entry end
+    end
+    if override==nil then override=false end
+    self:configure(self.options,override)
+    self:update()
+    return true
 end
 function Status:resetPosition()
     self:setPosition(Status.defaults.x,Status.defaults.y)
@@ -124,9 +161,6 @@ function Status:update()
         if self.panel.visible then self.panel:show(false) end
         return
     end
-    self.panel.width=displayWidth(self.options)
-    self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
-    self.toggle.width=self.panel.width-20
     local enabled=self.deps.enabled()
     self:setText(self.toggle,enabled and 'Automation: [ON]' or 'Automation: [OFF]')
     Theme.color(self.toggle.text,enabled and 'green' or 'red')
@@ -157,6 +191,18 @@ function Status:update()
         else append(value==nil and '' or value) end
         entry.display=table.concat(lines,'\n'); entry.lineCount=math.max(1,#lines)
     end
+    local width=displayWidth(self.options)
+    for _,entry in ipairs(self.entries) do
+        if not entry.hidden then
+            local name=Buffer.plain(entry.definition.name,self.deps.windower.from_shift_jis)
+            local indent=math.ceil(math.max(0,entry.valueLabel.x-10)/self.characterWidth)
+            width=math.max(width,20+math.max(longestLine(name),longestLine(entry.display)+indent)*self.characterWidth)
+        end
+    end
+    self.panel.width=math.ceil(width)
+    self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
+    self.toggle.width=self.panel.width-20
+    self:setText(self.toggle,enabled and 'Automation: [ON]' or 'Automation: [OFF]')
     -- Expression arrays can change size at runtime: reflow rows and automatic
     -- height before clipping, without rebuilding controls or disturbing dragging.
     local lineHeight=math.ceil(self.options.font_size*1.8)

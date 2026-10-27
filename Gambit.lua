@@ -316,7 +316,7 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         globals.cloud_panel:configure(settings.cloudPanel)
     end
     if globals.status_panel then
-        local ok, err = pcall(function() globals.status_panel:configure(loadPanelSettings()) end)
+        local ok, err = pcall(function() globals.status_panel:configure(loadPanelSettings(),false) end)
         if ok then globals.status_panel_ready = true end
         if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
     end
