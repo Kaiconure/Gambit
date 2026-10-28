@@ -24,6 +24,7 @@ use those defaults. Mouse resizing is not implemented yet.
 | `gbt panel tracking -list` | List names alphabetically |
 | `gbt panel tracking -set <name>` | Switch immediately and save selection |
 | `gbt panel reset-position` | Restore default coordinates and save |
+| `gbt panel reset` | Restore and save all panel defaults, clearing temporary tracking |
 | `gbt panel position <x> <y>` | Set both coordinates in pixels and save |
 | `gbt panel anchor [<top\|bottom> <left\|right>]` | View or set the position anchor and save |
 | `gbt panel x <x>` / `gbt panel y <y>` | Set one coordinate, retaining the other |
@@ -141,6 +142,47 @@ produce repeated chat errors.
 
 ## Temporary tracking from actions
 
+### Most recently used job ability
+
+Actions and tracking expressions can read `gambit.last_ability`, which is nil
+until a completed self job-ability event is observed. It contains `id`, `name`,
+and `time` (the `os.clock()` timestamp, in seconds). Manual abilities are included;
+other players' abilities, spells, and weapon skills do not replace it. It clears
+on logout or addon reload, and remains available through settings reloads.
+Context values are snapshots; a fresh context sees the latest observed ability.
+
+For a tracking entry that stays hidden until an ability has been used:
+
+```json
+{ "name": "Last ability", "expression": ["gambit.last_ability and gambit.last_ability.name"] }
+```
+
+An action can test elapsed time with
+`gambit.last_ability and time - gambit.last_ability.time < 5`.
+
+`gambit.last_spell` provides `id`, `name`, `time`, `age`, and `status` for your
+most recent spell, including manual casting. Cast start creates a record with
+`status='casting'`; completion changes it to `'completed'`, and interruption
+changes it to `'interrupted'`. `time` is refreshed on each transition and `age`
+is seconds since that transition, calculated when the context is created.
+Completion can also create a record if the start event was not observed.
+Spell and ability records are independent and have the same lifetime and
+snapshot behavior. For example:
+
+```json
+{ "name": "Last spell", "expression": ["gambit.last_spell and gambit.last_spell.name"] }
+```
+
+Both `gambit.last_spell.target` and `gambit.last_ability.target` contain `id`,
+`name`, and `index`. Spell targets are captured at cast start and refreshed on
+completion; interruption retains the cast-start target. Ability targets are
+captured at completion. The ID remains available if the target cannot be resolved; `name`
+and `index` are then nil. The target itself is nil if no target ID is available.
+For area spells or abilities this is the first target reported in the result packet, rather
+than a list of everyone affected. These are recorded details, not a live entity.
+
+### Configure tracking rows
+
 Use `setPanelTracking(entries)` in an action to replace the displayed tracking
 rows. Pass an array with the same entry schema as a single configured tracking
 set; no set name or `sets` wrapper is needed. For example, in an action file:
@@ -185,14 +227,16 @@ changes, retains the temporary rows.
 ### Background skins
 
 Use `gbt panel theme ffxi` for the blue-violet textured skin with silver horizontal
-trim and open sides. It uses `content/ui/ffxi/cleaned-background.png` as its basis.
+trim and open sides. Its retained `content/ui/ffxi/center.png` is 300 by 400 pixels;
+the redundant full-resolution source has been removed.
 The six-pixel top and bottom borders stay fixed, and the center fills the width.
 The center uses a fixed 400-pixel texture height to keep the
 horizontal lines about 4–5 pixels apart as the panel resizes. Adjust
 `texture_height` in the theme registry to tune spacing (larger means wider).
-Regenerate
-the three pieces and a 580-by-300 preview with `content/ui/ffxi/generate.ps1`.
-The cleaned source remains unchanged.
+Run `content/ui/ffxi/generate.ps1` to normalize the center resolution and rebuild
+the 580-by-300 preview using the retained center and top/bottom border assets.
+The renderer stretches the center horizontally and repeats it vertically;
+resolution changes do not alter the configured line spacing.
 
 Use `gbt panel theme ff8` for the gray FF8-style bevel/gradient skin, or
 `gbt panel theme ff7` for the blue gradient and silver frame extracted from

@@ -1,4 +1,4 @@
-__version = '1.0.3'
+__version = '1.0.4'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -545,6 +545,8 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    globals.last_ability = nil
+    globals.last_spell = nil
     globals.status_panel_ready = false
     resetNamespaceStartup()
     globals.logged_in = false
@@ -1302,6 +1304,46 @@ local _handle_actionChunk = function(id, data)
     if actionId <= 0 then return end
 
     local category = tonumber(packet['Category']) or 0
+
+    -- Record completed self job abilities before effect handling can return.
+    if category == 6 or     -- Job ability completed
+        category == 14     -- Unblinkable job ability completed
+    then
+        local player = windower.ffxi.get_player()
+        local ability = resources.job_abilities[actionId]
+        if player and actorId == player.id and ability then
+            local targetId = tonumber(packet['Target 1 ID'])
+            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
+            globals.last_ability = {id=ability.id, name=ability.name, time=os.clock(),
+                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
+        end
+    end
+    if category == 8 and actionId == 24931 then -- Spell casting started
+        local player = windower.ffxi.get_player()
+        local spellId = tonumber(packet['Target 1 Action 1 Param'])
+        local spell = spellId and resources.spells[spellId]
+        if player and actorId == player.id and spell then
+            local targetId = tonumber(packet['Target 1 ID'])
+            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
+            globals.last_spell = {id=spell.id, name=spell.name, time=os.clock(), status='casting',
+                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
+        end
+    elseif category == 8 and actionId == 28787 then -- Spell casting interrupted
+        local player = windower.ffxi.get_player()
+        if player and actorId == player.id and globals.last_spell and globals.last_spell.status=='casting' then
+            globals.last_spell.status='interrupted'
+            globals.last_spell.time=os.clock()
+        end
+    elseif category == 4 then  -- Spell casting completed
+        local player = windower.ffxi.get_player()
+        local spell = resources.spells[actionId]
+        if player and actorId == player.id and spell then
+            local targetId = tonumber(packet['Target 1 ID'])
+            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
+            globals.last_spell = {id=spell.id, name=spell.name, time=os.clock(), status='completed',
+                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
+        end
+    end
 
     local actor = windower.ffxi.get_mob_by_id(actorId)
     local action = nil

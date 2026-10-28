@@ -123,6 +123,11 @@ end
 function Status:resetPosition()
     self:setPosition(Status.defaults.x,Status.defaults.y)
 end
+function Status:reset()
+    self:configure(copy(Config.defaults),false)
+    self:update()
+    self:persist()
+end
 function Status:viewport()
     local get=self.deps.windower.get_windower_settings
     local screen=get and get() or {}

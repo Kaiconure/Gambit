@@ -18,6 +18,7 @@ handlers['panel'] = function(args)
         writeMessage('  gbt panel theme [<name> | -list] - View, list, or change background skin')
         writeMessage('  gbt panel tracking [-list | -set <name>] - View, list, or switch tracking sets')
         writeMessage('  gbt panel reset-position - Restore default position')
+        writeMessage('  gbt panel reset - Restore and save all panel defaults')
         writeMessage('  gbt panel reload - Apply panel settings from main.json')
     end
     local command = (args[1] or ''):lower()
@@ -32,6 +33,10 @@ handlers['panel'] = function(args)
         elseif command == 'show' or command == 'hide' then
             panel:setVisible(command == 'show')
         elseif command == 'reset-position' then panel:resetPosition()
+        elseif command == 'reset' then
+            assert(#args==1,'Usage: gbt panel reset')
+            panel:reset()
+            writeMessage('Panel settings reset to defaults.')
         elseif command == 'anchor' then
             if not args[2] then
                 local anchor=panel.options.anchor or {vertical='top',horizontal='left'}

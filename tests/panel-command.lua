@@ -18,7 +18,8 @@ local panel={options=options,setVisible=function(_,visible) options.visible=visi
         if height=='auto' then options.height=nil; self.panel.height=250
         elseif height then options.height=height; self.panel.height=height end
     end,
-    resetPosition=function() options.reset=true end,update=function() end}
+    resetPosition=function() options.reset=true end,
+    reset=function() options.allReset=true end,update=function() end}
 local env=setmetatable({handlers={},globals={status_panel=panel},
     loadPanelSettings=function() return 'disk' end,
     writeMessage=function(value) output[#output+1]=value end,
@@ -31,6 +32,11 @@ local anchorErrors=#errors
 env.handlers.panel({'anchor','right','top'})
 assert(#errors==anchorErrors+1 and options.anchor.horizontal=='right')
 -- Restore output/error counts expected by the original command scenarios.
+env.handlers.panel({'reset'})
+assert(options.allReset and output[#output]=='Panel settings reset to defaults.')
+options.allReset=nil
+env.handlers.panel({'reset','extra'})
+assert(not options.allReset)
 output={}; errors={}
 env.handlers.panel({'SHOW'}); assert(options.visible)
 env.handlers.panel({'tracking','-list'}); assert(output[2]=='  default' and output[3]=='  notes')

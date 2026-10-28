@@ -25,7 +25,9 @@ Config.defaults =
             {
                 {name='Strategy',expression={'gambit.strategy'}},
                 {name='Namespace',expression={"gambit.namespace or '(base settings)'"}},
-                {name='Skillchain',expression={"(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s', party_weapon_skill.name, skillchain and skillchain.name and (' → ' .. skillchain.name) or '')"}},
+                {name='Skillchain Progress',expression={"(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s', party_weapon_skill.name, skillchain and skillchain.name and (' → ' .. skillchain.name) or '')"}},
+                {name='Spell Casting', expression={"(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', gambit.last_spell.name, gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. gambit.last_spell.target.name) or '', gambit.last_spell.status)"}},
+                {name='Job Ability', expression={"(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', gambit.last_ability.name, gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. gambit.last_ability.target.name) or '')"}}
             },
             none={}
         }

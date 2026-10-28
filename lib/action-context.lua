@@ -2099,6 +2099,29 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         gambit = {
             enabled = globals.enabled,
             namespace = settingsPaths.getLoadedNamespace(),
+            last_ability = globals.last_ability and {
+                id = globals.last_ability.id, 
+                name = globals.last_ability.name, 
+                time = globals.last_ability.time,
+                age = time - globals.last_ability.time,
+                target=globals.last_ability.target and {
+                    id = globals.last_ability.target.id,
+                    name = globals.last_ability.target.name,
+                    index = globals.last_ability.target.index,
+                },
+            },
+            last_spell = globals.last_spell and {
+                id = globals.last_spell.id, 
+                name = globals.last_spell.name, 
+                time = globals.last_spell.time,
+                status = globals.last_spell.status,
+                age = time - globals.last_spell.time,
+                target = globals.last_spell.target and {
+                    id = globals.last_spell.target.id,
+                    name = globals.last_spell.target.name,
+                    index = globals.last_spell.target.index,
+                },
+            },
             strategy = settings.strategy,
             distance = settings.maxDistance,
             distance_z = settings.maxDistanceZ,
@@ -6760,7 +6783,7 @@ return {
         if not settings or not windower.ffxi.get_player() or
             not windower.ffxi.get_mob_by_target('me') then return nil end
         local target = globals.target and globals.target:mob()
-        local context = makeActionContext('function', 0, target, 0, -1, windower.ffxi.get_party())
+        local context = makeActionContext('function', os.clock(), target, 0, -1, windower.ffxi.get_party())
         context.action = {
             name=name or 'manual execution', importedFrom='manual command',
             enumerators={}, scopes={execution={}, iteration={}}, results={},

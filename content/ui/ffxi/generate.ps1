@@ -1,81 +1,55 @@
-# Build a nine-slice frame from the cleaned artwork. The source is never modified.
-# Its horizontal silver trim supplies the profile for all four sides.
+# Normalize the retained center asset and rebuild the preview from runtime assets.
+# No separate full-resolution source image is required.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
-$source = [Drawing.Bitmap]::FromFile((Join-Path $PSScriptRoot 'cleaned-background.png'))
-$frame = $null
+$centerPath = Join-Path $PSScriptRoot 'center.png'
+$source = [Drawing.Bitmap]::FromFile($centerPath)
+$center = $null
 $preview = $null
 try {
-    $b = 6
-    $trim = 24
-    $w = $source.Width
-    $h = $source.Height - 2*$trim + 2*$b
-    $frame = New-Object Drawing.Bitmap($w,$h)
-    $graphics = [Drawing.Graphics]::FromImage($frame)
+    $resizeNeeded = $source.Width -ne 300 -or $source.Height -ne 400
+    $center = New-Object Drawing.Bitmap(300,400)
+    $graphics = [Drawing.Graphics]::FromImage($center)
     try {
-        $graphics.DrawImage($source, [Drawing.Rectangle]::new(0,0,$w,$h),
-            [Drawing.Rectangle]::new(0,$trim,$source.Width,($source.Height-2*$trim)),
-            [Drawing.GraphicsUnit]::Pixel)
+        $graphics.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+        $graphics.PixelOffsetMode = [Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+        $graphics.DrawImage($source,[Drawing.Rectangle]::new(0,0,300,400),
+            [Drawing.Rectangle]::new(0,0,$source.Width,$source.Height),[Drawing.GraphicsUnit]::Pixel)
     } finally { $graphics.Dispose() }
-
-    # Rounded outer corners with one-pixel alpha coverage. At the inside of the
-    # frame, retain the texture already drawn underneath the silver profile.
-    for ($y=0; $y -lt $h; $y++) {
-        for ($x=0; $x -lt $w; $x++) {
-            $dx = [Math]::Min($x,$w-1-$x)
-            $dy = [Math]::Min($y,$h-1-$y)
-            if ($dx -ge $b -and $dy -ge $b) { continue }
-            $depth = [double][Math]::Min($dx,$dy)
-            if ($dx -lt $b -and $dy -lt $b) {
-                $depth = $b - [Math]::Sqrt([Math]::Pow($b-$dx-0.5,2) + [Math]::Pow($b-$dy-0.5,2))
-            }
-            if ($depth -lt -0.5) {
-                $frame.SetPixel($x,$y,[Drawing.Color]::Transparent)
-            } else {
-                $sampleY = [int][Math]::Round([Math]::Max(0,$depth)*($trim-1)/($b-1))
-                $sampleY = [Math]::Min($trim-1,$sampleY)
-                $color = $source.GetPixel([int]($source.Width/2),$sampleY)
-                $alpha = [int](255*[Math]::Min(1,[Math]::Max(0,$depth+0.5)))
-                $frame.SetPixel($x,$y,[Drawing.Color]::FromArgb($alpha,$color.R,$color.G,$color.B))
-            }
-        }
+    $source.Dispose()
+    $source = $null
+    # Avoid rewriting already normalized artwork on repeated runs.
+    if ($resizeNeeded) {
+        $center.Save($centerPath,[Drawing.Imaging.ImageFormat]::Png)
     }
-    $pieces = @{
-        'top-left'=@(0,0,$b,$b); 'top-right'=@(($w-$b),0,$b,$b)
-        'bottom-left'=@(0,($h-$b),$b,$b); 'bottom-right'=@(($w-$b),($h-$b),$b,$b)
-        'top'=@($b,0,($w-2*$b),$b); 'bottom'=@($b,($h-$b),($w-2*$b),$b)
-        'left'=@(0,$b,$b,($h-2*$b)); 'right'=@(($w-$b),$b,$b,($h-2*$b))
-        'center'=@($b,$b,($w-2*$b),($h-2*$b))
-    }
-    # Assemble a preview using the same fixed corners and stretched edges as Lua.
+    $registry = Get-Content (Join-Path $PSScriptRoot '../themes.json') -Raw | ConvertFrom-Json
+    $textureHeight = $registry.ffxi.texture_height
+    $border = $registry.ffxi.border
     $pw=580; $ph=300
-    $preview=New-Object Drawing.Bitmap($pw,$ph)
-    $graphics=[Drawing.Graphics]::FromImage($preview)
+    $preview = New-Object Drawing.Bitmap($pw,$ph)
+    $graphics = [Drawing.Graphics]::FromImage($preview)
     try {
-        foreach ($name in $pieces.Keys) {
-            # FFXI uses only horizontal trim; no side or corner assets.
-            if ($name -match 'left|right') { continue }
-            $r=$pieces[$name]
-            $piece=$frame.Clone([Drawing.Rectangle]::new($r[0],$r[1],$r[2],$r[3]),
-                [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        # Match the renderer: stretch across width, repeat at texture_height.
+        for ($y=$border; $y -lt $ph-$border; $y+=$textureHeight) {
+            $height=[Math]::Min($textureHeight,$ph-$border-$y)
+            $graphics.DrawImage($center,[Drawing.Rectangle]::new(0,$y,$pw,$height),
+                [Drawing.Rectangle]::new(0,0,$center.Width,[int]($center.Height*$height/$textureHeight)),
+                [Drawing.GraphicsUnit]::Pixel)
+        }
+        foreach ($edge in @('top','bottom')) {
+            $edgeImage=[Drawing.Bitmap]::FromFile((Join-Path $PSScriptRoot ($edge+'.png')))
             try {
-                $piece.Save((Join-Path $PSScriptRoot ($name+'.png')),[Drawing.Imaging.ImageFormat]::Png)
-                $px=0; $py=$b; $width=$pw; $height=$ph-2*$b
-                if ($name -match 'left') { $px=0; $width=$b }
-                if ($name -match 'right') { $px=$pw-$b; $width=$b }
-                if ($name -match 'top') { $py=0; $height=$b }
-                if ($name -match 'bottom') { $py=$ph-$b; $height=$b }
-                $sampleHeight=$piece.Height
-                if ($name -eq 'center') { $sampleHeight=[int]($piece.Height*$height/400) }
-                $graphics.DrawImage($piece,[Drawing.Rectangle]::new($px,$py,$width,$height),
-                    [Drawing.Rectangle]::new(0,0,$piece.Width,$sampleHeight),[Drawing.GraphicsUnit]::Pixel)
-            } finally { $piece.Dispose() }
+                $y=0
+                if ($edge -eq 'bottom') { $y=$ph-$border }
+                $graphics.DrawImage($edgeImage,[Drawing.Rectangle]::new(0,$y,$pw,$border),
+                    [Drawing.Rectangle]::new(0,0,$edgeImage.Width,$edgeImage.Height),[Drawing.GraphicsUnit]::Pixel)
+            } finally { $edgeImage.Dispose() }
         }
     } finally { $graphics.Dispose() }
     $preview.Save((Join-Path $PSScriptRoot 'preview.png'),[Drawing.Imaging.ImageFormat]::Png)
-    "Generated FFXI skin: center and horizontal trim, $b-pixel borders, ${pw}x${ph} preview."
+    "FFXI center: 300x400; rebuilt ${pw}x${ph} preview from retained assets."
 } finally {
     if ($preview) { $preview.Dispose() }
-    if ($frame) { $frame.Dispose() }
-    $source.Dispose()
+    if ($center) { $center.Dispose() }
+    if ($source) { $source.Dispose() }
 }
