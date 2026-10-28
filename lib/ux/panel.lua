@@ -8,6 +8,7 @@ function Panel.new(options, primitives)
         height=options.height,labels={},buttons={},visible=false},Panel)
     self.primitives=primitives
     self.onMove=options.on_move
+    self.resolvePosition=options.resolve_position
     self.background=Background.new(options.theme,primitives)
     return self
 end
@@ -27,6 +28,9 @@ function Panel:button(x,y,width,height,size,callback,role)
     return item
 end
 function Panel:layout()
+    if self.resolvePosition and not (self.capture and self.capture.drag) then
+        self.x,self.y=self.resolvePosition(self.width,self.height)
+    end
     -- Hide primitives without releasing an active title-bar drag capture.
     if self.visible then
         self.background:visible(false)

@@ -5,6 +5,7 @@ local options={visible=true,width=500,x=30,y=150,tracking={current='default',set
 local panel={options=options,setVisible=function(_,visible) options.visible=visible end,
     setTheme=function(_,name) options.theme=name end,
     setLogVisible=function(_,visible) options.show_log=visible end,
+    setAnchor=function(_,vertical,horizontal) options.anchor={vertical=vertical,horizontal=horizontal} end,
     setTracking=function(_,name) assert(options.tracking.sets[name],'Unknown tracking set'); options.tracking.current=name end,
     configure=function(_,value) assert(value=='disk'); options.visible=false end,
     panel={height=250},
@@ -24,6 +25,13 @@ local env=setmetatable({handlers={},globals={status_panel=panel},
     writeError=function(value) errors[#errors+1]=value end},{__index=_G})
 local chunk=assert(loadstring(handler)); setfenv(chunk,env); chunk()
 env.handlers.panel({'hide'}); assert(not options.visible)
+env.handlers.panel({'anchor'}); assert(output[#output]=='Panel anchor: top left')
+env.handlers.panel({'anchor','TOP','RIGHT'}); assert(options.anchor.horizontal=='right')
+local anchorErrors=#errors
+env.handlers.panel({'anchor','right','top'})
+assert(#errors==anchorErrors+1 and options.anchor.horizontal=='right')
+-- Restore output/error counts expected by the original command scenarios.
+output={}; errors={}
 env.handlers.panel({'SHOW'}); assert(options.visible)
 env.handlers.panel({'tracking','-list'}); assert(output[2]=='  default' and output[3]=='  notes')
 env.handlers.panel({'tracking','-set','notes'}); assert(options.tracking.current=='notes')

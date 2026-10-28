@@ -25,6 +25,7 @@ use those defaults. Mouse resizing is not implemented yet.
 | `gbt panel tracking -set <name>` | Switch immediately and save selection |
 | `gbt panel reset-position` | Restore default coordinates and save |
 | `gbt panel position <x> <y>` | Set both coordinates in pixels and save |
+| `gbt panel anchor [<top\|bottom> <left\|right>]` | View or set the position anchor and save |
 | `gbt panel x <x>` / `gbt panel y <y>` | Set one coordinate, retaining the other |
 | `gbt panel size <width> <height>` | Set both dimensions in pixels and save |
 | `gbt panel width <width>` | Set width while retaining height mode |
@@ -87,8 +88,22 @@ history lines 0–100, and refresh interval 0.1–60 seconds. Bounds errors reje
 configuration rather than silently changing it.
 
 `position`, `x`, or `y` without arguments reports the current position.
-Coordinates are absolute screen offsets from the top-left corner, not relative
-movements. Updates do not rebuild tracking rows or discard history.
+Coordinates are pixel offsets inward from the selected window edges, not relative
+movements. The default anchor is `top left`. For example:
+
+```text
+gbt panel anchor top right
+gbt panel position 30 150
+```
+
+This keeps the panel's right edge 30 pixels from the window's right edge and its
+top edge 150 pixels down. Automatic width grows leftward when right-anchored;
+automatic height grows upward when bottom-anchored. Window-size changes are
+picked up on refresh. Dragging saves offsets relative to the selected edges.
+Changing anchors retains the numeric offsets, so the panel moves to the selected
+corner. Anchors persist as `anchor: {"vertical":"top","horizontal":"right"}`
+under `ui.status_panel`. Unspecified components default to `top` and `left`.
+Updates do not rebuild tracking rows or discard history or temporary tracking.
 
 An optional `height` sets minimum height (80–2000 pixels); omit it for automatic
 height. `size`, `width`, or `height` without arguments reports the current size.

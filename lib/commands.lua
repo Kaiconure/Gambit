@@ -9,6 +9,7 @@ handlers['panel'] = function(args)
         writeMessage('Panel commands:')
         writeMessage('  gbt panel show | hide - Show or hide the panel')
         writeMessage('  gbt panel position [<x> <y>] - View or set position')
+        writeMessage('  gbt panel anchor [top|bottom left|right] - View or set position anchor')
         writeMessage('  gbt panel x [<x>] | y [<y>] - View or set one coordinate')
         writeMessage('  gbt panel size [<width> <height>] - View or set size')
         writeMessage('  gbt panel width [<width>] - View or set width')
@@ -31,6 +32,18 @@ handlers['panel'] = function(args)
         elseif command == 'show' or command == 'hide' then
             panel:setVisible(command == 'show')
         elseif command == 'reset-position' then panel:resetPosition()
+        elseif command == 'anchor' then
+            if not args[2] then
+                local anchor=panel.options.anchor or {vertical='top',horizontal='left'}
+                writeMessage('Panel anchor: '..anchor.vertical..' '..anchor.horizontal)
+            else
+                local vertical=args[2]:lower()
+                local horizontal=args[3] and args[3]:lower()
+                assert(#args==3 and (vertical=='top' or vertical=='bottom')
+                    and (horizontal=='left' or horizontal=='right'),
+                    'Usage: gbt panel anchor <top|bottom> <left|right>')
+                panel:setAnchor(vertical,horizontal)
+            end
         elseif command == 'position' or command == 'x' or command == 'y' then
             if not args[2] then
                 writeMessage('Panel position: ' .. panel.options.x .. ', ' .. panel.options.y)

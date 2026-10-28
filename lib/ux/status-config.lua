@@ -5,10 +5,14 @@ Config.defaults =
     visible = true,
     show_log = false,
     theme = 'ffxi',
-    x = 145,
-    y = 120,
-    width = 250,
-    height = 100,
+    x = 130,
+    y = 48,
+    anchor = {
+        vertical = 'top',
+        horizontal = 'right'
+    },
+    width = 450,
+    height = 140,
     font_size = 10,
     history_lines = 4,
     refresh_interval = 0.5,
@@ -33,6 +37,12 @@ function Config.normalize(input)
     assert(type(input)=='table','Panel settings must be an object')
     local result=copy(Config.defaults)
     for key,value in pairs(input) do result[key]=value end
+    result.anchor=result.anchor or {vertical='top',horizontal='left'}
+    assert(type(result.anchor)=='table','Panel anchor must be an object')
+    result.anchor.vertical=result.anchor.vertical or 'top'
+    result.anchor.horizontal=result.anchor.horizontal or 'left'
+    assert(result.anchor.vertical=='top' or result.anchor.vertical=='bottom','Panel vertical anchor must be top or bottom')
+    assert(result.anchor.horizontal=='left' or result.anchor.horizontal=='right','Panel horizontal anchor must be left or right')
     for key,range in pairs({x={0,100000},y={0,100000},width={180,2000},font_size={6,30},
         history_lines={0,100},refresh_interval={0.1,60}}) do
         local value=result[key]

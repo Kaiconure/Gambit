@@ -302,6 +302,32 @@ panel:setSize(nil,400)
 parts=panel.panel.background.parts
 assert(parts.center.repeat_xyValue[2]==388/400)
 panel:setTheme('solid'); assert(panel.panel.background.parts.top==nil)
+local screenWidth,screenHeight=1920,1080
+panel.deps.windower.get_windower_settings=function() return {ui_x_res=screenWidth,ui_y_res=screenHeight} end
+panel:setPosition(30,40)
+panel:setAnchor('top','right')
+assert(panel.panel.x==1920-panel.panel.width-30 and panel.panel.y==40)
+panel:setTemporaryTracking({{name='Long',value=string.rep('x',120)}})
+assert(panel.panel.x+panel.panel.width==1890)
+assert(panel.options.x==30 and saves[#saves].anchor.horizontal=='right')
+panel:setAnchor('bottom','right')
+assert(panel.panel.y+panel.panel.height==1040)
+screenWidth=1600; screenHeight=900
+panel.nextUpdate=0; events.prerender()
+assert(panel.panel.x+panel.panel.width==1570 and panel.panel.y+panel.panel.height==860)
+local dragX,dragY=panel.panel.x+5,panel.panel.y+5
+assert(events.mouse(1,dragX,dragY,0,false))
+assert(events.mouse(0,dragX-20,dragY-10,0,false))
+assert(events.mouse(2,dragX-20,dragY-10,0,false))
+assert(panel.options.x==50 and panel.options.y==50)
+assert(saves[#saves].x==50 and saves[#saves].y==50)
+local oldAnchor=panel.options.anchor
+assert(not pcall(panel.setAnchor,panel,'middle','right'))
+assert(panel.options.anchor==oldAnchor)
+panel:setAnchor('bottom','left')
+assert(panel.panel.x==50 and panel.panel.y+panel.panel.height==850)
+panel:setAnchor('top','left')
+assert(panel.panel.x==50 and panel.panel.y==50)
 loggedIn=false; events.prerender(); assert(not panel.panel.visible)
 panel:destroy()
 assert(unsubscribed and removed.mouse and removed.prerender)

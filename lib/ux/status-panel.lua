@@ -57,8 +57,10 @@ function Status:configure(options,trackingOverride)
     self.panel=Panel.new({x=options.x,y=options.y,width=width,
         theme=options.theme,
         height=options.height or (72+(trackingLines+options.history_lines+1)*lineHeight),
+        resolve_position=function(width,height) return self:screenPosition(width,height) end,
         on_move=function(x,y)
-            self.options.x=x; self.options.y=y
+            self.options.x,self.options.y=self:anchorOffsets(x,y)
+            self.panel:layout()
             self:persist()
         end},self.deps)
     self.panel:label(10,5,options.font_size,'heading').text:text(Buffer.clip('Gambit Status',
@@ -120,6 +122,31 @@ function Status:setTemporaryTracking(entries,append)
 end
 function Status:resetPosition()
     self:setPosition(Status.defaults.x,Status.defaults.y)
+end
+function Status:viewport()
+    local get=self.deps.windower.get_windower_settings
+    local screen=get and get() or {}
+    return screen.ui_x_res or 0,screen.ui_y_res or 0
+end
+function Status:screenPosition(width,height)
+    local sw,sh=self:viewport()
+    local anchor=self.options.anchor
+    local x=anchor.horizontal=='right' and sw-width-self.options.x or self.options.x
+    local y=anchor.vertical=='bottom' and sh-height-self.options.y or self.options.y
+    return math.max(0,x),math.max(0,y)
+end
+function Status:anchorOffsets(x,y)
+    local sw,sh=self:viewport()
+    local anchor=self.options.anchor
+    return math.max(0,anchor.horizontal=='right' and sw-self.panel.width-x or x),
+        math.max(0,anchor.vertical=='bottom' and sh-self.panel.height-y or y)
+end
+function Status:setAnchor(vertical,horizontal)
+    local options=copy(self.options)
+    options.anchor={vertical=vertical,horizontal=horizontal}
+    options=Config.normalize(options)
+    self.options.anchor=options.anchor
+    self.panel:layout(); self:persist()
 end
 function Status:setPosition(x,y)
     local options=copy(self.options)
