@@ -13,7 +13,7 @@ Config.defaults =
     },
     width = 450,
     height = 140,
-    font_size = 10,
+    font_size = 11,
     history_lines = 4,
     refresh_interval = 0.5,
     tracking =
