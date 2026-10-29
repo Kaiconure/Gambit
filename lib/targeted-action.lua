@@ -12,7 +12,9 @@ function targeted.send(category, resource, targetId)
         ['Category']=category, ['Param']=resource.id,
         ['X Offset']=0, ['Y Offset']=0, ['Z Offset']=0,
     })
-    packets.inject(packet)
+    if globals and globals.event_system then
+        globals.event_system:send(packet)
+    else packets.inject(packet) end
     return true -- Submission only; spell completion is observed separately.
 end
 

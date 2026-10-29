@@ -1,5 +1,16 @@
 # Gambit command reference
 
+`gbt equipment resync` clears pending gear requests and held dispatch barriers,
+then takes a fresh equipped-slot baseline. Ordinary equipment state updates are
+packet-driven; see [equipment queue](equipment.md).
+
+`gbt events reload` reloads only event rules and their configuration variables.
+`gbt events` or `gbt events status` shows the single active event file. Its path
+is also reported on successful event loading/reloading. Event files do not merge.
+Normal action compilation/state is retained. Pending event requests receive
+`reloaded` post cleanup; invalid files retain the previous event configuration.
+See [event rules](events.md).
+
 Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
 `gbt panel reset-position`, and `gbt panel reload`. Tracking controls:
 `gbt panel tracking`, `gbt panel tracking -list`, and

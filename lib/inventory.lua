@@ -1,4 +1,9 @@
 local inventory = {}
+local function equipment_view(items,confirmed,session)
+    local manager=session or inventory.equipment_manager
+    if manager and items then return manager:snapshot(items,confirmed) end
+    return items
+end
 
 -------------------------------------------------------------------------------
 -- Bags that store equippable items
@@ -180,7 +185,7 @@ local default_find_item_flags = {
     equippable = false
 }
 
-inventory.find_equipment_in_slot = function(slot, items)
+inventory.find_equipment_in_slot = function(slot, items, confirmed, session)
     if slot == nil then return end
 
     local slotId = GEAR_SLOT_IDS_BY_NAME[slot]
@@ -188,12 +193,12 @@ inventory.find_equipment_in_slot = function(slot, items)
     local slotField = GEAR_SLOT_FIELDS_BY_ID[slotId]
     if slotField == nil then return end
 
-    items = items or windower.ffxi.get_items()
-    if not items then return end
+    items = equipment_view(items or windower.ffxi.get_items(),confirmed,session)
+    if not items or not items.equipment then return end
 
     -- 0 in the slot item id (local id) means nothing is equipped
     local localId = items.equipment[slotField]
-    if localId <= 0 then return end
+    if type(localId)~='number' or localId <= 0 then return end
 
     local bagId = items.equipment[slotField .. '_bag']
     if bagId < 0 then return end
@@ -211,9 +216,10 @@ inventory.find_equipment_in_slot = function(slot, items)
         {
             equippable = true,
             bag_id = bagId,
-            local_id = localId
+            local_id = localId,
+            confirmed = confirmed
         },
-        items)
+        items,nil,session)
 end
 
 local function sanitize_augments(extdata)
@@ -275,8 +281,8 @@ local function inventory_items_match(item1, item2)
     end
 end
 
-inventory.equip_many = function(pieces, all_items, simulate, changes)
-    all_items = all_items or windower.ffxi.get_items()
+inventory.equip_many = function(pieces, all_items, simulate, changes, session)
+    all_items = equipment_view(all_items or windower.ffxi.get_items(),false,session)
     
     if type(changes) == 'table' then
         changes.removed = {}
@@ -302,7 +308,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
         local slot_id = type(name) == 'string' and type(slot) == 'string' and inventory.get_slot_id_by_name(slot)
 
         if type(name) == 'string' and type(slot_id) == 'number' then
-            local equipped = inventory.find_equipment_in_slot(slot, all_items)
+            local equipped = inventory.find_equipment_in_slot(slot, all_items,false,session)
             local searching = true
 
             -- Clone the exclusion list
@@ -317,7 +323,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
                     find_param,
                     flags,
                     all_items,
-                    local_exclusion_list
+                    local_exclusion_list,session
                 )
 
                 if candidate then
@@ -348,6 +354,10 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
         end
     end
 
+    local rank={}
+    for index,info in ipairs(GEAR_SLOT_INFO) do rank[info.id]=index end
+    table.sort(swaps,function(a,b) return rank[a.slot_id]<rank[b.slot_id] end)
+    local operations={}
     -- Now we will go through all of the processed swaps, and equip the gear
     if not simulate then
         -- if inventory.printDebug then
@@ -359,12 +369,17 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
             -- If we're tracking changes, store those changes now
             if changes then
                 -- If an item is already in this slot, fetch it and store it in the removed list
-                local removed = inventory.find_equipment_in_slot(swap.slot, all_items)
+                local removed = inventory.find_equipment_in_slot(swap.slot, all_items,false,session)
                 if removed then
                     changes.removed[swap.slot] = {
                         name = removed.name,
-                        augments = removed.augments
+                        augments = removed.augments,
+                        id = removed.id,
+                        localId = removed.localId,
+                        bagId = removed.bagId
                     }
+                else
+                    changes.removed[swap.slot] = {empty=true}
                 end
 
                 -- Store the item we are swapping in
@@ -390,15 +405,74 @@ inventory.equip_many = function(pieces, all_items, simulate, changes)
             --     end
             -- end
 
-            windower.ffxi.set_equip(
-                swap.item.localId,
-                swap.slot_id,
-                swap.item.bagId
-            )
+            operations[#operations+1]={slot=swap.slot_id,item={id=swap.item.id,
+                localId=swap.item.localId,bagId=swap.item.bagId},
+                after=swap.slot_id==1 and 0 or swap.slot_id==3 and 2 or nil}
+        end
+        local manager=session or inventory.equipment_manager
+        if manager then
+            manager:submit(operations)
+        else
+            for _,op in ipairs(operations) do windower.ffxi.set_equip(op.item.localId,op.slot,op.item.bagId) end
         end
     end
 
     return #swaps
+end
+
+-- Restoration must not depend on the asynchronous equipped-status cache.
+-- A quick failed action may reach post before its pre equipment update arrives.
+inventory.snapshot_equipment = function(session)
+    local items=equipment_view(windower.ffxi.get_items(),false,session)
+    assert(items and items.equipment,'Equipment state is unavailable for snapshot')
+    local saved={}
+    for _,info in ipairs(GEAR_SLOT_INFO) do
+        local index=items.equipment[info.field]
+        if index==0 then saved[info.slot]={empty=true}
+        elseif type(index)=='number' and index>0 then
+            local bag=items.equipment[info.field..'_bag']
+            local item=inventory.get_item_from_bag(items,bag,index)
+            assert(item,'Equipment item metadata is unavailable for snapshot: '..info.slot)
+            saved[info.slot]={id=item.id,name=item.name,localId=index,bagId=bag}
+        end
+        -- Unknown slots are not assumed empty and must never be unequipped on pop.
+    end
+    return saved
+end
+
+inventory.restore_equipment = function(removed,session)
+    local items=windower.ffxi.get_items()
+    if not items then return 0 end
+    local count=0
+    local operations={}
+    local legacy={}
+    for slot,saved in pairs(removed or {}) do
+        local slotId=inventory.get_slot_id_by_name(slot)
+        if slotId~=nil then
+            if saved.empty then
+                operations[#operations+1]={slot=slotId,item={localId=0,bagId=0,id=0}}
+                count=count+1
+            elseif type(saved.localId)=='number' and type(saved.bagId)=='number' then
+                local item=inventory.get_item_from_bag(items,saved.bagId,saved.localId)
+                -- Never equip an unrelated item if a bag slot has been reused.
+                if item and item.id==saved.id then
+                    operations[#operations+1]={slot=slotId,item={localId=saved.localId,bagId=saved.bagId,id=saved.id},
+                        after=slotId==1 and 0 or slotId==3 and 2 or nil}
+                    count=count+1
+                end
+            else legacy[slot]=saved end
+        end
+    end
+    local rank={}
+    for index,info in ipairs(GEAR_SLOT_INFO) do rank[info.id]=index end
+    table.sort(operations,function(a,b) return rank[a.slot]<rank[b.slot] end)
+    local manager=session or inventory.equipment_manager
+    if manager then manager:submit(operations)
+    else
+        for _,op in ipairs(operations) do windower.ffxi.set_equip(op.item.localId,op.slot,op.item.bagId) end
+    end
+    if next(legacy) then count=count+inventory.equip_many(legacy,nil,false,nil,session) end
+    return count
 end
 
 inventory.find_equipped_linkshells = function(player, items)
@@ -448,7 +522,7 @@ inventory.find_equipped_linkshells = function(player, items)
     return result
 end
 
-inventory.find_item = function(item, flags, items, exclusion_list)
+inventory.find_item = function(item, flags, items, exclusion_list, session)
     flags = flags or default_find_item_flags
 
     local only_usable = flags.usable
@@ -487,6 +561,7 @@ inventory.find_item = function(item, flags, items, exclusion_list)
     end
 
     items = items or windower.ffxi.get_items()
+    if not flags.usable then items=equipment_view(items,flags.confirmed,session) end
 
     for bagId, bagInfo in pairs(bags_to_search) do
         local bag_is_usable = bagInfo.usable
@@ -578,6 +653,14 @@ inventory.find_item = function(item, flags, items, exclusion_list)
                         bagItem.status ~= 25
 
                     local isEquipped = bagItem.status == 5 or bagItem.status == 19
+                    if (session or inventory.equipment_manager) and not flags.usable and bagInfo.equippable then
+                        isEquipped=false
+                        for _,field in pairs(GEAR_SLOT_FIELDS_BY_ID) do
+                                if items.equipment and items.equipment[field]==bagItem.slot and items.equipment[field..'_bag']==bagId then
+                                isEquipped=true; break
+                            end
+                        end
+                    end
 
                     local slots = {}
                     local slot = nil
@@ -659,8 +742,8 @@ end
 -- Determine if appropriate ranged attack gear is equipped. Note that this will NOT register 
 -- for consumable thrown items (i.e. it will not let you throw your Rare/Ex sachet).
 --
-inventory.get_ranged_equipment = function ()
-    local items = windower.ffxi.get_items()
+inventory.get_ranged_equipment = function (session)
+    local items = equipment_view(windower.ffxi.get_items(),false,session)
     if items then
         local range = inventory.get_item_from_bag(items, items.equipment.range_bag, items.equipment.range)
         local ammo = inventory.get_item_from_bag(items, items.equipment.ammo_bag, items.equipment.ammo)
@@ -727,4 +810,15 @@ inventory.has_all_augments = function(item_or_extdata, required_augments)
     return matches >= num_required
 end
 
+-- Same API, explicitly bound to a context's collector; never a global mode flag.
+function inventory.bind_equipment(session)
+    return setmetatable({
+        equip_many=function(pieces,items,simulate,changes) return inventory.equip_many(pieces,items,simulate,changes,session) end,
+        restore_equipment=function(removed) return inventory.restore_equipment(removed,session) end,
+        snapshot_equipment=function() return inventory.snapshot_equipment(session) end,
+        find_equipment_in_slot=function(slot,items,confirmed) return inventory.find_equipment_in_slot(slot,items,confirmed,session) end,
+        find_item=function(item,flags,items,excluded) return inventory.find_item(item,flags,items,excluded,session) end,
+        get_ranged_equipment=function() return inventory.get_ranged_equipment(session) end,
+    },{__index=inventory})
+end
 return inventory

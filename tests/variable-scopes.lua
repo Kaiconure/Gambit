@@ -49,7 +49,7 @@ assert(fresh.view(function() return a._variableScope end).haste_cycle.count==0)
 assert(not pcall(scopes.prepare,{}, {with_vars={'invalid'}}))
 -- Exercise the actual context wiring, including explicit global access and
 -- switching the active action before evaluating its conditions.
-local binding=assert(source:match('(    local globalVars = actionStateManager.vars.-)    context.skillchain_trigger_time'))
+local binding=assert(source:match('(    local globalVars = .-)    context.skillchain_trigger_time'))
 local wired={action=a}
 local bind=assert(loadstring(binding))
 setfenv(bind,setmetatable({context=wired,actionStateManager={vars=global,originalVars=values.copy(global),variableScopes=state},
@@ -64,4 +64,18 @@ wired.action=a
 local found=false
 for key in wired.pairs(wired.vars) do if key=='haste_cycle' then found=true end end
 assert(found)
+-- The event store bypasses normal scoped/global variables, including helpers.
+local isolated={vars={shared=5},original={shared=5}}
+local eventContext={vars=isolated.vars,action=a}
+local eventBind=assert(loadstring(binding))
+setfenv(eventBind,setmetatable({context=eventContext,variableState=isolated,
+    actionStateManager={vars=global,originalVars=values.copy(global),variableScopes=state},
+    variableValues=values,attachVariableHelpers=attach},{__index=_G}))
+eventBind();attach(eventContext)
+eventContext.setVar('shared',9)
+eventContext.setVarGlobal('haste_cycle.count',12)
+assert(eventContext.vars.shared==9 and eventContext.getVarGlobal('haste_cycle.count')==12)
+assert(global.shared==2 and global.haste_cycle.count==77)
+eventContext.resetVar('shared'); assert(eventContext.vars.shared==5)
+assert(eventContext._originalVars==isolated.original)
 print('PASS: persistent shared descendants, nested isolation, direct writes, resets, global fallback, yielding and rebuild')

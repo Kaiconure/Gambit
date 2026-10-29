@@ -15,7 +15,7 @@ check('child/blm.json', 'child/blm.json', 'child/(!mages).json', 'base/blm-rdm.j
 check('base/blm-rdm.json', 'child/blm.json', 'base/blm-rdm.json')
 check('child/(!mages).json', 'child/(!mages).json', 'child/(!all).json')
 check('child/(!all).json', 'child/(!all).json', 'base/blm.json')
-check('child/(mages).json', 'child/(nukers).json', 'child/(mages).json')
+check('child/(nukers).json', 'child/(nukers).json', 'child/(mages).json')
 check('base/(mages).json', 'child/(all).json', 'base/(mages).json')
 check('standard/blm.json', 'child/(all).json', 'standard/blm.json')
 check('child/(all).json', 'child/(!healers).json', 'child/(all).json')

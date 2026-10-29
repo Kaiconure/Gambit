@@ -95,8 +95,8 @@ function loader.new(warn)
         end
     end
     return {
-        merge = function(original, incoming, source)
-            if original and incoming then merge(original, incoming, root, source, 0, '') end
+        merge = function(original, incoming, source, priority)
+            if original and incoming then merge(original, incoming, root, source, priority or 0, '') end
         end,
     }
 end

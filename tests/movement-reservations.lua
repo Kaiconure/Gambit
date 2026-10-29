@@ -56,3 +56,24 @@ assert(not pending.resumeMovement(5))
 assert(competitor.releaseMovement())
 assert(pending.resumeMovement(5)) -- denied acquisition did not consume the opportunity
 print('PASS: cross-battle continuation, expired/released rejection and contention retry')
+
+local retry=context('retry','battle',14)
+assert(retry.reserveMovement(20))
+local deadline=now+20
+now=now+2
+assert(retry.releaseMovement(true))
+assert(context(nil,'battle',14).movementAvailable())
+local competing=context('competitor','battle',14)
+assert(competing.reserveMovement(3))
+assert(not retry.resumeMovement(20)) -- Contention must not erase the retry deadline.
+assert(competing.releaseMovement())
+assert(retry.resumeMovement(20))
+now=now+3
+assert(retry.releaseMovement(true))
+assert(context('retry','battle',14).resumeMovement(20))
+now=deadline
+assert(not retry.resumeMovement(20)) -- Repeated retries cannot renew the original lease.
+assert(retry.reserveMovement(20))
+assert(retry.releaseMovement())
+assert(not retry.resumeMovement(20)) -- Completion still closes continuation.
+print('PASS: recoverable release retries across contexts and contention without extending deadline')

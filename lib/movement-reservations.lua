@@ -38,18 +38,27 @@ function manager.attach(context, cancel)
         reservation = {owner=name, expires=os.clock()+seconds, section=context.actionType,
             scope=context.battleScope, zone=context.scopes.zone, vars=context.vars, cancel=cancel}
         acquisitions[name] = {section=context.actionType, scope=context.battleScope,
-            zone=context.scopes.zone, vars=context.vars}
+            zone=context.scopes.zone, vars=context.vars, expires=reservation.expires}
         return true
     end
     -- Continue an operation in a new context, but never restart an expired or
-    -- released reservation in the same context. Fresh operations use reserveMovement.
+    -- completed reservation in the same context. Recoverable releases may resume
+    -- only within their original deadline. Fresh operations use reserveMovement.
     context.resumeMovement = function(seconds)
         if context.hasMovementReservation() then return true end
-        if sameContext(acquisitions[owner()], context) then return false end
+        local previous=acquisitions[owner()]
+        if sameContext(previous, context) then
+            if previous.retryable and os.clock()<previous.expires then
+                return context.reserveMovement(previous.expires-os.clock())
+            end
+            return false
+        end
         return context.reserveMovement(seconds)
     end
-    context.releaseMovement = function()
+    context.releaseMovement = function(retryable)
         if not context.hasMovementReservation() then return false end
+        local previous=acquisitions[owner()]
+        if previous then previous.retryable=retryable==true end
         cancel()
         reservation = nil
         return true

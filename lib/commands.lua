@@ -168,6 +168,40 @@ handlers['slots'] = function(args)
     end
 end
 
+handlers['equipment'] = function(args)
+    if #args~=1 or args[1]:lower()~='resync' then
+        writeMessage('Usage: gbt equipment resync')
+        return
+    end
+    local manager=globals.equipment_manager
+    if not manager then writeMessage('Equipment manager is unavailable.'); return end
+    local ok,err=pcall(manager.resync,manager)
+    if not ok then writeError('Could not resync equipment: '..tostring(err))
+    else writeMessage('Equipment state resynced; pending equipment requests cleared.') end
+end
+
+handlers['events'] = function(args)
+    local command=(args[1] or 'status'):lower()
+    if #args>1 or (command~='reload' and command~='status') then
+        writeMessage('Usage: gbt events [status | reload]')
+        return
+    end
+    local service=globals.event_system
+    if not service then writeMessage('Event system is unavailable.'); return end
+    if command=='status' then
+        local active=service.runtime and service.runtime.config.path
+        writeMessage(active and ('Active event file: '..text_file(active)) or 'No active event file.')
+        for _,path in ipairs(service.runtime and service.runtime.config.vars_files or {}) do
+            writeMessage('Event variables: '..text_file(path))
+        end
+        return
+    end
+    local ok,result=pcall(service.reload,service)
+    if not ok then writeError('Could not reload event rules: '..tostring(result))
+    elseif not result then writeMessage('No character is logged in; event rules cleared.')
+    else writeMessage('Event rules reloaded.') end
+end
+
 handlers['eval'] = function(args)
     local code = table.concat(args or {}, ' ')
     if not code:match('%S') then

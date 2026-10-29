@@ -6,8 +6,10 @@ function selectors.alphabetical(a, b)
     return an < bn
 end
 local jobs = {}
+local jobCount = 0
 for job in ('WAR MNK WHM BLM RDM THF PLD DRK BST BRD RNG SAM NIN DRG SMN BLU COR PUP DNC SCH GEO RUN'):gmatch('%S+') do
     jobs[job] = true
+    jobCount = jobCount + 1
 end
 
 local groups = {
@@ -32,19 +34,62 @@ groups.HEALERS = groups.HEALER
 groups.NUKERS = groups.NUKER
 groups.TANKS = groups.TANK
 
+-- Membership is static: count each shared table once, and prepare both filename
+-- forms so sorting performs only lookups (including aliases and complements).
+local groupSizes, inverseNames, groupEntries = {}, {}, {}
+local membershipSizes = {}
+for name, members in pairs(groups) do
+    local count=membershipSizes[members]
+    if not count then
+        count=0
+        for _ in pairs(members) do count=count+1 end
+        membershipSizes[members]=count
+    end
+    local positive=name:lower()
+    local inverse='~'..positive
+    groupSizes[positive]=count
+    groupSizes[inverse]=jobCount-count
+    inverseNames[inverse]=true
+    groupEntries[#groupEntries+1]={members=members,positive=positive,inverse=inverse}
+end
+
 -- Stable filename selectors for automatic job entry points.
+function selectors.orderEntryPointGroups(values)
+    local positive,inverse={},{}
+    local function less(a,b)
+        local sa,sb=groupSizes[a] or math.huge,groupSizes[b] or math.huge
+        if sa~=sb then return sa<sb end
+        return a<b
+    end
+    for _,name in ipairs(values or {}) do
+        local isInverse=inverseNames[name] or (not groupSizes[name] and name:sub(1,1)=='~')
+        local list=isInverse and inverse or positive
+        list[#list+1]=name
+    end
+    -- Leader has no fixed job membership: preserve its former alphabetical
+    -- position, sorting the job groups around that slot.
+    table.sort(positive)
+    local leaderIndex
+    for index,name in ipairs(positive) do
+        if name=='leader' then leaderIndex=index; table.remove(positive,index); break end
+    end
+    table.sort(positive,less)
+    if leaderIndex then table.insert(positive,leaderIndex,'leader') end
+    table.sort(inverse,less)
+    for _,name in ipairs(inverse) do positive[#positive+1]=name end
+    return positive
+end
+
 function selectors.entryPointGroups(job, isLeader)
     local result, inverse = {}, {}
     job = (job or ''):upper()
-    for name, members in pairs(groups) do
-        if members[job] then result[#result + 1] = name:lower()
-        else inverse[#inverse + 1] = '~' .. name:lower() end
+    for _,entry in ipairs(groupEntries) do
+        if entry.members[job] then result[#result + 1] = entry.positive
+        else inverse[#inverse + 1] = entry.inverse end
     end
     if isLeader then result[#result + 1] = 'leader' end
-    table.sort(result)
-    table.sort(inverse)
     for _, name in ipairs(inverse) do result[#result + 1] = name end
-    return result
+    return selectors.orderEntryPointGroups(result)
 end
 
 local function parseSelector(target)

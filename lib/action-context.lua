@@ -6,6 +6,9 @@ local variableValues = require('./lib/variable-values')
 local targetSelectors = require('./lib/target-selectors')
 local multiStageParticipants = require('./lib/multi-stage-participants')
 local targetedAction = require('./lib/targeted-action')
+local magicBurst = require('./lib/magic-burst')
+local magicSkills = require('./meta/magic-skills')
+local cureSpell = require('./lib/cure-spell')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
 -- A mob need not have observed buffs yet. Resource objects have an ID but
@@ -2088,7 +2091,8 @@ end
 
 -----------------------------------------------------------------------------------------
 --
-local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party, variableState)
+    local inventory=variableState and variableState.equipment and variableState.equipment.inventory or inventory
     local context = {
         actionType = actionType,
         time = time,
@@ -2135,7 +2139,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         battleScope = battleScope,
         skillchain = actionStateManager:getSkillchain(target),
         party_weapon_skill = actionStateManager:getPartyWeaponSkillInfo(target),
-        vars = actionStateManager.vars
+        vars = variableState and variableState.vars or actionStateManager.vars
     }
 
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
@@ -2143,10 +2147,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     engagementHelpers.attach(context)
     context.settings = context.gambit
 
-    local globalVars = actionStateManager.vars
-    local scopeState = actionStateManager.variableScopes
+    local globalVars = variableState and variableState.vars or actionStateManager.vars
+    local originalVars = variableState and variableState.original or actionStateManager.originalVars
+    local scopeState = not variableState and actionStateManager.variableScopes
     local function scopeId() return context.action and context.action._variableScope end
-    context._originalVars = actionStateManager.originalVars
+    context._originalVars = originalVars
     if scopeState then
         local scopedVars = scopeState.view(scopeId)
         local scopedOriginal = scopeState.view(scopeId, true)
@@ -2164,7 +2169,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
     context.getVarGlobal = function(name) return variableValues.get(globalVars, name) end
-    local globalHelpers = {vars=globalVars, _originalVars=actionStateManager.originalVars}
+    local globalHelpers = {vars=globalVars, _originalVars=originalVars}
     attachVariableHelpers(globalHelpers)
     context.setVarGlobal = globalHelpers.setVar
 
@@ -2440,46 +2445,37 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         local entries = context.sanitizeEquipmentList(false, ...)        
         local count = inventory.equip_many(entries)
         if count > 0 then
-            writeVerbose('Changing equipment: %s changed':format(
-                pluralize(count, 'gear item', 'gear items', Colors.verbose)
-            ))
-
             return count
         end
     end
 
     --------------------------------------------------------------------------------------
-    -- Similar to equipMany above, but equipment change details are saved for use
-    -- with equipPop for restoration later.
+    -- Save all known effective slots before optional changes. Later equip/equipMany
+    -- calls are covered by the same restore point, including phase-local plans.
     context.equipPush = function(...)
-        local changes = {}
-
-        local entries = context.sanitizeEquipmentList(false, ...)        
-        local count = inventory.equip_many(entries, nil, false, changes)
+        local snapshot=inventory.snapshot_equipment()
+        local hasGear=select('#',...)>0
+        local count=0
+        if hasGear then
+            local entries=context.sanitizeEquipmentList(false,...)
+            count=inventory.equip_many(entries)
+        end
+        table.insert(context.vars._.eq_stack,{removed=snapshot})
         if count > 0 then
-            writeVerbose('Pushing equipment: %s changed':format(
-                pluralize(count, 'gear item', 'gear items', Colors.verbose)
-            ))
-
-            table.insert(context.vars._.eq_stack, changes)
-
             return count
         end
-
-        -- We will always push an entry, even if it's blank. This makes for easier push/pop management in your gambits.
-        table.insert(context.vars._.eq_stack, {removed = {}, equipped = {}})
+        if not hasGear then return true end
     end
 
     context.equipPop = function()
         if #context.vars._.eq_stack > 0 then
             local latest = table.remove(context.vars._.eq_stack)
             if latest and latest.removed then
-                writeVerbose('Restoring previous equipment...')
-                return context.equipMany(latest.removed)
+                local count=inventory.restore_equipment(latest.removed)
+                return count>0 and count or nil
             end
         end
 
-        writeVerbose('No equipment was found to restore!')
     end
 
     -- Push a stop request to the currently running function, if any. Has no effect
@@ -2862,8 +2858,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     -- Find the item equipped in the specified slot
-    context.findEquipmentInSlot = function(slot)
-        context.item = inventory.find_equipment_in_slot(slot)
+    context.findEquipmentInSlot = function(slot, confirmed)
+        context.item = inventory.find_equipment_in_slot(slot,nil,confirmed)
         return context.item
     end
 
@@ -5608,6 +5604,44 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Returns true if the specified buff is active
+    context.isCureSpell = function(value)
+        if type(value)=='table' then
+            if value.kind and value.kind~='spell' then return false end
+            value=value.id or value.name
+        end
+        return cureSpell(findSpell(value))
+    end
+
+    context.canMagicBurst = function(spell, target)
+        return magicBurst.check(spell, target, context, {
+            findSpell = findSpell,
+            elements = resources.elements,
+            getSkillchain = function(mob) return actionStateManager:getSkillchain(mob) end,
+        })
+    end
+
+    context.spellHasSkill = function(value, skill)
+        local skillId=type(skill)=='number' and skill or magicSkills[skill]
+        if not skillId then return false end
+        if type(value)=='table' then
+            if value.kind and value.kind~='spell' then return false end
+            value=value.id or value.name
+        end
+        local spell=findSpell(value)
+        return spell~=nil and spell.skill==skillId
+    end
+
+    for name, skill in pairs({
+        isDivineSpell='divine', isHealingSpell='healing',
+        isEnhancingSpell='enhancing', isEnfeeblingSpell='enfeebling',
+        isElementalSpell='elemental', isDarkSpell='dark',
+        isSummoningSpell='summoning', isNinjutsuSpell='ninjutsu',
+        isSingingSpell='singing', isBlueSpell='blue', isGeomancySpell='geomancy',
+    }) do
+        local skillName=skill
+        context[name]=function(value) return context.spellHasSkill(value, skillName) end
+    end
+
     context.skillchaining = function (...)
         local names = varargs({...})
         local skillchain = context.skillchain
@@ -6092,11 +6126,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Determine if you have a ranged weapon and ammo equipped
     context.canShoot = function()
         if context.t then
-            local items     = windower.ffxi.get_items()
-            local ammo      = tonumber(items.equipment.ammo or 0)
-            local ranged    = tonumber(items.equipment.range or 0)
-
-            return ammo > 0 and ranged > 0
+            return inventory.find_equipment_in_slot('range')~=nil and inventory.find_equipment_in_slot('ammo')~=nil
         end
 
         return false
@@ -6779,11 +6809,11 @@ local dumped = false
 
 return {
     -- Manual executions own their context/action and never replace the latest context.
-    createTemporary = function(name)
+    createTemporary = function(name, variableState)
         if not settings or not windower.ffxi.get_player() or
             not windower.ffxi.get_mob_by_target('me') then return nil end
         local target = globals.target and globals.target:mob()
-        local context = makeActionContext('function', os.clock(), target, 0, -1, windower.ffxi.get_party())
+        local context = makeActionContext('function', os.clock(), target, 0, -1, windower.ffxi.get_party(), variableState)
         context.action = {
             name=name or 'manual execution', importedFrom='manual command',
             enumerators={}, scopes={execution={}, iteration={}}, results={},

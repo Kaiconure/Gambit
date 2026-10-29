@@ -31,14 +31,11 @@ function Panel:layout()
     if self.resolvePosition and not (self.capture and self.capture.drag) then
         self.x,self.y=self.resolvePosition(self.width,self.height)
     end
-    -- Hide primitives without releasing an active title-bar drag capture.
-    if self.visible then
-        self.background:visible(false)
-        for _, item in ipairs(self.labels) do item.text:visible(false) end
-    end
+    -- Newly created primitives stay hidden until the controller reveals them.
+    -- Live refreshes must not toggle visibility: Windower may render between
+    -- those calls, producing a blank frame even when the layout is unchanged.
     self.background:layout(self.x,self.y,self.width,self.height)
     for _, item in ipairs(self.labels) do item.text:pos(self.x+item.x,self.y+item.y) end
-    if self.visible then self:show(true) end
 end
 function Panel:show(visible)
     self.visible=visible

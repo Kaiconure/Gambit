@@ -1,4 +1,4 @@
-__version = '1.0.4'
+__version = '1.0.5'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -320,6 +320,10 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         if ok then globals.status_panel_ready = true end
         if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
     end
+    if globals.event_system then
+        local ok,err=pcall(function() globals.event_system:reload() end)
+        if not ok then writeError('Could not load event rules: '..tostring(err)) end
+    end
 
     if settings.debugging then
         inventory.printDebug = printDebug
@@ -414,6 +418,34 @@ windower.register_event('load', function()
 
     initTrustData()
 
+    globals.equipment_manager = require('./lib/equipment/init').new({
+        windower=windower,inventory=inventory,packets=packets,
+        report=function(message) writeError('[equipment] '..message) end,
+        verbose=function(message) writeVerbose(message) end,
+        formatCount=function(count) return text_number(count, Colors.verbose) end,
+    })
+    inventory.equipment_manager=globals.equipment_manager
+    globals.event_system = require('./lib/events/init').new({
+        windower=windower,packets=packets,resources=resources,
+        context=ActionContext.createTemporary,
+        schedule=function(fn,delay) return coroutine.schedule(fn,delay) end,
+        report=function(message) writeError('[events] '..message) end,
+        announce=function(message) writeMessage('[events] '..message) end,
+        formatPath=text_file,
+        barrier=function(fn) globals.equipment_manager:barrier(fn) end,
+        equipmentSession=function() return globals.equipment_manager:session() end,
+        equipmentPending=function() return #globals.equipment_manager.queue.batches>0 end,
+        abilityReady=function(player,ability)
+            local timers=windower.ffxi.get_ability_recasts()
+            local remaining=timers and timers[ability.recast_id]
+            if type(remaining)~='number' then return nil end
+            -- Ready and Quick Draw use charges; their positive recharge timer
+            -- alone does not prove that no usable charge remains.
+            if ability.recast_id==102 or ability.recast_id==195 then return nil end
+            if ability.recast_id==231 and getAvailableStratagems(player,timers)>0 then return true end
+            return remaining<=0
+        end,
+    })
     globals.cloud_panel = ux.cloud_panel.new()
     globals.status_panel_ready = false
     globals.status_panel = require('./lib/ux/status-panel').new({
@@ -564,6 +596,15 @@ windower.register_event('unload', function()
 
     globals.logged_in = false
     globals.shutting_down = true
+    if globals.event_system then
+        globals.event_system:destroy()
+        globals.event_system=nil
+    end
+    if globals.equipment_manager then
+        globals.equipment_manager:destroy()
+        globals.equipment_manager=nil
+        inventory.equipment_manager=nil
+    end
     if globals.status_panel then
         globals.status_panel:destroy()
         globals.status_panel = nil
