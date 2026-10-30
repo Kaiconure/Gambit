@@ -189,15 +189,24 @@ end
 
 handlers['events'] = function(args)
     local command=(args[1] or 'status'):lower()
+    if command=='r' then command='reload' elseif command=='s' then command='status' end
     local outputProcessed=false
+    local entryName
+    local reloadCurrent=false
     local valid=command=='reload' or command=='status'
-    for index=2,#args do
+    local index=2
+    while index<=#args do
         local flag=args[index]:lower()
         if command=='reload' and (flag=='-v' or flag=='-verbose') then outputProcessed=true
+        elseif command=='reload' and (flag=='-r' or flag=='-reload') then reloadCurrent=true
+        elseif command=='reload' and (flag=='-e' or flag=='-events') and not entryName then
+            index=index+1; entryName=args[index]
+            if not entryName or entryName:sub(1,1)=='-' then valid=false end
         else valid=false end
+        index=index+1
     end
-    if not valid then
-        writeMessage('Usage: gbt events [status | reload [-verbose | -v]]')
+    if not valid or (reloadCurrent and entryName) then
+        writeMessage('Usage: gbt events [status|s | reload|r [-e <file>|-r] [-verbose|-v]]')
         return
     end
     local service=globals.event_system
@@ -213,7 +222,11 @@ handlers['events'] = function(args)
         end
         return
     end
-    local ok,result=pcall(service.reload,service,outputProcessed)
+    if reloadCurrent then
+        local active=service.runtime and service.runtime.config.path
+        entryName=service.selectedFile or (active and active:gsub('\\','/'):match('([^/]+)%.json$'))
+    end
+    local ok,result=pcall(service.reload,service,outputProcessed,entryName)
     if not ok then writeError('Could not reload event rules: '..tostring(result))
     elseif not result then writeMessage('No character is logged in; event rules cleared.')
     else writeMessage('Event rules reloaded.') end

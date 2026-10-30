@@ -15,6 +15,7 @@ and serves as a reference when writing or extending rules.
 | Configure the shipped gear rules | A character/job `.vars.json` file; see the [stock guide](stock-events.md) |
 | Check the active rule and variable files | `//gbt events status` |
 | Reload event JSON only | `//gbt events reload` |
+| Temporarily select a different event file | `//gbt events r -e empty` |
 | See the fully processed configuration | `//gbt events reload -v` |
 | Load changed Lua implementation code | `//lua reload Gambit` |
 | React to a spell or ability | `pre`, `mid`, and `post` arrays |
@@ -418,6 +419,23 @@ for restoring first and then applying idle/battle gear, and
 [equipment reference](equipment.md) for candidates, augments, and queue details.
 
 ## Reloading and troubleshooting
+
+Use `//gbt events r -e empty` to select `empty.json`, or
+`//gbt events r -e lib/my-events` for a library-style path. The name resolves
+through the normal event directories, with the closest matching file winning;
+the `.json` suffix is optional. Absolute paths and `..` traversal are rejected.
+Imports still resolve through the complete event hierarchy, and normal matching
+job/group variable files still load independently of the selected rule file.
+Selection does not discover an additional companion vars file for the explicit
+name unless it already matches the normal variable search.
+
+The selection is session-only: `//gbt events r -r` reloads the current selection,
+while plain `//gbt events r` or full `//gbt r` restores automatic selection.
+Full settings/job/namespace reloads also restore automatic selection.
+`-r` has the alias `-reload` and cannot be combined with `-e`.
+A failed selection leaves the current configuration active. `r` is
+an alias for `reload`, and `s` is an alias for `status`. `-e` also accepts the
+alias `-events`, and can be combined with `-v` for processed output.
 
 - `//gbt events status` lists the entry file, imports, and variable files.
 - `//gbt events reload` reloads only events; `//gbt r` also reloads normal settings.

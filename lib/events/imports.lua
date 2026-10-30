@@ -1,5 +1,5 @@
 -- Explicit composition; import names resolve through event directories only.
-return function(candidates,read)
+return function(candidates,read,entryName)
     local directories,seenDirectories={},{}
     for _,path in ipairs(candidates) do
         local directory=path:match('^(.*)/[^/]+$')
@@ -45,6 +45,15 @@ return function(candidates,read)
         end
         chain[#chain]=nil; visiting[identity]=nil; seen[identity]=true
         documents[#documents+1]={path=path,document=document}
+    end
+    if entryName then
+        local relative=reference(entryName,'Event entry point')
+        for _,directory in ipairs(directories) do
+            local path=directory..'/'..relative
+            local document=read(path)
+            if document~=nil then visit(path,document); return documents,path end
+        end
+        error('Event entry point not found: '..relative)
     end
     for _,path in ipairs(candidates) do
         local document=read(path)

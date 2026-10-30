@@ -44,10 +44,10 @@ function Service.new(deps)
     require('./lib/events/transitions').attach(self,listen)
     return self
 end
-function Service:reload(outputProcessed)
+function Service:reload(outputProcessed,entryName)
     local deps=self.deps
     local player=deps.windower.ffxi.get_player()
-    if not player then self:clear('reloaded'); self.runtime=nil; return end
+    if not player then self:clear('reloaded'); self.runtime=nil; self.selectedFile=nil; return end
     local read=deps.read or function(path)
         local file=io.open((deps.windower.addon_path or '')..path,'r')
         if not file then return nil end
@@ -60,7 +60,7 @@ function Service:reload(outputProcessed)
     local groups=selectors.entryPointGroups(player.main_job,party.party1_leader==player.id)
     local config=Config.load(paths.eventFiles(player.name,player.main_job,groups),read,deps.report,function(required)
         return selectors.matchesPlayer(player,required,party.party1_leader==player.id)
-    end)
+    end,entryName)
     if outputProcessed and config.path and deps.writeProcessed then
         local name=config.path:match('([^/]+)%.json$') or player.main_job:lower()
         local outputPath=paths.writePath(player.name,'.output/'..name..'.events.processed.json')
@@ -71,6 +71,7 @@ function Service:reload(outputProcessed)
     end
     -- Load/compile completely before replacing the active configuration.
     self:clear('reloaded')
+    self.selectedFile=entryName
     self.runtime=Runtime.new(config,{context=deps.context,report=deps.report,
         debug=function(message,lostLifecycle)
             if deps.debug then deps.debug(message) end

@@ -1,0 +1,7 @@
+{
+  "vars": {
+    "comment": [
+      "Run '//gbt events r -e empty' to load this file, which will raise no events at all."
+    ]
+  }
+}

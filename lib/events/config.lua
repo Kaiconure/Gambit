@@ -54,7 +54,7 @@ local function compileRule(rule,label,contributed)
         conditions=not rule.disabled and expressions(rule.when,label..'.when') or {},
         commands=not rule.disabled and expressions(rule.commands,label..'.commands') or {}}
 end
-function Config.load(paths,read,warn,matchesRequired)
+function Config.load(paths,read,warn,matchesRequired,entryName)
     local result={vars={},rules={},files={},vars_files={}}
     local inlineVars={}
     local layouts={}
@@ -66,7 +66,7 @@ function Config.load(paths,read,warn,matchesRequired)
         end
     end
     local slots=eventSlots.new(result.rules,layouts,paths,warn,matchesRequired,compileRule)
-    local documents,selectedPath=importDocuments(paths,read)
+    local documents,selectedPath=importDocuments(paths,read,entryName)
     result.path=selectedPath
     for _,entry in ipairs(documents) do
         local path,document=entry.path,entry.document

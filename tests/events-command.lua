@@ -18,12 +18,22 @@ env.handlers.events({'status'})
 assert(output[#output-1]=='Event variables: <file>character.vars.json</file>')
 assert(output[#output]=='Event variables: <file>shared.vars.json</file>')
 env.handlers.events({'reload','extra'})
-assert(count==1 and output[#output]=='Usage: gbt events [status | reload [-verbose | -v]]')
+assert(count==1 and output[#output]=='Usage: gbt events [status|s | reload|r [-e <file>|-r] [-verbose|-v]]')
 local flags={}
 service.reload=function(_,flag) flags[#flags+1]=flag; return {} end
 env.handlers.events({'reload','-v'})
 env.handlers.events({'reload','-verbose'})
 assert(flags[1]==true and flags[2]==true)
+local selected
+service.reload=function(self,verbose,name) selected=name; self.selectedFile=name; return {} end
+env.handlers.events({'r','-e','empty','-v'}); assert(selected=='empty')
+env.handlers.events({'r','-r'}); assert(selected=='empty')
+env.handlers.events({'r'}); assert(selected==nil)
+env.handlers.events({'r','-reload'}); assert(selected=='selected')
+env.handlers.events({'s'}); assert(output[#output]:find('Event variables:',1,true))
+local errorCount=#output
+env.handlers.events({'r','-e'}); assert(#output==errorCount+1 and output[#output]:find('Usage:',1,true))
+env.handlers.events({'r','-r','-e','empty'}); assert(output[#output]:find('Usage:',1,true))
 service.reload=function() error('invalid event JSON') end
 env.handlers.events({'reload'}); assert(#errors==1 and errors[1]:find('invalid event JSON',1,true))
 service.reload=function() return nil end

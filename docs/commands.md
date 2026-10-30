@@ -11,6 +11,12 @@ Normal action compilation/state is retained. Pending event requests receive
 `reloaded` post cleanup; invalid files retain the previous event configuration.
 See [event rules](events.md) and [configuring the stock events](stock-events.md).
 
+`gbt events r -e <file>` temporarily selects a named event file through the event
+search hierarchy (`.json` optional). `gbt events r -r` reloads the current selection;
+plain `gbt events r` or full `gbt r` restores automatic selection. The `-r` flag
+also accepts `-reload` and cannot be combined with `-e`. Event subcommands accept `r` for
+`reload` and `s` for `status`. Use `-v` with reload to export processed JSON.
+
 Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
 `gbt panel reset-position`, and `gbt panel reload`. Tracking controls:
 `gbt panel tracking`, `gbt panel tracking -list`, and
