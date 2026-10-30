@@ -11,7 +11,8 @@ characters running the addon locally.
 |---|---|
 | [Commands](docs/commands.md) | Commands, aliases, options, and examples |
 | [Actions](docs/actions.md) | Action files, conditions, and commands |
-| [Event rules](docs/events.md) | One selected file of isolated pre/mid/post action reactions |
+| [Event rules](docs/events.md) | Event types, rules, context, ordering, and troubleshooting |
+| [Stock events](docs/stock-events.md) | Configure shipped gear rules with variables and contributions |
 | [Equipment queue](docs/equipment.md) | Ordered swaps, pending/confirmed queries, retries, and action barriers |
 | [Action properties](docs/properties.md) | Values available in action contexts |
 | [Action functions](docs/functions.md) | Lua helpers used by actions |

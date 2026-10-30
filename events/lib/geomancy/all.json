@@ -1,0 +1,57 @@
+{
+  "imports": ["lib/spells/pre"],
+  "vars": {
+    "gear": {
+      "spells": {
+        "geomancy": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.geomancy", "vars.gear.spells.geomancy.pre"],
+        "commands": [
+          "equipMany(vars.gear.spells.geomancy.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-geomancy-pre"
+      },
+      {
+        "when": [
+          "event.geomancy",
+          "vars.gear.spells.geomancy[event.name] and vars.gear.spells.geomancy[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.geomancy[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-geomancy-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.geomancy", "vars.gear.spells.geomancy.mid"],
+        "commands": [
+          "equipMany(vars.gear.spells.geomancy.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-geomancy-mid"
+      },
+      {
+        "when": [
+          "event.geomancy",
+          "vars.gear.spells.geomancy[event.name] and vars.gear.spells.geomancy[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.geomancy[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-geomancy-named-mid"
+      }
+    ]
+  }
+}

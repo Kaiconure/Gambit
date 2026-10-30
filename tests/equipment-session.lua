@@ -33,7 +33,7 @@ body=body:gsub("('[^'\r\n]*'):format",'(%1):format')
 local captured
 local function context(_,state)
     local bound=state.equipment and state.equipment.inventory or inventory
-    local ctx={vars=state.vars,mark=function(value) order[#order+1]=value end,
+    local ctx={vars=state.vars,me={is_engaged=true},mark=function(value) order[#order+1]=value end,
         findEquipmentInSlot=function(slot,confirmed) return bound.find_equipment_in_slot(slot,nil,confirmed) end,
         fail=function() error('phase failure') end,assert=assert}
     local chunk=assert(loadstring(body))
@@ -44,7 +44,7 @@ local function context(_,state)
 end
 local function runtime(pre,mid,post,useSnapshot)
     local config=Config.load({'test'},function() return {vars={
-        general={ring1={name='General'},body={name='Body'}},specific={ring1={name='Specific'}},
+        general={ring1={name='General'},body={name='Body'},meta={stop=true,note='ignored by equipment'}},specific={ring1={name='Specific'}},
         mid={body={name='Mid Body'}}},spells={use_equipment_snapshot=useSnapshot,pre=pre,mid=mid or {},post=post or {}}} end)
     return Runtime.new(config,{context=context,report=function(err) errors[#errors+1]=err end,
         clock=function() return 0 end,schedule=function() error('must reserve barrier without delay') end,
@@ -63,6 +63,7 @@ assert(#sent==2 and #gear.queue.batches==2) -- One equipment batch plus dispatch
 assert(#messages==1 and messages[1]=='Queued equipment changes: 2') -- Layered pre calls report one batch.
 for _,entry in ipairs(sent) do assert(entry.index~=2) end -- General ring never submitted.
 assert(order[1]==nil and #captured.vars._.eq_stack==2)
+assert(captured.vars.general.meta.stop==true and captured.vars.general.meta.slot==nil)
 ack(5,4); ack(13,3)
 assert(order[1]=='dispatch' and #sent==3 and sent[3].index==6)
 run:complete('spell',10,nil,'completed')
@@ -226,6 +227,38 @@ run=runtime({{commands={'equipMany(vars.specific)'}}},nil,{{commands={'equipPop(
 run:submit(event(),function() end); ack(13,3)
 run:complete('spell',10,nil,'completed')
 assert(#sent==2 and sent[2].index==1)
+gear:destroy()
+
+-- Shared post restoration is opt-in and batches baseline + partial state gear.
+local json=require('./lib/jsonlua')
+local postFile=assert(io.open('events/lib/post-equip.json'))
+local postDocument=json.parse(postFile:read('*a')); postFile:close()
+for _,restore in ipairs({false,true}) do
+    gear=manager(); sent={}
+    run=runtime({{commands={'equipPush(vars.general)','equipMany(vars.specific)'}}},nil,postDocument.spells.post)
+    run.config.vars.post_equip={restore_snapshot=restore}
+    run.config.vars.gear={battle={body={name='Mid Body'}}}
+    run:submit(event(),function() end); ack(5,4); ack(13,3)
+    run:complete('spell',10,nil,'completed')
+    if restore then
+        assert(#sent==4 and sent[3].index==6 and sent[4].index==1)
+        ack(5,6); ack(13,1)
+        assert(inventory.find_equipment_in_slot('ring1').name=='Original')
+    else
+        assert(#sent==3 and sent[3].index==6)
+        ack(5,6)
+        assert(inventory.find_equipment_in_slot('ring1').name=='Specific')
+    end
+    gear:destroy()
+end
+
+gear=manager(); sent={}
+run=runtime({{commands={'equipPop()','equipPush(vars.specific)'}}},nil,postDocument.spells.post)
+run.config.vars.post_equip={restore_snapshot=true}
+run.config.vars.gear={battle={body={name='Mid Body'}}}
+run:submit(event(),function() end); ack(13,3)
+run:complete('spell',10,nil,'completed')
+assert(#sent==2 and sent[2].index==6) -- Consumed baseline: don't unwind a later explicit push.
 gear:destroy()
 
 -- Snapshot failure blocks before pre and never dispatches.

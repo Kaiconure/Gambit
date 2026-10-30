@@ -1,0 +1,21 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "pre": null
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["vars.gear.spells.pre"],
+        "commands": [
+          "equipMany(vars.gear.spells.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "general-spell-pre"
+      }
+    ]
+  }
+}

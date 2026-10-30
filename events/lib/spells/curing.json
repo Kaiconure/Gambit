@@ -1,0 +1,56 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "curing": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.curing", "vars.gear.spells.curing.pre"],
+        "commands": [
+          "equipMany(vars.gear.spells.curing.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-curing-pre"
+      },
+      {
+        "when": [
+          "event.curing",
+          "vars.gear.spells.curing[event.name] and vars.gear.spells.curing[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.curing[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-curing-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.curing", "vars.gear.spells.curing.mid"],
+        "commands": [
+          "equipMany(vars.gear.spells.curing.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-curing-mid"
+      },
+      {
+        "when": [
+          "event.curing",
+          "vars.gear.spells.curing[event.name] and vars.gear.spells.curing[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.curing[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-curing-named-mid"
+      }
+    ]
+  }
+}

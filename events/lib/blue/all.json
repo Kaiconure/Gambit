@@ -1,0 +1,57 @@
+{
+  "imports": ["lib/spells/pre"],
+  "vars": {
+    "gear": {
+      "spells": {
+        "blue": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.blue", "vars.gear.spells.blue.pre"],
+        "commands": [
+          "equipMany(vars.gear.spells.blue.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-pre"
+      },
+      {
+        "when": [
+          "event.blue",
+          "vars.gear.spells.blue[event.name] and vars.gear.spells.blue[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.blue[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.blue", "vars.gear.spells.blue.mid"],
+        "commands": [
+          "equipMany(vars.gear.spells.blue.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-mid"
+      },
+      {
+        "when": [
+          "event.blue",
+          "vars.gear.spells.blue[event.name] and vars.gear.spells.blue[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.blue[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-named-mid"
+      }
+    ]
+  }
+}

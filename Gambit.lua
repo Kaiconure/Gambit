@@ -321,7 +321,7 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
     end
     if globals.event_system then
-        local ok,err=pcall(function() globals.event_system:reload() end)
+        local ok,err=pcall(function() globals.event_system:reload(outputProcessed) end)
         if not ok then writeError('Could not load event rules: '..tostring(err)) end
     end
 
@@ -427,10 +427,12 @@ windower.register_event('load', function()
     inventory.equipment_manager=globals.equipment_manager
     globals.event_system = require('./lib/events/init').new({
         windower=windower,packets=packets,resources=resources,
+        writeProcessed=writeJsonToFile,
         context=ActionContext.createTemporary,
         schedule=function(fn,delay) return coroutine.schedule(fn,delay) end,
         report=function(message) writeError('[events] '..message) end,
         announce=function(message) writeMessage('[events] '..message) end,
+        debug=function(message) writeDebug('[events] '..message) end,
         formatPath=text_file,
         barrier=function(fn) globals.equipment_manager:barrier(fn) end,
         equipmentSession=function() return globals.equipment_manager:session() end,

@@ -63,7 +63,8 @@ record(6,10,100); assert(globals.last_ability.id==11)
 local file=assert(io.open('lib/action-context.lua')); source=file:read('*a'); file:close()
 local fields=assert(source:match('gambit = ({.-\n        }),'))
 local context=assert(loadstring('return '..fields))
-local contextEnv={globals=globals,settings={},time=125,settingsPaths={getLoadedNamespace=function() end}}
+local contextEnv={globals=globals,settings={},time=125,settingsPaths={getLoadedNamespace=function() end},
+    targetMetadata=require('./lib/target-metadata'),windower=env.windower}
 setfenv(context,contextEnv)
 assert(context().last_ability.age==1.5 and context().last_spell.age==1.5)
 local defaults=require('./lib/ux/status-config').defaults.tracking.sets.default
@@ -89,6 +90,13 @@ assert(spellSnapshot.name=='Refresh' and spellSnapshot.time==123.5)
 spellSnapshot.name='Changed'; assert(globals.last_spell.name=='Refresh')
 assert(spellSnapshot.target.name=='Ally')
 spellSnapshot.target.name='Changed'; assert(globals.last_spell.target.name=='Ally')
+env.windower.ffxi.get_mob_by_id=function() return {id=200,index=20,name='New live name',
+    spawn_type=16,status=2,valid_target=true} end
+assert(context().last_spell.target.is_dead and context().last_ability.target.is_mob)
+assert(context().last_spell.target.name=='Ally')
+env.windower.ffxi.get_mob_by_id=function() return nil end
+assert(not context().last_spell.target.valid_target and context().last_spell.target.id==200)
+assert(context().last_ability.target.is_mob==nil)
 globals.last_spell=nil; assert(context().last_spell==nil)
 globals.last_ability=nil; assert(context().last_ability==nil)
 print('PASS: self completed abilities, category filtering, unknown resources, missing player and isolated context snapshot')

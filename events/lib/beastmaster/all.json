@@ -1,0 +1,56 @@
+{
+  "vars": {
+    "gear": {
+      "beastmaster": {
+        "ready": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "pet_abilities": {
+    "pre": [
+      {
+        "when": ["event.type == 'Monster'", "vars.gear.beastmaster.ready.pre"],
+        "commands": [
+          "equipMany(vars.gear.beastmaster.ready.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "beastmaster-ready-pre"
+      },
+      {
+        "when": [
+          "event.type == 'Monster'",
+          "vars.gear.beastmaster.ready[event.name] and vars.gear.beastmaster.ready[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.beastmaster.ready[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "beastmaster-ready-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.type == 'Monster'", "vars.gear.beastmaster.ready.mid"],
+        "commands": [
+          "equipMany(vars.gear.beastmaster.ready.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "beastmaster-ready-mid"
+      },
+      {
+        "when": [
+          "event.type == 'Monster'",
+          "vars.gear.beastmaster.ready[event.name] and vars.gear.beastmaster.ready[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.beastmaster.ready[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "beastmaster-ready-named-mid"
+      }
+    ]
+  }
+}

@@ -9,7 +9,7 @@ packet-driven; see [equipment queue](equipment.md).
 is also reported on successful event loading/reloading. Event files do not merge.
 Normal action compilation/state is retained. Pending event requests receive
 `reloaded` post cleanup; invalid files retain the previous event configuration.
-See [event rules](events.md).
+See [event rules](events.md) and [configuring the stock events](stock-events.md).
 
 Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
 `gbt panel reset-position`, and `gbt panel reload`. Tracking controls:
@@ -91,7 +91,7 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 | `-reload` | `-r` | Reload the currently loaded action set, retaining its loaded namespace unless `-ns` overrides it. |
 | `-settings-only` | `-so` | Reload settings while bypassing action reload. |
 | `-ns <namespace>` | — | Select a namespace for this load. Cannot be combined with `-settings-only`. |
-| `-verbose` | `-v` | Write processed JSON debugging output to `.output` folders for this reload. Off by default. |
+| `-verbose` | `-v` | Write processed action and event JSON debugging output to `.output` folders for this reload. Off by default. |
 
 Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
 

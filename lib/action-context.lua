@@ -9,6 +9,7 @@ local targetedAction = require('./lib/targeted-action')
 local magicBurst = require('./lib/magic-burst')
 local magicSkills = require('./meta/magic-skills')
 local cureSpell = require('./lib/cure-spell')
+local targetMetadata = require('./lib/target-metadata')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
 -- A mob need not have observed buffs yet. Resource objects have an ID but
@@ -1720,30 +1721,11 @@ local function initContextTargetSymbol(context, symbol, debug)
     symbol.model_size = symbol.mob.model_size
     symbol.model_scale = symbol.mob.model_scale
 
-    symbol.is_trust = (symbol.mob.spawn_type == SPAWN_TYPE_TRUST)
-    symbol.is_player = symbol.targets.Player
-    symbol.is_me = (symbol.id == context.player.id)
-    symbol.is_mob = (symbol.mob.spawn_type == SPAWN_TYPE_MOB)
-    symbol.x = symbol.mob.x
-    symbol.y = symbol.mob.y
-    symbol.z = symbol.mob.z
-    symbol.heading = symbol.mob.heading
-    symbol.valid_target = symbol.mob.valid_target
-    symbol.spawn_type = symbol.mob.spawn_type
-    symbol.status = symbol.mob.status
-    symbol.target_index = symbol.mob.target_index
+    targetMetadata.apply(symbol,symbol.mob,context.player.id)
 
     if symbol.is_player then
     end
 
-    if symbol.status == STATUS_RESTING then symbol.is_resting = true end
-    if symbol.status == STATUS_ENGAGED then symbol.is_engaged = true end
-    if symbol.status == 4 then symbol.is_cutscene = true end
-    if symbol.status == 2 or symbol.status == 3 then symbol.is_dead = true end
-    if symbol.status == 85 or symbol.status == 5 then symbol.is_mounted = true end
-    if symbol.status == STATUS_IDLE then symbol.is_idle = true end
-    if symbol.status == 44 then symbol.is_crafting = true end
-    if symbol.is_idle or symbol.is_engaged or symbol.is_mounted or symbol.is_resting then symbol.can_follow = true end
 
     if not settings.useRawDistances then
         if
@@ -2108,11 +2090,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 name = globals.last_ability.name, 
                 time = globals.last_ability.time,
                 age = time - globals.last_ability.time,
-                target=globals.last_ability.target and {
-                    id = globals.last_ability.target.id,
-                    name = globals.last_ability.target.name,
-                    index = globals.last_ability.target.index,
-                },
+                target=targetMetadata.refresh(globals.last_ability.target,windower.ffxi),
             },
             last_spell = globals.last_spell and {
                 id = globals.last_spell.id, 
@@ -2120,11 +2098,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 time = globals.last_spell.time,
                 status = globals.last_spell.status,
                 age = time - globals.last_spell.time,
-                target = globals.last_spell.target and {
-                    id = globals.last_spell.target.id,
-                    name = globals.last_spell.target.name,
-                    index = globals.last_spell.target.index,
-                },
+                target=targetMetadata.refresh(globals.last_spell.target,windower.ffxi),
             },
             strategy = settings.strategy,
             distance = settings.maxDistance,
@@ -2342,6 +2316,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 name = slot.name
                 slot = slot.slot
                 augments = slot.matched_augments
+            elseif type(name) == 'table' and #name>0 then
+                if not slot then return end
+                context.equipMany({[slot]=name})
+                return true
             elseif type(name) == 'table' then
                 -- Assume name is an item
                 augments = name.matched_augments
@@ -2417,9 +2395,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     entries = { entries }
                 else
                     -- Copy the slot into the entry itself for easier reference later
+                    local equipmentEntries = {}
                     for slot, entry in pairs(entries) do
-                        entry.slot = slot
+                        if slot ~= 'meta' then
+                            if type(entry)=='string' then
+                                equipmentEntries[slot]={name=entry,slot=slot}
+                            else
+                                entry.slot = slot
+                                equipmentEntries[slot] = entry
+                            end
+                        end
                     end
+                    entries = equipmentEntries
                 end
             end
         end
@@ -2442,7 +2429,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Attempt to change multiple equipment items at once. Returns the number of equipment
     -- changes if any changes occurred, or nil if no changes occurred.
     context.equipMany = function(...)
+        context.equipment_set = nil
         local entries = context.sanitizeEquipmentList(false, ...)        
+        local input = ...
+        context.equipment_set = type(input)=='table' and input or entries
         local count = inventory.equip_many(entries)
         if count > 0 then
             return count
@@ -2453,11 +2443,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Save all known effective slots before optional changes. Later equip/equipMany
     -- calls are covered by the same restore point, including phase-local plans.
     context.equipPush = function(...)
+        context.equipment_set = nil
         local snapshot=inventory.snapshot_equipment()
         local hasGear=select('#',...)>0
         local count=0
         if hasGear then
             local entries=context.sanitizeEquipmentList(false,...)
+            local input=...
+            context.equipment_set=type(input)=='table' and input or entries
             count=inventory.equip_many(entries)
         end
         table.insert(context.vars._.eq_stack,{removed=snapshot})
@@ -6756,6 +6749,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.randomize = context_randomize
     context.sendCommand = context_send_command
     context.sendCommands = context_send_commands
+    -- Dispatch literal Windower strings separately; never evaluate or format them.
+    context.sendWindowerCommands = function(commands)
+        assert(type(commands)=='table','sendWindowerCommands requires an array of strings')
+        for index,command in pairs(commands) do
+            assert(type(index)=='number' and index>=1 and index%1==0 and index<=#commands
+                and type(command)=='string','sendWindowerCommands requires a dense array of strings')
+        end
+        local count=0
+        for _,command in ipairs(commands) do
+            if command:match('%S') then
+                windower.send_command(command)
+                count=count+1
+            end
+        end
+        return count>0 and count or nil
+    end
     context.sendText = context_send_text
     context.keyTap = context_key_tap
     context.isApex = context_is_apex
@@ -6776,6 +6785,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.arrayFirstMissing = context_array_first_missing
     context.arrayFirstContained = context_array_first_contained
     context.type = type
+    context.ipairs = ipairs
     context.isBoolean = function(val) return type(val) == 'boolean' end
     context.isNumber = function(val) return type(val) == 'number' end
     context.isString = function(val) return type(val) == 'string' end    

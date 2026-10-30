@@ -32,7 +32,7 @@ local empty=Config.load({'empty','fallback'},function(path)
 end)
 assert(empty.path=='empty' and #empty.rules.spells.pre==0)
 assert(not pcall(Config.load,{'invalid','fallback'},function() return {invalid=true} end))
-assert(not pcall(Config.load,{'bad'},function() return {imports={}} end))
+assert(not pcall(Config.load,{'bad'},function() return {imports='invalid'} end))
 assert(not pcall(Config.load,{'bad'},function() return {spells={pre={{commands={'broken('}}}}} end))
 assert(not pcall(Config.load,{'bad'},function() return {spells={pre={bad={}}}} end))
 local commented=Config.load({'comments'},function() return {spells={pre={

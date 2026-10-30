@@ -3,6 +3,10 @@ local copy=require('./lib/variable-values').copy
 local calls={}
 local items={equipment={left_ring=1,left_ring_bag=8},wardrobe={[1]={id=101},[2]={id=202}}}
 resources={items={[101]={id=101},[202]={id=202}}}
+findItem=function(query)
+    if type(query)=='table' then query=query.name end
+    if query=='Roll Ring' then return resources.items[202] end
+end
 windower={ffxi={get_items=function() return items end,
     set_equip=function(localId,slot,bag) calls[#calls+1]={localId,slot,bag} end}}
 arrayAppend=function(t,v) t[#t+1]=v end
@@ -27,7 +31,9 @@ local function context()
     return ctx
 end
 local pre=context()
-assert(pre.equipPush({ring1={name='Roll Ring'}})==1)
+local set={ring1={name='Roll Ring'},meta={stop=true,note='retained'}}
+assert(pre.equipPush(set)==1)
+assert(set.meta.stop and set.meta.note=='retained' and set.meta.slot==nil)
 assert(calls[1][1]==2 and calls[1][2]==13 and calls[1][3]==8)
 local saved=vars._.eq_stack[1].removed.ring1
 assert(saved.id==101 and saved.localId==1 and saved.bagId==8)

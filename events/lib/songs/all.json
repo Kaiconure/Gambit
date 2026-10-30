@@ -1,0 +1,55 @@
+{
+  "imports": ["lib/spells/pre"],
+  "vars": {
+    "gear": {
+      "songs": {
+        "pre": null,
+        "mid": null
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.singing", "vars.gear.songs.pre"],
+        "commands": [
+          "equipMany(vars.gear.songs.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "songs-pre"
+      },
+      {
+        "when": [
+          "event.singing",
+          "vars.gear.songs[event.name] and vars.gear.songs[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.songs[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "songs-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.singing", "vars.gear.songs.mid"],
+        "commands": [
+          "equipMany(vars.gear.songs.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "songs-mid"
+      },
+      {
+        "when": [
+          "event.singing",
+          "vars.gear.songs[event.name] and vars.gear.songs[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.songs[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "songs-named-mid"
+      }
+    ]
+  }
+}

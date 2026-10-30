@@ -1,0 +1,113 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "burst": {
+          "pre": null,
+          "mid": null
+        },
+        "elemental": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.elemental", "vars.gear.spells.elemental.pre"],
+        "commands": [
+          "equipMany(vars.gear.spells.elemental.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-elemental-pre"
+      },
+      {
+        "when": [
+          "event.elemental",
+          "vars.gear.spells.elemental[event.name] and vars.gear.spells.elemental[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.elemental[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-elemental-named-pre"
+      },
+      {
+        "when": [
+          "event.elemental",
+          "canMagicBurst(event)",
+          "vars.gear.spells.burst.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.burst.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-burst-pre"
+      },
+      {
+        "when": [
+          "event.elemental",
+          "canMagicBurst(event)",
+          "vars.gear.spells.burst[event.name] and vars.gear.spells.burst[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.burst[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-burst-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.elemental", "vars.gear.spells.elemental.mid"],
+        "commands": [
+          "equipMany(vars.gear.spells.elemental.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-elemental-mid"
+      },
+      {
+        "when": [
+          "event.elemental",
+          "vars.gear.spells.elemental[event.name] and vars.gear.spells.elemental[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.elemental[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-elemental-named-mid"
+      },
+      {
+        "when": [
+          "event.elemental",
+          "canMagicBurst(event)",
+          "vars.gear.spells.burst.mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.burst.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-burst-mid"
+      },
+      {
+        "when": [
+          "event.elemental",
+          "canMagicBurst(event)",
+          "vars.gear.spells.burst[event.name] and vars.gear.spells.burst[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.burst[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-burst-named-mid"
+      },
+      {
+        "when": ["event.target.is_mob and event.element_name == 'Dark'"],
+        "commands": ["equip('head', 'Pixie Hairpin +1')"],
+        "id": "pixie-hairpin-for-darkness"
+      }
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "buff_overlays": []
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "commands": [
+          "for _, entry in ipairs(vars.gear.spells.buff_overlays) do if entry.buff and entry.pre and entry.when and hasBuff(entry.buff) and evaluateAllConditions(entry.when) then equipMany(entry.pre); if equipment_set and equipment_set.meta and equipment_set.meta.stop then stopEvent(); break end end end"
+        ],
+        "id": "spells-buff-overlays-pre"
+      }
+    ],
+    "mid": [
+      {
+        "commands": [
+          "for _, entry in ipairs(vars.gear.spells.buff_overlays) do if entry.buff and entry.mid and entry.when and hasBuff(entry.buff) and evaluateAllConditions(entry.when) then equipMany(entry.mid); if equipment_set and equipment_set.meta and equipment_set.meta.stop then stopEvent(); break end end end"
+        ],
+        "id": "spells-buff-overlays-mid"
+      }
+    ]
+  }
+}

@@ -45,4 +45,20 @@ config=load()
 assert(config.path==child..'events/geo.json' and #config.rules.spells.pre==0)
 assert(config.vars.gear.head=='specific' and config.vars.locked=='attempt')
 Paths.setLoadedNamespace(nil)
+local bundledPaths=Paths.eventFiles('Tester','GEO',{'mages'})
+assert(bundledPaths[#bundledPaths-2]=='./events/geo.json')
+assert(bundledPaths[#bundledPaths-1]=='./events/(mages).json')
+assert(bundledPaths[#bundledPaths]=='./events/common.json')
+local bundled={
+    ['./events/geo.json']={vars={value='inline'},spells={pre={{commands={'true'}}}}},
+    ['./events/common.vars.json']={vars={value='bundled',onlyBundled=true}},
+    ['./settings/events/common.vars.json']={vars={value='user'}},
+}
+local function loadBundled() return Config.load(bundledPaths,function(path) return bundled[path] end) end
+local shipped=loadBundled()
+assert(shipped.path=='./events/geo.json' and shipped.vars.value=='user' and shipped.vars.onlyBundled)
+bundled['./settings/events/common.json']={}
+assert(loadBundled().path=='./settings/events/common.json') -- Even user common beats shipped exact job.
+bundled['./settings/Tester/events/geo.json']={}
+assert(loadBundled().path=='./settings/Tester/events/geo.json')
 print('PASS: event vars namespace/character/job/group layering, implicit defaults, explicit priorities, isolation and validation')

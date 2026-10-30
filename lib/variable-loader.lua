@@ -1,5 +1,6 @@
 -- Priority exists only while loading. Runtime vars contain ordinary values.
 local loader = {}
+local expandKeys=require('./lib/variable-key-expansion')
 
 local function protected(node, priority)
     if node.priority ~= nil and node.priority >= priority then return true end
@@ -96,7 +97,9 @@ function loader.new(warn)
     end
     return {
         merge = function(original, incoming, source, priority)
-            if original and incoming then merge(original, incoming, root, source, priority or 0, '') end
+            if original and incoming then
+                merge(original, expandKeys(incoming,priority or 0,tostring(source or 'vars')), root, source, priority or 0, '')
+            end
         end,
     }
 end

@@ -1,0 +1,56 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "enhancing": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.enhancing", "vars.gear.spells.enhancing.pre"],
+        "commands": [
+          "equipMany(vars.gear.spells.enhancing.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-enhancing-pre"
+      },
+      {
+        "when": [
+          "event.enhancing",
+          "vars.gear.spells.enhancing[event.name] and vars.gear.spells.enhancing[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.enhancing[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-enhancing-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.enhancing", "vars.gear.spells.enhancing.mid"],
+        "commands": [
+          "equipMany(vars.gear.spells.enhancing.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-enhancing-mid"
+      },
+      {
+        "when": [
+          "event.enhancing",
+          "vars.gear.spells.enhancing[event.name] and vars.gear.spells.enhancing[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.enhancing[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-enhancing-named-mid"
+      }
+    ]
+  }
+}

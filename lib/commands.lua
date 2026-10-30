@@ -182,8 +182,15 @@ end
 
 handlers['events'] = function(args)
     local command=(args[1] or 'status'):lower()
-    if #args>1 or (command~='reload' and command~='status') then
-        writeMessage('Usage: gbt events [status | reload]')
+    local outputProcessed=false
+    local valid=command=='reload' or command=='status'
+    for index=2,#args do
+        local flag=args[index]:lower()
+        if command=='reload' and (flag=='-v' or flag=='-verbose') then outputProcessed=true
+        else valid=false end
+    end
+    if not valid then
+        writeMessage('Usage: gbt events [status | reload [-verbose | -v]]')
         return
     end
     local service=globals.event_system
@@ -191,12 +198,15 @@ handlers['events'] = function(args)
     if command=='status' then
         local active=service.runtime and service.runtime.config.path
         writeMessage(active and ('Active event file: '..text_file(active)) or 'No active event file.')
+        for _,path in ipairs(service.runtime and service.runtime.config.files or {}) do
+            if path~=active then writeMessage('Event import: '..text_file(path)) end
+        end
         for _,path in ipairs(service.runtime and service.runtime.config.vars_files or {}) do
             writeMessage('Event variables: '..text_file(path))
         end
         return
     end
-    local ok,result=pcall(service.reload,service)
+    local ok,result=pcall(service.reload,service,outputProcessed)
     if not ok then writeError('Could not reload event rules: '..tostring(result))
     elseif not result then writeMessage('No character is logged in; event rules cleared.')
     else writeMessage('Event rules reloaded.') end

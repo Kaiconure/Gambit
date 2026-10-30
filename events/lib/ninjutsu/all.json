@@ -1,0 +1,55 @@
+{
+  "imports": ["lib/spells/pre"],
+  "vars": {
+    "gear": {
+      "ninjutsu": {
+        "pre": null,
+        "mid": null
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.ninjutsu", "vars.gear.ninjutsu.pre"],
+        "commands": [
+          "equipMany(vars.gear.ninjutsu.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "ninjutsu-pre"
+      },
+      {
+        "when": [
+          "event.ninjutsu",
+          "vars.gear.ninjutsu[event.name] and vars.gear.ninjutsu[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.ninjutsu[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "ninjutsu-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.ninjutsu", "vars.gear.ninjutsu.mid"],
+        "commands": [
+          "equipMany(vars.gear.ninjutsu.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "ninjutsu-mid"
+      },
+      {
+        "when": [
+          "event.ninjutsu",
+          "vars.gear.ninjutsu[event.name] and vars.gear.ninjutsu[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.ninjutsu[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "ninjutsu-named-mid"
+      }
+    ]
+  }
+}

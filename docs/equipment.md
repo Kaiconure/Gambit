@@ -7,6 +7,38 @@ requested, not that the server has confirmed them.
 
 ## Equipment views
 
+### Ordered item candidates
+
+`equip('back', {'Aptitude Mantle +1', 'Aptitude Mantle'})` chooses the first
+available, eligible item. Slot-based sets can supply an ordered array of item
+tables (including per-candidate augments):
+
+```json
+{
+  "back": [
+    {"name": "Aptitude Mantle +1"},
+    {"name": "Aptitude Mantle"}
+  ]
+}
+```
+
+This also works with `equipPush(set)` and `checkEquipMany(set)`. Candidates are
+tested in order and stop at the first usable match. An item already equipped
+or queued in the requested slot counts as available. A matching instance is
+retained instead of swapping to another copy; required augments must match, but
+unspecified augments do not force a copy change. A better candidate becoming
+available can upgrade the slot on a later call. Candidates unavailable for the
+slot, including copies already used by another slot, are skipped. If none are
+available the slot is left unchanged. Paired slots resolve in deterministic slot
+order and cannot select the same physical copy twice.
+
+`equipPop()` does not select candidates: it restores the exact saved physical
+item instance or empty slot, as before. Helper return conventions are unchanged.
+Candidate lists share one normalization/resolution pass and inventory input
+snapshot per request; actual queue sends still validate identity and wait for
+acknowledgments. Missing candidates add lookup work, while early matches avoid
+examining lower-priority candidates. No runtime timing guarantee is implied.
+
 The manager tracks confirmed gear, queued requests, and submitted requests.
 Its effective view overlays queued/submitted changes on confirmed gear. It does
 not modify Windower's inventory tables. Confirmed equipped slots are bootstrapped
@@ -49,6 +81,30 @@ Equipment helpers preserve their return values but do not print intermediate
 counts or restoration messages. Verbose output reports one count per nonempty
 batch submitted to the shared equipment queue, including restoration batches.
 No-op batches are silent; swap failures remain visible.
+
+Equipment sets may carry a reserved `meta` field with arbitrary caller metadata:
+
+```json
+{
+  "head": {"name": "Some Hat"},
+  "meta": {"stop": true}
+}
+```
+
+Equipment helpers ignore `meta` without modifying or interpreting its contents.
+Event rules may use `set.meta and set.meta.stop and stopEvent()` after equipping
+the set. The shipped event modules use this pattern for per-name overrides and
+roll gear. Metadata is not an instruction to the equipment queue itself.
+Sanitization runs each time a helper is called, so runtime changes are respected;
+it is not a one-time load transformation.
+
+`equipMany(set)` and `equipPush(set)` clear `equipment_set` initially, then expose
+the original input table in the current context before submitting equipment.
+This retains metadata even when no changes are needed. Subsequent commands can
+use `equipment_set.meta and equipment_set.meta.stop and stopEvent()` independently
+of the helper's return value. For slot/name argument lists, `equipment_set` is
+the normalized equipment map instead. A no-argument `equipPush()` leaves it nil.
+The value belongs to the current context; a new event phase starts without it.
 
 `equipPop()` restores the latest full snapshot, including slots changed by later
 `equip()` or `equipMany()` calls and originally empty slots. Therefore pop can

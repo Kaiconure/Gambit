@@ -1,0 +1,80 @@
+{
+  "imports": ["lib/spells/pre"],
+  "vars": {
+    "gear": {
+      "scholar": {
+        "light_arts": {
+          "pre": null,
+          "mid": null
+        },
+        "dark_arts": {
+          "pre": null,
+          "mid": null
+        },
+        "stratagems": []
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": [
+          "hasBuff('Light Arts', 'Addendum: White')",
+          "vars.gear.scholar.light_arts.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.scholar.light_arts.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "scholar-light-arts-pre"
+      },
+      {
+        "when": [
+          "hasBuff('Dark Arts', 'Addendum: Black')",
+          "vars.gear.scholar.dark_arts.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.scholar.dark_arts.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "scholar-dark-arts-pre"
+      },
+      {
+        "commands": [
+          "for _, entry in ipairs(vars.gear.scholar.stratagems) do if hasBuff(entry.buff) and evaluateAllConditions(entry.when) and entry.pre then equipMany(entry.pre); if equipment_set and equipment_set.meta and equipment_set.meta.stop then stopEvent(); break end end end"
+        ],
+        "id": "scholar-stratagems-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": [
+          "hasBuff('Light Arts', 'Addendum: White')",
+          "vars.gear.scholar.light_arts.mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.scholar.light_arts.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "scholar-light-arts-mid"
+      },
+      {
+        "when": [
+          "hasBuff('Dark Arts', 'Addendum: Black')",
+          "vars.gear.scholar.dark_arts.mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.scholar.dark_arts.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "scholar-dark-arts-mid"
+      },
+      {
+        "commands": [
+          "for _, entry in ipairs(vars.gear.scholar.stratagems) do if hasBuff(entry.buff) and evaluateAllConditions(entry.when) and entry.mid then equipMany(entry.mid); if equipment_set and equipment_set.meta and equipment_set.meta.stop then stopEvent(); break end end end"
+        ],
+        "id": "scholar-stratagems-mid"
+      }
+    ]
+  }
+}

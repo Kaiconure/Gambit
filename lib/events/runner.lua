@@ -2,8 +2,8 @@
 local copy=require('./lib/variable-values').copy
 local Runner={}
 Runner.__index=Runner
-function Runner.new(config,context,report,equipmentSession)
-    return setmetatable({config=config,context=context,report=report,equipmentSession=equipmentSession},Runner)
+function Runner.new(config,context,report,equipmentSession,targetSnapshot)
+    return setmetatable({config=config,context=context,report=report,equipmentSession=equipmentSession,targetSnapshot=targetSnapshot},Runner)
 end
 local function evaluate(expression,context)
     local thread=coroutine.create(function()
@@ -36,6 +36,9 @@ function Runner:run(request,phase)
         return false
     end
     context.event=copy(request.event)
+    if request.event.target and self.targetSnapshot then
+        context.event.target=self.targetSnapshot(request.event.target)
+    end
     context.event.phase=phase
     local active=true
     local phaseFailed=false

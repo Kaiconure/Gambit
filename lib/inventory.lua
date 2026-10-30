@@ -259,29 +259,15 @@ local function is_item_excluded(exclusion_list, bagId, localId)
     end
 end
 
-local function inventory_items_match(item1, item2)
-    ---------------------------------------------------------------------------
-    -- This function will determine if two inventory items represent matching,
-    -- equivalent items. For now, this does NOT take into account augments, so
-    -- items of the same name with different augments will show as identical.
-    -- This will change in the future.
-    if item1 ~= nil and item2 ~= nil then
-        if
-            item1.id == item2.id
-        then
-            -- If they both have extdata, then we'll return true if all augments match
-            if item1.extdata and item2.extdata then
-                return inventory.has_all_augments(item1.extdata, item2.extdata.augments)
-            end
-
-            -- Otherwise, we'll only return true if both items have no extdata. They're not
-            -- the same item if the underlying metadata differs.
-            return not item1.extdata and not item2.extdata
-        end
-    end
-end
-
 inventory.equip_many = function(pieces, all_items, simulate, changes, session)
+    -- Set-level metadata belongs to callers, not slot resolution.
+    if pieces.meta~=nil then
+        local equipment={}
+        for slot,piece in pairs(pieces) do
+            if slot~='meta' then equipment[slot]=piece end
+        end
+        pieces=equipment
+    end
     all_items = equipment_view(all_items or windower.ffxi.get_items(),false,session)
     
     if type(changes) == 'table' then
@@ -302,53 +288,53 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
     local flags = { equippable = true, equipped = false }
     local swaps = { }
 
-    for slot, piece in pairs(pieces) do
-        local name = piece.equipment or piece.item or piece.gear or piece.name
-        local augments = piece.augments or piece.aug or {}
-        local slot_id = type(name) == 'string' and type(slot) == 'string' and inventory.get_slot_id_by_name(slot)
-
-        if type(name) == 'string' and type(slot_id) == 'number' then
-            local equipped = inventory.find_equipment_in_slot(slot, all_items,false,session)
-            local searching = true
-
-            -- Clone the exclusion list
-            local local_exclusion_list = { }
-            for i = 1, #exclusion_list do
-                arrayAppend(local_exclusion_list, exclusion_list[i])
-            end
-
-            while searching do
-                local find_param = {name = name, augments = augments, slot = slot}
-                local candidate = inventory.find_item(
-                    find_param,
-                    flags,
-                    all_items,
-                    local_exclusion_list,session
-                )
-
-                if candidate then
-                    arrayAppend(local_exclusion_list, candidate)
-
-                    -- We will only perform the swap if there's nothing already equipped
-                    -- in the slot, or if the item that IS equipped doesn't match our
-                    -- current candidate equipment item.
-                    if 
-                        equipped == nil or
-                        not inventory_items_match(equipped, candidate)
-                    then
-                        if 
-                            candidate.raw_slots[slot_id]
-                        then
-                            arrayAppend(exclusion_list, candidate)
-                            arrayAppend(swaps, { slot_id = slot_id, slot = slot, item = candidate })
-
-                            -- We've already found our match, we're done
-                            searching = false
+    -- Resolve in slot order as well as sending in slot order. Candidate copies
+    -- reserved by one slot cannot be reused by a later slot in this request.
+    local ordered={}
+    for slot,piece in pairs(pieces) do
+        local id=type(slot)=='string' and inventory.get_slot_id_by_name(slot)
+        if id then ordered[id]={slot=slot,piece=piece} end
+    end
+    for _,info in ipairs(GEAR_SLOT_INFO) do
+        local entry=ordered[info.id]
+        if entry then
+            local slot,piece=entry.slot,entry.piece
+            local nested=type(piece)=='table' and (piece.equipment or piece.item or piece.gear or piece.name)
+            local choices=type(piece)=='table' and #piece>0 and piece
+                or type(nested)=='table' and nested or {piece}
+            local equipped=inventory.find_equipment_in_slot(slot,all_items,false,session)
+            local selected
+            for _,choice in ipairs(choices) do
+                if type(choice)=='string' then choice={name=choice} end
+                assert(type(choice)=='table','Equipment candidates must be item names or tables')
+                local name=choice.equipment or choice.item or choice.gear or choice.name
+                local augments=choice.augments or choice.aug or {}
+                if type(name)=='string' then
+                    local resource=findItem(name)
+                    -- Equipped/queued copies are eligible, and win over other
+                    -- physical copies of this candidate. Unspecified augments
+                    -- do not require an unnecessary change to another copy.
+                    if equipped and resource and equipped.id==resource.id
+                        and not is_item_excluded(exclusion_list,equipped.bagId,equipped.localId)
+                        and inventory.has_all_augments(equipped,augments) then
+                        selected=equipped
+                    elseif resource then
+                        local excluded={}
+                        for _,item in ipairs(exclusion_list) do excluded[#excluded+1]=item end
+                        while true do
+                            local candidate=inventory.find_item({id=resource.id,name=name,augments=augments,slot=slot},flags,all_items,excluded,session)
+                            if not candidate then break end
+                            excluded[#excluded+1]=candidate
+                            if candidate.raw_slots[info.id] then selected=candidate; break end
                         end
                     end
-                else
-                    -- No matching candidate was found, we're done
-                    searching = false
+                    if selected then break end
+                end
+            end
+            if selected then
+                exclusion_list[#exclusion_list+1]=selected
+                if selected~=equipped then
+                    swaps[#swaps+1]={slot_id=info.id,slot=slot,item=selected,augments=selected.matched_augments}
                 end
             end
         end

@@ -18,7 +18,12 @@ env.handlers.events({'status'})
 assert(output[#output-1]=='Event variables: <file>character.vars.json</file>')
 assert(output[#output]=='Event variables: <file>shared.vars.json</file>')
 env.handlers.events({'reload','extra'})
-assert(count==1 and output[#output]=='Usage: gbt events [status | reload]')
+assert(count==1 and output[#output]=='Usage: gbt events [status | reload [-verbose | -v]]')
+local flags={}
+service.reload=function(_,flag) flags[#flags+1]=flag; return {} end
+env.handlers.events({'reload','-v'})
+env.handlers.events({'reload','-verbose'})
+assert(flags[1]==true and flags[2]==true)
 service.reload=function() error('invalid event JSON') end
 env.handlers.events({'reload'}); assert(#errors==1 and errors[1]:find('invalid event JSON',1,true))
 service.reload=function() return nil end

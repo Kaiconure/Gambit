@@ -3,10 +3,10 @@ local copy=require('./lib/variable-values').copy
 local Runner=require('./lib/events/runner')
 local Runtime={}
 Runtime.__index=Runtime
-local sections={spell='spells',job_ability='job_abilities',weapon_skill='weapon_skills'}
+local sections={spell='spells',job_ability='job_abilities',weapon_skill='weapon_skills',pet_ability='pet_abilities'}
 function Runtime.new(config,deps)
     return setmetatable({config=config,deps=deps,pending={},sequence=0,
-        runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession)},Runtime)
+        runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession,deps.targetSnapshot)},Runtime)
 end
 function Runtime:run(request,phase)
     self.running=true
@@ -14,6 +14,38 @@ function Runtime:run(request,phase)
     self.running=false
     if not ok then self.deps.report('Event '..phase..': '..tostring(result)); return false end
     return result
+end
+function Runtime:loading()
+    if self.loaded then return end
+    self.loaded=true
+    if not self.config.path then return end
+    local vars=copy(self.config.vars)
+    vars._={eq_stack={}}
+    local request={section='loading',event={kind='loading',cancelled=false,time=self.deps.clock()},
+        variables={vars=vars,original=copy(vars)}}
+    if self:run(request,'actions') then
+        vars._=nil
+        self.config.vars=vars
+    end
+end
+-- Observed transitions are independent notifications, not cancellable actions.
+-- Each notification gets isolated vars and one equipment phase; gear persists.
+function Runtime:observe(event,phase)
+    local section=event.kind=='status' and ('statuses.'..tostring(event.category))
+        or event.kind=='zone' and 'zones'
+    local rules=self.config.rules[section]
+    if not rules or not rules[phase] or #rules[phase]==0 then return end
+    if self.running then self.deps.report('Event rules cannot dispatch nested events'); return end
+    self.sequence=self.sequence+1
+    event=copy(event)
+    event.request_id=self.sequence
+    event.time=self.deps.clock()
+    event.cancelled=false
+    local vars=copy(self.config.vars)
+    vars._={eq_stack={}}
+    local request={section=section,event=event,variables={vars=vars,original=copy(vars)}}
+    self:run(request,phase)
+    request.variables.vars._.eq_stack={}
 end
 function Runtime:finish(request,outcome)
     if request.finished then return end
@@ -100,7 +132,7 @@ function Runtime:submit(event,dispatch)
             if not ok or message==false then
                 self.deps.report('Event dispatch failed: '..tostring(message))
                 self:finish(request,'failed')
-            elseif not request.finished then self:run(request,'mid') end
+            elseif not request.finished and event.kind~='pet_ability' then self:run(request,'mid') end
     end
     -- Reserve pre's dispatch boundary synchronously with its phase commit.
     -- There is no timer gap in which another caller can insert gear before it.

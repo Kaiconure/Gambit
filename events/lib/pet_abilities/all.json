@@ -1,0 +1,33 @@
+{
+  "vars": {
+    "gear": {
+      "pet_abilities": {}
+    }
+  },
+  "pet_abilities": {
+    "pre": [
+      {
+        "when": [
+          "vars.gear.pet_abilities[event.name] and vars.gear.pet_abilities[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.pet_abilities[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "pet-abilities-pre-named"
+      }
+    ],
+    "mid": [
+      {
+        "when": [
+          "vars.gear.pet_abilities[event.name] and vars.gear.pet_abilities[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.pet_abilities[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "pet-abilities-mid-named"
+      }
+    ]
+  }
+}

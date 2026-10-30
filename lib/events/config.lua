@@ -2,7 +2,16 @@
 local copy=require('./lib/variable-values').copy
 local factory=require('./lib/execution-factory')
 local variableLoader=require('./lib/variable-loader')
-local Config={kinds={'spells','job_abilities','weapon_skills'},phases={'pre','mid','post'}}
+local importDocuments=require('./lib/events/imports')
+local eventSlots=require('./lib/events/slots')
+local Config={kinds={'spells','job_abilities','weapon_skills','pet_abilities'},phases={'pre','mid','post'}}
+local statusCategories=require('./lib/events/statuses').categories
+local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading'}
+for _,category in ipairs(statusCategories) do sections[#sections+1]='statuses.'..category end
+local function phases(kind)
+    if kind=='loading' then return {'actions'} end
+    return (kind=='zones' or kind:match('^statuses%.')) and {'enter','leave'} or Config.phases
+end
 local function array(value,label)
     assert(type(value)=='table',label..' must be an array')
     for key in pairs(value) do
@@ -22,63 +31,90 @@ local function expressions(value,label)
     end
     return result
 end
-function Config.load(paths,read,warn)
-    local result={vars={},rules={},files={},vars_files={}}
-    local inlineVars
-    for _,kind in ipairs(Config.kinds) do
-        result.rules[kind]={pre={},mid={},post={}}
+local function compileRule(rule,label,contributed)
+    assert(type(rule)=='table',label..': rule must be an object')
+    if rule.slot~=nil or rule.slots~=nil then
+        assert(not contributed,label..': contributions cannot contain slots')
+        for key in pairs(rule) do
+            assert(key=='slot' or key=='slots' or key=='comment',label..': slots must be standalone placeholders')
+        end
+        return {slot=copy(rule.slot),slots=copy(rule.slots),source=label}
     end
-    for _,path in ipairs(paths) do
-        local document=read(path)
-        if document~=nil then
+    assert(rule.id==nil or (type(rule.id)=='string' and rule.id:match('%S')),label..': invalid rule id')
+    assert(rule.disabled==nil or type(rule.disabled)=='boolean',label..': invalid disabled flag')
+    assert(rule.stop==nil or type(rule.stop)=='boolean',label..': invalid stop flag')
+    local commentOnly=rule.comment~=nil
+    for key in pairs(rule) do
+        assert(key=='id' or key=='when' or key=='commands' or key=='disabled' or key=='stop'
+            or key=='comment' or (contributed and key=='priority'),label..': unsupported rule key '..tostring(key))
+        if key~='comment' then commentOnly=false end
+    end
+    if commentOnly then return end
+    return {id=rule.id,source=label,stop=rule.stop,disabled=rule.disabled,priority=rule.priority,
+        conditions=not rule.disabled and expressions(rule.when,label..'.when') or {},
+        commands=not rule.disabled and expressions(rule.commands,label..'.commands') or {}}
+end
+function Config.load(paths,read,warn,matchesRequired)
+    local result={vars={},rules={},files={},vars_files={}}
+    local inlineVars={}
+    local layouts={}
+    for _,kind in ipairs(sections) do
+        result.rules[kind]={}
+        for _,phase in ipairs(phases(kind)) do
+            result.rules[kind][phase]={}
+            layouts[#layouts+1]={section=kind,phase=phase}
+        end
+    end
+    local slots=eventSlots.new(result.rules,layouts,paths,warn,matchesRequired,compileRule)
+    local documents,selectedPath=importDocuments(paths,read)
+    result.path=selectedPath
+    for _,entry in ipairs(documents) do
+        local path,document=entry.path,entry.document
+        do
             assert(type(document)=='table',path..': expected an object')
             for key in pairs(document) do
-                assert(key=='vars' or result.rules[key],path..': unsupported key '..tostring(key))
+                assert(key=='vars' or key=='imports' or key=='statuses' or key=='contributions' or (result.rules[key] and not key:find('%.')),
+                    path..': unsupported key '..tostring(key))
+            end
+            if document.statuses~=nil then
+                assert(type(document.statuses)=='table',path..': statuses must be an object')
+                for category in pairs(document.statuses) do
+                    assert(result.rules['statuses.'..tostring(category)],path..': unsupported status category '..tostring(category))
+                end
             end
             if document.vars then
                 assert(type(document.vars)=='table',path..': vars must be an object')
                 for key in pairs(document.vars) do assert(type(key)=='string',path..': vars keys must be names') end
-                inlineVars=copy(document.vars)
+                inlineVars[#inlineVars+1]={vars=copy(document.vars),path=path}
             end
             result.files[#result.files+1]=path
-            result.path=path
-            for _,kind in ipairs(Config.kinds) do
+            slots.collect(document,path)
+            for _,kind in ipairs(sections) do
                 local section=document[kind]
+                local category=kind:match('^statuses%.(.+)$')
+                if category then section=document.statuses and document.statuses[category] end
                 if section then
                     assert(type(section)=='table',path..': '..kind..' must be an object')
+                    local observational=kind=='zones' or kind=='loading' or category~=nil
+                    assert(not observational or section.use_equipment_snapshot==nil,
+                        path..': '..kind..' does not support use_equipment_snapshot')
                     assert(section.use_equipment_snapshot==nil or type(section.use_equipment_snapshot)=='boolean',
                         path..': '..kind..'.use_equipment_snapshot must be a boolean')
-                    result.rules[kind].use_equipment_snapshot=section.use_equipment_snapshot==true
-                    for phase in pairs(section) do
-                        assert(phase=='pre' or phase=='mid' or phase=='post' or phase=='use_equipment_snapshot',path..': unknown phase '..tostring(phase))
+                    if section.use_equipment_snapshot~=nil then
+                        result.rules[kind].use_equipment_snapshot=section.use_equipment_snapshot
                     end
-                    for _,phase in ipairs(Config.phases) do
+                    for phase in pairs(section) do
+                        assert(result.rules[kind][phase]~=nil or (not observational and phase=='use_equipment_snapshot'),path..': unknown phase '..tostring(phase))
+                    end
+                    for _,phase in ipairs(phases(kind)) do
                         for index,rule in ipairs(array(section[phase] or {},path..':'..kind..'.'..phase)) do
-                            assert(type(rule)=='table',path..': rule must be an object')
-                            assert(rule.id==nil or (type(rule.id)=='string' and rule.id:match('%S')),path..': invalid rule id')
-                            assert(rule.disabled==nil or type(rule.disabled)=='boolean',path..': invalid disabled flag')
-                            assert(rule.stop==nil or type(rule.stop)=='boolean',path..': invalid stop flag')
-                            local commentOnly=rule.comment~=nil
-                            for key in pairs(rule) do
-                                assert(key=='id' or key=='when' or key=='commands' or key=='disabled' or key=='stop' or key=='comment',
-                                    path..': unsupported rule key '..tostring(key))
-                                if key~='comment' then commentOnly=false end
-                            end
                             local list=result.rules[kind][phase]
-                            if rule.id then
-                                for i=#list,1,-1 do if list[i].id==rule.id then table.remove(list,i) end end
-                            end
-                            if not rule.disabled and not commentOnly then
-                                local label=path..':'..kind..'.'..phase..'['..index..']'
-                                list[#list+1]={id=rule.id,source=label,stop=rule.stop,
-                                    conditions=expressions(rule.when,label..'.when'),
-                                    commands=expressions(rule.commands,label..'.commands')}
-                            end
+                            local item=compileRule(rule,path..':'..kind..'.'..phase..'['..index..']')
+                            if item then list[#list+1]=item end
                         end
                     end
                 end
             end
-            break -- Even an empty file intentionally suppresses all fallbacks.
         end
     end
     -- Highest specificity first: the shared loader preserves earlier values at
@@ -90,14 +126,22 @@ function Config.load(paths,read,warn)
         if candidate:match('%.json$') then document=read(path) end
         if document~=nil then
             assert(type(document)=='table',path..': expected an object')
-            for key in pairs(document) do assert(key=='vars',path..': vars files only support vars') end
-            assert(type(document.vars)=='table',path..': vars must be an object')
-            for key in pairs(document.vars) do assert(type(key)=='string',path..': vars keys must be names') end
-            variables.merge(result.vars,document.vars,path)
+            for key in pairs(document) do assert(key=='vars' or key=='contributions',path..': vars files only support vars and contributions') end
+            assert(document.vars~=nil or document.contributions~=nil,path..': vars files require vars or contributions')
+            if document.vars~=nil then
+                assert(type(document.vars)=='table',path..': vars must be an object')
+                for key in pairs(document.vars) do assert(type(key)=='string',path..': vars keys must be names') end
+                variables.merge(result.vars,document.vars,path)
+            end
+            slots.collect(document,path)
             result.vars_files[#result.vars_files+1]=path
         end
     end
-    variables.merge(result.vars,inlineVars,result.path,-1)
+    for index=#inlineVars,1,-1 do
+        local entry=inlineVars[index]
+        variables.merge(result.vars,entry.vars,entry.path,-1)
+    end
+    result.available_slots=slots.expand()
     return result
 end
 return Config
