@@ -11,6 +11,7 @@ local function displayWidth(options)
     return math.max(options.width,options.show_log and 600 or 0)
 end
 local function longestLine(text)
+    text=Buffer.uncolored(text)
     local longest=0
     for line in (text..'\n'):gmatch('(.-)\n') do
         -- Count UTF-8 code points rather than bytes (e.g. the right arrow).
@@ -18,6 +19,13 @@ local function longestLine(text)
         longest=math.max(longest,count)
     end
     return longest
+end
+local function textWidth(item,text,fallback)
+    item.text:text(text)
+    -- Windower can report a positive but stale extent after text changes,
+    -- especially when a hidden row reappears. Use stable spacing immediately
+    -- rather than positioning from the previous frame's measured text.
+    return longestLine(text)*fallback
 end
 function Status.new(deps,options)
     local self=setmetatable({deps=deps},Status)
@@ -63,17 +71,37 @@ function Status:configure(options,trackingOverride)
             self.panel:layout()
             self:persist()
         end},self.deps)
-    self.panel:label(10,5,options.font_size,'heading').text:text(Buffer.clip('Gambit Status',
-        math.floor(self.columns*options.font_size/(options.font_size+2))))
-    self.toggle=self.panel:button(10,30,width-20,lineHeight,options.font_size,self.deps.toggle,'subheading')
+    self.title=self.panel:label(10,5,options.font_size,'heading')
+    self.titleWidth=textWidth(self.title,'Gambit Status',(options.font_size+2)*0.8)
+    self.toggle=self.panel:button(18+self.titleWidth,5,5*(options.font_size+2)*0.8,lineHeight,options.font_size,self.deps.toggle,'heading')
+    self.toggle.text:bold(true)
+    self.strategy=self.panel:label(self.toggle.x+self.toggle.width+2,5,options.font_size,'heading')
+    self.strategy.text:bold(true)
+    local versionSize=math.max(7,options.font_size-2)
+    self.version=self.panel:label(0,(self.panel.background.skin.border or 0)+2,versionSize,'body')
+    Theme.color(self.version.text,'heading')
+    local version=self.deps.version or (_addon and _addon.version) or __version
+    self.versionText=version and ('v'..tostring(version):gsub('^v','')) or ''
+    self.versionWidth=textWidth(self.version,self.versionText,versionSize*0.8)
+    if self.version.text.italic then self.version.text:italic(true) end
     local row=1
     for _,definition in ipairs(tracking) do
         local entry={definition=definition,label=self.panel:label(10,32+row*lineHeight,options.font_size,'subheading'),
-            valueLabel=self.panel:label(18,32+(row+1)*lineHeight,options.font_size,'body')}
+            valueLabel=self.panel:label(18,32+(row+1)*lineHeight,options.font_size,'subheading')}
+        entry.valueLabel.text:bold(false)
+        Theme.color(entry.valueLabel.text,'body')
         row=row+((definition.expression==nil and type(definition.value)=='table') and math.max(1,#definition.value)+1 or 1)
         if definition.expression~=nil then
-            local ok,fn=pcall(factory.get,definition.expression)
-            if ok then entry.fn=fn else entry.error=true end
+            if type(definition.expression)=='table' then
+                entry.fns={}
+                for _,code in ipairs(definition.expression) do
+                    local ok,fn=pcall(factory.get,code)
+                    if ok then entry.fns[#entry.fns+1]=fn else entry.error=true end
+                end
+            else
+                local ok,fn=pcall(factory.get,definition.expression)
+                if ok then entry.fn=fn else entry.error=true end
+            end
         end
         self.entries[#self.entries+1]=entry
     end
@@ -175,14 +203,21 @@ function Status:setTheme(name)
     local options=copy(self.options); options.theme=name
     self:configure(options); self:update(); self:persist()
 end
+function Status:setFontSize(size)
+    local options=copy(self.options); options.font_size=size
+    self:configure(options); self:update(); self:persist()
+end
 function Status:setText(item,text)
     local lineHeight=math.ceil(self.options.font_size*1.8)
     local capacity=math.max(0,math.floor((self.panel.height-item.y-8)/lineHeight))
     local lines={}
     for line in (text..'\n'):gmatch('(.-)\n') do
         if #lines>=capacity then break end
-        local indent=math.ceil(math.max(0,item.x-10)/self.characterWidth)
-        lines[#lines+1]=Buffer.clip(line,self.columns-indent)
+        -- Subtract the indent in pixels before converting to characters.
+        -- Rounding the panel down and the indent up separately can lose a
+        -- whole character even when automatic width reserved enough space.
+        local columns=math.max(0,math.floor((self.panel.width-item.x-10)/self.characterWidth+0.000001))
+        lines[#lines+1]=Buffer.clip(line,columns)
     end
     item.text:text(table.concat(lines,'\n'))
 end
@@ -194,25 +229,46 @@ function Status:update()
         return
     end
     local enabled=self.deps.enabled()
-    self:setText(self.toggle,enabled and 'Automation: [ON]' or 'Automation: [OFF]')
+    self.toggle.text:text(enabled and '[on]' or '[off]')
     Theme.color(self.toggle.text,enabled and 'green' or 'red')
+    local strategy=self.deps.strategy and self.deps.strategy()
+    local strategyText=strategy and ('['..tostring(strategy)..']') or ''
+    if strategyText~=self.strategyText then self.nextUpdate=0 end
+    self.strategyText=strategyText
+    self.strategyWidth=textWidth(self.strategy,strategyText,(self.options.font_size+2)*0.8)
+    Theme.color(self.strategy.text,(strategy=='aggressor' or strategy=='puller') and 'red' or 'green')
     if self.panel.visible and os.clock()<self.nextUpdate then return end
     self.nextUpdate=os.clock()+self.options.refresh_interval
     for _, entry in ipairs(self.entries) do
         local value=entry.definition.value
         if entry.definition.expression~=nil then
             value='[error]'
-            if entry.fn and not entry.error then
+            if (entry.fn or entry.fns) and not entry.error then
                 local ok,context=pcall(self.deps.context,'status panel')
                 if not ok or not context then value='[unavailable]'
                 else
-                    setfenv(entry.fn,context)
-                    local success,result=pcall(entry.fn)
-                    if success then value=result else entry.error=true end
+                    if entry.fns then
+                        value={}
+                        for _,fn in ipairs(entry.fns) do
+                            setfenv(fn,context)
+                            local success,result=pcall(fn)
+                            if not success then entry.error=true; value='[error]'; break end
+                            if result~=nil then
+                                if type(result)=='table' then
+                                    for _,item in ipairs(result) do value[#value+1]=item end
+                                else value[#value+1]=result end
+                            end
+                        end
+                    else
+                        setfenv(entry.fn,context)
+                        local success,result=pcall(entry.fn)
+                        if success then value=result else entry.error=true end
+                    end
                 end
             end
         end
-        entry.hidden=value==nil
+        entry.hidden=value==nil or (type(value)=='table' and #value==0)
+        entry.inline=type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'
         local lines={}
         local function append(text)
             text=Buffer.plain(text,self.deps.windower.from_shift_jis)
@@ -223,25 +279,28 @@ function Status:update()
         else append(value==nil and '' or value) end
         entry.display=table.concat(lines,'\n'); entry.lineCount=math.max(1,#lines)
     end
-    local width=displayWidth(self.options)
+    local headerEnd=self.strategyWidth>0 and (self.strategy.x+self.strategyWidth) or (self.toggle.x+self.toggle.width)
+    local width=math.max(displayWidth(self.options),headerEnd+self.versionWidth+20)
     for _,entry in ipairs(self.entries) do
         if not entry.hidden then
             local name=Buffer.plain(entry.definition.name,self.deps.windower.from_shift_jis)
-            local indent=math.ceil(math.max(0,entry.valueLabel.x-10)/self.characterWidth)
-            width=math.max(width,20+math.max(longestLine(name),longestLine(entry.display)+indent)*self.characterWidth)
+            entry.heading=name..(entry.inline and name~='' and ':' or '')
+            local headingWidth=textWidth(entry.label,entry.heading,self.characterWidth)
+            entry.valueLabel.x=entry.inline and (10+headingWidth+8) or 18
+            local indent=entry.valueLabel.x-10
+            width=math.max(width,20+math.max(headingWidth,longestLine(entry.display)*self.characterWidth+indent))
         end
     end
     self.panel.width=math.ceil(width)
     self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
-    self.toggle.width=self.panel.width-20
-    self:setText(self.toggle,enabled and 'Automation: [ON]' or 'Automation: [OFF]')
+    self.version.x=self.panel.width-self.versionWidth-10
     -- Expression arrays can change size at runtime: reflow rows and automatic
     -- height before clipping, without rebuilding controls or disturbing dragging.
     local lineHeight=math.ceil(self.options.font_size*1.8)
-    local y=52
+    local y=math.max(32,5+math.ceil((self.options.font_size+2)*1.8))
     for _, entry in ipairs(self.entries) do
-        entry.label.y=y; entry.valueLabel.y=y+lineHeight
-        if not entry.hidden then y=y+(1+entry.lineCount)*lineHeight end
+        entry.label.y=y; entry.valueLabel.y=y+(entry.inline and 0 or lineHeight)
+        if not entry.hidden then y=y+(entry.lineCount+(entry.inline and 0 or 1))*lineHeight end
     end
     local logLines=self.options.show_log and self.options.history_lines or 0
     self.logHeading.y=y+12
@@ -252,7 +311,7 @@ function Status:update()
     self.panel:layout()
     self:setText(self.logHeading,logLines>0 and 'Log' or '')
     for _, entry in ipairs(self.entries) do
-        self:setText(entry.label,entry.hidden and '' or Buffer.plain(entry.definition.name,self.deps.windower.from_shift_jis))
+        self:setText(entry.label,entry.hidden and '' or entry.heading)
         self:setText(entry.valueLabel,entry.hidden and '' or entry.display)
         Theme.color(entry.valueLabel.text,entry.error and 'red' or 'body')
     end

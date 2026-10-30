@@ -258,6 +258,12 @@ does not check MP, recast, range, or predicted landing time.
 `event.outcome` can be `completed`, `interrupted`, `failed`, `cancelled`,
 `timeout`, `reloaded`, `zoned`, `logout`, or `unloaded`.
 `event.completed_at` records the terminal time.
+`event.time` records lifecycle creation and `event.duration` gives elapsed seconds
+from creation to termination, available in post. Rejection/failure and timeout
+cleanup diagnostics include
+elapsed creation/dispatch times (or indicate that dispatch never happened).
+Normal completion, interruption, local cancellation, and lifecycle teardown do
+not emit these cleanup messages.
 
 `event.completed`, `.interrupted`, `.failed`, and `.timed_out` are post-only
 booleans corresponding to the first, second, third, and timeout outcomes.
@@ -272,6 +278,9 @@ are blocked before pre, so those attempts have no lifecycle or post.
 ## Variables, imports, and composition
 
 ### Variables and their lifetime
+
+See [Variables](variables.md) for definitions, Lua references, clearing markers,
+priority prefixes, and CSV key expansion across actions and events.
 
 `.vars.json` files accept `vars` and/or `contributions`. They cannot contain
 event sections or imports. Values merge through the search hierarchy; nested
@@ -385,6 +394,17 @@ saves it and applies gear. `equipPop()` restores the latest exact snapshot,
 including originally empty slots. An extra pop can consume the original baseline.
 An empty stack pop does nothing.
 
+`equipRestore()` restores the original lifecycle baseline directly and discards
+intermediate pushes. It returns a positive requested-change count, or nil for
+no changes/no remaining baseline. A consumed baseline is never restored again;
+without a lifecycle baseline it leaves manual snapshots alone. Restoration joins
+the current phase batch, so later idle/battle gear can overlay it. Use this helper
+rather than inspecting internal stack storage.
+
+Use stopping cautiously in post: `stopEvent()` and `stop: true` can skip later
+cleanup and restoration rules. Lifecycle-managed automatic restoration still
+runs after the phase.
+
 Setting `use_equipment_snapshot: true` on an action section restores any remaining
 baseline after post and discards the stack. If the baseline was already popped,
 cleanup does not restore it twice. With the flag off, unpopped snapshots are
@@ -428,7 +448,30 @@ without Lua evaluation or waiting, but does not wait for equipment or guarantee
 completion order of the receiving commands.
 
 Login/job/namespace/settings changes can reload event configuration. Missing or
-unidentifiable server results use timeout cleanup (currently 120 seconds).
+unidentifiable server results use timeout cleanup: three seconds after dispatch
+for player job abilities and weapon skills, and 30 seconds for pet abilities.
+Spells must receive a matching server casting-start notification within three
+seconds of dispatch. Once confirmed, they have twice the resource cast time
+plus three seconds from that notification to complete. A completion without a
+start notification still finishes normally. Local mid execution is not server
+start confirmation. Delayed or missing start packets can cause false timeouts;
+debug diagnostics distinguish missing start from missing completion. Equipment dispatch
+waiting has a separate ten-second fallback; its queue has its own failure
+handling. An expired request runs post cleanup before a retry is accepted.
+
+A duplicate ordinary job ability can recover after a one-second response grace
+when its recast still reports ready. Charge-based abilities are excluded from
+this inference. Recognized rejections prefer the newest dispatched request only
+when it is recent and clearly separated from older requests; ambiguous messages
+retain timeout recovery. Missing/dead hostile targets also trigger cleanup.
+Debug logging records suppressed duplicates and recovery reasons. With
+`//gbt config -debugging on`, these diagnostics also go to the Windower console
+independently of chat verbosity, but only for lost-lifecycle timeout recovery.
+Recognized rejections and other handled failures retain debug-chat diagnostics
+without console output. Import-load messages remain on the ordinary
+debug output path. Cleanup
+honors your post rules and snapshot settings; it does not force restoration when
+your configuration deliberately leaves equipment in place.
 An event request that never reaches the outgoing listener cannot create a
 lifecycle. Test your gear and failure paths in game during beta; JSON compilation
 alone cannot verify equipment ownership or timing.

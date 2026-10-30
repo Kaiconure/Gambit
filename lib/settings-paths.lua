@@ -35,6 +35,29 @@ function paths.namespaceExists(name)
     return directoryExists(paths.namespacePath(name))
 end
 
+-- Namespace content directories delimit the owning namespace, including
+-- inherited or underscore-aliased namespaces. Display paths omit leading ./.
+function paths.namespaceRelativeFile(fileName)
+    if not fileName then return end
+    local normalized=fileName:gsub('\\','/')
+    local relative=normalized:gsub('^%./','')
+    if relative:match('^settings/[_%.]ns/') then
+        return relative:match('^settings/[_%.]ns/.-/(players/.*)$')
+            or relative:match('^settings/[_%.]ns/.-/(actions/.*)$')
+            or relative:match('^settings/[_%.]ns/.-/(events/.*)$') or relative
+    end
+    return relative
+end
+
+function paths.fileNamespace(fileName)
+    if not fileName then return end
+    local relative=fileName:gsub('\\','/'):gsub('^%./','')
+    if not relative:match('^settings/[_%.]ns/') then return end
+    return relative:match('^settings/[_%.]ns/(.-)/players/')
+        or relative:match('^settings/[_%.]ns/(.-)/events/')
+        or relative:match('^settings/[_%.]ns/(.-)/actions/')
+end
+
 function paths.isNamespaceInitialized(name)
     return paths.namespaceExists(name) and files.new(paths.namespacePath(name) .. '/.nsconfig'):exists()
 end

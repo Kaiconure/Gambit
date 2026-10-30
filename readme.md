@@ -11,6 +11,7 @@ characters running the addon locally.
 |---|---|
 | [Commands](docs/commands.md) | Commands, aliases, options, and examples |
 | [Actions](docs/actions.md) | Action files, conditions, and commands |
+| [Variables](docs/variables.md) | Definitions, references, merging, CSV keys, and runtime state |
 | [Event rules](docs/events.md) | Event types, rules, context, ordering, and troubleshooting |
 | [Stock events](docs/stock-events.md) | Configure shipped gear rules with variables and contributions |
 | [Equipment queue](docs/equipment.md) | Ordered swaps, pending/confirmed queries, retries, and action barriers |

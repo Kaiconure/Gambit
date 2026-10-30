@@ -37,7 +37,7 @@ local function context(_,state)
         findEquipmentInSlot=function(slot,confirmed) return bound.find_equipment_in_slot(slot,nil,confirmed) end,
         fail=function() error('phase failure') end,assert=assert}
     local chunk=assert(loadstring(body))
-    setfenv(chunk,setmetatable({context=ctx,inventory=bound,Colors={},varargs=function(args) return args end,
+    setfenv(chunk,setmetatable({context=ctx,inventory=bound,restoreEquipment=require('./lib/equipment/restore'),Colors={},varargs=function(args) return args end,
         writeVerbose=function() end,pluralize=function() return '' end},{__index=_G}))
     chunk(); captured=state
     return ctx
@@ -233,10 +233,11 @@ gear:destroy()
 local json=require('./lib/jsonlua')
 local postFile=assert(io.open('events/lib/post-equip.json'))
 local postDocument=json.parse(postFile:read('*a')); postFile:close()
+local postRules=postDocument.contributions['spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after']
 for _,restore in ipairs({false,true}) do
     gear=manager(); sent={}
-    run=runtime({{commands={'equipPush(vars.general)','equipMany(vars.specific)'}}},nil,postDocument.spells.post)
-    run.config.vars.post_equip={restore_snapshot=restore}
+    run=runtime({{commands={'equipPush(vars.general)','equipMany(vars.specific)'}}},nil,postRules)
+    run.config.vars.post_equip={enabled=true,restore_snapshot=restore}
     run.config.vars.gear={battle={body={name='Mid Body'}}}
     run:submit(event(),function() end); ack(5,4); ack(13,3)
     run:complete('spell',10,nil,'completed')
@@ -253,8 +254,8 @@ for _,restore in ipairs({false,true}) do
 end
 
 gear=manager(); sent={}
-run=runtime({{commands={'equipPop()','equipPush(vars.specific)'}}},nil,postDocument.spells.post)
-run.config.vars.post_equip={restore_snapshot=true}
+run=runtime({{commands={'equipPop()','equipPush(vars.specific)'}}},nil,postRules)
+run.config.vars.post_equip={enabled=true,restore_snapshot=true}
 run.config.vars.gear={battle={body={name='Mid Body'}}}
 run:submit(event(),function() end); ack(13,3)
 run:complete('spell',10,nil,'completed')

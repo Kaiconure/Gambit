@@ -12,8 +12,8 @@ Config.defaults =
         horizontal = 'right'
     },
     width = 450,
-    height = 140,
-    font_size = 11,
+    height = 85,
+    font_size = 12,
     history_lines = 4,
     refresh_interval = 0.5,
     tracking =
@@ -23,11 +23,52 @@ Config.defaults =
         {
             default =
             {
-                {name='Strategy',expression={'gambit.strategy'}},
-                {name='Namespace',expression={"gambit.namespace or '(base settings)'"}},
-                {name='Skillchain Progress',expression={"(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s', party_weapon_skill.name, skillchain and skillchain.name and (' → ' .. skillchain.name) or '')"}},
-                {name='Spell Casting', expression={"(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', gambit.last_spell.name, gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. gambit.last_spell.target.name) or '', gambit.last_spell.status)"}},
-                {name='Job Ability', expression={"(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', gambit.last_ability.name, gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. gambit.last_ability.target.name) or '')"}}
+                {
+                    name='Automation',
+                    expression={
+                        'format("Actions: \\\\cs(100,235,130)%s (%s namespace)\\\\cr", gambit.entrypoint_relative, gambit.namespace or "global")',
+                        'format("Events: \\\\cs(100,235,130)%s (%s namespace)\\\\cr", gambit.events_relative, gambit.event_namespace or "global")',
+                        '(bt or nil) and format("Enemy: \\\\cs(255,80,80)%s (%d / %X)\\\\cr", bt.name, bt.id, bt.index)',
+                    }
+                },
+                {
+                    name='Skillchain Progress',
+                    expression={
+                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s (~%.1fs)', party_weapon_skill.name, skillchain and skillchain.name and (' → ' .. skillchain.name) or '', (skillchain or party_weapon_skill).lifetime)"
+                    }
+                },
+                {
+                    name='Spell Casting',
+                    expression={
+                        "(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', gambit.last_spell.name, gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. gambit.last_spell.target.name) or '', gambit.last_spell.status)"
+                    }
+                },
+                {
+                    name='Job Ability',
+                    expression={
+                        "(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', gambit.last_ability.name, gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. gambit.last_ability.target.name) or '')"
+                    }
+                }
+            },
+            compact = {
+                {
+                    name='Skillchain Progress',
+                    expression={
+                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s (~%.1fs)', party_weapon_skill.name, skillchain and skillchain.name and (' → ' .. skillchain.name) or '', (skillchain or party_weapon_skill).lifetime)"
+                    }
+                },
+                {
+                    name='Spell Casting',
+                    expression={
+                        "(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', gambit.last_spell.name, gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. gambit.last_spell.target.name) or '', gambit.last_spell.status)"
+                    }
+                },
+                {
+                    name='Job Ability',
+                    expression={
+                        "(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', gambit.last_ability.name, gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. gambit.last_ability.target.name) or '')"
+                    }
+                }
             },
             none={}
         }
@@ -72,6 +113,12 @@ function Config.normalize(input)
             assert(type(entry)=='table' and type(entry.name)=='string','Tracking entries require a name')
             assert(entry.expression==nil or type(entry.expression)=='string' or type(entry.expression)=='table',
                 'Tracking expression must be a string or array')
+            if type(entry.expression)=='table' then
+                for i,code in pairs(entry.expression) do
+                    assert(type(i)=='number' and i%1==0 and i>=1 and i<=#entry.expression and type(code)=='string',
+                        'Tracking expression arrays must contain strings')
+                end
+            end
             assert(entry.value==nil or type(entry.value)=='string' or type(entry.value)=='table',
                 'Tracking value must be a string or array')
             if type(entry.value)=='table' then

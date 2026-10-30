@@ -14,6 +14,7 @@ handlers['panel'] = function(args)
         writeMessage('  gbt panel size [<width> <height>] - View or set size')
         writeMessage('  gbt panel width [<width>] - View or set width')
         writeMessage('  gbt panel height [<height>|auto] - View or set height')
+        writeMessage('  gbt panel font-size [<size>] - View or set font size (6-30)')
         writeMessage('  gbt panel log [show | hide] - View or change recent output visibility')
         writeMessage('  gbt panel theme [<name> | -list] - View, list, or change background skin')
         writeMessage('  gbt panel tracking [-list | -set <name>] - View, list, or switch tracking sets')
@@ -82,6 +83,13 @@ handlers['panel'] = function(args)
                 assert(height and #args==2,'Usage: gbt panel height <height|auto>')
             end
             panel:setSize(width,height)
+        elseif command == 'font-size' or command == 'fontsize' then
+            assert(#args<=2,'Usage: gbt panel font-size [<size>]')
+            if args[2] then
+                local size=tonumber(args[2])
+                assert(size,'Usage: gbt panel font-size <size>')
+                panel:setFontSize(size)
+            else writeMessage('Panel font size: '..tostring(panel.options.font_size)) end
         elseif command == 'reload' then
             panel:configure(loadPanelSettings(),false); panel:update()
             writeMessage('Panel settings reloaded.')

@@ -33,6 +33,7 @@ function Service.new(deps)
     end)
     listen('prerender',function()
         pets.tick(self)
+        self:validatePendingTargets()
         if self.runtime then self.runtime:tick() end
         if self.transitionTick then self.transitionTick() end
     end)
@@ -71,6 +72,18 @@ function Service:reload(outputProcessed)
     -- Load/compile completely before replacing the active configuration.
     self:clear('reloaded')
     self.runtime=Runtime.new(config,{context=deps.context,report=deps.report,
+        debug=function(message,lostLifecycle)
+            if deps.debug then deps.debug(message) end
+            if lostLifecycle and deps.diagnostic then deps.diagnostic(message) end
+        end,
+        retryReady=function(event)
+            if event.kind~='job_ability' or not deps.abilityReady then return end
+            local ability=deps.resources.job_abilities[event.id]
+            -- A recharge timer cannot prove that a charged action failed.
+            if not ability or ability.recast_id==102 or ability.recast_id==195 or ability.recast_id==231 then return end
+            local player=deps.windower.ffxi.get_player()
+            if player then return deps.abilityReady(player,ability) end
+        end,
         clock=deps.clock or os.clock,schedule=deps.schedule,barrier=deps.barrier,equipmentSession=deps.equipmentSession,
         targetSnapshot=function(target) return targetMetadata.refresh(target,deps.windower.ffxi) end})
     self.runtime:loading()
@@ -169,6 +182,7 @@ function Service:outgoing(id,original,modified,injected,blocked)
         kind=mapping[1],
         id=resource.id,
         name=resource.en,
+        cast_time=mapping[1]=='spell' and resource.cast_time or nil,
         actor_id=player.id,
         pet=pet and {id=pet.id,index=pet.index,name=pet.name} or nil,
         type=resource.type,
@@ -219,6 +233,12 @@ function Service:action(action)
     local player=self.deps.windower.ffxi.get_player()
     if not player or action.actor_id~=player.id then return end
     local category=action.category
+    if category==8 and action.param==24931 then
+        local target=action.targets and action.targets[1]
+        local detail=target and target.actions and target.actions[1]
+        if detail then self.runtime:spellStarted(detail.param,target.id) end
+        return
+    end
     if category==8 and action.param==28787 then
         self.runtime:complete('spell',nil,nil,'interrupted')
         return
@@ -238,22 +258,49 @@ function Service:action(action)
         if not matched and ability and ability.type=='CorsairRoll' then
             matched=self.runtime:complete('job_ability',123,nil,failed and 'failed' or 'completed')
         end
-        if failed and not matched then self:reject(kind) end
+        if failed and not matched then self:reject(kind,messageId(detail.message)) end
     end
 end
 -- Common explicit rejection messages. Unknown failures expire via timeout;
 -- do not interpret every action message as a terminal result.
-function Service:reject(kind)
-    -- These messages do not consistently identify resource type/ID. Only
-    -- correlate when exactly one dispatched request is awaiting a result.
-    local candidate
+function Service:reject(kind,rejectionMessage)
+    -- These messages do not consistently identify resource type/ID. Prefer a
+    -- sole candidate, or a clearly newer recent dispatch; otherwise wait.
+    local candidate,previous
     for _,request in ipairs(self.runtime.pending) do
         if request.sent_at and (not kind or request.event.kind==kind) then
-            if candidate then return end
-            candidate=request
+            if not candidate or request.sent_at>candidate.sent_at then
+                previous=candidate; candidate=request
+            elseif not previous or request.sent_at>previous.sent_at then previous=request end
         end
     end
-    if candidate then self.runtime:finish(candidate,'failed') end
+    if previous then
+        -- Only prefer a newer dispatch when it is recent and clearly separated.
+        -- Near-simultaneous requests remain ambiguous, including pet commands.
+        local now=(self.deps.clock or os.clock)()
+        if now-candidate.sent_at>2 or candidate.sent_at-previous.sent_at<0.25 then return end
+    end
+    if candidate then
+        self.runtime:diagnostic(candidate,'recognized server rejection'..
+            (rejectionMessage and (' (message '..tostring(rejectionMessage)..')') or '')..
+            '; running post cleanup')
+        self.runtime:finish(candidate,'failed')
+    end
+end
+function Service:validatePendingTargets()
+    if not self.runtime or #self.runtime.pending==0 then return end
+    local pending={}
+    for _,request in ipairs(self.runtime.pending) do pending[#pending+1]=request end
+    for _,request in ipairs(pending) do
+        local target=request.event.target
+        if target and target.is_mob and target.id then
+            local mob=self.deps.windower.ffxi.get_mob_by_id(target.id)
+            if not mob or not mob.valid_target or mob.hpp==0 or mob.status==2 or mob.status==3 then
+                self.runtime:diagnostic(request,'target unavailable; running post cleanup')
+                self.runtime:finish(request,'failed')
+            end
+        end
+    end
 end
 function Service:incoming(id,original,modified,injected,blocked)
     if id~=0x029 or injected or not self.runtime then return end
@@ -262,7 +309,7 @@ function Service:incoming(id,original,modified,injected,blocked)
     if pets.incoming(self,packet) then return end
     local player=self.deps.windower.ffxi.get_player()
     if not player or packet.Actor~=player.id or not rejected[messageId(packet.Message)] then return end
-    self:reject()
+    self:reject(nil,messageId(packet.Message))
 end
 function Service:destroy()
     self:clear('unloaded')

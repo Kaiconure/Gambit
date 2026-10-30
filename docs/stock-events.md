@@ -45,6 +45,8 @@ point; adding a vars file does not remove that override.
 
 ## Files and layering
 
+For variable syntax and merging basics, see [Variables](variables.md).
+
 | Location | Purpose |
 |---|---|
 | `events/` | Shipped rule entry points and reusable modules |
@@ -120,11 +122,13 @@ below describes an object key, not literal JSON punctuation.
 | `gear.spells.buff_overlays` | Ordered buff-dependent spell overlays; see below |
 | `gear.weapon_skills.pre` | General weapon-skill set |
 | `gear.weapon_skills[<name>].pre` | Named weapon-skill override |
+| `gear.job_abilities.pre` | General job-ability pre set, before the generic named override |
 | `gear.job_abilities[<name>].pre` | Named job-ability set |
 | `gear.rolls` | Direct gear set for Corsair rolls and Double-Up; there is no `.pre` suffix |
 | `gear.pet_abilities[<name>].pre` / `.mid` | Named pet-command/ability overrides |
 | `on_battle.windower_commands` | Array of literal Windower commands after the battle-enter gear rule |
 | `on_idle.windower_commands` | Array of literal Windower commands after the idle-enter gear rule |
+| `post_equip.enabled` | Enable stock post restoration and idle/battle gear; default `true` |
 | `post_equip.restore_snapshot` | Restore starting gear before the post idle/battle overlay; default `false` |
 
 Common spell categories are `curing`, `enfeebling`, `enhancing`, `elemental`, and
@@ -135,6 +139,18 @@ Common spell categories are `curing`, `enfeebling`, `enhancing`, `elemental`, an
 `elemental` describes the Elemental Magic skill. `burst` additionally requires
 `canMagicBurst(event)` for the current target/window. A spell-specific set can
 run without its category's general set being configured.
+
+### General job-ability gear
+
+Set `gear.job_abilities.pre` for gear shared by job abilities, then use
+`gear.job_abilities[<name>].pre` for named overrides. Both requests join the
+same pre batch, with the named set winning overlapping slots.
+
+The general set runs at the position of `lib/job_abilities/all`'s own rules.
+Imported roll rules run first, so general job-ability gear can override
+`gear.rolls`; the named ability set follows the general set. Specialized job
+modules may also run earlier. This is not an unconditional first step for all
+job-ability modules. A general set's `meta.stop` skips the later named override.
 
 ### Named overrides
 
@@ -319,6 +335,58 @@ Status-enter gear rules do not capture or restore an action baseline.
 
 ## Extending stock behavior with contributions
 
+### Stock example: shared post-equipment rules
+
+The shipped [post-equipment module](../events/lib/post-equip.json) contributes
+one ordered rule list to four built-in hooks:
+
+```json
+{
+  "contributions": {
+    "spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after": [
+      {
+        "when": ["vars.post_equip.enabled", "vars.post_equip.restore_snapshot"],
+        "commands": ["equipRestore()"],
+        "id": "post-equip-restore"
+      },
+      {
+        "when": ["vars.post_equip.enabled", "me.is_idle and vars.gear.idle"],
+        "commands": ["equipMany(vars.gear.idle)"],
+        "id": "post-equip-idle"
+      },
+      {
+        "when": ["vars.post_equip.enabled", "me.is_engaged and vars.gear.battle"],
+        "commands": ["equipMany(vars.gear.battle)"],
+        "id": "post-equip-battle"
+      }
+    ]
+  }
+}
+```
+
+This is an excerpt of the shipped module, not an additional configuration to
+copy into your vars file. The module also supplies the variable defaults.
+
+Comma-separated hook names apply the same list to each destination at load
+time; no `csv(...)` wrapper is needed. Each action type gets restoration first,
+then the applicable state set. Shared IDs are safe because ID replacement is
+scoped to each section/phase.
+
+The `.after` hooks place these rules after ordinary post handlers, independently
+of the module's import position. Restoration and state gear share the post
+batch, so a partial idle/battle set overlays the baseline without intermediate
+equipment cycles. `equipRestore()` hides the stack details and safely does
+nothing when no lifecycle baseline remains.
+
+Set `post_equip.enabled` to `false` to skip all three rules. This does not disable
+status-enter gear or lifecycle-managed `use_equipment_snapshot` restoration.
+The rules deliberately do not honor gear-set `meta.stop`: stopping post could
+skip other cleanup contributions. Earlier stop rules can still skip these hooks,
+and other after contributions follow their normal ordering; `.after` does not
+guarantee the final operation under every extension.
+
+### Personal contributions
+
 Keep gear in `vars`, and add rules through `contributions` in the same vars file.
 Every phase has built-in `.before` and `.after` hooks. Examples include
 `spells.pre.before`, `pet_abilities.mid.after`, `statuses.idle.enter.after`,
@@ -365,7 +433,7 @@ Replacement is different from stopping: it changes the configuration itself.
 
 Useful IDs include `general-spell-pre`, `spells-named-pre`, `spells-named-mid`,
 `spells-buff-overlays-pre`, `spells-buff-overlays-mid`, `rolls-pre`, and
-`post-equip-spells-restore`. Category IDs include `spells-curing-mid` and
+`post-equip-restore`. Category IDs include `spells-curing-mid` and
 `spells-curing-named-mid`. Inspect the shipped module or processed output for
 the exact ID and phase you want to change.
 

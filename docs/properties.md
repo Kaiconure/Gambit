@@ -32,6 +32,35 @@ These represent targetable mobs, players, and trusts on the map.
 
 ## Contextual
 
+### Loaded automation
+
+These fields are also available to panel tracking expressions:
+
+| Field | Meaning |
+|---|---|
+| `gambit.namespace` | Current loaded namespace |
+| `gambit.entrypoint` | Stored automation entry-point name |
+| `gambit.entrypoint_path` | Source filename, including `.json` |
+| `gambit.entrypoint_relative` | Source path relative to its owning namespace, including `.json`; global paths omit the leading `./` |
+| `gambit.entrypoint_name` | Source path with `/` separators and the final `.json` removed |
+| `gambit.events` | Active event entry file's basename without `.json`, e.g. `common` or `(mages)` |
+| `gambit.events_path` | Active event entry file's source filename, including `.json` |
+| `gambit.events_name` | Event source path with `/` separators and the final `.json` removed |
+| `gambit.events_relative` | Event source path relative to its owning namespace, including `.json`; global/shipped paths omit the leading `./` |
+| `gambit.event_namespace` | Owning namespace folder path of the selected event file, including physical underscore aliases; nil for global/shipped files or no active file |
+
+Entry-point fields can be nil before actions have loaded. For example, a source
+file `./settings/Carbonite/actions/pld.json` gives an `entrypoint_name` of
+`./settings/Carbonite/actions/pld`.
+For a namespace source such as
+`./settings/_ns/xp/players/Carbonite/actions/pld.json`, `entrypoint_relative` is
+`players/Carbonite/actions/pld.json`. Inherited sources are relative to their own
+namespace rather than the currently selected namespace.
+The event fields describe the selected event entry point, not its imported
+modules, and are nil when no event file is active. They update after event reload.
+
+### Selected resources
+
 Contextual variables are those which are set when certain conditions are met, allowing them to be referenced more easily later on. They would typically be set in the `when` clause and used in the `commands` list, but that's not strictly required.
 
 - `ability` - When `canUseAbility` finds a match (or when `canUse` matches on an ability), this will be set to the ability that triggered the match.

@@ -40,17 +40,41 @@ function Buffer:add(message)
 end
 -- UTF-8 output: never split a code point. Legacy unconverted Shift-JIS input
 -- retains safe double-byte clipping when a converter is unavailable.
+local function colorToken(text,index)
+    if text:byte(index)~=92 then return end
+    local tail=text:sub(index)
+    if tail:sub(1,3)=='\\cr' then return 3,false end
+    local token,r,g,b=tail:match('^(\\cs%((%d+),(%d+),(%d+)%))')
+    if token and tonumber(r)<=255 and tonumber(g)<=255 and tonumber(b)<=255 then return #token,true end
+end
+function Buffer.uncolored(text)
+    if not text:find('\\',1,true) then return text end
+    local parts,index={},1
+    while index<=#text do
+        local count=colorToken(text,index)
+        if count then index=index+count
+        else parts[#parts+1]=text:sub(index,index); index=index+1 end
+    end
+    return table.concat(parts)
+end
 function Buffer.clip(text,columns)
     local index,used=1,0
+    local colored=false
     local utf8=Buffer.isUtf8(text)
-    while index<=#text and used<columns do
+    while index<=#text do
+        local token,active=colorToken(text,index)
+        if token then
+            colored=active; index=index+token
+        else
+        if used>=columns then break end
         local byte=text:byte(index)
         local wide=(byte>=0x81 and byte<=0x9F) or (byte>=0xE0 and byte<=0xFC)
         local count=utf8 and utf8Length(text,index) or (wide and 2 or 1)
         local width=utf8 and 1 or count
         if used+width>columns then break end
         used=used+width; index=index+count
+        end
     end
-    return text:sub(1,index-1)
+    return text:sub(1,index-1)..(colored and '\\cr' or '')
 end
 return Buffer

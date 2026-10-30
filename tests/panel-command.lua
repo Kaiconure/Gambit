@@ -4,6 +4,7 @@ local output,errors={},{}
 local options={visible=true,width=500,x=30,y=150,tracking={current='default',sets={default={},notes={}}}}
 local panel={options=options,setVisible=function(_,visible) options.visible=visible end,
     setTheme=function(_,name) options.theme=name end,
+    setFontSize=function(_,size) assert(size>=6 and size<=30 and size%1==0); options.font_size=size end,
     setLogVisible=function(_,visible) options.show_log=visible end,
     setAnchor=function(_,vertical,horizontal) options.anchor={vertical=vertical,horizontal=horizontal} end,
     setTracking=function(_,name) assert(options.tracking.sets[name],'Unknown tracking set'); options.tracking.current=name end,
@@ -39,6 +40,13 @@ env.handlers.panel({'reset','extra'})
 assert(not options.allReset)
 output={}; errors={}
 env.handlers.panel({'SHOW'}); assert(options.visible)
+env.handlers.panel({'font-size','12'}); assert(options.font_size==12)
+env.handlers.panel({'fontsize'}); assert(output[#output]=='Panel font size: 12')
+local fontErrors=#errors
+env.handlers.panel({'font-size','bad'})
+env.handlers.panel({'font-size','31'})
+assert(#errors==fontErrors+2 and options.font_size==12)
+output={}; errors={}
 env.handlers.panel({'tracking','-list'}); assert(output[2]=='  default' and output[3]=='  notes')
 env.handlers.panel({'tracking','-set','notes'}); assert(options.tracking.current=='notes')
 env.handlers.panel({'tracking','-set','bad'}); assert(#errors==1 and options.tracking.current=='notes')

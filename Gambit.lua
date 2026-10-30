@@ -433,6 +433,7 @@ windower.register_event('load', function()
         report=function(message) writeError('[events] '..message) end,
         announce=function(message) writeMessage('[events] '..message) end,
         debug=function(message) writeDebug('[events] '..message) end,
+        diagnostic=function(message) printDebug('[events] %s',message) end,
         formatPath=text_file,
         barrier=function(fn) globals.equipment_manager:barrier(fn) end,
         equipmentSession=function() return globals.equipment_manager:session() end,
@@ -453,6 +454,7 @@ windower.register_event('load', function()
     globals.status_panel = require('./lib/ux/status-panel').new({
         windower=windower, texts=texts, images=images,
         enabled=function() return globals.enabled end,
+        strategy=function() return settings.strategy end,
         loggedIn=function() return globals.logged_in end,
         ready=function()
             return globals.status_panel_ready and not actionStateManager.needsRecompile
@@ -598,6 +600,7 @@ windower.register_event('unload', function()
 
     globals.logged_in = false
     globals.shutting_down = true
+    smartMove:shutdown()
     if globals.event_system then
         globals.event_system:destroy()
         globals.event_system=nil

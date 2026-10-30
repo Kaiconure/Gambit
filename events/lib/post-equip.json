@@ -1,119 +1,33 @@
 {
   "vars": {
     "gear": {},
-    "post_equip": {
+    "^post_equip": {
+      "enabled": true,
       "restore_snapshot": false
     }
   },
-  "spells": {
-    "post": [
+  "contributions": {
+    "spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after": [
       {
         "when": [
-          "vars.post_equip.restore_snapshot",
-          "vars._.eq_stack[1] and vars._.eq_stack[1].event_baseline"
+          "vars.post_equip.enabled",
+          "vars.post_equip.restore_snapshot"
         ],
-        "commands": ["while #vars._.eq_stack > 0 do equipPop() end"],
-        "id": "post-equip-spells-restore"
+        "commands": ["equipRestore()"],
+        "id": "post-equip-restore"
       },
       {
-        "when": ["me.is_idle and vars.gear.idle"],
-        "commands": [
-          "equipMany(vars.gear.idle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-spells-idle"
+        "when": ["vars.post_equip.enabled", "me.is_idle and vars.gear.idle"],
+        "commands": ["equipMany(vars.gear.idle)"],
+        "id": "post-equip-idle"
       },
-      {
-        "when": ["me.is_engaged and vars.gear.battle"],
-        "commands": [
-          "equipMany(vars.gear.battle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-spells-battle"
-      }
-    ]
-  },
-  "job_abilities": {
-    "post": [
       {
         "when": [
-          "vars.post_equip.restore_snapshot",
-          "vars._.eq_stack[1] and vars._.eq_stack[1].event_baseline"
+          "vars.post_equip.enabled",
+          "me.is_engaged and vars.gear.battle"
         ],
-        "commands": ["while #vars._.eq_stack > 0 do equipPop() end"],
-        "id": "post-equip-job-abilities-restore"
-      },
-      {
-        "when": ["me.is_idle and vars.gear.idle"],
-        "commands": [
-          "equipMany(vars.gear.idle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-job-abilities-idle"
-      },
-      {
-        "when": ["me.is_engaged and vars.gear.battle"],
-        "commands": [
-          "equipMany(vars.gear.battle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-job-abilities-battle"
-      }
-    ]
-  },
-  "pet_abilities": {
-    "post": [
-      {
-        "when": [
-          "vars.post_equip.restore_snapshot",
-          "vars._.eq_stack[1] and vars._.eq_stack[1].event_baseline"
-        ],
-        "commands": ["while #vars._.eq_stack > 0 do equipPop() end"],
-        "id": "post-equip-pet-abilities-restore"
-      },
-      {
-        "when": ["me.is_idle and vars.gear.idle"],
-        "commands": [
-          "equipMany(vars.gear.idle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-pet-abilities-idle"
-      },
-      {
-        "when": ["me.is_engaged and vars.gear.battle"],
-        "commands": [
-          "equipMany(vars.gear.battle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-pet-abilities-battle"
-      }
-    ]
-  },
-  "weapon_skills": {
-    "post": [
-      {
-        "when": [
-          "vars.post_equip.restore_snapshot",
-          "vars._.eq_stack[1] and vars._.eq_stack[1].event_baseline"
-        ],
-        "commands": ["while #vars._.eq_stack > 0 do equipPop() end"],
-        "id": "post-equip-weapon-skills-restore"
-      },
-      {
-        "when": ["me.is_idle and vars.gear.idle"],
-        "commands": [
-          "equipMany(vars.gear.idle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-weapon-skills-idle"
-      },
-      {
-        "when": ["me.is_engaged and vars.gear.battle"],
-        "commands": [
-          "equipMany(vars.gear.battle)",
-          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
-        ],
-        "id": "post-equip-weapon-skills-battle"
+        "commands": ["equipMany(vars.gear.battle)"],
+        "id": "post-equip-battle"
       }
     ]
   }

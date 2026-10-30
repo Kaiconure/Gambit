@@ -1,9 +1,26 @@
 -- Request lifecycle. No dependency on Windower packets or the Gambit scheduler.
 local copy=require('./lib/variable-values').copy
 local Runner=require('./lib/events/runner')
+local restoreEquipment=require('./lib/equipment/restore')
 local Runtime={}
 Runtime.__index=Runtime
 local sections={spell='spells',job_ability='job_abilities',weapon_skill='weapon_skills',pet_ability='pet_abilities'}
+local function responseTimeout(event)
+    if event.kind=='job_ability' or event.kind=='weapon_skill' then return 3 end
+    if event.kind=='spell' then return math.max(3,(tonumber(event.cast_time) or 0)*2+3) end
+    return 30 -- Pet commands may wait for the pet to begin and finish acting.
+end
+function Runtime:diagnostic(request,message,lostLifecycle)
+    if self.deps.debug then
+        local now=request.event.completed_at or self.deps.clock()
+        local elapsed=math.max(0,now-request.event.time)
+        local dispatch=request.sent_at and string.format(', %.3fs since dispatch',math.max(0,now-request.sent_at))
+            or ', not dispatched'
+        self.deps.debug('Event '..tostring(request.event.name or request.event.id)..' #'..
+            tostring(request.event.request_id)..': '..message..
+            string.format(' [%.3fs since creation%s]',elapsed,dispatch),lostLifecycle)
+    end
+end
 function Runtime.new(config,deps)
     return setmetatable({config=config,deps=deps,pending={},sequence=0,
         runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession,deps.targetSnapshot)},Runtime)
@@ -57,6 +74,10 @@ function Runtime:finish(request,outcome)
     request.event.timed_out=outcome=='timeout'
     request.event.cancelled=request.event.cancelled or outcome=='cancelled'
     request.event.completed_at=self.deps.clock()
+    request.event.duration=math.max(0,request.event.completed_at-request.event.time)
+    if outcome=='failed' or outcome=='timeout' then
+        self:diagnostic(request,'outcome '..tostring(outcome)..'; running post cleanup',outcome=='timeout')
+    end
     self:run(request,'post')
     local stack=request.variables.vars._.eq_stack
     local baseline
@@ -67,7 +88,7 @@ function Runtime:finish(request,outcome)
         local ok,message=pcall(function()
             local session=self.deps.equipmentSession()
             local restored,err=pcall(function()
-                session.inventory.restore_equipment(baseline)
+                restoreEquipment(stack,session.inventory)
                 session:commit()
             end)
             if not restored then session:discard(); error(err,0) end
@@ -86,12 +107,27 @@ function Runtime:submit(event,dispatch)
         return true
     end
     if #rules.pre+#rules.mid+#rules.post==0 then return end
+    -- Recover expired requests even if a retry arrives before the next render.
+    self:tick()
     -- A retry while the same request is unresolved must not create a second
     -- equipment stack whose saved state is already the temporary gear.
     for _,pending in ipairs(self.pending) do
         local previous=pending.event
         if previous.kind==event.kind and previous.id==event.id
-            and (previous.target and previous.target.id)==(event.target and event.target.id) then return true end
+            and (previous.target and previous.target.id)==(event.target and event.target.id) then
+            if pending.sent_at and self.deps.clock()-pending.sent_at>=1
+                and self.deps.retryReady and self.deps.retryReady(previous)==true then
+                self:diagnostic(pending,'retry remains ready after dispatch; recovering stale lifecycle')
+                self:finish(pending,'timeout')
+                break
+            end
+            if not pending.suppression_logged then
+                pending.suppression_logged=true
+                self:diagnostic(pending,pending.sent_at and 'duplicate suppressed while awaiting result'
+                    or 'duplicate suppressed while awaiting equipment dispatch')
+            end
+            return true
+        end
     end
     self.sequence=self.sequence+1
     event=copy(event)
@@ -145,6 +181,17 @@ function Runtime:submit(event,dispatch)
     end
     return true -- Block original; only the dispatch callback releases it.
 end
+function Runtime:spellStarted(id,targetId)
+    for _,request in ipairs(self.pending) do
+        local event=request.event
+        if request.sent_at and event.kind=='spell' and event.id==id
+            and event.target and event.target.id==targetId then
+            -- Repeated start notifications must not extend the deadline.
+            request.started_at=request.started_at or self.deps.clock()
+            return true
+        end
+    end
+end
 function Runtime:complete(kind,id,targetId,outcome)
     for _,request in ipairs(self.pending) do
         local event=request.event
@@ -158,7 +205,19 @@ end
 function Runtime:tick()
     for i=#self.pending,1,-1 do
         local request=self.pending[i]
-        if self.deps.clock()-(request.sent_at or request.event.time)>120 then self:finish(request,'timeout') end
+        local limit=request.sent_at and responseTimeout(request.event) or 10
+        local since=request.sent_at or request.event.time
+        if request.sent_at and request.event.kind=='spell' then
+            if request.started_at then since=request.started_at
+            else limit=3 end
+        end
+        if self.deps.clock()-since>=limit then
+            if request.event.kind=='spell' and request.sent_at then
+                self:diagnostic(request,request.started_at and 'spell completion missing'
+                    or 'spell start never confirmed')
+            end
+            self:finish(request,'timeout')
+        end
     end
 end
 function Runtime:clear(outcome)

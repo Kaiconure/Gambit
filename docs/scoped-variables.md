@@ -1,5 +1,8 @@
 # Scoped action variables
 
+For definitions, references, priorities, and CSV key expansion, start with
+[Variables](variables.md). This page covers private action scopes.
+
 Use `with_vars` on an import or a normal action to provide private configuration
 and persistent state without changing the shared library:
 
@@ -52,8 +55,32 @@ supported, but external Lua utilities using native Lua 5.1 `pairs`, `next`,
 `rawget`, or `rawset` on that root bypass the view. Pass the relevant subtree to
 such utilities instead. Do not replace the context's `vars` root.
 
-## Idle self-Haste
+## Example: self-only Haste configuration
 
-The base RDM idle actions import self-only Haste before Refresh, gated by the
-existing idle preparation precondition. Haste is best effort: if unavailable,
-later actions can run. The normal battle Haste import retains namespace targets.
+The shipped haste library (`buffs/haste-cycle`) reads `vars.haste_cycle.targets`. In your own action file, you could import it with private
+targets in `idle` so that you keep yourself hasted before entering battle, 
+
+```json
+{
+  "vars": {
+    "haste_cycle": {
+      "targets": ["me", "Tanks", "Melee"]
+    }
+  },
+  "battle": [
+    {
+      "import": "buffs/haste-cycle"
+    }
+  ],
+  "idle": [
+    {
+      "import": "buffs/haste-cycle",
+      "with_vars": {
+        "haste_cycle": {"targets": ["me"]}
+      }
+    }
+  ]
+}
+```
+
+You could further restrict the idle haste action with a `precondition`, perhaps saying that it should only act when you're in a level-restricted battlefield.

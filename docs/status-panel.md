@@ -1,15 +1,73 @@
 # Status panel prototype
 
 The panel appears while logged in, including while automation is disabled. Drag
-its title bar to move it. Click the automation status row to use Gambit's normal
-toggle command; commands and hotkeys continue to update the same state.
+its title bar to move it. Click `[on]` / `[off]` beside the title to use Gambit's
+normal toggle command; commands and hotkeys continue to update the same state.
+The active strategy appears beside the toggle, for example `[on] [leader]`.
+Only the on/off text is clickable. Aggressor/puller strategies appear red;
+other strategies appear green. Header content can widen the panel to reserve
+space for the right-aligned version.
+The addon version appears as a small right-aligned label just below the top border
+and follows the panel width as it resizes.
 
 Personal settings live under `ui.status_panel` in `settings/<character>/main.json`.
 They are loaded directly from that global character file, regardless of namespace
 main overrides. Defaults live in `lib/ux/status-config.lua`; omitted properties
 use those defaults. Mouse resizing is not implemented yet.
 
+## Inline colors
+
+Tracking names and values support Windower's `\cs(r,g,b)` color codes and
+`\cr` reset. RGB components range from 0 to 255. For a static JSON value:
+
+```json
+{
+  "name": "Note",
+  "value": "\\cs(255,215,0)Gold text\\cr"
+}
+```
+
+An expression also has Lua string escaping, so it needs another level:
+
+```json
+{
+  "name": "Mode",
+  "expression": "'\\\\cs(255,215,0)' .. gambit.strategy .. '\\\\cr'"
+}
+```
+
+Color codes do not count toward automatic width or clipping. Each displayed
+line resets any remaining inline color at its end; color each array/multiline
+entry explicitly. Inline bold is not supported.
+
 ## Commands
+
+To track the current automation entry point, add an entry to your tracking set:
+
+```json
+{
+  "name": "Automation",
+  "expression": "gambit.entrypoint_name"
+}
+```
+
+Use `gambit.entrypoint` for the stored name or `gambit.entrypoint_path` for the
+source filename including `.json`. The row is omitted when its result is nil.
+`gambit.entrypoint_relative` omits the owning namespace's directory prefix for
+namespace files, while retaining the normal source path for global files.
+Both relative display fields omit the leading `./`; the source-path fields
+retain their original values.
+The active event entry file has corresponding `gambit.events`,
+`gambit.events_path`, `gambit.events_name`, and `gambit.events_relative` fields:
+
+```json
+{"name": "Events", "expression": "gambit.events_relative"}
+```
+
+`gambit.event_namespace` identifies the selected event file's actual namespace,
+which may differ from the active `gambit.namespace` because of inheritance or
+fallback. Use `gambit.event_namespace or 'global'` to display global/shipped
+sources as global. Folder aliases such as `_base` retain their source spelling.
 
 | Command | Behavior |
 |---|---|
@@ -29,6 +87,7 @@ use those defaults. Mouse resizing is not implemented yet.
 | `gbt panel anchor [<top\|bottom> <left\|right>]` | View or set the position anchor and save |
 | `gbt panel x <x>` / `gbt panel y <y>` | Set one coordinate, retaining the other |
 | `gbt panel size <width> <height>` | Set both dimensions in pixels and save |
+| `gbt panel font-size [<size>]` | View or set the base font size (integer 6–30) and save; alias `fontsize` |
 | `gbt panel width <width>` | Set width while retaining height mode |
 | `gbt panel height <height>` | Set a minimum height while retaining width |
 | `gbt panel height auto` | Restore automatic height based on tracking/history |
@@ -76,9 +135,10 @@ Merge this `ui` section into your existing global character main configuration:
 ```
 
 Each named set is an array of entries. Names are case-sensitive. `value` accepts
-a string or an array of display lines. Expressions can also return arrays: each
-element appears on its own indented line under the entry heading. Scalar results
-appear on one content line. Automatic height and subsequent rows reflow as the
+a string displayed inline with the name, or an array of display lines below
+the heading (even a one-element array). Expressions can also return arrays: each
+element appears on its own indented line under the entry heading. Automatic
+height and subsequent rows reflow as the
 array length changes. Switching sets rebuilds tracking rows and
 panel height, retaining placement, width, and recent output. Empty sets show only
 the automation toggle and log. The initial prototype's tracking array format is
@@ -126,9 +186,13 @@ shorter. Log text never drives automatic width. These width changes do not
 modify saved settings.
 
 Expressions use the ordinary action expression compiler and a fresh temporary
-context per entry. Strings accept expressions or scripts; arrays evaluate
-independent expressions in order and return the final result, matching
-`context.execute`. An expression takes precedence over a static value even when
+context per entry. A string expression returning a scalar displays inline with
+its heading, for example `Strategy: leader`. An array evaluates each expression
+independently and displays its results below the heading, including when the
+array has only one expression. An expression returning an array expands into
+one line per element and uses vertical layout even for a string expression.
+Nil results are omitted; an empty result array has no visible rows.
+An expression takes precedence over a static value even when
 returning `false` or `nil`. A `nil` value hides both the heading and value and
 reserves no rows; the entry reappears when its value becomes non-nil. `false`
 continues to display normally. Updates occur every half second by default. Use short,

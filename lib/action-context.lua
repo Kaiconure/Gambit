@@ -10,6 +10,7 @@ local magicBurst = require('./lib/magic-burst')
 local magicSkills = require('./meta/magic-skills')
 local cureSpell = require('./lib/cure-spell')
 local targetMetadata = require('./lib/target-metadata')
+local restoreEquipment = require('./lib/equipment/restore')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
 -- A mob need not have observed buffs yet. Resource objects have an ID but
@@ -2075,6 +2076,8 @@ end
 --
 local function makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party, variableState)
     local inventory=variableState and variableState.equipment and variableState.equipment.inventory or inventory
+    local eventRuntime=globals.event_system and globals.event_system.runtime
+    local eventPath=eventRuntime and eventRuntime.config.path
     local context = {
         actionType = actionType,
         time = time,
@@ -2085,6 +2088,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         gambit = {
             enabled = globals.enabled,
             namespace = settingsPaths.getLoadedNamespace(),
+            entrypoint = settings.actionInfo and settings.actionInfo.name,
+            entrypoint_path = settings.actionInfo and settings.actionInfo.fileName,
+            entrypoint_relative = settings.actionInfo and settingsPaths.namespaceRelativeFile(settings.actionInfo.fileName),
+            entrypoint_name = settings.actionInfo and settings.actionInfo.fileName and
+                settings.actionInfo.fileName:gsub('\\','/'):gsub('%.[jJ][sS][oO][nN]$',''),
+            events = eventPath and eventPath:gsub('\\','/'):match('([^/]+)%.[jJ][sS][oO][nN]$'),
+            events_path = eventPath,
+            events_name = eventPath and eventPath:gsub('\\','/'):gsub('%.[jJ][sS][oO][nN]$',''),
+            events_relative = eventPath and settingsPaths.namespaceRelativeFile(eventPath),
+            event_namespace = eventPath and settingsPaths.fileNamespace(eventPath),
             last_ability = globals.last_ability and {
                 id = globals.last_ability.id, 
                 name = globals.last_ability.name, 
@@ -2458,6 +2471,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             return count
         end
         if not hasGear then return true end
+    end
+
+    -- Restore the original lifecycle snapshot in one request, discarding pushes.
+    context.equipRestore = function()
+        return restoreEquipment(context.vars._.eq_stack, inventory)
     end
 
     context.equipPop = function()
