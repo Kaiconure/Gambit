@@ -188,9 +188,8 @@ category-specific named overrides. Elemental gear precedes burst gear, with
 general and named sets checked independently. Buff overlays follow those
 categories, then the general named-spell override runs.
 
-The final common mid rule attempts Pixie Hairpin +1 for Dark-element spells
-targeting mobs, if available. It is independent of your configured category sets.
-The contribution example below shows how to disable it.
+Configure any item-specific behavior through your own gear variables or contributions, with
+appropriate restoration for slots absent from idle/battle sets.
 
 Specialized job modules add their own layers. Most run before the common spell
 rules; SCH's arts/stratagem overlays run after them. A `meta.stop` or earlier
@@ -412,15 +411,43 @@ An earlier stop can prevent an after hook from running. Contributed equipment
 uses the same batch as stock equipment, with later slot requests winning.
 Keep commands synchronous and short.
 
+### Example: optional Dark-element headgear
+
+Pixie Hairpin +1 is a useful example of adding item-specific behavior through
+contributions. This is opt-in and is not included in the stock rules:
+
+```json
+{
+  "vars": {
+    "post_equip": {"enabled": true, "restore_snapshot": true}
+  },
+  "contributions": {
+    "spells.mid.after": [
+      {
+        "when": ["event.target.is_mob", "event.element_name == 'Dark'"],
+        "commands": ["equip('head', 'Pixie Hairpin +1')"],
+        "id": "pixie-hairpin-for-darkness"
+      }
+    ]
+  }
+}
+```
+
+Place this in a matching `.vars.json` file. The stock post-equipment module's
+restore-first option returns the head slot to its original item before applying
+idle/battle gear, even when those sets omit a headpiece. A missing Hairpin leaves
+the slot unchanged. Earlier phase stops can prevent this after contribution.
+
 ### Disable or replace a stock rule
 
-IDs resolve at load time across a final phase. To remove the stock Hairpin rule:
+IDs resolve at load time across a final phase. To remove the stock buff-overlay
+mid rule:
 
 ```json
 {
   "contributions": {
     "spells.mid.after": [
-      {"disabled": true, "id": "pixie-hairpin-for-darkness"}
+      {"disabled": true, "id": "spells-buff-overlays-mid"}
     ]
   }
 }

@@ -102,11 +102,6 @@
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
         "id": "spells-burst-named-mid"
-      },
-      {
-        "when": ["event.target.is_mob and event.element_name == 'Dark'"],
-        "commands": ["equip('head', 'Pixie Hairpin +1')"],
-        "id": "pixie-hairpin-for-darkness"
       }
     ]
   }

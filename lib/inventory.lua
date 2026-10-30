@@ -466,7 +466,7 @@ inventory.find_equipped_linkshells = function(player, items)
 
     player = player or windower.ffxi.get_player()
     if player then
-        items = items or windower.ffxi.get_items()        
+        items = items or windower.ffxi.get_items()
 
         if items then
             local primary_linkshell = nil
@@ -519,7 +519,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
 
     -- If the flags don't specify a specific bag local id, we'll just look up the item directly from metadata
     if not flags.local_id then
-        item = findItem(item)    
+        item = findItem(item)
         if item == nil then 
             return 
         end
@@ -571,7 +571,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
                     bagItems = empty
                 end
             else
-                bagItems = tableAll(bag, function (_i) 
+                bagItems = tableAll(bag, function (_i)
                     return type(_i) == 'table' and _i.id == item.id 
                 end)
             end

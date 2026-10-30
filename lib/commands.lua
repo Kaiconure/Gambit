@@ -3,7 +3,6 @@ local jobInfoRecords = require('./lib/job-info')
 local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
-
 handlers['panel'] = function(args)
     local function showHelp()
         writeMessage('Panel commands:')
