@@ -1,0 +1,22 @@
+{
+  "vars": {
+    "gear": {
+      "rolls": null
+    }
+  },
+  "job_abilities": {
+    "pre": [
+      {
+        "when": [
+          "vars.gear.rolls",
+          "event.type == 'CorsairRoll' or event.name == 'Double-Up'"
+        ],
+        "commands": [
+          "equipMany(vars.gear.rolls)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "rolls-pre"
+      }
+    ]
+  }
+}

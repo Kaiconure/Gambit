@@ -1,0 +1,34 @@
+{
+  "vars": {
+    "gear": {},
+    "^post_equip": {
+      "enabled": true,
+      "restore_snapshot": false
+    }
+  },
+  "contributions": {
+    "spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after": [
+      {
+        "when": [
+          "vars.post_equip.enabled",
+          "vars.post_equip.restore_snapshot"
+        ],
+        "commands": ["equipRestore()"],
+        "id": "post-equip-restore"
+      },
+      {
+        "when": ["vars.post_equip.enabled", "me.is_idle and vars.gear.idle"],
+        "commands": ["equipMany(vars.gear.idle)"],
+        "id": "post-equip-idle"
+      },
+      {
+        "when": [
+          "vars.post_equip.enabled",
+          "me.is_engaged and vars.gear.battle"
+        ],
+        "commands": ["equipMany(vars.gear.battle)"],
+        "id": "post-equip-battle"
+      }
+    ]
+  }
+}

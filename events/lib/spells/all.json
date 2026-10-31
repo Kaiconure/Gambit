@@ -1,0 +1,41 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {}
+    }
+  },
+  "imports": [
+    "lib/spells/pre",
+    "lib/spells/curing",
+    "lib/spells/enfeebling",
+    "lib/spells/enhancing",
+    "lib/spells/elemental",
+    "lib/spells/buff-overlays"
+  ],
+  "spells": {
+    "pre": [
+      {
+        "when": [
+          "vars.gear.spells[event.name] and vars.gear.spells[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": [
+          "vars.gear.spells[event.name] and vars.gear.spells[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-named-mid"
+      }
+    ]
+  }
+}

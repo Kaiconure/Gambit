@@ -464,13 +464,13 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                                 break
                             end
 
-                            printDebug('Packet targeting of %s/%d was successful after %.2fs (%d/%d)':format(
-                                t.name,
-                                t.id,
-                                os.clock() - start_t,
-                                num_attempted,
-                                max_attempts
-                            ))
+                            -- printDebug('Packet targeting of %s/%d was successful after %.2fs (%d/%d)':format(
+                            --     t.name,
+                            --     t.id,
+                            --     os.clock() - start_t,
+                            --     num_attempted,
+                            --     max_attempts
+                            -- ))
 
                             return true, nil
                         end

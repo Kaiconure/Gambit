@@ -15,7 +15,7 @@ underscore-prefixed sibling to find missing children.
 Commands, saved default namespaces, and `inherits_from` may keep logical names
 such as `xp/cleave`. Explicit `_xp/_cleave` paths are also accepted. Inheritance
 cycles are checked using resolved paths, so alternate spellings cannot hide a
-cycle. Reserved names such as `actions` and `players` remain reserved with an
+cycle. Reserved names such as `actions`, `players`, and `events` remain reserved with an
 underscore prefix too.
 
 Loads, imports, common-file discovery, contribution precedence, configuration

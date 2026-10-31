@@ -162,6 +162,7 @@
     "distance is approach distance, range is accepted recipient distance (default 7 yalms), duration bounds each move.",
     "timeout bounds the shared movement reservation across the roll and Double-Up sequence; it is not extended by Double-Up.",
     "After a roll attempt, loss of Double-Up Chance releases the reservation; a temporary ability recast does not.",
+    "Failed alignment releases movement for other actions and retries after retry_delay without extending the original reservation timeout.",
     "Only the selected recipient is range-checked. Keep other intended recipients nearby; this is not a group coverage guarantee.",
     "Use distance <= range, and a range safely inside your actual roll radius. Context movement helpers honor the reservation in idle and battle."
   ],

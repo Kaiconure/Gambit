@@ -1,0 +1,12 @@
+{
+  "imports": [
+    "lib/on-battle",
+    "lib/on-idle",
+    "lib/weapon_skills/all",
+    "lib/summoning/all",
+    "lib/spells/all",
+    "lib/job_abilities/all",
+    "lib/pet_abilities/all",
+    "lib/post-equip"
+  ]
+}

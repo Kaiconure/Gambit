@@ -1,0 +1,30 @@
+{
+  "vars": {
+    "gear": {
+      "job_abilities": {}
+    }
+  },
+  "imports": ["lib/job_abilities/rolls"],
+  "job_abilities": {
+    "pre": [
+      {
+        "when": ["vars.gear.job_abilities.pre and vars.gear.job_abilities.pre"],
+        "commands": [
+          "equipMany(vars.gear.job_abilities.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "job-abilities-pre"
+      },
+      {
+        "when": [
+          "vars.gear.job_abilities[event.name] and vars.gear.job_abilities[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.job_abilities[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "job-abilities-named-pre"
+      }
+    ]
+  }
+}

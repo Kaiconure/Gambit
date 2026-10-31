@@ -1,0 +1,36 @@
+{
+  "vars": {
+    "gear": {
+      "puppetmaster": {
+        "abilities": {
+          "Activate": {
+            "pre": null
+          },
+          "Deus Ex Automata": {
+            "pre": null
+          },
+          "Repair": {
+            "pre": null
+          },
+          "Maintenance": {
+            "pre": null
+          }
+        }
+      }
+    }
+  },
+  "job_abilities": {
+    "pre": [
+      {
+        "when": [
+          "vars.gear.puppetmaster.abilities[event.name] and vars.gear.puppetmaster.abilities[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.puppetmaster.abilities[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "puppetmaster-abilities-named-pre"
+      }
+    ]
+  }
+}

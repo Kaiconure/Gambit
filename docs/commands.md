@@ -1,5 +1,28 @@
 # Gambit command reference
 
+`gbt equipment resync` clears pending gear requests and held dispatch barriers,
+then takes a fresh equipped-slot baseline. Ordinary equipment state updates are
+packet-driven; see [equipment queue](equipment.md).
+
+`gbt events reload` reloads only event rules and their configuration variables.
+`gbt events` or `gbt events status` shows the single active event file. Its path
+is also reported on successful event loading/reloading. Event files do not merge.
+Normal action compilation/state is retained. Pending event requests receive
+`reloaded` post cleanup; invalid files retain the previous event configuration.
+See [event rules](events.md) and [configuring the stock events](stock-events.md).
+
+`gbt events r -e <file>` temporarily selects a named event file through the event
+search hierarchy (`.json` optional). `gbt events r -r` reloads the current selection;
+plain `gbt events r` or full `gbt r` restores automatic selection. The `-r` flag
+also accepts `-reload` and cannot be combined with `-e`. Event subcommands accept `r` for
+`reload` and `s` for `status`. Use `-v` with reload to export processed JSON.
+
+Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
+`gbt panel reset-position`, and `gbt panel reload`. Tracking controls:
+`gbt panel tracking`, `gbt panel tracking -list`, and
+`gbt panel tracking -set <name>`. Panel settings persist per character in the
+global `main.json`; see [status panel configuration](status-panel.md).
+
 `gbt slots` lists the current configuration's contribution slots grouped by action
 type, with sections sorted alphabetically and slots in their placement order.
 Repeated slots appear once at their first occurrence; fallback alternatives retain
@@ -74,7 +97,7 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 | `-reload` | `-r` | Reload the currently loaded action set, retaining its loaded namespace unless `-ns` overrides it. |
 | `-settings-only` | `-so` | Reload settings while bypassing action reload. |
 | `-ns <namespace>` | — | Select a namespace for this load. Cannot be combined with `-settings-only`. |
-| `-verbose` | `-v` | Write processed JSON debugging output to `.output` folders for this reload. Off by default. |
+| `-verbose` | `-v` | Write processed action and event JSON debugging output to `.output` folders for this reload. Off by default. |
 
 Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
 
@@ -228,7 +251,7 @@ On load, Gambit also registers these Windower shortcuts:
 
 ```text
 //gbt config -distance 20 -chasetime 15
-//gbt config -cloudpanel on
+//gbt panel show
 //gbt verbosity -level normal
 ```
 
@@ -242,7 +265,7 @@ On load, Gambit also registers these Windower shortcuts:
 | `-chasetime <seconds>` | `-ct` | Maximum chase time; clamped to 5–60. |
 | `-skillchaindelay <seconds>` | `-scdelay`, `-scd` | Skillchain delay; requires a positive input and is capped by Gambit's maximum skillchain time. |
 | `-targetingduration <seconds>` | `-td` | Targeting duration; clamped to 1–20. |
-| `-cloudpanel on/off` | `-cp` | Enable or disable the cloud panel. |
+| `-cloudpanel on/off` | `-cp` | Retired; displays a notice without changing saved settings. Use `gbt panel show`. |
 | `-rawdistance on/off` | `-rd` | Toggle raw-distance mode. This option alone does not trigger a settings save. |
 | `-debugging on/off` | — | Toggle additional debugging details. |
 | `-stt on/off` | — | Toggle slower target transitions. |

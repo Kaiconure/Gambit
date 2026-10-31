@@ -1,4 +1,4 @@
-__version = '1.0.0'
+__version = '1.0.5'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -43,7 +43,6 @@ images = require('images')
 skillchain_helper = require('lib/skillchain-helper')
 
 require('ux/core')
-require('ux/cloud-panel')
 
 require('actions')
 
@@ -315,6 +314,15 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
     if globals.cloud_panel then
         globals.cloud_panel:configure(settings.cloudPanel)
     end
+    if globals.status_panel then
+        local ok, err = pcall(function() globals.status_panel:configure(loadPanelSettings(),false) end)
+        if ok then globals.status_panel_ready = true end
+        if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
+    end
+    if globals.event_system then
+        local ok,err=pcall(function() globals.event_system:reload(outputProcessed) end)
+        if not ok then writeError('Could not load event rules: '..tostring(err)) end
+    end
 
     if settings.debugging then
         inventory.printDebug = printDebug
@@ -409,7 +417,54 @@ windower.register_event('load', function()
 
     initTrustData()
 
-    globals.cloud_panel = ux.cloud_panel.new()
+    globals.equipment_manager = require('./lib/equipment/init').new({
+        windower=windower,inventory=inventory,packets=packets,
+        report=function(message) writeError('[equipment] '..message) end,
+        verbose=function(message) writeVerbose(message) end,
+        formatCount=function(count) return text_number(count, Colors.verbose) end,
+    })
+    inventory.equipment_manager=globals.equipment_manager
+    globals.event_system = require('./lib/events/init').new({
+        windower=windower,packets=packets,resources=resources,
+        writeProcessed=writeJsonToFile,
+        context=ActionContext.createTemporary,
+        schedule=function(fn,delay) return coroutine.schedule(fn,delay) end,
+        report=function(message) writeError('[events] '..message) end,
+        announce=function(message) writeMessage('[events] '..message) end,
+        debug=function(message) writeDebug('[events] '..message) end,
+        diagnostic=function(message) printDebug('[events] %s',message) end,
+        formatPath=text_file,
+        barrier=function(fn) globals.equipment_manager:barrier(fn) end,
+        equipmentSession=function() return globals.equipment_manager:session() end,
+        equipmentPending=function() return #globals.equipment_manager.queue.batches>0 end,
+        abilityReady=function(player,ability)
+            local timers=windower.ffxi.get_ability_recasts()
+            local remaining=timers and timers[ability.recast_id]
+            if type(remaining)~='number' then return nil end
+            -- Ready and Quick Draw use charges; their positive recharge timer
+            -- alone does not prove that no usable charge remains.
+            if ability.recast_id==102 or ability.recast_id==195 then return nil end
+            if ability.recast_id==231 and getAvailableStratagems(player,timers)>0 then return true end
+            return remaining<=0
+        end,
+    })
+    -- Legacy cloud-panel code/assets/settings are retained, but no display is
+    -- created. The status panel is the supported UI, regardless of saved flags.
+    globals.status_panel_ready = false
+    globals.status_panel = require('./lib/ux/status-panel').new({
+        windower=windower, texts=texts, images=images,
+        enabled=function() return globals.enabled end,
+        strategy=function() return settings.strategy end,
+        loggedIn=function() return globals.logged_in end,
+        ready=function()
+            return globals.status_panel_ready and not actionStateManager.needsRecompile
+                and windower.ffxi.get_player()~=nil and windower.ffxi.get_mob_by_target('me')~=nil
+        end,
+        toggle=function() sendSelfCommand('toggle') end,
+        context=ActionContext.createTemporary,
+        subscribe=subscribeGambitLog,
+        save=savePanelSettings,
+    })
 
     smartMove:setLogger(writeDebug, writeTrace)
 
@@ -482,6 +537,7 @@ end)
 ---------------------------------------------------------------------
 -- Login
 windower.register_event('login', function ()
+    globals.status_panel_ready = false
     actionStateManager:setConquestInfo()
 
     if 
@@ -525,6 +581,9 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    globals.last_ability = nil
+    globals.last_spell = nil
+    globals.status_panel_ready = false
     resetNamespaceStartup()
     globals.logged_in = false
     globals.suppress_logging = true
@@ -541,6 +600,20 @@ windower.register_event('unload', function()
 
     globals.logged_in = false
     globals.shutting_down = true
+    smartMove:shutdown()
+    if globals.event_system then
+        globals.event_system:destroy()
+        globals.event_system=nil
+    end
+    if globals.equipment_manager then
+        globals.equipment_manager:destroy()
+        globals.equipment_manager=nil
+        inventory.equipment_manager=nil
+    end
+    if globals.status_panel then
+        globals.status_panel:destroy()
+        globals.status_panel = nil
+    end
 
     resetCurrentMob(nil, true)
     windower.send_command('unbind !~G;')    -- Unbind the automation toggle key
@@ -1277,6 +1350,46 @@ local _handle_actionChunk = function(id, data)
     if actionId <= 0 then return end
 
     local category = tonumber(packet['Category']) or 0
+
+    -- Record completed self job abilities before effect handling can return.
+    if category == 6 or     -- Job ability completed
+        category == 14     -- Unblinkable job ability completed
+    then
+        local player = windower.ffxi.get_player()
+        local ability = resources.job_abilities[actionId]
+        if player and actorId == player.id and ability then
+            local targetId = tonumber(packet['Target 1 ID'])
+            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
+            globals.last_ability = {id=ability.id, name=ability.name, time=os.clock(),
+                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
+        end
+    end
+    if category == 8 and actionId == 24931 then -- Spell casting started
+        local player = windower.ffxi.get_player()
+        local spellId = tonumber(packet['Target 1 Action 1 Param'])
+        local spell = spellId and resources.spells[spellId]
+        if player and actorId == player.id and spell then
+            local targetId = tonumber(packet['Target 1 ID'])
+            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
+            globals.last_spell = {id=spell.id, name=spell.name, time=os.clock(), status='casting',
+                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
+        end
+    elseif category == 8 and actionId == 28787 then -- Spell casting interrupted
+        local player = windower.ffxi.get_player()
+        if player and actorId == player.id and globals.last_spell and globals.last_spell.status=='casting' then
+            globals.last_spell.status='interrupted'
+            globals.last_spell.time=os.clock()
+        end
+    elseif category == 4 then  -- Spell casting completed
+        local player = windower.ffxi.get_player()
+        local spell = resources.spells[actionId]
+        if player and actorId == player.id and spell then
+            local targetId = tonumber(packet['Target 1 ID'])
+            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
+            globals.last_spell = {id=spell.id, name=spell.name, time=os.clock(), status='completed',
+                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
+        end
+    end
 
     local actor = windower.ffxi.get_mob_by_id(actorId)
     local action = nil

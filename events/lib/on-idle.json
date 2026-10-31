@@ -1,0 +1,27 @@
+{
+  "vars": {
+    "gear": {},
+    "on_idle": {
+      "windower_commands": []
+    }
+  },
+  "statuses": {
+    "idle": {
+      "enter": [
+        {
+          "commands": [
+            "equipMany(vars.gear.idle)",
+            "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+          ],
+          "when": ["vars.gear.idle"],
+          "id": "on-idle-enter-general"
+        },
+        {
+          "when": ["arrayCount(vars.on_idle.windower_commands) > 0"],
+          "commands": ["sendWindowerCommands(vars.on_idle.windower_commands)"],
+          "id": "on-idle-enter-windower-commands"
+        }
+      ]
+    }
+  }
+}

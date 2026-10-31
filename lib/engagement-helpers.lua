@@ -28,7 +28,7 @@ function helpers.attach(context)
                 return false
             end
         end
-        context.releaseMovement()
+        context.releaseMovement(true) -- Recoverable failure; retain the original lease deadline.
         context.postpone(options.retry_delay or 10)
         return false
     end

@@ -3,6 +3,127 @@ local jobInfoRecords = require('./lib/job-info')
 local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
+handlers['panel'] = function(args)
+    local function showHelp()
+        writeMessage('Panel commands:')
+        writeMessage('  gbt panel show | hide - Show or hide the panel')
+        writeMessage('  gbt panel position [<x> <y>] - View or set position')
+        writeMessage('  gbt panel anchor [top|bottom left|right] - View or set position anchor')
+        writeMessage('  gbt panel x [<x>] | y [<y>] - View or set one coordinate')
+        writeMessage('  gbt panel size [<width> <height>] - View or set size')
+        writeMessage('  gbt panel width [<width>] - View or set width')
+        writeMessage('  gbt panel height [<height>|auto] - View or set height')
+        writeMessage('  gbt panel font-size [<size>] - View or set font size (6-30)')
+        writeMessage('  gbt panel log [show | hide] - View or change recent output visibility')
+        writeMessage('  gbt panel theme [<name> | -list] - View, list, or change background skin')
+        writeMessage('  gbt panel tracking [-list | -set <name>] - View, list, or switch tracking sets')
+        writeMessage('  gbt panel reset-position - Restore default position')
+        writeMessage('  gbt panel reset - Restore and save all panel defaults')
+        writeMessage('  gbt panel reload - Apply panel settings from main.json')
+    end
+    local command = (args[1] or ''):lower()
+    if command == 'help' or command == '-help' or command == '-h' then showHelp(); return end
+    local panel = globals.status_panel
+    if not panel then writeMessage('Status panel is unavailable.'); return end
+    local ok, err = pcall(function()
+        if command == '' then
+            writeMessage('Panel: ' .. (panel.options.visible and 'shown' or 'hidden')
+                .. '; tracking: ' .. panel.options.tracking.current)
+            showHelp()
+        elseif command == 'show' or command == 'hide' then
+            panel:setVisible(command == 'show')
+        elseif command == 'reset-position' then panel:resetPosition()
+        elseif command == 'reset' then
+            assert(#args==1,'Usage: gbt panel reset')
+            panel:reset()
+            writeMessage('Panel settings reset to defaults.')
+        elseif command == 'anchor' then
+            if not args[2] then
+                local anchor=panel.options.anchor or {vertical='top',horizontal='left'}
+                writeMessage('Panel anchor: '..anchor.vertical..' '..anchor.horizontal)
+            else
+                local vertical=args[2]:lower()
+                local horizontal=args[3] and args[3]:lower()
+                assert(#args==3 and (vertical=='top' or vertical=='bottom')
+                    and (horizontal=='left' or horizontal=='right'),
+                    'Usage: gbt panel anchor <top|bottom> <left|right>')
+                panel:setAnchor(vertical,horizontal)
+            end
+        elseif command == 'position' or command == 'x' or command == 'y' then
+            if not args[2] then
+                writeMessage('Panel position: ' .. panel.options.x .. ', ' .. panel.options.y)
+                return
+            end
+            local x, y
+            if command == 'position' then
+                x=tonumber(args[2]); y=tonumber(args[3])
+                assert(x and y and #args==3,'Usage: gbt panel position <x> <y>')
+            elseif command == 'x' then
+                x=tonumber(args[2]); assert(x and #args==2,'Usage: gbt panel x <x>')
+            else
+                y=tonumber(args[2]); assert(y and #args==2,'Usage: gbt panel y <y>')
+            end
+            panel:setPosition(x,y)
+        elseif command == 'size' or command == 'width' or command == 'height' then
+            if not args[2] then
+                writeMessage('Panel size: ' .. panel.options.width .. ' x ' .. panel.panel.height
+                    .. (panel.options.height == nil and ' (automatic height)' or ''))
+                return
+            end
+            local width, height
+            if command == 'size' then
+                width=tonumber(args[2]); height=tonumber(args[3])
+                assert(width and height and #args==3,'Usage: gbt panel size <width> <height>')
+            elseif command == 'width' then
+                width=tonumber(args[2])
+                assert(width and #args==2,'Usage: gbt panel width <width>')
+            else
+                height=args[2]:lower()=='auto' and 'auto' or tonumber(args[2])
+                assert(height and #args==2,'Usage: gbt panel height <height|auto>')
+            end
+            panel:setSize(width,height)
+        elseif command == 'font-size' or command == 'fontsize' then
+            assert(#args<=2,'Usage: gbt panel font-size [<size>]')
+            if args[2] then
+                local size=tonumber(args[2])
+                assert(size,'Usage: gbt panel font-size <size>')
+                panel:setFontSize(size)
+            else writeMessage('Panel font size: '..tostring(panel.options.font_size)) end
+        elseif command == 'reload' then
+            panel:configure(loadPanelSettings(),false); panel:update()
+            writeMessage('Panel settings reloaded.')
+        elseif command == 'theme' then
+            if args[2] == '-list' then
+                local names={}
+                for name in pairs(require('./lib/ux/theme').reload()) do names[#names+1]=name end
+                table.sort(names)
+                writeMessage('Panel themes:')
+                for _,name in ipairs(names) do writeMessage('  '..name) end
+            elseif args[2] then panel:setTheme(args[2]:lower())
+            else writeMessage('Panel theme: ' .. panel.options.theme) end
+        elseif command == 'log' then
+            local action = (args[2] or ''):lower()
+            if action == 'show' or action == 'hide' then
+                panel:setLogVisible(action == 'show')
+            elseif action == '' then
+                writeMessage('Panel recent log: ' .. (panel.options.show_log and 'shown' or 'hidden'))
+            else writeMessage('Usage: gbt panel log [show | hide]') end
+        elseif command == 'tracking' then
+            if args[2] == '-list' then
+                local names = {}
+                for name in pairs(panel.options.tracking.sets) do names[#names+1]=name end
+                table.sort(names)
+                writeMessage('Tracking sets (current: ' .. panel.options.tracking.current .. '):')
+                for _, name in ipairs(names) do writeMessage('  ' .. name) end
+            elseif args[2] == '-set' and args[3] then
+                panel:setTracking(args[3])
+                writeMessage('Tracking set: ' .. panel.options.tracking.current)
+            elseif not args[2] then writeMessage('Tracking set: ' .. panel.options.tracking.current)
+            else writeMessage('Usage: gbt panel tracking [-list | -set <name>]') end
+        else showHelp() end
+    end)
+    if not ok then writeError('Panel: ' .. tostring(err)) end
+end
 
 handlers['slots'] = function(args)
     local actionType = getArgValue(args, '-t')
@@ -52,6 +173,63 @@ handlers['slots'] = function(args)
         writeMessage('  ' .. text_action_type(section) .. ':')
         for _, name in ipairs(grouped[section]) do writeMessage('    ' .. text_action_value(name)) end
     end
+end
+
+handlers['equipment'] = function(args)
+    if #args~=1 or args[1]:lower()~='resync' then
+        writeMessage('Usage: gbt equipment resync')
+        return
+    end
+    local manager=globals.equipment_manager
+    if not manager then writeMessage('Equipment manager is unavailable.'); return end
+    local ok,err=pcall(manager.resync,manager)
+    if not ok then writeError('Could not resync equipment: '..tostring(err))
+    else writeMessage('Equipment state resynced; pending equipment requests cleared.') end
+end
+
+handlers['events'] = function(args)
+    local command=(args[1] or 'status'):lower()
+    if command=='r' then command='reload' elseif command=='s' then command='status' end
+    local outputProcessed=false
+    local entryName
+    local reloadCurrent=false
+    local valid=command=='reload' or command=='status'
+    local index=2
+    while index<=#args do
+        local flag=args[index]:lower()
+        if command=='reload' and (flag=='-v' or flag=='-verbose') then outputProcessed=true
+        elseif command=='reload' and (flag=='-r' or flag=='-reload') then reloadCurrent=true
+        elseif command=='reload' and (flag=='-e' or flag=='-events') and not entryName then
+            index=index+1; entryName=args[index]
+            if not entryName or entryName:sub(1,1)=='-' then valid=false end
+        else valid=false end
+        index=index+1
+    end
+    if not valid or (reloadCurrent and entryName) then
+        writeMessage('Usage: gbt events [status|s | reload|r [-e <file>|-r] [-verbose|-v]]')
+        return
+    end
+    local service=globals.event_system
+    if not service then writeMessage('Event system is unavailable.'); return end
+    if command=='status' then
+        local active=service.runtime and service.runtime.config.path
+        writeMessage(active and ('Active event file: '..text_file(active)) or 'No active event file.')
+        for _,path in ipairs(service.runtime and service.runtime.config.files or {}) do
+            if path~=active then writeMessage('Event import: '..text_file(path)) end
+        end
+        for _,path in ipairs(service.runtime and service.runtime.config.vars_files or {}) do
+            writeMessage('Event variables: '..text_file(path))
+        end
+        return
+    end
+    if reloadCurrent then
+        local active=service.runtime and service.runtime.config.path
+        entryName=service.selectedFile or (active and active:gsub('\\','/'):match('([^/]+)%.json$'))
+    end
+    local ok,result=pcall(service.reload,service,outputProcessed,entryName)
+    if not ok then writeError('Could not reload event rules: '..tostring(result))
+    elseif not result then writeMessage('No character is logged in; event rules cleared.')
+    else writeMessage('Event rules reloaded.') end
 end
 
 handlers['eval'] = function(args)
@@ -968,30 +1146,7 @@ handlers['config'] = function(args)
     end
 
     if cp > 0 then
-        local hasCpChanges = false
-
-        cp = args[cp + 1]
-        settings.cloudPanel = settings.cloudPanel or {}
-
-        if cp == 'on' then
-            settings.cloudPanel.enabled = true
-            hasChanges = true
-            hasCpChanges = true
-        elseif cp == 'off' then
-            settings.cloudPanel.enabled = false
-            hasChanges = true
-            hasCpChanges = true 
-        end
-
-        if hasCpChanges then
-            if globals.cloud_panel then
-                globals.cloud_panel:configure(settings.cloudPanel)
-            end
-        end
-
-        writeMessage('Cloud panel display: %s':format(
-            settings.cloudPanel.enabled and text_green('on') or text_red('off')
-        ))
+        writeMessage('The cloud panel is retired. Use gbt panel show for the status panel.')
     end
 
     if slowTargetTransitions > 0 then

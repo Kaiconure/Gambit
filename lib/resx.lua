@@ -79,9 +79,9 @@ local function matchResourceByNameEN(resource, enNameLowerCase)
 
     return resource and (
         (lower == enNameLowerCase or
-            "\"%s\"":format(lower) == enNameLowerCase) or
+            ('"' .. lower .. '"') == enNameLowerCase) or
         (lowerl and 
-            (lowerl == enNameLowerCase or "\"%s\"":format(lowerl) == enNameLowerCase))
+            (lowerl == enNameLowerCase or ('"' .. lowerl .. '"') == enNameLowerCase))
     )
 end
 
@@ -94,6 +94,11 @@ end
 --------------------------------------------------------------------------------------
 -- Given the specified resource table, find the first match with 
 -- the provided name
+-- Static metadata only: never cache ownership, recasts, or availability here.
+-- Separate tables/languages cannot contaminate each other. Bounded FIFO caches
+-- include misses, so unavailable abilities do not repeatedly scan item names.
+local resourceNameCaches=setmetatable({}, {__mode='k'})
+local RESOURCE_NAME_CACHE_LIMIT=1024
 function findResourceByName(res, name, language)
     if type(res) ~= 'table' then return end
     --if type(name) == 'table' and name.name then name = name.name end
@@ -122,7 +127,24 @@ function findResourceByName(res, name, language)
         name = string.lower(name)
     end
 
-    return tableFirst(res, function (res) return matchFn(res, name) end)
+    local caches=resourceNameCaches[res]
+    if not caches then caches={}; resourceNameCaches[res]=caches end
+    local mode=language=='English' and 'English' or 'Japanese'
+    local cache=caches[mode]
+    if not cache then
+        cache={names={},order={},next=1}
+        caches[mode]=cache
+    end
+    local cached=cache.names[name]
+    if cached~=nil then return cached or nil end
+
+    local result=tableFirst(res, function (res) return matchFn(res, name) end)
+    local evicted=cache.order[cache.next]
+    if evicted~=nil then cache.names[evicted]=nil end
+    cache.order[cache.next]=name
+    cache.next=cache.next%RESOURCE_NAME_CACHE_LIMIT+1
+    cache.names[name]=result or false
+    return result
 end
 
 --------------------------------------------------------------------------------------

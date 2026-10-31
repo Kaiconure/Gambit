@@ -393,7 +393,8 @@ state_manager.setSkillchain = function(self, name, mob)
             self.skillchains[mobId] = {
                 name = name,
                 mob = mob,
-                time = os.clock()
+                time = os.clock(),
+                lifetime = MAX_SKILLCHAIN_TIME
             }
         else
             -- If no name is provided, clear the skillchain on the specified mob
@@ -421,10 +422,13 @@ state_manager.getSkillchain = function(self, mob)
     if mobId then
         local skillchain = self.skillchains[mobId]
         if skillchain then
-            if skillchain.time > 0 and (os.clock() - skillchain.time) > MAX_SKILLCHAIN_TIME then
+            local age = os.clock() - skillchain.time
+            if skillchain.time >= 0 and age > MAX_SKILLCHAIN_TIME then
                 self.skillchains[mobId] = nil
                 return
             end
+
+            skillchain.lifetime = math.max(0, MAX_SKILLCHAIN_TIME - age)
 
             return skillchain
         end
@@ -479,7 +483,8 @@ state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
                     name = skill.name,
                     actor = actor,
                     mob = mob,
-                    skillchains = skillchains
+                    skillchains = skillchains,
+                    lifetime = MAX_WEAPON_SKILL_TIME
                 }
             end
         else
@@ -497,15 +502,17 @@ state_manager.getPartyWeaponSkillInfo = function(self, mob)
         local mobId = tonumber(type(mob) == 'table' and mob.id)
         if mobId then
             local weaponSkill = self.weaponSkills[mobId]
-
             if weaponSkill then
-                if weaponSkill.time > 0 and (os.clock() - weaponSkill.time) > MAX_WEAPON_SKILL_TIME then
+                local age = os.clock() - weaponSkill.time
+                if weaponSkill.time >= 0 and age > MAX_WEAPON_SKILL_TIME then
                     self.weaponSkills[mobId] = nil
-                    weaponSkill = nil
+                    return
                 end
-            end
 
-            return weaponSkill
+                weaponSkill.lifetime = math.max(0, MAX_WEAPON_SKILL_TIME - age)
+
+                return weaponSkill
+            end
         end
     end
 end

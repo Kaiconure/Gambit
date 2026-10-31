@@ -1,0 +1,29 @@
+{
+  "vars": {
+    "gear": {},
+    "on_battle": {
+      "windower_commands": []
+    }
+  },
+  "statuses": {
+    "battle": {
+      "enter": [
+        {
+          "commands": [
+            "equipMany(vars.gear.battle)",
+            "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+          ],
+          "when": ["vars.gear.battle"],
+          "id": "on-battle-enter-general"
+        },
+        {
+          "when": ["arrayCount(vars.on_battle.windower_commands) > 0"],
+          "commands": [
+            "sendWindowerCommands(vars.on_battle.windower_commands)"
+          ],
+          "id": "on-battle-enter-windower-commands"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "solid": {
+    "color": [20, 24, 32],
+    "opacity": 220
+  },
+  "ff7": {
+    "folder": "content/ui/ff7/",
+    "border": 10,
+    "opacity": 220
+  },
+  "ff8": {
+    "folder": "content/ui/ff8/",
+    "border": 5,
+    "opacity": 245
+  },
+  "ffxi": {
+    "folder": "content/ui/ffxi/",
+    "border": 6,
+    "texture_height": 400,
+    "opacity": 200
+  }
+}

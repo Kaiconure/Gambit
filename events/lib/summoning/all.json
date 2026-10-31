@@ -1,0 +1,159 @@
+{
+  "imports": ["lib/spells/pre"],
+  "vars": {
+    "gear": {
+      "summoning": {
+        "avatar": {
+          "pre": null,
+          "mid": null
+        },
+        "rage": {
+          "pre": null,
+          "mid": null
+        },
+        "ward": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": ["event.summoning", "vars.gear.summoning.avatar.pre"],
+        "commands": [
+          "equipMany(vars.gear.summoning.avatar.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-avatar-pre"
+      },
+      {
+        "when": [
+          "event.summoning",
+          "vars.gear.summoning.avatar[event.name] and vars.gear.summoning.avatar[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.avatar[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-avatar-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": ["event.summoning", "vars.gear.summoning.avatar.mid"],
+        "commands": [
+          "equipMany(vars.gear.summoning.avatar.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-avatar-mid"
+      },
+      {
+        "when": [
+          "event.summoning",
+          "vars.gear.summoning.avatar[event.name] and vars.gear.summoning.avatar[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.avatar[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-avatar-named-mid"
+      }
+    ]
+  },
+  "pet_abilities": {
+    "pre": [
+      {
+        "when": [
+          "event.type == 'BloodPactWard'",
+          "vars.gear.summoning.ward.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.ward.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-ward-pre"
+      },
+      {
+        "when": [
+          "event.type == 'BloodPactWard'",
+          "vars.gear.summoning.ward[event.name] and vars.gear.summoning.ward[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.ward[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-ward-named-pre"
+      },
+      {
+        "when": [
+          "event.type == 'BloodPactRage'",
+          "vars.gear.summoning.rage.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.rage.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-rage-pre"
+      },
+      {
+        "when": [
+          "event.type == 'BloodPactRage'",
+          "vars.gear.summoning.rage[event.name] and vars.gear.summoning.rage[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.rage[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-rage-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": [
+          "event.type == 'BloodPactWard'",
+          "vars.gear.summoning.ward.mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.ward.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-ward-mid"
+      },
+      {
+        "when": [
+          "event.type == 'BloodPactWard'",
+          "vars.gear.summoning.ward[event.name] and vars.gear.summoning.ward[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.ward[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-ward-named-mid"
+      },
+      {
+        "when": [
+          "event.type == 'BloodPactRage'",
+          "vars.gear.summoning.rage.mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.rage.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-rage-mid"
+      },
+      {
+        "when": [
+          "event.type == 'BloodPactRage'",
+          "vars.gear.summoning.rage[event.name] and vars.gear.summoning.rage[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.summoning.rage[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "summoning-rage-named-mid"
+      }
+    ]
+  }
+}

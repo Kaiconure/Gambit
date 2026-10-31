@@ -1,0 +1,29 @@
+{
+  "vars": {
+    "gear": {
+      "weapon_skills": {}
+    }
+  },
+  "weapon_skills": {
+    "pre": [
+      {
+        "when": ["vars.gear.weapon_skills.pre"],
+        "commands": [
+          "equipMany(vars.gear.weapon_skills.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "weapon-skills-pre"
+      },
+      {
+        "when": [
+          "vars.gear.weapon_skills[event.name] and vars.gear.weapon_skills[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.weapon_skills[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "weapon-skills-named-pre"
+      }
+    ]
+  }
+}

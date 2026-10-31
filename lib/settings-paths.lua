@@ -1,5 +1,6 @@
 -- Session state: this module survives settings reloads, but not addon reloads.
 local paths = {}
+local targetSelectors=require('./lib/target-selectors')
 local namespace = nil
 local loadedNamespace = nil
 local loadedPrecedence = {}
@@ -32,6 +33,29 @@ end
 
 function paths.namespaceExists(name)
     return directoryExists(paths.namespacePath(name))
+end
+
+-- Namespace content directories delimit the owning namespace, including
+-- inherited or underscore-aliased namespaces. Display paths omit leading ./.
+function paths.namespaceRelativeFile(fileName)
+    if not fileName then return end
+    local normalized=fileName:gsub('\\','/')
+    local relative=normalized:gsub('^%./','')
+    if relative:match('^settings/[_%.]ns/') then
+        return relative:match('^settings/[_%.]ns/.-/(players/.*)$')
+            or relative:match('^settings/[_%.]ns/.-/(actions/.*)$')
+            or relative:match('^settings/[_%.]ns/.-/(events/.*)$') or relative
+    end
+    return relative
+end
+
+function paths.fileNamespace(fileName)
+    if not fileName then return end
+    local relative=fileName:gsub('\\','/'):gsub('^%./','')
+    if not relative:match('^settings/[_%.]ns/') then return end
+    return relative:match('^settings/[_%.]ns/(.-)/players/')
+        or relative:match('^settings/[_%.]ns/(.-)/events/')
+        or relative:match('^settings/[_%.]ns/(.-)/actions/')
 end
 
 function paths.isNamespaceInitialized(name)
@@ -94,7 +118,7 @@ function paths.validateNamespace(name)
     end
     for segment in (name or ''):gmatch('[^/]+') do
         local normalized = segment:lower():gsub('^_+', '')
-        if normalized == 'actions' or normalized == 'players' then
+        if normalized == 'actions' or normalized == 'players' or normalized == 'events' then
             return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
         end
         if normalized == 'con' or normalized == 'nul' or normalized == 'aux' or normalized == 'prn'
@@ -231,6 +255,33 @@ end
 function paths.writePath(playerName, relative)
     local root = loadedNamespace and (paths.namespacePath(loadedNamespace) .. '/players') or './settings'
     return root .. '/' .. playerName .. '/' .. relative
+end
+
+-- Closest scope/location wins; only the first existing event file is loaded.
+function paths.eventFiles(playerName, mainJob, groups)
+    local roots={}
+    for _,name in ipairs(loadedPrecedence) do roots[#roots+1]=paths.namespacePath(name) end
+    roots[#roots+1]=SETTINGS_ROOT
+    local positives,inverses={},{}
+    for _,group in ipairs(targetSelectors.orderEntryPointGroups(groups)) do
+        local list=group:sub(1,1)=='~' and inverses or positives
+        list[#list+1]=group
+    end
+    local result={}
+    local function addDirectory(directory)
+        result[#result+1]=directory..'/'..mainJob:lower()..'.json'
+        for _,group in ipairs(positives) do result[#result+1]=directory..'/('..group..').json' end
+        for _,group in ipairs(inverses) do result[#result+1]=directory..'/('..group..').json' end
+        result[#result+1]=directory..'/common.json'
+    end
+    for _,root in ipairs(roots) do
+        local characterRoot=root==SETTINGS_ROOT and root or root..'/players'
+        for _,directory in ipairs({characterRoot..'/'..playerName..'/events',root..'/events'}) do
+            addDirectory(directory)
+        end
+    end
+    addDirectory('./events') -- Shipped defaults never outrank user settings.
+    return result
 end
 
 -- Namespace character/common paths precede base character/common paths.

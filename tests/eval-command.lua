@@ -41,11 +41,13 @@ local factoryEnv=setmetatable({settings={}, globals={},
  windower={ffxi={get_player=function() return {} end,
  get_mob_by_target=function() return {} end,get_party=function() return {} end}},
  actionStateManager={setContext=function() error('must not replace latest context') end},
- makeActionContext=function() return {} end}, {__index=_G})
+ os={clock=function() return 123.5 end},
+ makeActionContext=function(_,time) assert(time==123.5); return {time=time} end}, {__index=_G})
 local factoryChunk=assert(loadstring(factorySource));setfenv(factoryChunk,factoryEnv)
 local factory=factoryChunk()
 local firstContext=factory.createTemporary('first')
 local secondContext=factory.createTemporary('second')
+assert(firstContext.time==123.5 and secondContext.time==123.5)
 assert(firstContext~=secondContext and firstContext.action~=secondContext.action)
 firstContext.action.enumerators.member={}
 firstContext.action.availableAt=100

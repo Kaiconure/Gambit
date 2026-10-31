@@ -11,6 +11,10 @@ characters running the addon locally.
 |---|---|
 | [Commands](docs/commands.md) | Commands, aliases, options, and examples |
 | [Actions](docs/actions.md) | Action files, conditions, and commands |
+| [Variables](docs/variables.md) | Definitions, references, merging, CSV keys, and runtime state |
+| [Event rules](docs/events.md) | Event types, rules, context, ordering, and troubleshooting |
+| [Stock events](docs/stock-events.md) | Configure shipped gear rules with variables and contributions |
+| [Equipment queue](docs/equipment.md) | Ordered swaps, pending/confirmed queries, retries, and action barriers |
 | [Action properties](docs/properties.md) | Values available in action contexts |
 | [Action functions](docs/functions.md) | Lua helpers used by actions |
 | [Action slots](docs/action-slots.md) | Contributions, replacements, fallbacks, and priorities |
@@ -18,6 +22,7 @@ characters running the addon locally.
 | [Namespace paths](docs/namespace-folders.md) | Folder layout and underscore aliases |
 | [Scoped variables](docs/scoped-variables.md) | Private configuration for imported branches |
 | [Multi-stage weapon skills](docs/multi-stage.md) | Participants, exclusions, and capability sharing |
+| [Status panel prototype](docs/status-panel.md) | Movable status toggle, recent output, and tracked expressions |
 
 The [base-extension cheatsheet](docs/extending-base-cheatsheet.md) is a worked
 example based on the author's private namespace layout. Its `base`, `xp`, and

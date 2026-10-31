@@ -10,7 +10,7 @@ local env=setmetatable({
     hasBuff=function() return locked end,
     align=function() return reached,reason end,
     hasMovementReservation=function() return reserved end,
-    releaseMovement=function() released=true;reserved=false end,
+    releaseMovement=function(retryable) assert(retryable==true);released=true;reserved=false end,
     postpone=function(value) delay=value end,
 }, {__index=_G})
 setfenv(expression,env)

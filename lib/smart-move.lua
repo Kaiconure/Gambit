@@ -257,6 +257,7 @@ end
 -- ======================================================================================
 
 local function sm_movement_exp(self, job)
+    if self.shutting_down then return end
     
     -- Unlock the target
     local player = windower.ffxi.get_player()
@@ -264,6 +265,8 @@ local function sm_movement_exp(self, job)
         windower.send_command('input /lockon')
         coroutine.sleep(0.25)
     end
+
+    if self.shutting_down then return end
 
     local originalStatus = player.status
 
@@ -463,6 +466,7 @@ local function sm_movement_exp(self, job)
     
     while
         continue and            -- Updated each iteration indicating whether the job should self-terminate
+        not self.shutting_down and
         not self.cancel and     -- Updated by the main class for external termination of the job
         job:cycle()             -- Have the job update its state, returning true if it's still valid
     do
@@ -492,6 +496,7 @@ local function sm_movement_exp(self, job)
     end
 
     -- If there's a completion function, call it
+    if self.shutting_down then return end
     if type(job.oncomplete) == 'function' then
         job:oncomplete()
     else
@@ -503,7 +508,7 @@ end
 local sm_movement = sm_movement_exp
 
 function sm_coroutine(self)
-    while true do
+    while not self.shutting_down do
         --self.cancel = false
 
         local job = self.queue[1]
@@ -537,6 +542,7 @@ end
 -------------------------------------------------------------------------------
 -- Create the basic job entry
 local function sm_createBaseJob(self, mode, skipcancel)
+    if self.shutting_down then return end
     local info = windower.ffxi.get_info()
     if type(info.zone) ~= 'number' or info.zone < 1 or resources.zones[info.zone] == nil then
         return nil
@@ -568,6 +574,8 @@ local function sm_createBaseJob(self, mode, skipcancel)
     job.oncomplete = function (self)
         windower.ffxi.run(false)
         coroutine.sleep(0.125)
+
+        if smartMove.shutting_down then return end
 
         if self:is_valid() then
             local player = windower.ffxi.get_player()
@@ -632,9 +640,21 @@ function smartMove:resetJitter()
     end
 end
 
+-- Terminal, non-yielding cleanup: movement state outlives Lua coroutines.
+function smartMove:shutdown()
+    self.shutting_down = true
+    self.cancel = true
+    self.queue = {}
+    self.previousJob = nil
+    self.current = nil
+    windower.ffxi.follow(-1)
+    windower.ffxi.run(false)
+end
+
 -------------------------------------------------------------------------------
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.
 function smartMove:cancelJob(jobId, immediate)
+    if self.shutting_down then return end
     local job = self.current
     local canCancel = job and (
         (jobId == nil) or
@@ -650,7 +670,7 @@ function smartMove:cancelJob(jobId, immediate)
             -- to finish before returning. We'll give it a little bit of buffer time
             -- afterward as well.
             while 
-                self.cancel or (jobId and self.current and self.current.jobId == jobId)
+                not self.shutting_down and (self.cancel or (jobId and self.current and self.current.jobId == jobId))
             do
                 coroutine.sleep(0.125)
             end
@@ -1061,6 +1081,7 @@ end
 -- Reschedules the specified jobId. If no joIb is provided, the most recent
 -- job is scheduled automatically. Returns the new job id, or nil if none.
 function smartMove:reschedule(jobId)
+    if self.shutting_down then return end
     local previousJob = self.previousJob
     if previousJob then
         if jobId == nil or jobId == previousJob.jobId then

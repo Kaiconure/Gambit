@@ -69,10 +69,26 @@ function resetNamespaceStartup()
     namespacePlayer = nil
 end
 
+-- Personal panel preferences are independent of namespace main configuration.
+function loadPanelSettings()
+    local player = assert(windower.ffxi.get_player(), 'No character is logged in')
+    local base = readBaseSettings(player.name)
+    return base.ui and base.ui.status_panel
+end
+
+function savePanelSettings(config)
+    local player = assert(windower.ffxi.get_player(), 'No character is logged in')
+    local base, fileName = readBaseSettings(player.name)
+    base.ui = base.ui or {}
+    base.ui.status_panel = config
+    writeJsonToFile(fileName, base)
+end
+
 local function settingsSnapshot(value)
     local snapshot = json.parse(json.stringify(value))
     snapshot.actions = nil
     snapshot.default_namespace = nil
+    snapshot.ui = nil -- Personal UI state is loaded/saved independently.
     return snapshot
 end
 
@@ -217,7 +233,7 @@ local defaultSettings = {
     followCommandDistance = 1,
     weaponSkillDelay = nil,
     cloudPanel = {
-        enabled = true,
+        enabled = false,
         duration = 2,
         top = 100
     }
@@ -1244,7 +1260,9 @@ function saveSettings(settingsToSave, force)
     -- Preserve the independent startup preference when saving the base file.
     local output = settingsSnapshot(settingsToSave)
     if fileName == './settings/' .. player.name .. '/main.json' then
-        output.default_namespace = readBaseSettings(player.name).default_namespace
+        local base = readBaseSettings(player.name)
+        output.default_namespace = base.default_namespace
+        output.ui = base.ui
     end
     writeJsonToFile(fileName, output)
     lastSavedSettings = settingsToSave

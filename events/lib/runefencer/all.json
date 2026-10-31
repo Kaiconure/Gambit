@@ -1,0 +1,81 @@
+{
+  "vars": {
+    "gear": {
+      "runefencer": {
+        "runes": {
+          "pre": null
+        },
+        "wards": {
+          "pre": null
+        },
+        "effusions": {
+          "pre": null
+        }
+      }
+    }
+  },
+  "job_abilities": {
+    "pre": [
+      {
+        "when": ["event.type == 'Rune'", "vars.gear.runefencer.runes.pre"],
+        "commands": [
+          "equipMany(vars.gear.runefencer.runes.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "runefencer-runes-pre"
+      },
+      {
+        "when": [
+          "event.type == 'Rune'",
+          "vars.gear.runefencer.runes[event.name] and vars.gear.runefencer.runes[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.runefencer.runes[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "runefencer-runes-named-pre"
+      },
+      {
+        "when": ["event.type == 'Ward'", "vars.gear.runefencer.wards.pre"],
+        "commands": [
+          "equipMany(vars.gear.runefencer.wards.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "runefencer-wards-pre"
+      },
+      {
+        "when": [
+          "event.type == 'Ward'",
+          "vars.gear.runefencer.wards[event.name] and vars.gear.runefencer.wards[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.runefencer.wards[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "runefencer-wards-named-pre"
+      },
+      {
+        "when": [
+          "event.type == 'Effusion'",
+          "vars.gear.runefencer.effusions.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.runefencer.effusions.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "runefencer-effusions-pre"
+      },
+      {
+        "when": [
+          "event.type == 'Effusion'",
+          "vars.gear.runefencer.effusions[event.name] and vars.gear.runefencer.effusions[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.runefencer.effusions[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "runefencer-effusions-named-pre"
+      }
+    ]
+  }
+}
