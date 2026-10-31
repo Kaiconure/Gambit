@@ -26,12 +26,12 @@ local function load(job)
     end)
 end
 local function set(name) return {head={name=name}} end
-local function run(config,section,phase,event,buffs)
+local function run(config,section,phase,event,buffs,magicBurst)
     local worn={}
     local context=function(_,state)
         local ctx
         ctx={vars=state.vars,ipairs=ipairs,
-        canMagicBurst=function() return false end,
+        canMagicBurst=function() return magicBurst or false end,
         hasBuff=function(...)
             for _,name in ipairs({...}) do if buffs and buffs[name] then return true end end
             return false
@@ -76,6 +76,14 @@ for _,case in ipairs({{'BRD','songs','singing'},{'NIN','ninjutsu','ninjutsu'},{'
     assert(result.head=='specialized' and result.neck=='specific',job)
 end
 local geo=load('GEO')
+local blm=load('BLM')
+assert(blm.vars.gear.spells.magic_burst and blm.vars.gear.spells.burst==nil)
+blm.vars.gear.spells.magic_burst.mid=set('burst general')
+blm.vars.gear.spells.magic_burst.Burst={mid={neck={name='burst override'}}}
+blm.vars.gear.spells.Burst={mid={waist={name='spell override'}}}
+local burstResult=run(blm,'spells','mid',{name='Burst',elemental=true},nil,true)
+assert(burstResult.head=='burst general' and burstResult.neck=='burst override' and burstResult.waist=='spell override')
+assert(run(blm,'spells','mid',{name='Burst',elemental=true}).head==nil)
 assert(geo.path=='./events/geo.json')
 geo.vars.gear.spells.pre=set('fast cast'); geo.vars.gear.spells.geomancy.pre=set('geomancy')
 assert(run(geo,'spells','pre',{name='Geo-Fury',geomancy=true}).head=='geomancy')
@@ -94,6 +102,20 @@ bst.vars.gear.beastmaster.ready['Razor Fang']={mid=set('specific potency')}
 assert(run(bst,'pet_abilities','pre',{name='Razor Fang',type='Monster'}).head=='ready delay')
 assert(run(bst,'pet_abilities','mid',{name='Razor Fang',type='Monster'}).head=='specific potency')
 local pup=load('PUP')
+local runefencer=load('RUN')
+assert(runefencer.path=='./events/run.json')
+for _,case in ipairs({{'runes','Rune','Ignis'},{'wards','Ward','Vallation'},{'effusions','Effusion','Rayke'}}) do
+    local group,kind,name=unpack(case)
+    runefencer.vars.gear.runefencer[group].pre=set('general '..group)
+    runefencer.vars.gear.runefencer[group][name]={pre={neck={name='specific '..name}}}
+    local result=run(runefencer,'job_abilities','pre',{name=name,type=kind})
+    assert(result.head=='general '..group and result.neck=='specific '..name)
+end
+runefencer.vars.gear.job_abilities.Rayke={pre=set('final Rayke')}
+assert(run(runefencer,'job_abilities','pre',{name='Rayke',type='Effusion'}).head=='final Rayke')
+assert(run(runefencer,'job_abilities','pre',{name='Other',type='Other'}).head==nil)
+runefencer.vars.gear.runefencer.wards.pre={head={name='stop ward'},meta={stop=true}}
+assert(run(runefencer,'job_abilities','pre',{name='Vallation',type='Ward'}).neck==nil)
 pup.vars.gear.puppetmaster.abilities.Repair.pre=set('repair')
 assert(run(pup,'job_abilities','pre',{name='Repair'}).head=='repair')
 assert(run(pup,'job_abilities','pre',{name='Other'}).head==nil)

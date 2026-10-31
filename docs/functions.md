@@ -152,6 +152,19 @@ Both positioning imports expose `duration` and `retry_delay` under their respect
 
 For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
 
+## Sending Windower commands
+
+`sendWindowerCommands(commands)` accepts one literal command string or a dense
+array of strings. It dispatches nonblank strings in order with
+`windower.send_command`, without evaluating Lua or waiting for completion.
+It returns the number dispatched, or nil for an empty array/blank-only input.
+Nil is not accepted.
+
+```lua
+sendWindowerCommands('input /echo Ready')
+sendWindowerCommands({'input /echo Ready', 'lua c other start'})
+```
+
 ## Evaluating reusable conditions
 
 

@@ -2,7 +2,7 @@
   "vars": {
     "gear": {
       "spells": {
-        "burst": {
+        "magic_burst": {
           "pre": null,
           "mid": null
         },
@@ -38,25 +38,25 @@
         "when": [
           "event.elemental",
           "canMagicBurst(event)",
-          "vars.gear.spells.burst.pre"
+          "vars.gear.spells.magic_burst.pre"
         ],
         "commands": [
-          "equipMany(vars.gear.spells.burst.pre)",
+          "equipMany(vars.gear.spells.magic_burst.pre)",
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
-        "id": "spells-burst-pre"
+        "id": "spells-magic-burst-pre"
       },
       {
         "when": [
           "event.elemental",
           "canMagicBurst(event)",
-          "vars.gear.spells.burst[event.name] and vars.gear.spells.burst[event.name].pre"
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].pre"
         ],
         "commands": [
-          "equipMany(vars.gear.spells.burst[event.name].pre)",
+          "equipMany(vars.gear.spells.magic_burst[event.name].pre)",
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
-        "id": "spells-burst-named-pre"
+        "id": "spells-magic-burst-named-pre"
       }
     ],
     "mid": [
@@ -83,25 +83,25 @@
         "when": [
           "event.elemental",
           "canMagicBurst(event)",
-          "vars.gear.spells.burst.mid"
+          "vars.gear.spells.magic_burst.mid"
         ],
         "commands": [
-          "equipMany(vars.gear.spells.burst.mid)",
+          "equipMany(vars.gear.spells.magic_burst.mid)",
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
-        "id": "spells-burst-mid"
+        "id": "spells-magic-burst-mid"
       },
       {
         "when": [
           "event.elemental",
           "canMagicBurst(event)",
-          "vars.gear.spells.burst[event.name] and vars.gear.spells.burst[event.name].mid"
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].mid"
         ],
         "commands": [
-          "equipMany(vars.gear.spells.burst[event.name].mid)",
+          "equipMany(vars.gear.spells.magic_burst[event.name].mid)",
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
-        "id": "spells-burst-named-mid"
+        "id": "spells-magic-burst-named-mid"
       }
     ]
   }

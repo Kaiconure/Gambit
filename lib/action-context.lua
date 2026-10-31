@@ -6769,7 +6769,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.sendCommands = context_send_commands
     -- Dispatch literal Windower strings separately; never evaluate or format them.
     context.sendWindowerCommands = function(commands)
-        assert(type(commands)=='table','sendWindowerCommands requires an array of strings')
+        if type(commands)=='string' then commands={commands} end
+        assert(type(commands)=='table','sendWindowerCommands requires a string or array of strings')
         for index,command in pairs(commands) do
             assert(type(index)=='number' and index>=1 and index%1==0 and index<=#commands
                 and type(command)=='string','sendWindowerCommands requires a dense array of strings')

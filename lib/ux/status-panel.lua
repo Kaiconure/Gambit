@@ -77,9 +77,9 @@ function Status:configure(options,trackingOverride)
     self.toggle.text:bold(true)
     self.strategy=self.panel:label(self.toggle.x+self.toggle.width+2,5,options.font_size,'heading')
     self.strategy.text:bold(true)
-    local versionSize=math.max(7,options.font_size-2)
-    self.version=self.panel:label(0,(self.panel.background.skin.border or 0)+2,versionSize,'body')
-    Theme.color(self.version.text,'heading')
+    local versionSize=math.max(6,options.font_size-3)
+    self.version=self.panel:label(0,(self.panel.background.skin.border or 0)+1,versionSize,'body')
+    Theme.color(self.version.text,'version')
     local version=self.deps.version or (_addon and _addon.version) or __version
     self.versionText=version and ('v'..tostring(version):gsub('^v','')) or ''
     self.versionWidth=textWidth(self.version,self.versionText,versionSize*0.8)
@@ -293,7 +293,7 @@ function Status:update()
     end
     self.panel.width=math.ceil(width)
     self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
-    self.version.x=self.panel.width-self.versionWidth-10
+    self.version.x=self.panel.width-self.versionWidth-2
     -- Expression arrays can change size at runtime: reflow rows and automatic
     -- height before clipping, without rebuilding controls or disturbing dragging.
     local lineHeight=math.ceil(self.options.font_size*1.8)

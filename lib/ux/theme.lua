@@ -54,6 +54,7 @@ end
 Theme.reload()
 Theme.colors={green={100,235,130},red={255,80,80},yellow={245,215,110},orange={245,160,80},
     heading={245,245,250},subheading={155,200,245},body={230,230,238},
+    version={240,240,24},
     log_odd={225,230,240},log_even={165,185,210},log_latest={255, 255, 0}}
 Theme.styles={heading={font='Segoe UI',size_offset=2,bold=true,color='heading'},
     subheading={font='Segoe UI',size_offset=0,bold=true,color='subheading'},

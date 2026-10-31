@@ -9,8 +9,11 @@ chunk()
 assert(context.sendWindowerCommands({'input /echo 100% ready','  ','wait 1; input /echo later','lua c other start'})==3)
 assert(sent[1]=='input /echo 100% ready' and sent[2]=='wait 1; input /echo later' and sent[3]=='lua c other start')
 assert(context.sendWindowerCommands({})==nil)
-for _,invalid in ipairs({'string',{'valid',false},{[2]='hole'}}) do
-    assert(not pcall(context.sendWindowerCommands,invalid) and #sent==3)
+assert(context.sendWindowerCommands('input /echo single')==1 and sent[4]=='input /echo single')
+assert(context.sendWindowerCommands('  ')==nil and #sent==4)
+assert(not pcall(context.sendWindowerCommands,nil))
+for _,invalid in ipairs({false,{'valid',false},{[2]='hole'}}) do
+    assert(not pcall(context.sendWindowerCommands,invalid) and #sent==4)
 end
 -- Both actual hook files compile under the status schema and call the dispatcher.
 local json=require('./lib/jsonlua')

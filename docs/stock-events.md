@@ -5,6 +5,52 @@ can use them by creating a variable file; writing a personal event rule file is
 optional. See the [event user guide](events.md) for event timing, rule syntax,
 context fields, imports, and the full contribution interface.
 
+## Shipped event entry points
+
+These files live in the addon's top-level `events/` directory. Closer user or
+namespace files take precedence. Jobs without a dedicated entry point use
+`common.json`; they can still have their own `<job>.vars.json` configuration.
+
+| File | Included behavior |
+|---|---|
+| `common.json` | Shared spells, job abilities (including Corsair rolls), weapon skills, named pet abilities, idle/battle transitions, and post-equipment rules |
+| `blu.json` | Common behavior plus Blue Magic sets and named overrides |
+| `brd.json` | Common behavior plus song sets and named overrides |
+| `bst.json` | Common behavior plus general and named Ready sets |
+| `geo.json` | Common behavior plus geomancy sets and named overrides |
+| `nin.json` | Common behavior plus ninjutsu sets and named overrides |
+| `pup.json` | Common behavior plus named PUP player-ability sets such as Repair |
+| `run.json` | Common behavior plus general/named Rune Enchantment, Ward, and Effusion sets |
+| `sch.json` | Common behavior plus arts- and stratagem-dependent spell overlays |
+| `smn.json` | Common behavior plus avatar summoning and general/named Blood Pact Rage/Ward sets |
+| `empty.json` | An explicitly selectable entry point with no built-in rules; independently loaded vars-file contributions can still add handlers |
+
+The reusable pieces are under `events/lib/`. You normally configure the shipped
+entry points through vars files rather than editing these libraries. Their
+supported gear paths and job examples are described below.
+
+## Event command cheat sheet
+
+The command is **`gbt events`** (plural). In game, prefix it with `//`:
+
+| Command | Purpose |
+|---|---|
+| `//gbt events` or `//gbt events status` | Show the active entry point, imports, and variable files; `s` is an alias for `status` |
+| `//gbt events reload` or `//gbt events r` | Reload event JSON using automatic/default file selection |
+| `//gbt events r -e empty` | Temporarily select `empty.json`; substitute any event-file name or library-style path |
+| `//gbt events r -r` | Reload the currently selected event file instead of returning to automatic selection |
+| `//gbt events r -v` | Reload automatic selection and export processed event JSON |
+| `//gbt events r -r -v` | Reload the current selection and export its processed JSON |
+| `//gbt r` | Reload normal settings/actions and events, restoring automatic event selection |
+| `//lua reload Gambit` | Reload addon Lua code after implementation changes; event JSON reload alone does not reload Lua |
+
+`-e` also accepts `-events`, `-r` accepts `-reload`, and `-v` accepts `-verbose`.
+An explicit filename may omit `.json` and resolves through the event search
+hierarchy. Selection is not persisted. `-e` and `-r` are mutually exclusive;
+either can be combined with `-v`. Failed event loads retain the previous working
+configuration. See [the event guide](events.md#reloading-and-troubleshooting)
+for output locations and diagnostics.
+
 ## Quick start
 
 Create `settings/<character>/events/<job>.vars.json`, using the character's name
@@ -43,6 +89,483 @@ Use `//gbt events reload -v` to export the fully processed configuration.
 An existing personal `<job>.json` or group rule file can override the stock entry
 point; adding a vars file does not remove that override.
 
+## How-to guide
+
+Use these recipes in `settings/<character>/events/<job>.vars.json`, unless a
+recipe says otherwise. Replace descriptive item names such as `Your Fast Cast
+Head` with exact names of equipment you own. The examples illustrate configuration,
+not recommended best-in-slot sets. Combine their fields into one `vars` object
+and one `contributions` object; do not paste several whole JSON documents into
+the same file or repeat object keys.
+
+| I want to... | Recipe |
+|---|---|
+| Use a shared Fast Cast set | [General spell pre-cast](#use-one-fast-cast-set-for-spells) |
+| Enhance cures, enfeebles, or nukes | [Spell categories and named overrides](#layer-spell-category-and-named-gear) |
+| Add magic-burst or buff-dependent gear | [Burst and buff overlays](#add-burst-and-buff-dependent-overlays) |
+| Return to normal gear | [Idle/battle gear and restoration](#equip-idlebattle-gear-and-restore-partial-sets) |
+| Prefer an item but accept a fallback | [Candidates and shared sets](#choose-fallback-items-and-share-set-definitions) |
+| Enhance abilities, rolls, or weapon skills | [Abilities and weapon skills](#configure-abilities-rolls-and-weapon-skills) |
+| Configure a job-specific system | [Job recipes](#configure-job-specific-gear) |
+| Add custom behavior without replacing stock rules | [Contributions](#add-custom-rules-and-initialization) |
+| Find out why a rule isn't working | [Check and troubleshoot](#check-which-files-and-rules-are-active) |
+
+### Use one Fast Cast set for spells
+
+Configure **`gear.spells.pre`** for general spell pre-cast equipment:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "pre": {
+          "head": {"name": "Your Fast Cast Head"},
+          "body": {"name": "Your Fast Cast Body"},
+          "ear1": {"name": "Your Fast Cast Earring"}
+        }
+      }
+    }
+  }
+}
+```
+
+The shared pre rule runs before specialized and named spell gear. Songs,
+ninjutsu, summoning, geomancy, and Blue Magic modules import it too; import
+deduplication prevents it running multiple times. Later pre layers can override
+its slots. Leave `meta.stop` unset if those layers should still run.
+
+Pre equipment is acknowledged before the action is dispatched. Result-enhancing
+equipment usually belongs in mid, but fast/instant spells may finish before mid
+gear arrives. For such spells, put essential result gear in their named pre set:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "Flash": {"pre": {"head": {"name": "Your Flash Head"}}}
+      }
+    }
+  }
+}
+```
+
+This overlays the shared Fast Cast set; it doesn't replace every slot.
+
+### Layer spell category and named gear
+
+The stock spell categories under `vars.gear.spells` are:
+
+| Category | Applies to |
+|---|---|
+| `curing` | Cure, Curaga, Cura, and Full Cure; excludes other Healing Magic and Blue Magic cures |
+| `enfeebling` | Spells using the Enfeebling Magic skill, such as Dispel and Sleep |
+| `enhancing` | Spells using the Enhancing Magic skill, such as Haste and Protect |
+| `elemental` | Spells using the Elemental Magic skill, such as Fire and Blizzard; not every spell with an element |
+| `magic_burst` | Elemental Magic spells whose element matches the target's current tracked magic-burst window; overlays `elemental` gear |
+| `geomancy` | Geomancy spells, including Indi- and Geo-spells; supplied by the GEO module |
+| `blue` | Blue Magic spells, including Blue Magic cures; supplied by the BLU module |
+
+Each category accepts general `.pre`/`.mid` sets and named spell overrides.
+These keys are the categories implemented by stock rules, not an automatic set
+for every spell skill. BRD songs, NIN ninjutsu, and SMN summoning use separate
+paths described in [job-specific gear](#configure-job-specific-gear).
+
+General category gear runs first, followed by its named override:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "curing": {
+          "mid": {
+            "body": {"name": "Your Cure Body"},
+            "hands": {"name": "Your Cure Hands"},
+            "neck": {"name": "Your Cure Necklace"}
+          }
+        },
+        "enfeebling": {
+          "mid": {
+            "body": {"name": "Your Enfeebling Body"},
+            "hands": {"name": "Your Enfeebling Hands"}
+          },
+          "Dispel": {"mid": {"head": {"name": "Your Dispel Head"}}}
+        },
+        "enhancing": {"mid": {"body": {"name": "Your Enhancing Body"}}},
+        "elemental": {"mid": {"body": {"name": "Your Nuking Body"}}}
+      }
+    }
+  }
+}
+```
+
+Curing means the Cure/Curaga/Cura families and Full Cure, not all Healing Magic.
+Category names describe the classifications supported by the stock modules;
+they are not arbitrary spell skills. A named override runs even if its general
+category set is absent. `gear.spells.Dispel.mid` would instead be the common
+named-spell override, applied after category and buff-overlay rules. Use exact
+English spell names on every client.
+
+### Add burst and buff-dependent overlays
+
+```json
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "elemental": {"mid": {"body": {"name": "Your Nuking Body"}}},
+        "magic_burst": {
+          "mid": {
+            "head": {"name": "Your Burst Head"},
+            "ring1": {"name": "Your Burst Ring"}
+          }
+        },
+        "buff_overlays": [
+          {
+            "buff": "Rapture",
+            "when": ["event.curing"],
+            "mid": {"head": {"name": "Your Rapture Head"}}
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+Burst gear overlays elemental gear when `canMagicBurst(event)` matches the
+target's current tracked window and the spell element. It doesn't guarantee
+the spell will land before the window closes. Buff overlays apply in array
+order after categories; each needs a `when` array (use `[]` for no additional
+condition) and a set for the relevant phase. All changes in that phase form
+one final batch. See [buff overlays](#buff-overlays) for the full entry format.
+
+### Equip idle/battle gear and restore partial sets
+
+```json
+{
+  "vars": {
+    "gear": {
+      "idle": {"back": {"name": "Your Idle Back"}},
+      "battle": {"back": {"name": "Your Battle Back"}}
+    },
+    "post_equip": {"enabled": true, "restore_snapshot": true}
+  }
+}
+```
+
+State-enter events apply the matching set. After action cleanup, restore-first
+returns to the lifecycle's starting equipment, then applies idle/battle gear.
+This matters for partial sets: a casting headpiece should not remain just
+because your idle set only defines a back piece. It also means intentional gear
+changes during the lifecycle can be overwritten.
+
+Note that by default, `post_equip.enabled` is true and `post_equip.resore_snapshot` is false.
+
+Set `post_equip.enabled` to false to disable stock post gear/restoration, while
+retaining state-enter rules. Set only `restore_snapshot` to false to keep post
+state gear but skip baseline restoration. See [restoration details](#restoration-and-partial-sets)
+before combining this with manual pushes or `use_equipment_snapshot`.
+
+To send literal commands after a state-enter gear request, use
+`on_idle.windower_commands` or `on_battle.windower_commands`; see
+[the command example](#windower-commands-on-state-changes). They don't wait for
+equipment acknowledgment and are not Lua scripts.
+
+### Choose fallback items and share set definitions
+
+```json
+{
+  "vars": {
+    "gear": {
+      "csv(idle, battle)": {
+        "back": [{"name": "Aptitude Mantle +1"}, {"name": "Aptitude Mantle"}]
+      },
+      "weapon_skills": {
+        "csv(Savage Blade, Shining Blade)": {
+          "pre": {"ring1": {"name": "Rufescent Ring"}}
+        }
+      }
+    }
+  }
+}
+```
+
+Candidates are ordered preferences; a missing item falls back to the next.
+An already-equipped matching copy is retained. CSV keys expand into independent
+copies at load time. An explicit sibling name can override a generated name.
+See [variables](variables.md#expand-multiple-keys-with-csv) for collision rules
+and [equipment](equipment.md) for augments and exact snapshot restoration.
+
+### Configure abilities, rolls, and weapon skills
+
+```json
+{
+  "vars": {
+    "gear": {
+      "job_abilities": {
+        "pre": {"body": {"name": "Your General Ability Body"}},
+        "Sentinel": {"pre": {"feet": {"name": "Your Sentinel Feet"}}}
+      },
+      "rolls": {"ring1": {"name": "Barataria Ring"}},
+      "weapon_skills": {
+        "pre": {
+          "body": {"name": "Your Weapon Skill Body"},
+          "waist": {"name": "Your Weapon Skill Belt"},
+          "ring1": {"name": "Your Weapon Skill Ring"}
+        },
+        "Savage Blade": {"pre": {"head": {"name": "Your Savage Blade Head"}}}
+      }
+    }
+  }
+}
+```
+
+Use the relevant pieces for your job. Weapon-skill named sets overlay the general
+set in pre. Rolls use the direct `gear.rolls` set for Corsair rolls and Double-Up;
+there is no `gear.rolls.pre`. Roll rules run before the common general ability
+set, then the common named ability override. Avoid configuring conflicting
+general ability slots unless you intend to override the roll gear.
+
+These actions need their enhancement gear in pre; don't rely on mid for an
+instant player action. Post may occur before its animation visibly ends.
+
+### Configure job-specific gear
+
+Use the matching main-job vars file. The dedicated stock entry point selects
+the relevant module; it doesn't automatically select modules for your subjob.
+Below are minimal configurations to combine with your common sets and restoration.
+
+| Job | Scenario and example `vars` contents |
+|---|---|
+| BRD | General song potency: `{"gear":{"songs":{"mid":{"range":{"name":"Your Song Instrument"}}}}}` |
+| NIN | General ninjutsu, then named Utsusemi gear: `{"gear":{"ninjutsu":{"mid":{"body":{"name":"Your Ninjutsu Body"}},"Utsusemi: Ni":{"pre":{"head":{"name":"Your Utsusemi Head"}}}}}}` |
+| GEO | Geomancy duration/potency: `{"gear":{"spells":{"geomancy":{"mid":{"hands":{"name":"Your Geomancy Hands"}}}}}}` |
+| BLU | General Blue Magic, then a named cure override: `{"gear":{"spells":{"blue":{"mid":{"body":{"name":"Your Blue Magic Body"}},"White Wind":{"mid":{"head":{"name":"Your White Wind Head"}}}}}}}` |
+| BST | Ready potency: `{"gear":{"beastmaster":{"ready":{"mid":{"body":{"name":"Your Ready Body"}}}}}}` |
+| PUP | Repair enhancement: `{"gear":{"puppetmaster":{"abilities":{"Repair":{"pre":{"body":{"name":"Your Repair Body"}}}}}}}` |
+
+Wrap a table example in `{"vars": ...}` when using it as a complete file.
+BRD and NIN also accept `[<English spell name>].pre/mid` within `songs` and
+`ninjutsu`, respectively. Instrument choice is explicit gear, not an inferred
+event classification. Blue cures are Blue Magic and do not match `curing`.
+Luopan-related player abilities and BST Reward use the normal named
+`gear.job_abilities` path. PUP's module covers player abilities, not autonomous
+automaton actions; random Sic moves are not command-correlated Ready events.
+
+#### SMN: named Blood Pact Rage and Ward sets
+
+In `settings/<character>/events/smn.vars.json`, configure avatar summoning
+separately from Rage and Ward. Put named pact overrides inside the corresponding
+`rage` or `ward` object:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "summoning": {
+        "avatar": {"mid": {"body": {"name": "Your Summoning Body"}}},
+        "rage": {
+          "pre": {"hands": {"name": "Your Pact Recast Hands"}},
+          "mid": {
+            "body": {"name": "Your Rage Body"},
+            "hands": {"name": "Your Rage Hands"}
+          },
+          "Flaming Crush": {
+            "mid": {
+              "head": {"name": "Your Flaming Crush Head"},
+              "ring1": {"name": "Your Flaming Crush Ring"}
+            }
+          },
+          "Predator Claws": {
+            "mid": {"body": {"name": "Your Physical Pact Body"}}
+          }
+        },
+        "ward": {
+          "pre": {"hands": {"name": "Your Pact Recast Hands"}},
+          "mid": {"body": {"name": "Your Ward Body"}},
+          "Hastega II": {
+            "mid": {
+              "head": {"name": "Your Hastega Head"},
+              "feet": {"name": "Your Hastega Feet"}
+            }
+          },
+          "Earthen Armor": {
+            "mid": {"body": {"name": "Your Earthen Armor Body"}}
+          }
+        }
+      }
+    },
+    "post_equip": {"enabled": true, "restore_snapshot": true}
+  }
+}
+```
+
+For Flaming Crush, the general Rage mid set applies first, then its named head
+and ring overlay. Predator Claws instead overrides the general body's slot.
+Hastega II and Earthen Armor follow the same pattern within Ward. Named entries
+also accept `pre`, and do not require a general set to be configured. These are
+gear-layout examples; replace the placeholder items with your chosen pieces.
+
+Pet pre is player-command initiation; mid is observed pet execution; post is
+result/failure cleanup. A lifecycle can go directly from pre to post, so gear
+restoration must not assume mid ran. General/named `pet_abilities` overrides
+follow the job module unless an earlier rule stops processing.
+
+For example, `gear.pet_abilities["Flaming Crush"].mid` is another supported
+named override, applied after the SMN-specific `gear.summoning.rage` rules.
+Use one location unless you intentionally want another layer.
+
+#### BST: named Ready sets
+
+In `settings/<character>/events/bst.vars.json`, use
+`gear.beastmaster.ready[<English ability name>].pre/mid` for named Ready moves:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "beastmaster": {
+        "ready": {
+          "pre": {"hands": {"name": "Your Ready Recast Hands"}},
+          "mid": {
+            "body": {"name": "Your Ready Body"},
+            "feet": {"name": "Your Ready Feet"}
+          },
+          "Razor Fang": {
+            "mid": {
+              "head": {"name": "Your Razor Fang Head"},
+              "ring1": {"name": "Your Razor Fang Ring"}
+            }
+          },
+          "Tail Blow": {
+            "mid": {"body": {"name": "Your Tail Blow Body"}}
+          }
+        }
+      }
+    },
+    "post_equip": {"enabled": true, "restore_snapshot": true}
+  }
+}
+```
+
+The general pre set applies before the player's command is released. On observed
+pet execution, the general Ready mid set applies, followed by the matching named
+override. Razor Fang adds a head and ring; Tail Blow replaces the general body.
+Named `pre` entries can similarly overlay the general pre set. All requests
+within a phase are batched, so intermediate sets do not require separate swaps.
+
+The module matches `pet_abilities` of type `Monster`; it does not turn autonomous
+pet attacks or random Sic moves into named Ready lifecycles. Generic
+`gear.pet_abilities[<name>].pre/mid` overrides can add a final layer afterward.
+Restore-first handles partial idle/battle sets at post, including failure paths
+where mid never ran. Earlier `meta.stop` rules can skip later named overrides;
+leave stopping unset for normal general-then-specific layering.
+
+#### RUN: runes, wards, and effusions
+
+In `settings/<character>/events/run.vars.json`, organize ability enhancement
+sets by resource type. Each group accepts a general `pre` set and named `pre`
+overrides:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "runefencer": {
+        "runes": {
+          "pre": {"body": {"name": "Your Rune Ability Body"}},
+          "Ignis": {"pre": {"hands": {"name": "Your Ignis Hands"}}}
+        },
+        "wards": {
+          "pre": {"neck": {"name": "Your Ward Necklace"}},
+          "Vallation": {"pre": {"body": {"name": "Your Vallation Body"}}},
+          "Valiance": {"pre": {"body": {"name": "Your Valiance Body"}}},
+          "Pflug": {"pre": {"feet": {"name": "Your Pflug Feet"}}}
+        },
+        "effusions": {
+          "pre": {"neck": {"name": "Your Effusion Necklace"}},
+          "Gambit": {"pre": {"hands": {"name": "Your Gambit Hands"}}},
+          "Rayke": {"pre": {"feet": {"name": "Your Rayke Feet"}}}
+        }
+      }
+    },
+    "post_equip": {"enabled": true, "restore_snapshot": true}
+  }
+}
+```
+
+These are layout examples with placeholder items. `runes` matches
+`event.type == 'Rune'`, `wards` matches `'Ward'`, and `effusions` matches
+`'Effusion'`. This grouping does not automatically infer appropriate gear from
+the currently harbored runes. The resource's `event.element` is not a reliable
+description of the rune-dependent effect.
+
+General group gear applies first, then its named override. The common
+`gear.job_abilities.pre` and `gear.job_abilities[<name>].pre` rules run afterward,
+so their overlapping slots can override RUN-specific gear. Earlier `meta.stop`
+can prevent those later rules. Individual abilities outside these three groups
+remain configurable through the common named ability map. RUN spell gear uses
+the normal shared spell categories and named overrides.
+
+#### SCH: arts and stratagem overlays
+
+For SCH, use `gear.scholar.light_arts.pre/mid` and
+`gear.scholar.dark_arts.pre/mid` for arts-dependent gear, including the respective
+Addendum buffs. Use the ordered [stratagem example](#scholar-stratagems) for
+Rapture/Ebullience-style overlays. SCH overlays run after common spell rules.
+
+### Add custom rules and initialization
+
+Contributions let a vars file extend stock behavior at before/after hooks:
+
+```json
+{
+  "vars": {"announce_cures": true},
+  "contributions": {
+    "loading.actions.after": [
+      {"commands": ["setVar('ready_message', 'Cure rules initialized')"], "id": "personal-init"}
+    ],
+    "spells.pre.before": [
+      {
+        "when": ["vars.announce_cures and event.curing"],
+        "commands": ["log(vars.ready_message, event.name)"],
+        "id": "personal-cure-announcement"
+      }
+    ]
+  }
+}
+```
+
+Loading runs once per successful event load/reload; its successful variable
+changes initialize the copies used by later lifecycles. Ordinary lifecycle
+`setVar` calls do not persist into the next lifecycle. Keep scripts short and
+non-yielding. For literal Windower command arrays, use `sendWindowerCommands`.
+
+For item-specific gear, see the [optional Hairpin contribution](#example-optional-dark-element-headgear).
+For existing-rule replacement, disabling by ID, priorities, and custom hooks,
+see [contribution controls](#disable-or-replace-a-stock-rule). IDs replace at
+load time; they are not first-match groups. Before/after contributions can be
+skipped by earlier stops. Use a set's `meta.stop` only when later phase rules
+really should be skipped; avoid stopping post cleanup.
+
+### Check which files and rules are active
+
+1. Run `//gbt events s` to inspect the selected entry point, imports, and vars files.
+2. Run `//gbt events r` after editing JSON; `//gbt events r -r` preserves an
+   explicitly selected file. Use `//gbt events r -e common` to temporarily choose
+   a different entry point, or full `//gbt r` to return to automatic selection.
+3. Add `-v` to export final variables, expanded rules, IDs, and source metadata.
+4. Check exact English names, the correct variable phase/path, and earlier stops.
+   A closer empty rule file intentionally suppresses shipped defaults.
+
+If casting gear remains, review partial sets and restore-first behavior. If
+mid gear misses fast casts, put essential pieces in pre. JSON compilation cannot
+verify ownership or in-game timing. See [troubleshooting](#checking-your-setup)
+and the [event guide](events.md#reloading-and-troubleshooting) for failure handling.
+
 ## Files and layering
 
 For variable syntax and merging basics, see [Variables](variables.md).
@@ -69,6 +592,36 @@ modules explicitly. Imports follow event-directory precedence, so importing your
 own entry point's name would create a cycle.
 
 ## Gear set format
+
+### Equipment slot names
+
+Use these keys inside any gear set. Slot names are case-insensitive; lowercase
+is the convention used in the examples.
+
+| Slot key | Equipment position | Accepted alias |
+|---|---|---|
+| `main` | Main-hand weapon | — |
+| `sub` | Off-hand weapon, shield, or grip | — |
+| `range` | Ranged weapon or instrument | — |
+| `ammo` | Ammunition | — |
+| `head` | Head | — |
+| `body` | Body | — |
+| `hands` | Hands | — |
+| `legs` | Legs | — |
+| `feet` | Feet | — |
+| `neck` | Neck | — |
+| `waist` | Waist | — |
+| `ear1` | Left ear | `left_ear` |
+| `ear2` | Right ear | `right_ear` |
+| `ring1` | Left ring | `left_ring` |
+| `ring2` | Right ring | `right_ring` |
+| `back` | Back | — |
+
+Use one key per physical slot; do not define both `ear1` and `left_ear`, for
+example. `meta` is reserved set metadata, not an equipment slot. Omitted slots
+are left alone, so both small overlays and full sets use the same format.
+
+### Item values and metadata
 
 All paths below start with `vars`. In JSON, put them under the top-level `vars`
 object. Gear sets are slot-keyed objects:
@@ -132,11 +685,11 @@ below describes an object key, not literal JSON punctuation.
 | `post_equip.restore_snapshot` | Restore starting gear before the post idle/battle overlay; default `false` |
 
 Common spell categories are `curing`, `enfeebling`, `enhancing`, `elemental`, and
-`burst`. GEO adds `geomancy`; BLU adds `blue`. There is no general
+`magic_burst`. GEO adds `geomancy`; BLU adds `blue`. There is no general
 `gear.spells.mid` rule: use categories or named sets for result-enhancing gear.
 
 `curing` includes Cure, Curaga, Cura, and Full Cure, but not all Healing Magic.
-`elemental` describes the Elemental Magic skill. `burst` additionally requires
+`elemental` describes the Elemental Magic skill. `magic_burst` additionally requires
 `canMagicBurst(event)` for the current target/window. A spell-specific set can
 run without its category's general set being configured.
 
@@ -259,6 +812,7 @@ their variables in the same character/job vars file.
 | `blu.json` | `gear.spells.blue.pre` / `.mid` and named category overrides |
 | `bst.json` | `gear.beastmaster.ready.pre` / `.mid` and `[<name>].pre` / `.mid` overrides |
 | `pup.json` | `gear.puppetmaster.abilities[<name>].pre` |
+| `run.json` | `gear.runefencer.runes`, `.wards`, `.effusions`: each accepts `.pre` and `[<name>].pre` |
 | `sch.json` | `gear.scholar.light_arts.pre` / `.mid`, `.dark_arts.pre` / `.mid`, and `.stratagems` |
 
 Every specialized spell module also imports the shared general spell-pre rule;
