@@ -11,6 +11,8 @@ local magicSkills = require('./meta/magic-skills')
 local cureSpell = require('./lib/cure-spell')
 local targetMetadata = require('./lib/target-metadata')
 local restoreEquipment = require('./lib/equipment/restore')
+local equipmentReferences = require('./lib/equipment/references')
+local checklist = require('./lib/checklist')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
 -- A mob need not have observed buffs yet. Resource objects have an ID but
@@ -1013,10 +1015,21 @@ end
 -----------------------------------------------------------------------------------------
 -- 
 local function setPartyEnumerators(context)
+    -- Expression selectors reserve only the final table for ordering options;
+    -- preceding arguments retain their string.format positions, including nils.
+    local function expressionArguments(...)
+        local args={...}
+        local count=select('#',...)
+        local options=args[count]
+        if type(options)=='table' then
+            args[count]=nil; count=count-1
+        else options=nil end
+        return args,count,options
+    end
     local function selectionArguments(...)
         local args = {...}
         local options = args[#args]
-        if type(options) == 'table' and (options.randomize ~= nil or options.self_first ~= nil) then
+        if type(options) == 'table' and (options.randomize ~= nil or options.self_first ~= nil or options.self_last ~= nil) then
             table.remove(args)
         else
             options = nil
@@ -1085,7 +1098,9 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- Find a party member who matches the given expression
     context.partyAny = function(expression, ...)
-        local results = enumerateContextByExpression(context, PARTY_MEMBER_FIELD_NAMES, expression, ...)
+        local args,count,options=expressionArguments(...)
+        local results = enumerateContextByExpression(context, PARTY_MEMBER_FIELD_NAMES, expression, unpack(args,1,count))
+        targetSelectors.applyOptions(context,results,options)
         
         context.member = results[1]
         context.members = results
@@ -1141,7 +1156,9 @@ local function setPartyEnumerators(context)
     -----------------------------------------------------------------------------------------
     -- Find a party or alliance member who match the given expression
     context.allyAny = function(expression, ...)
-        local results = enumerateContextByExpression(context, ALL_MEMBER_FIELD_NAMES, expression, ...)
+        local args,count,options=expressionArguments(...)
+        local results = enumerateContextByExpression(context, ALL_MEMBER_FIELD_NAMES, expression, unpack(args,1,count))
+        targetSelectors.applyOptions(context,results,options)
 
         context.member = results[1]
         context.members = results
@@ -2101,6 +2118,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             last_ability = globals.last_ability and {
                 id = globals.last_ability.id, 
                 name = globals.last_ability.name, 
+                element = globals.last_ability.element,
                 time = globals.last_ability.time,
                 age = time - globals.last_ability.time,
                 target=targetMetadata.refresh(globals.last_ability.target,windower.ffxi),
@@ -2108,6 +2126,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             last_spell = globals.last_spell and {
                 id = globals.last_spell.id, 
                 name = globals.last_spell.name, 
+                element = globals.last_spell.element,
                 time = globals.last_spell.time,
                 status = globals.last_spell.status,
                 age = time - globals.last_spell.time,
@@ -2159,6 +2178,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local globalHelpers = {vars=globalVars, _originalVars=originalVars}
     attachVariableHelpers(globalHelpers)
     context.setVarGlobal = globalHelpers.setVar
+    -- Event variables are isolated; checklist state always belongs to automation.
+    local checklistVariables={vars=actionStateManager.vars}
+    attachVariableHelpers(checklistVariables)
+    checklist.attach(context,checklistVariables.getVar,checklistVariables.setVar)
 
     context.skillchain_trigger_time = 
         (context.skillchain and context.skillchain.time) or 
@@ -2329,7 +2352,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 name = slot.name
                 slot = slot.slot
                 augments = slot.matched_augments
-            elseif type(name) == 'table' and #name>0 then
+            elseif type(name) == 'table' and (#name>0 or name.var~=nil) then
                 if not slot then return end
                 context.equipMany({[slot]=name})
                 return true
@@ -2411,11 +2434,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     local equipmentEntries = {}
                     for slot, entry in pairs(entries) do
                         if slot ~= 'meta' then
-                            if type(entry)=='string' then
-                                equipmentEntries[slot]={name=entry,slot=slot}
-                            else
-                                entry.slot = slot
-                                equipmentEntries[slot] = entry
+                            entry=equipmentReferences.resolve(entry,context.getVar)
+                            if entry~=nil then
+                                if type(entry)=='string' then
+                                    equipmentEntries[slot]={name=entry,slot=slot}
+                                else
+                                    entry.slot = slot
+                                    equipmentEntries[slot] = entry
+                                end
                             end
                         end
                     end

@@ -57,7 +57,7 @@ function Buffer.uncolored(text)
     end
     return table.concat(parts)
 end
-function Buffer.clip(text,columns)
+function Buffer.clip(text,columns,advance)
     local index,used=1,0
     local colored=false
     local utf8=Buffer.isUtf8(text)
@@ -70,7 +70,7 @@ function Buffer.clip(text,columns)
         local byte=text:byte(index)
         local wide=(byte>=0x81 and byte<=0x9F) or (byte>=0xE0 and byte<=0xFC)
         local count=utf8 and utf8Length(text,index) or (wide and 2 or 1)
-        local width=utf8 and 1 or count
+        local width=advance and advance(text:sub(index,index+count-1)) or (utf8 and 1 or count)
         if used+width>columns then break end
         used=used+width; index=index+count
         end

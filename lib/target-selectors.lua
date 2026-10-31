@@ -265,7 +265,8 @@ function selectors.applyOptions(context, members, options)
             members[i], members[j] = members[j], members[i]
         end
     end
-    if options.self_first then selectors.selfFirst(context, members) end
+    if options.self_first then selectors.selfFirst(context, members)
+    elseif options.self_last then selectors.selfLast(context, members) end
     return members
 end
 
@@ -276,6 +277,19 @@ function selectors.selfFirst(context, members)
     for i, member in ipairs(members) do
         if member == me or (me.id and member.id == me.id) then
             if i > 1 then table.insert(members, 1, table.remove(members, i)) end
+            break
+        end
+    end
+    return members
+end
+
+-- Move self to the end while preserving the order of all other matches.
+function selectors.selfLast(context, members)
+    local me = context.me
+    if not me then return members end
+    for i, member in ipairs(members) do
+        if member == me or (me.id and member.id == me.id) then
+            if i < #members then table.insert(members, table.remove(members, i)) end
             break
         end
     end

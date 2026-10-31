@@ -250,5 +250,43 @@ for _, method in ipairs({'partyByName','alliesByName'}) do
     assert(ctx[method]({}, {randomize=true}) == nil)
     assert(ctx.action.enumerators.member == nil)
 end
+for _,method in ipairs({'partyAny','allyAny'}) do
+    local ctx={p0=zulu,p1=alpha,p2=scholar,me=zulu,action={enumerators={}}}
+    setup(ctx)
+    calls=0
+    assert(ctx[method]('true and %d == 15',15)==alpha)
+    assert(calls==0)
+    assert(ctx[method]('true and %d == 15',15,{randomize=true,self_first=true})==zulu)
+    assert(calls==2 and #ctx.members==3)
+    assert(ctx[method]('true',{})==alpha)
+    assert(ctx[method]('false',{randomize=true})==nil and ctx.member_count==0)
+end
+for _,method in ipairs({'partyAll','allyAll'}) do
+    local ctx={p0=zulu,p1=alpha,p2=scholar,me=zulu,action={enumerators={}}}
+    setup(ctx)
+    calls=0
+    assert(ctx[method]('true',{randomize=true,self_first=true})==zulu)
+    assert(calls==2)
+    assert(ctx[method]('true',{randomize=true,self_first=true})==scholar)
+    assert(calls==2)
+end
+for _,method in ipairs({'partyAny','allyAny','partyByName','alliesByName'}) do
+    local ctx={p0=zulu,p1=alpha,p2=scholar,me=alpha,action={enumerators={}}}
+    setup(ctx)
+    local names=method=='partyByName' or method=='alliesByName'
+    local selection=names and {'*'} or 'true'
+    assert(ctx[method](selection,{self_last=true})==scholar)
+    assert(ctx.members[3]==alpha and #ctx.members==3)
+    ctx.action.enumerators={}
+    assert(ctx[method](selection,{randomize=true,self_last=true})~=alpha)
+    assert(ctx.members[3]==alpha)
+    ctx.action.enumerators={}
+    assert(ctx[method](selection,{randomize=true,self_first=true,self_last=true})==alpha)
+end
+local noSelf={alpha,scholar}
+selectors.applyOptions({me=zulu},noSelf,{self_last=true})
+assert(#noSelf==2 and noSelf[1]==alpha and noSelf[2]==scholar)
+selectors.applyOptions({},noSelf,{self_last=true})
+assert(noSelf[1]==alpha)
 math.random=originalRandom
 print('PASS: optional shuffle/self-first, vararg and array syntax, cycle stability and empty selections')

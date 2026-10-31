@@ -31,8 +31,9 @@ local file=assert(io.open('lib/action-context.lua')); local source=file:read('*a
 local body=assert(source:match('(    context.equip = function.-)%s*%-%- Push a stop request'))
 local function context()
     local ctx={vars={_={eq_stack={}}}}
+    ctx.getVar=function(path) return require('./lib/variable-values').get(ctx.vars,path) end
     local fn=assert(loadstring(body))
-    setfenv(fn,setmetatable({context=ctx,inventory=inventory,varargs=function(args) return args end},{__index=_G}))
+    setfenv(fn,setmetatable({context=ctx,inventory=inventory,equipmentReferences=require('./lib/equipment/references'),varargs=function(args) return args end},{__index=_G}))
     fn(); return ctx
 end
 local function ack(slot,index)
@@ -92,5 +93,23 @@ reset(); ctx=context()
 assert(ctx.equipPush(set)==1); ack(15,2)
 items.wardrobe[1]={id=1,slot=1,count=1,status=0}
 assert(ctx.equipPop()>0 and sent[2].index==3) -- Restore Original, not the newly available Better.
+reset(); ctx=context()
+ctx.vars.gear={battle={back={{name='Better Mantle'},{name='Fallback Mantle'}}}}
+local referenced={back={var='vars.gear.battle.back'},meta={stop=true}}
+assert(ctx.checkEquipMany(referenced)==1 and #sent==0)
+assert(ctx.equipPush(referenced)==1 and ctx.equipment_set==referenced)
+assert(referenced.back.slot==nil and ctx.vars.gear.battle.back.slot==nil)
+ack(15,2)
+assert(ctx.equipPop()>0 and sent[2].index==3)
+ack(15,3)
+assert(ctx.equip('back',{var='gear.battle.back'})==true and sent[3].index==2)
+local sentBefore=#sent
+assert(ctx.equipMany({head={var='gear.not_defined.head'}})==nil and #sent==sentBefore)
+reset(); ctx=context()
+items.wardrobe[10]={id=6,slot=10,count=1,status=0,augments={'STR+10'}}
+items.wardrobe[11]={id=6,slot=11,count=1,status=0,augments={'STR+20'}}
+ctx.vars.ring={name='Augmented Ring',augments={'STR+20'}}
+assert(ctx.equipMany({ring1={var='vars.ring'}})==1 and sent[1].index==11)
+assert(ctx.vars.ring.slot==nil and ctx.vars.ring.augments[1]=='STR+20')
 manager:destroy(); inventory.equipment_manager=nil
 print('PASS: ordered candidates, fallback/upgrade, duplicate stability, pending state, paired-slot exclusions, augments and exact push/pop')

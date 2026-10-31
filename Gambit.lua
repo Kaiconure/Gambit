@@ -1,4 +1,4 @@
-__version = '1.0.5'
+__version = '1.0.6'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -455,6 +455,7 @@ windower.register_event('load', function()
         windower=windower, texts=texts, images=images,
         enabled=function() return globals.enabled end,
         strategy=function() return settings.strategy end,
+        canShareClaim=function(mob) return partyInfo:canShareClaimOnMob(mob) end,
         loggedIn=function() return globals.logged_in end,
         ready=function()
             return globals.status_panel_ready and not actionStateManager.needsRecompile
@@ -1360,7 +1361,7 @@ local _handle_actionChunk = function(id, data)
         if player and actorId == player.id and ability then
             local targetId = tonumber(packet['Target 1 ID'])
             local target = targetId and windower.ffxi.get_mob_by_id(targetId)
-            globals.last_ability = {id=ability.id, name=ability.name, time=os.clock(),
+            globals.last_ability = {id=ability.id, name=ability.name, element=ability.element, time=os.clock(),
                 target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
         end
     end
@@ -1371,7 +1372,7 @@ local _handle_actionChunk = function(id, data)
         if player and actorId == player.id and spell then
             local targetId = tonumber(packet['Target 1 ID'])
             local target = targetId and windower.ffxi.get_mob_by_id(targetId)
-            globals.last_spell = {id=spell.id, name=spell.name, time=os.clock(), status='casting',
+            globals.last_spell = {id=spell.id, name=spell.name, element=spell.element, time=os.clock(), status='casting',
                 target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
         end
     elseif category == 8 and actionId == 28787 then -- Spell casting interrupted
@@ -1386,7 +1387,7 @@ local _handle_actionChunk = function(id, data)
         if player and actorId == player.id and spell then
             local targetId = tonumber(packet['Target 1 ID'])
             local target = targetId and windower.ffxi.get_mob_by_id(targetId)
-            globals.last_spell = {id=spell.id, name=spell.name, time=os.clock(), status='completed',
+            globals.last_spell = {id=spell.id, name=spell.name, element=spell.element, time=os.clock(), status='completed',
                 target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
         end
     end

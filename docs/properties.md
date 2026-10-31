@@ -32,6 +32,20 @@ These represent targetable mobs, players, and trusts on the map.
 
 ## Contextual
 
+### Target classification
+
+Initialized context targets (`me`, `t`/`bt`, `cursor`, `pet`, party/alliance
+members, and target lookup results) expose `is_player`, `is_mob`, `is_trust`,
+`is_npc`, and `is_pet` directly. The same classification is available on event
+targets and recorded `last_spell`/`last_ability` targets.
+
+`is_npc` mirrors Windower's NPC flag; `is_pet` checks for a numeric
+`owner_index` greater than zero, independently of spawn type. This includes
+pets belonging to other players or monsters, not only your own pet.
+These flags are not mutually exclusive: a pet or enemy can also be flagged as
+an NPC. For panel colors, test specific types before the broader NPC flag.
+Classification flags are nil when the underlying mob is unavailable.
+
 ### Loaded automation
 
 These fields are also available to panel tracking expressions:

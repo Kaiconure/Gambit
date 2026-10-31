@@ -7,6 +7,7 @@ local targetSelectors = require('./lib/target-selectors')
 local variableScopes = require('./lib/variable-scopes')
 local actionSlots = require('./lib/action-slots')
 local leaderLoadState = require('./lib/leader-load-state')
+local panelConfig = require('./lib/ux/status-config')
 local loadedLeaderState
 local loadingLeader
 local loadedNamespaceDescriptions
@@ -80,7 +81,7 @@ function savePanelSettings(config)
     local player = assert(windower.ffxi.get_player(), 'No character is logged in')
     local base, fileName = readBaseSettings(player.name)
     base.ui = base.ui or {}
-    base.ui.status_panel = config
+    base.ui.status_panel = panelConfig.forSave(config)
     writeJsonToFile(fileName, base)
 end
 

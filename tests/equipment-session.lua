@@ -37,7 +37,7 @@ local function context(_,state)
         findEquipmentInSlot=function(slot,confirmed) return bound.find_equipment_in_slot(slot,nil,confirmed) end,
         fail=function() error('phase failure') end,assert=assert}
     local chunk=assert(loadstring(body))
-    setfenv(chunk,setmetatable({context=ctx,inventory=bound,restoreEquipment=require('./lib/equipment/restore'),Colors={},varargs=function(args) return args end,
+    setfenv(chunk,setmetatable({context=ctx,inventory=bound,equipmentReferences=require('./lib/equipment/references'),restoreEquipment=require('./lib/equipment/restore'),Colors={},varargs=function(args) return args end,
         writeVerbose=function() end,pluralize=function() return '' end},{__index=_G}))
     chunk(); captured=state
     return ctx

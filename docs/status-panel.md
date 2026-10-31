@@ -82,7 +82,7 @@ sources as global. Folder aliases such as `_base` retain their source spelling.
 | `gbt panel tracking -list` | List names alphabetically |
 | `gbt panel tracking -set <name>` | Switch immediately and save selection |
 | `gbt panel reset-position` | Restore default coordinates and save |
-| `gbt panel reset` | Restore and save all panel defaults, clearing temporary tracking |
+| `gbt panel reset` | Reset display preferences and select `default`; preserve custom sets and clear temporary tracking |
 | `gbt panel position <x> <y>` | Set both coordinates in pixels and save |
 | `gbt panel anchor [<top\|bottom> <left\|right>]` | View or set the position anchor and save |
 | `gbt panel x <x>` / `gbt panel y <y>` | Set one coordinate, retaining the other |
@@ -111,22 +111,37 @@ Merge this `ui` section into your existing global character main configuration:
 {
   "ui": {
     "status_panel": {
-      "visible": true,
-      "x": 30,
-      "y": 150,
-      "width": 500,
-      "font_size": 10,
-      "history_lines": 6,
-      "refresh_interval": 0.5,
       "tracking": {
-        "current": "default",
+        "current": "custom",
         "sets": {
-          "default": [
-            { "name": "Strategy", "expression": ["gambit.strategy"] },
-            { "name": "Namespace", "expression": ["gambit.namespace or '(base settings)'"] }
-          ],
-          "notes": [{ "name": "Spawn order", "value": ["1. Spawn NM A", "2. Spawn NM B"] }],
-          "none": []
+          "custom": [
+            {
+              "name": "Automation",
+              "expression": [
+                "\"Actions: \" .. color_text(format(\"%s (%s namespace)\", gambit.entrypoint_relative, gambit.namespace or \"global\"), 100,235,130)",
+                "\"Events: \" .. color_text(format(\"%s (%s namespace)\", gambit.events_relative, gambit.event_namespace or \"global\"), 100,235,130)",
+                "\"Target: \" .. color_mob(cursor) .. (cursor and cursor.valid_target and format(\" (%s / %s)\", color_number(cursor.id), color_number(format(\"%03X\", cursor.index))) or \"\")"
+              ]
+            },
+            {
+              "name": "Skillchain",
+              "expression": [
+                "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
+              ]
+            },
+            {
+              "name": "Spell",
+              "expression": [
+                "(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
+              ]
+            },
+            {
+              "name": "Job Ability",
+              "expression": [
+                "(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
+              ]
+            }
+          ]
         }
       }
     }
@@ -141,8 +156,28 @@ element appears on its own indented line under the entry heading. Automatic
 height and subsequent rows reflow as the
 array length changes. Switching sets rebuilds tracking rows and
 panel height, retaining placement, width, and recent output. Empty sets show only
-the automation toggle and log. The initial prototype's tracking array format is
-also accepted and becomes a `default` set.
+the automation toggle and log.
+
+
+### Stock and custom tracking sets
+
+Gambit owns every set defined in its stock configuration: currently `default`,
+`compact`, and `none`. Their definitions always come from Gambit. Saved copies
+under these names are ignored and removed the next time panel preferences are
+saved. The selected name (`tracking.current`) is still saved.
+
+Custom sets are merged with the stock sets in memory and saved normally. Use a
+unique name such as `custom` to keep your own version of the display. The example
+above copies the current stock `default` definition into a custom set, including its
+conditional rows and inline colors. Select it with `gbt panel tracking -set custom`.
+To use the built-in display instead, select `default`; you do not need to copy its
+definition into your settings. Old single-array tracking settings also fall back
+to the current stock default.
+
+`gbt panel reset` resets display preferences, selects `default`, clears temporary
+tracking, and saves. It preserves all custom tracking set definitions. Move any
+personal edits saved under a stock name to a custom name before your next panel
+preference save if you want to retain them.
 
 Coordinates must be nonnegative integers; width is 180–2000, font size 6–30,
 history lines 0–100, and refresh interval 0.1–60 seconds. Bounds errors reject the
@@ -179,8 +214,11 @@ horizontal clipping limit. This does not change font size or history capacity.
 
 Tracking headings and values can widen the panel beyond its configured width
 and the logging minimum. Each refresh sizes to the longest visible tracking
-line, including value indentation, using the same character-width estimate as
-clipping. Multiline values use their longest line; nil entries contribute no
+line, including value indentation, using the same font metrics as clipping.
+Segoe UI uses per-character regular/bold width tables; Consolas uses a fixed
+advance. Measurements are cached per label until text or font settings change,
+with conservative widths for unsupported characters and a small layout margin.
+Multiline values use their longest line; nil entries contribute no
 width. The panel shrinks toward its minimum when tracking content becomes
 shorter. Log text never drives automatic width. These width changes do not
 modify saved settings.
@@ -203,6 +241,180 @@ Syntax/runtime failures display `[error]` on the affected entry and stop retryin
 it until panel recreation (switch sets or run `gbt panel reload`). Unavailable contexts display
 `[unavailable]` and are retried. Failures do not quarantine automation actions or
 produce repeated chat errors.
+
+## Panel expression color helpers
+
+Tracking expressions have additional helpers, available only during panel
+evaluation:
+
+| Helper | Result |
+|---|---|
+| `color_text(text, r, g, b)` | Wrap text in RGB color markup; components are integers from 0 to 255 |
+| `color_mob(mob)` | Color the mob's name; unavailable/invalid targets return gray `--` |
+| `color_skillchain(chain)` | Color a skillchain name or an object's `name`; missing names return gray `--` |
+| `color_element(object)` | Color an object's `name` using its `element`; missing/invalid elements leave the name unchanged |
+| `color_number(value)` | Color a number or preformatted numeric string in pale gold |
+| `color_status(status)` | Casting in pending gold, interrupted in red, completed in green; unknown statuses use body color |
+| `color_latest(text)` | Color text using the most recent color chosen by either helper above |
+
+Players outside your party/alliance are white; party/alliance players are
+turquoise. Monsters and pets are light gold when not engaged and red when
+engaged. Engaged monsters/pets with an outside claim that cannot be shared are
+magenta, using Gambit's claim-sharing helper (including its shared-content
+exceptions). NPCs and other valid targets (including trusts) are green. Player and
+monster/pet classifications take precedence over the broad NPC flag. Invalid
+targets remain gray `--`. Dead targets use gray regardless of type or membership.
+These colors use the panel theme palette.
+
+```json
+{
+  "name": "Target",
+  "expression": "color_mob(cursor) .. (cursor and cursor.valid_target and color_latest(format(' (%d / %03X)', cursor.id, cursor.index)) or '')"
+}
+```
+
+`color_element` accepts Windower's numeric element IDs (0–7) or English element
+names, case-insensitively: Fire, Ice, Wind, Earth, Lightning, Water, Light, Dark.
+It works with spells, abilities, weapon skills, and event objects carrying those
+fields. Physical, None, and unsupported elements pass the name through without
+adding markup or changing `color_latest`. Nil input or a missing name returns
+nil. For example: `color_element(event)`.
+
+Color helpers update `color_latest` when they apply a color. Format numbers before coloring when
+needed, for example `color_number(format('%.1f', remaining))`. Palette entries
+`number`, `status_pending`, `status_interrupted`, and `status_completed` are in
+`lib/ux/theme.lua`. Stock tracking uses these for its countdown and spell status.
+
+Each expression starts with a fresh latest color, including each element of an
+expression array. Before a color has been chosen, `color_latest` uses the body
+color. Every helper closes its color markup with a reset. The expression above
+colors the target name first, then uses `color_latest` for its supplemental IDs.
+Tracking examples generally use expressions rather than local declarations or
+explicit return statements.
+
+`color_skillchain` recognizes names case-insensitively and updates `color_latest`.
+Unknown names retain their text in the normal body color. The stock skillchain
+progress row uses it automatically.
+
+| Skillchain | Color |
+|---|---|
+| Liquefaction | Coral red |
+| Induration | Pale blue |
+| Detonation | Mint green |
+| Scission | Sandy gold |
+| Impaction | Lavender |
+| Reverberation | Blue |
+| Transfixion | Pale yellow |
+| Compression | Purple |
+| Fusion | Orange |
+| Fragmentation | Turquoise |
+| Distortion | Blue-violet |
+| Gravitation | Muted plum |
+| Light / Radiance | Warm white |
+| Darkness / Umbra | Light violet |
+
+## Include another tracking set
+
+A tracking entry with `references` is replaced on screen by all rows from that
+named tracking set, in their existing order. For example, this set displays the
+built-in `compact` rows first, followed by a checklist:
+
+```json
+{
+  "ui": {
+    "status_panel": {
+      "tracking": {
+        "current": "objectives",
+        "sets": {
+          "objectives": [
+            {"references": "compact"},
+            {
+              "id": "sortie_a",
+              "name": "Objectives",
+              "checklist": [{"id": "key_a", "text": "Open any unlocked #A gate"}]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+References work in saved sets and arrays passed to `setPanelTracking`, including
+append mode. They can name stock or custom sets and can be nested. `none` inserts
+no rows. Missing sets and circular references produce configuration errors.
+When `references` is present, the entry's other fields are ignored; it does not
+need a `name`. The reference itself is saved, so changes to the referenced set
+are picked up when the panel is reconfigured or reloaded.
+
+## Objective checklists
+
+Add a checklist entry to a custom tracking set to display clickable objectives:
+
+```json
+{
+  "ui": {
+    "status_panel": {
+      "tracking": {
+        "current": "sortie",
+        "sets": {
+          "sortie": [
+            {
+              "id": "sortie_a",
+              "name": "Objectives",
+              "checklist": [
+                {"id": "kill_5_abject", "text": "Kill 5 abject mobs"},
+                {"text": "Kill 5 more abject mobs"}
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+```
+
+Each objective appears below its heading with an unchecked box or a green check.
+The icons use shared 32×32 PNG assets in `content/ui/checklist`, displayed at a
+size proportional to the panel font. Each row retains its own image instance;
+its texture changes only when the completion state changes.
+Click anywhere on its row to toggle it. The objective text turns gold while the
+pointer is over its icon or row. A checklist takes precedence over both
+`expression` and `value`; those fields are ignored when `checklist` is present.
+An empty checklist hides the entry, including its heading.
+
+The checklist requires an `id`. Each item requires single-line `text` and may
+provide an `id`; omitted IDs become `objective_1`, `objective_2`, and so on using
+their position in the array. Explicit item IDs remain stable when you reorder
+objectives. IDs start with a letter or underscore and contain only letters,
+digits, underscores, or hyphens. Item IDs must be unique within their checklist.
+
+State is read from `vars.panel.<checklist-id>.<item-id>`. Nil or false means
+pending; any truthy Lua value means complete (including zero). For example,
+automation actions can mark or reset the objectives above with:
+
+```lua
+checklistSet('sortie_a', 'kill_5_abject', true)
+checklistSet('sortie_a', 'objective_2', false)
+checklistGet('sortie_a', 'kill_5_abject') -- true or false
+```
+
+These helpers always use shared automation checklist state, including when called
+from event handlers or actions with scoped variables. `checklistSet` stores and
+returns a boolean using Lua truthiness: nil and false become false; everything
+else (including zero and empty strings) becomes true. `checklistGet` returns a
+boolean, with missing items returning false. They do not require the checklist
+to be currently displayed. Direct variable access remains available at the path
+above; event handlers can use `setVarGlobal` for that lower-level interface.
+
+Code-driven changes appear on the next panel refresh; clicks refresh immediately.
+Sets with the same checklist and item IDs share state. Switching tracking sets or
+changing panel preferences does not clear that state. Completion is runtime
+variable state, not a saved panel preference; initialize or reset it through
+variables/actions when starting a new run. Reloading automation settings may
+reset it along with other automation variables.
 
 ## Temporary tracking from actions
 

@@ -5,7 +5,7 @@ local Background=require('./lib/ux/background')
 Panel.__index = Panel
 function Panel.new(options, primitives)
     local self=setmetatable({x=options.x,y=options.y,width=options.width,
-        height=options.height,labels={},buttons={},visible=false},Panel)
+        height=options.height,labels={},buttons={},icons={},visible=false},Panel)
     self.primitives=primitives
     self.onMove=options.on_move
     self.resolvePosition=options.resolve_position
@@ -17,7 +17,8 @@ function Panel:label(x,y,size,role)
     text:visible(false)
     text:draggable(false); text:bg_visible(false)
     Theme.apply(text,role,size)
-    local item={text=text,x=x,y=y}
+    local style=Theme.styles[role or 'body']
+    local item={text=text,x=x,y=y,font=style.font,fontSize=size+style.size_offset,bold=style.bold}
     self.labels[#self.labels+1]=item
     return item
 end
@@ -25,6 +26,15 @@ function Panel:button(x,y,width,height,size,callback,role)
     local item=self:label(x,y,size,role)
     item.width=width; item.height=height; item.callback=callback
     self.buttons[#self.buttons+1]=item
+    return item
+end
+function Panel:icon(x,y,size)
+    local image=self.primitives.images.new({texture={fit=false}})
+    image:visible(false); image:draggable(false); image:fit(false)
+    image:color(255,255,255); image:alpha(255); image:repeat_xy(1,1)
+    image:size(size,size)
+    local item={image=image,x=x,y=y}
+    self.icons[#self.icons+1]=item
     return item
 end
 function Panel:layout()
@@ -36,17 +46,38 @@ function Panel:layout()
     -- those calls, producing a blank frame even when the layout is unchanged.
     self.background:layout(self.x,self.y,self.width,self.height)
     for _, item in ipairs(self.labels) do item.text:pos(self.x+item.x,self.y+item.y) end
+    for _, item in ipairs(self.icons) do item.image:pos(self.x+item.x,self.y+item.y) end
+    self:updateHover(self.mouseX,self.mouseY,self.mouseBlocked)
 end
 function Panel:show(visible)
     self.visible=visible
     self.background:visible(visible)
     for _, item in ipairs(self.labels) do item.text:visible(visible) end
+    for _, item in ipairs(self.icons) do item.image:visible(visible) end
     if not visible then self.capture=nil end
+    self:updateHover(self.mouseX,self.mouseY,self.mouseBlocked)
 end
 local function inside(x,y,left,top,width,height)
     return x>=left and y>=top and x<left+width and y<top+height
 end
+function Panel:updateHover(x,y,blocked)
+    for _,button in ipairs(self.buttons) do
+        if button.onHover then
+            local hovered=not not (self.visible and x and y and not blocked
+                and not (self.capture and self.capture.drag)
+                and inside(x,y,self.x,self.y,self.width,self.height)
+                and inside(x,y,self.x+(button.hitX or button.x),self.y+button.y,
+                    button.hitWidth or button.width,button.height))
+            if button.hovered~=hovered then
+                button.hovered=hovered
+                button.onHover(hovered)
+            end
+        end
+    end
+end
 function Panel:mouse(kind,x,y,blocked)
+    self.mouseX,self.mouseY,self.mouseBlocked=x,y,blocked
+    self:updateHover(x,y,blocked)
     if not self.visible then return end
     if self.capture then
         if kind==0 then
@@ -59,14 +90,16 @@ function Panel:mouse(kind,x,y,blocked)
             local captured=self.capture; self.capture=nil
             if captured.drag and self.onMove then self.onMove(self.x,self.y) end
             local button=captured.button
-            if button and inside(x,y,self.x+button.x,self.y+button.y,button.width,button.height) then button.callback() end
+            if button and inside(x,y,self.x+(button.hitX or button.x),self.y+button.y,
+                button.hitWidth or button.width,button.height) then button.callback() end
             return true
         end
     end
     if blocked then return end
     if kind==1 and inside(x,y,self.x,self.y,self.width,self.height) then
         for _, button in ipairs(self.buttons) do
-            if inside(x,y,self.x+button.x,self.y+button.y,button.width,button.height) then
+            if inside(x,y,self.x+(button.hitX or button.x),self.y+button.y,
+                button.hitWidth or button.width,button.height) then
                 self.capture={button=button}; return true
             end
         end
@@ -77,6 +110,7 @@ end
 function Panel:destroy()
     self:show(false)
     for _, item in ipairs(self.labels) do item.text:destroy() end
+    for _, item in ipairs(self.icons) do item.image:destroy() end
     self.background:destroy()
 end
 return Panel

@@ -3,8 +3,8 @@ local recording=assert(source:match('(%-%- Record completed self job abilities.-
 local globals={}
 local now=123.5
 local env={globals=globals,packet={['Target 1 ID']=200},tonumber=tonumber,os={clock=function() return now end},
-    resources={job_abilities={[10]={id=10,name='Convert'},[11]={id=11,name='Composure'}},
-        spells={[10]={id=10,name='Cure'},[11]={id=11,name='Refresh'}}},
+    resources={job_abilities={[10]={id=10,name='Convert',element=6},[11]={id=11,name='Composure',element=0}},
+        spells={[10]={id=10,name='Cure',element=6},[11]={id=11,name='Refresh',element=6}}},
     windower={ffxi={get_player=function() return {id=100} end,
         get_mob_by_id=function(id) if id==200 then return {id=id,name='Ally',index=20} end end}}}
 local function record(category,id,actor)
@@ -67,14 +67,17 @@ local contextEnv={globals=globals,settings={},time=125,settingsPaths={getLoadedN
     targetMetadata=require('./lib/target-metadata'),windower=env.windower}
 setfenv(context,contextEnv)
 assert(context().last_ability.age==1.5 and context().last_spell.age==1.5)
+assert(context().last_ability.element==0 and context().last_spell.element==6)
 local defaults=require('./lib/ux/status-config').defaults.tracking.sets.default
 for _,entry in ipairs(defaults) do
-    if entry.name=='Spell' or entry.name=='Ability' then
+    if entry.name=='Spell' or entry.name=='Job Ability' then
         local display=assert(loadstring('return '..entry.expression[1]))
-        contextEnv.time=129.49
-        setfenv(display,{gambit=context(),format=string.format})
+        contextEnv.time=128.49
+        local displayEnv={gambit=context(),format=string.format}
+        require('./lib/ux/panel-context').attach(displayEnv)
+        setfenv(display,displayEnv)
         assert(type(display())=='string')
-        contextEnv.time=129.5
+        contextEnv.time=128.5
         setfenv(display,{gambit=context(),format=string.format})
         assert(display()==nil)
     end
