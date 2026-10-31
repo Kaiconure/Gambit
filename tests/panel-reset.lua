@@ -22,10 +22,13 @@ local function equal(a,b)
     for k in pairs(b) do if a[k]==nil then return false end end
     return true
 end
-assert(equal(panel.options,Config.normalize(Config.defaults)))
-assert(#saved==1 and equal(saved[1],panel.options))
-assert(panel.trackingOverride==nil and panel.options.tracking.sets.custom==nil)
+local expected=Config.normalize(Config.defaults)
+expected.tracking.sets.custom={}
+assert(equal(panel.options,expected))
+assert(#saved==1 and equal(saved[1],Config.forSave(panel.options)))
+assert(panel.trackingOverride==nil and panel.options.tracking.sets.custom~=nil)
+assert(saved[1].tracking.sets.default==nil and saved[1].tracking.sets.none==nil)
 assert(panel.options.tracking~=Config.defaults.tracking)
 assert(panel.buffer.lines[1]=='Retained log')
 panel:destroy()
-print('PASS: reset restores and saves all defaults, clears overrides and custom sets, preserves log history')
+print('PASS: reset restores display defaults, preserves custom sets and history, saves only custom definitions')

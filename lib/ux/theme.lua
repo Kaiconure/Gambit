@@ -53,6 +53,12 @@ function Theme.reload()
 end
 Theme.reload()
 Theme.colors={green={100,235,130},red={255,80,80},yellow={245,215,110},orange={245,160,80},
+    white={255,255,255},turquoise={100,225,215},magenta={235,100,235},
+    target_player={193,251,255},target_idle={241,241,183},target_engaged={255,130,130},
+    target_outside_claim={244,122,244},target_other_player={255,255,255},
+    target_npc={100,235,130},target_dead={160,160,160},target_invalid={160,160,160},
+    number={241,241,183},status_pending={245,215,110},
+    status_interrupted={255,130,130},status_completed={100,235,130},
     heading={245,245,250},subheading={155,200,245},body={230,230,238},
     version={240,240,24},
     log_odd={225,230,240},log_even={165,185,210},log_latest={255, 255, 0}}

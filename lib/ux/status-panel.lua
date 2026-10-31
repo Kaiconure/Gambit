@@ -4,28 +4,20 @@ local factory=require('./lib/execution-factory')
 local Config=require('./lib/ux/status-config')
 local copy=require('./lib/variable-values').copy
 local Theme=require('./lib/ux/theme')
+local Metrics=require('./lib/ux/text-metrics')
+local PanelContext=require('./lib/ux/panel-context')
 local Status={}
 Status.__index=Status
 Status.defaults=Config.defaults
 local function displayWidth(options)
     return math.max(options.width,options.show_log and 600 or 0)
 end
-local function longestLine(text)
-    text=Buffer.uncolored(text)
-    local longest=0
-    for line in (text..'\n'):gmatch('(.-)\n') do
-        -- Count UTF-8 code points rather than bytes (e.g. the right arrow).
-        local _,count=line:gsub('[^\128-\191]','')
-        longest=math.max(longest,count)
-    end
-    return longest
-end
-local function textWidth(item,text,fallback)
+local function textWidth(item,text)
     item.text:text(text)
     -- Windower can report a positive but stale extent after text changes,
     -- especially when a hidden row reappears. Use stable spacing immediately
     -- rather than positioning from the previous frame's measured text.
-    return longestLine(text)*fallback
+    return Metrics.width(item,text)
 end
 function Status.new(deps,options)
     local self=setmetatable({deps=deps},Status)
@@ -44,10 +36,12 @@ function Status:configure(options,trackingOverride)
     local tracking=options.tracking.sets[options.tracking.current]
     if trackingOverride~=nil then
         local temporary=copy(options)
-        temporary.tracking={current='temporary',sets={temporary=trackingOverride}}
+        temporary.tracking.current='temporary'
+        temporary.tracking.sets.temporary=trackingOverride
         tracking=Config.normalize(temporary).tracking.sets.temporary
     end
     self.trackingOverride=trackingOverride~=nil and copy(tracking) or nil
+    tracking=Config.expandTracking(tracking,options.tracking.sets)
     if self.panel then self.panel:destroy() end
     self.options=options; self.entries={}; self.nextUpdate=0
     self.buffer=self.buffer or Buffer.new(options.history_lines,self.deps.windower.from_shift_jis)
@@ -72,7 +66,7 @@ function Status:configure(options,trackingOverride)
             self:persist()
         end},self.deps)
     self.title=self.panel:label(10,5,options.font_size,'heading')
-    self.titleWidth=textWidth(self.title,'Gambit Status',(options.font_size+2)*0.8)
+    self.titleWidth=textWidth(self.title,'Gambit Status')
     self.toggle=self.panel:button(18+self.titleWidth,5,5*(options.font_size+2)*0.8,lineHeight,options.font_size,self.deps.toggle,'heading')
     self.toggle.text:bold(true)
     self.strategy=self.panel:label(self.toggle.x+self.toggle.width+2,5,options.font_size,'heading')
@@ -82,16 +76,36 @@ function Status:configure(options,trackingOverride)
     Theme.color(self.version.text,'version')
     local version=self.deps.version or (_addon and _addon.version) or __version
     self.versionText=version and ('v'..tostring(version):gsub('^v','')) or ''
-    self.versionWidth=textWidth(self.version,self.versionText,versionSize*0.8)
+    self.versionWidth=textWidth(self.version,self.versionText)
     if self.version.text.italic then self.version.text:italic(true) end
     local row=1
     for _,definition in ipairs(tracking) do
         local entry={definition=definition,label=self.panel:label(10,32+row*lineHeight,options.font_size,'subheading'),
             valueLabel=self.panel:label(18,32+(row+1)*lineHeight,options.font_size,'subheading')}
         entry.valueLabel.text:bold(false)
+        entry.valueLabel.bold=false
         Theme.color(entry.valueLabel.text,'body')
         row=row+((definition.expression==nil and type(definition.value)=='table') and math.max(1,#definition.value)+1 or 1)
-        if definition.expression~=nil then
+        if definition.checklist~=nil then
+            entry.checks={}
+            for _,objective in ipairs(definition.checklist) do
+                local path='vars.panel.'..definition.id..'.'..objective.id
+                local button=self.panel:button(18,0,0,lineHeight,options.font_size,function()
+                    local context=self.deps.context('status panel checklist')
+                    context.setVar(path,not context.getVar(path))
+                    self.nextUpdate=0
+                    self:update()
+                end,'subheading')
+                button.text:bold(false)
+                button.bold=false
+                button.onHover=function(hovered)
+                    Theme.color(button.text,hovered and 'yellow' or 'subheading')
+                end
+                local size=math.max(10,math.floor(options.font_size*1.2+0.5))
+                local icon=self.panel:icon(18,0,size)
+                entry.checks[#entry.checks+1]={button=button,path=path,objective=objective,icon=icon,size=size}
+            end
+        elseif definition.expression~=nil then
             if type(definition.expression)=='table' then
                 entry.fns={}
                 for _,code in ipairs(definition.expression) do
@@ -112,7 +126,7 @@ function Status:configure(options,trackingOverride)
     self.panel:layout(); self.panel:show(false)
 end
 function Status:persist()
-    if self.deps.save then self.deps.save(copy(self.options)) end
+    if self.deps.save then self.deps.save(Config.forSave(self.options)) end
 end
 function Status:setVisible(visible)
     self.options.visible=visible
@@ -138,7 +152,8 @@ function Status:setTemporaryTracking(entries,append)
         -- Validate the incoming array before merging so malformed keys cannot
         -- be silently discarded by ipairs. configure validates the result too.
         local temporary=copy(self.options)
-        temporary.tracking={current='temporary',sets={temporary=entries}}
+        temporary.tracking.current='temporary'
+        temporary.tracking.sets.temporary=entries
         local incoming=Config.normalize(temporary).tracking.sets.temporary
         override=copy(self.trackingOverride or self.options.tracking.sets[self.options.tracking.current])
         for _,entry in ipairs(incoming) do override[#override+1]=entry end
@@ -152,7 +167,9 @@ function Status:resetPosition()
     self:setPosition(Status.defaults.x,Status.defaults.y)
 end
 function Status:reset()
-    self:configure(copy(Config.defaults),false)
+    local options=copy(Config.defaults)
+    options.tracking.sets=copy(self.options.tracking.sets)
+    self:configure(options,false)
     self:update()
     self:persist()
 end
@@ -210,14 +227,15 @@ end
 function Status:setText(item,text)
     local lineHeight=math.ceil(self.options.font_size*1.8)
     local capacity=math.max(0,math.floor((self.panel.height-item.y-8)/lineHeight))
+    local pixels=math.max(0,self.panel.width-item.x-10)
+    local previous=item.rendered
+    if previous and previous.text==text and previous.capacity==capacity and previous.pixels==pixels then return end
+    item.rendered={text=text,capacity=capacity,pixels=pixels}
     local lines={}
     for line in (text..'\n'):gmatch('(.-)\n') do
         if #lines>=capacity then break end
-        -- Subtract the indent in pixels before converting to characters.
-        -- Rounding the panel down and the indent up separately can lose a
-        -- whole character even when automatic width reserved enough space.
-        local columns=math.max(0,math.floor((self.panel.width-item.x-10)/self.characterWidth+0.000001))
-        lines[#lines+1]=Buffer.clip(line,columns)
+        -- Clip with the same font metrics used to reserve display width.
+        lines[#lines+1]=Metrics.clip(item,line,pixels)
     end
     item.text:text(table.concat(lines,'\n'))
 end
@@ -235,21 +253,36 @@ function Status:update()
     local strategyText=strategy and ('['..tostring(strategy)..']') or ''
     if strategyText~=self.strategyText then self.nextUpdate=0 end
     self.strategyText=strategyText
-    self.strategyWidth=textWidth(self.strategy,strategyText,(self.options.font_size+2)*0.8)
+    self.strategyWidth=textWidth(self.strategy,strategyText)
     Theme.color(self.strategy.text,(strategy=='aggressor' or strategy=='puller') and 'red' or 'green')
     if self.panel.visible and os.clock()<self.nextUpdate then return end
     self.nextUpdate=os.clock()+self.options.refresh_interval
     for _, entry in ipairs(self.entries) do
         local value=entry.definition.value
-        if entry.definition.expression~=nil then
+        if entry.checks then
+            value={}
+            local ok,context=pcall(self.deps.context,'status panel checklist')
+            for _,check in ipairs(entry.checks) do
+                local checked=not not (ok and context and context.getVar(check.path))
+                if check.checked~=checked then
+                    check.icon.image:path((self.deps.windower.addon_path or '')..
+                        'content/ui/checklist/'..(checked and 'checked' or 'unchecked')..'.png')
+                    check.checked=checked
+                end
+                check.display=Buffer.plain(check.objective.text,self.deps.windower.from_shift_jis)
+                value[#value+1]=check.display
+            end
+        elseif entry.definition.expression~=nil then
             value='[error]'
             if (entry.fn or entry.fns) and not entry.error then
                 local ok,context=pcall(self.deps.context,'status panel')
                 if not ok or not context then value='[unavailable]'
                 else
+                    local resetColor=PanelContext.attach(context,self.deps.canShareClaim)
                     if entry.fns then
                         value={}
                         for _,fn in ipairs(entry.fns) do
+                            resetColor()
                             setfenv(fn,context)
                             local success,result=pcall(fn)
                             if not success then entry.error=true; value='[error]'; break end
@@ -268,7 +301,7 @@ function Status:update()
             end
         end
         entry.hidden=value==nil or (type(value)=='table' and #value==0)
-        entry.inline=type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'
+        entry.inline=not entry.checks and type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'
         local lines={}
         local function append(text)
             text=Buffer.plain(text,self.deps.windower.from_shift_jis)
@@ -285,10 +318,11 @@ function Status:update()
         if not entry.hidden then
             local name=Buffer.plain(entry.definition.name,self.deps.windower.from_shift_jis)
             entry.heading=name..(entry.inline and name~='' and ':' or '')
-            local headingWidth=textWidth(entry.label,entry.heading,self.characterWidth)
-            entry.valueLabel.x=entry.inline and (10+headingWidth+8) or 18
+            local headingWidth=textWidth(entry.label,entry.heading)
+            entry.valueLabel.x=entry.inline and (10+headingWidth+8) or
+                (entry.checks and entry.checks[1] and (18+entry.checks[1].size+5) or 18)
             local indent=entry.valueLabel.x-10
-            width=math.max(width,20+math.max(headingWidth,longestLine(entry.display)*self.characterWidth+indent))
+            width=math.max(width,36+math.max(headingWidth,Metrics.width(entry.valueLabel,entry.display)+indent))
         end
     end
     self.panel.width=math.ceil(width)
@@ -300,6 +334,13 @@ function Status:update()
     local y=math.max(32,5+math.ceil((self.options.font_size+2)*1.8))
     for _, entry in ipairs(self.entries) do
         entry.label.y=y; entry.valueLabel.y=y+(entry.inline and 0 or lineHeight)
+        for i,check in ipairs(entry.checks or {}) do
+            check.button.y=y+i*lineHeight
+            check.button.x=entry.valueLabel.x
+            check.button.width=self.panel.width-check.button.x-10
+            check.button.hitX=18; check.button.hitWidth=self.panel.width-28
+            check.icon.y=check.button.y+math.floor((lineHeight-check.size)/2)
+        end
         if not entry.hidden then y=y+(entry.lineCount+(entry.inline and 0 or 1))*lineHeight end
     end
     local logLines=self.options.show_log and self.options.history_lines or 0
@@ -312,7 +353,10 @@ function Status:update()
     self:setText(self.logHeading,logLines>0 and 'Log' or '')
     for _, entry in ipairs(self.entries) do
         self:setText(entry.label,entry.hidden and '' or entry.heading)
-        self:setText(entry.valueLabel,entry.hidden and '' or entry.display)
+        self:setText(entry.valueLabel,(entry.hidden or entry.checks) and '' or entry.display)
+        for _,check in ipairs(entry.checks or {}) do
+            self:setText(check.button,check.display)
+        end
         Theme.color(entry.valueLabel.text,entry.error and 'red' or 'body')
     end
     local visibleLogLines=math.min(#self.logs,math.max(0,math.floor((self.panel.height-logY-8)/lineHeight)))

@@ -1,4 +1,5 @@
 local elements=require('./lib/skillchain-elements')
+local magicSkills=require('./meta/magic-skills')
 local burst={}
 
 -- Eligibility now, independent of spell usability or predicted landing time.
@@ -19,6 +20,11 @@ function burst.check(value,target,context,deps)
     if not chain then return false end
     local element=deps.elements[spell.element]
     if not element then return false end
+    if spell.skill==magicSkills.blue then
+        local ability=deps.findMonsterAbility and deps.findMonsterAbility(spell.en or spell.name)
+        -- Empty strings are still physical; only an explicitly absent field qualifies.
+        if not ability or ability.skillchain_a~=nil then return false end
+    end
     for _,name in ipairs(elements[chain.name] or {}) do
         if element.en==name or element.name==name then return true end
     end

@@ -4,7 +4,47 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Panel checklist state
+
+`checklistSet(checklistId, itemId, checked)` saves a boolean at
+`vars.panel.<checklistId>.<itemId>` and returns it. Nil and false become false;
+all other Lua values, including zero and empty strings, become true.
+`checklistGet(checklistId, itemId)` returns a boolean; missing state returns false.
+
+Both helpers use shared automation variables, including from event handlers and
+scoped actions. They work while the checklist is hidden. State is not saved to
+panel preferences. IDs follow the [panel checklist rules](status-panel.md#objective-checklists).
+
+```lua
+checklistSet('sortie_a', 'kill_5_abject', true)
+checklistGet('sortie_a', 'kill_5_abject') -- true
+```
+
 ## Optional selector ordering
+
+Expression selectors `partyAny`, `partyAll`, `allyAny`, and `allyAll` also accept
+a final options table with `randomize`, `self_first`, and `self_last`. Only the last argument
+is treated as options when it is a table; earlier arguments remain expression
+formatting arguments:
+
+```lua
+partyAny('distance < %d', 15, {randomize=true})
+partyAll('is_player', {randomize=true, self_first=true})
+```
+
+Options change ordering, not eligibility. Fresh enumerations shuffle once;
+`partyAll`/`allyAll` retain that order while continuing an existing cycle.
+Count helpers do not need ordering options. `partyAnchorByName` retains its
+deterministic preference ordering.
+
+`self_last=true` moves yourself to the end after shuffling, if you match the
+selection. Other members retain their relative order. If both `self_first` and
+`self_last` are truthy, `self_first` wins. All three options default to false and
+work with both expression and name-based selectors.
+
+```lua
+partyAny('is_player and not hasBuff("Sneak")', {randomize=true, self_last=true})
+```
 
 `partyByName(targets, options)` and `alliesByName(targets, options)` accept a trailing options table: `{randomize = true, self_first = true}`. Targets may be an array or separate arguments. Both options default to false. Randomization shuffles the resolved matches once per fresh enumeration, after exclusions and deduplication; self-first then moves yourself to the front if included. Neither option changes membership. Continuing the cycle preserves its order. These options are not used by `partyAnchorByName`, which keeps deterministic preference ordering.
 

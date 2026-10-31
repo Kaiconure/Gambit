@@ -1,6 +1,6 @@
 -- Lightweight classification shared by context symbols and recorded targets.
 local metadata={}
-local fields={'spawn_type','status','valid_target','target_index','x','y','z','heading','in_party','in_alliance'}
+local fields={'spawn_type','status','valid_target','target_index','claim_id','x','y','z','heading','in_party','in_alliance'}
 function metadata.apply(target,mob,playerId)
     for _,field in ipairs(fields) do
         if mob then target[field]=mob[field] else target[field]=nil end
@@ -10,6 +10,11 @@ function metadata.apply(target,mob,playerId)
     target.is_mob=known(spawn==16)
     target.is_player=known(spawn==1 or spawn==13)
     target.is_trust=known(spawn==14)
+    target.is_npc=known(mob and mob.is_npc==true)
+    -- Ownership identifies pets without relying on an incomplete spawn type.
+    -- Later, resolving the owner by index could distinguish player/monster pets.
+    local ownerIndex=mob and mob.owner_index
+    target.is_pet=known(type(ownerIndex)=='number' and ownerIndex>0)
     target.is_me=known(mob and mob.id==playerId)
     target.is_party_member=known(mob and mob.in_party==true)
     target.is_alliance_member=known(mob and mob.in_alliance==true)

@@ -7,6 +7,7 @@
   "imports": [
     "lib/spells/pre",
     "lib/spells/curing",
+    "lib/spells/divine",
     "lib/spells/enfeebling",
     "lib/spells/enhancing",
     "lib/spells/elemental",

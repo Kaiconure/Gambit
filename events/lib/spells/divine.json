@@ -1,0 +1,114 @@
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "divine": {
+          "pre": null,
+          "mid": null
+        },
+        "magic_burst": {
+          "pre": null,
+          "mid": null
+        }
+      }
+    }
+  },
+  "spells": {
+    "pre": [
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.divine.pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.divine.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-pre"
+      },
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.divine[event.name] and vars.gear.spells.divine[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.divine[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-named-pre"
+      },
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.magic_burst.pre",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-magic-burst-pre"
+      },
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].pre",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-magic-burst-named-pre"
+      }
+    ],
+    "mid": [
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.divine.mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.divine.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-mid"
+      },
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.divine[event.name] and vars.gear.spells.divine[event.name].mid"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.divine[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-named-mid"
+      },
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.magic_burst.mid",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-magic-burst-mid"
+      },
+      {
+        "when": [
+          "event.divine",
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].mid",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-divine-magic-burst-named-mid"
+      }
+    ]
+  }
+}

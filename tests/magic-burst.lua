@@ -45,6 +45,21 @@ for chain,allowed in pairs(mapping) do
     end
 end
 -- Verify the actual context wrapper delegates target-aware queries.
+context.skillchain={name='Fusion'}
+spells.Blue={id=101,name='Blue',en='Blue',skill=43,element=0}
+local monsterAbility={name='Blue'}
+deps.findMonsterAbility=function(name) assert(name=='Blue'); return monsterAbility end
+assert(check('Blue'))
+monsterAbility.skillchain_a=''
+assert(not check('Blue'))
+monsterAbility.skillchain_a='Liquefaction'
+assert(not check('Blue'))
+monsterAbility=nil
+assert(not check('Blue'))
+assert(check('Fire')) -- Ordinary spells do not depend on monster ability metadata.
+monsterAbility={}
+assert(check({id=101,kind='spell',target={id=100}}))
+assert(not check('Blue',200)) -- Magical Blue Magic still needs a matching element/window.
 local file=assert(io.open('lib/action-context.lua')); local source=file:read('*a'); file:close()
 local body=assert(source:match('(    context.canMagicBurst = function.-)\n    context.spellHasSkill ='))
 local ctx={bt={id=100},skillchain={name='Fusion'}}

@@ -160,10 +160,11 @@ The stock spell categories under `vars.gear.spells` are:
 | Category | Applies to |
 |---|---|
 | `curing` | Cure, Curaga, Cura, and Full Cure; excludes other Healing Magic and Blue Magic cures |
+| `divine` | Spells using the Divine Magic skill, such as Flash, Banish, and Holy |
 | `enfeebling` | Spells using the Enfeebling Magic skill, such as Dispel and Sleep |
 | `enhancing` | Spells using the Enhancing Magic skill, such as Haste and Protect |
 | `elemental` | Spells using the Elemental Magic skill, such as Fire and Blizzard; not every spell with an element |
-| `magic_burst` | Elemental Magic spells whose element matches the target's current tracked magic-burst window; overlays `elemental` gear |
+| `magic_burst` | Elemental or Divine Magic, plus Blue Magic with Burst Affinity, whose element matches the target's current tracked magic-burst window; overlays their category gear |
 | `geomancy` | Geomancy spells, including Indi- and Geo-spells; supplied by the GEO module |
 | `blue` | Blue Magic spells, including Blue Magic cures; supplied by the BLU module |
 
@@ -185,6 +186,13 @@ General category gear runs first, followed by its named override:
             "hands": {"name": "Your Cure Hands"},
             "neck": {"name": "Your Cure Necklace"}
           }
+        },
+        "divine": {
+          "mid": {
+            "body": {"name": "Your Divine Magic Body"},
+            "neck": {"name": "Your Divine Magic Necklace"}
+          },
+          "Flash": {"pre": {"head": {"name": "Your Flash Head"}}}
         },
         "enfeebling": {
           "mid": {
@@ -235,7 +243,7 @@ English spell names on every client.
 }
 ```
 
-Burst gear overlays elemental gear when `canMagicBurst(event)` matches the
+Burst gear overlays elemental or divine gear when `canMagicBurst(event)` matches the
 target's current tracked window and the spell element. It doesn't guarantee
 the spell will land before the window closes. Buff overlays apply in array
 order after categories; each needs a `when` array (use `[]` for no additional
@@ -623,6 +631,32 @@ are left alone, so both small overlays and full sets use the same format.
 
 ### Item values and metadata
 
+To reuse a full piece definition from another set, use a variable reference:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "battle": {
+        "head": {"name": "Your Shared Head", "augments": ["Your Augment"]}
+      },
+      "spells": {
+        "enhancing": {
+          "mid": {"head": {"var": "vars.gear.battle.head"}}
+        }
+      }
+    }
+  }
+}
+```
+
+The reference uses the entire current value, including augments or an ordered
+candidate array; it does not just copy the name. `vars.` is optional in the path.
+Lookup uses the current scope at equipment-request time without modifying the
+source definition. A missing value leaves the slot alone. A reference object
+must contain only `var`; cycles are rejected. See [equipment references](equipment.md#reuse-a-configured-piece)
+for helper usage and snapshot behavior.
+
 All paths below start with `vars`. In JSON, put them under the top-level `vars`
 object. Gear sets are slot-keyed objects:
 
@@ -684,7 +718,7 @@ below describes an object key, not literal JSON punctuation.
 | `post_equip.enabled` | Enable stock post restoration and idle/battle gear; default `true` |
 | `post_equip.restore_snapshot` | Restore starting gear before the post idle/battle overlay; default `false` |
 
-Common spell categories are `curing`, `enfeebling`, `enhancing`, `elemental`, and
+Common spell categories are `curing`, `divine`, `enfeebling`, `enhancing`, `elemental`, and
 `magic_burst`. GEO adds `geomancy`; BLU adds `blue`. There is no general
 `gear.spells.mid` rule: use categories or named sets for result-enhancing gear.
 
@@ -828,6 +862,15 @@ it is included only once.
 - **GEO:** geomancy remains under `gear.spells.geomancy`. Configure player
   abilities such as luopan-related job abilities under `gear.job_abilities`.
 - **BLU:** Blue Magic has its own category; Blue cures do not set `event.curing`.
+  With Burst Affinity active and `canMagicBurst(event)` true, shared
+  `gear.spells.magic_burst.pre` / `.mid` gear overlays Blue Magic gear, followed by
+  `gear.spells.magic_burst["Spectral Floe"].pre` / `.mid` (or another spell's
+  English name). Named burst sets work without a general burst set. General and
+  named Blue Magic sets run first; final spell-name overrides still run afterward.
+  `canMagicBurst` also requires a matching `monster_abilities` resource by English
+  spell name with `skillchain_a == nil`. A present field, including an empty
+  string, identifies a physical ability and prevents burst gear; missing resource
+  matches are excluded as well.
 - **BST:** Ready rules target named pet monster abilities. Reward is a player
   job ability. Random Sic moves and autonomous pet actions are not covered by
   the same command-correlated lifecycle.

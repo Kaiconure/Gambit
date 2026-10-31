@@ -10,16 +10,36 @@ assert(dead.is_dead and not dead.is_engaged and value.is_engaged)
 local missing=metadata.snapshot(identity,nil,200)
 assert(missing.id==100 and missing.name=='Original' and missing.index==10)
 assert(not missing.valid_target and missing.is_mob==nil and missing.status==nil)
+assert(missing.is_npc==nil and missing.is_pet==nil)
 mob.index=11; assert(not metadata.snapshot(identity,mob,200).valid_target); mob.index=10
 mob.id=101; assert(not metadata.snapshot(identity,mob,200).valid_target); mob.id=100
-for _,spawn in ipairs({1,13,14,16}) do
+for _,spawn in ipairs({1,2,13,14,16}) do
     mob.spawn_type=spawn; mob.status=0; mob.in_party=true; mob.in_alliance=true
     local target=metadata.snapshot(identity,mob,100)
     assert(target.is_player==(spawn==1 or spawn==13))
     assert(target.is_trust==(spawn==14) and target.is_mob==(spawn==16))
+    assert(target.is_pet==false and target.is_npc==false)
     assert(target.is_me and target.is_idle and target.is_party_member and target.is_alliance_member)
 end
 local symbol={}
+mob.is_npc=true; mob.spawn_type=16; mob.owner_index=1
+metadata.apply(symbol,mob,100)
+assert(symbol.is_npc==true and symbol.is_pet==true)
+mob.is_npc=false; mob.spawn_type=2; mob.owner_index=0
+metadata.apply(symbol,mob,100)
+assert(symbol.is_npc==false and symbol.is_pet==false)
+metadata.apply(symbol,nil,100)
+assert(symbol.is_npc==nil and symbol.is_pet==nil)
+for _,owner in ipairs({1,500,2047}) do
+    mob.owner_index=owner
+    assert(metadata.snapshot(identity,mob,100).is_pet==true)
+end
+for _,owner in ipairs({0,-1,false,'123'}) do
+    mob.owner_index=owner
+    assert(metadata.snapshot(identity,mob,100).is_pet==false)
+end
+mob.owner_index=nil
+assert(metadata.snapshot(identity,mob,100).is_pet==false)
 mob.status=1; metadata.apply(symbol,mob,100)
 mob.status=2; metadata.apply(symbol,mob,100)
 assert(symbol.is_dead and not symbol.is_engaged) -- Reused context symbols lose stale flags.

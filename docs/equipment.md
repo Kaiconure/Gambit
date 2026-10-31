@@ -1,5 +1,24 @@
 # Equipment queue
 
+## Reuse a configured piece
+
+Slot values can reference another variable's complete item specification:
+
+```lua
+equipMany({head={var='vars.gear.battle.head'}})
+equip('head', {var='gear.battle.head'})
+```
+
+The leading `vars.` is optional, as with `getVar`. References resolve at request
+time in the current variable scope, preserving item names, augments, and candidate
+arrays. Resolved values are copied so sanitization cannot modify the source.
+Missing values leave the slot unchanged. Chains are supported; circular or
+excessively nested references and references mixed with other fields are errors.
+The same slot-reference format works with `equipPush` and `checkEquipMany`.
+`equipment_set` still exposes the original caller-provided set, including `meta`.
+`equipPop`/`equipRestore` continue restoring exact snapshots without re-resolving
+configuration references.
+
 Gambit's normal actions and event rules share one equipment manager under
 `lib/equipment/`. Existing `equip`, `equipMany`, `checkEquipMany`, `equipPush`, and
 `equipPop` calls keep their input formats. A successful call means changes were
