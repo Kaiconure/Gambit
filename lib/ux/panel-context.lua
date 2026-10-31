@@ -1,22 +1,43 @@
 local Theme=require('./lib/ux/theme')
 local PanelContext={}
-local skillchainColors={
-    liquefaction={255,125,110},induration={170,220,255},
-    detonation={135,235,175},scission={225,195,130},
-    impaction={205,175,255},reverberation={120,175,255},
-    transfixion={250,235,160},compression={200,145,235},
-    fusion={255,180,105},fragmentation={110,225,215},
-    distortion={155,165,255},gravitation={200,155,195},
-    light={255,245,220},radiance={255,245,220},
-    darkness={205,180,245},umbra={205,180,245},
-}
+local skillchainElements=require('./lib/skillchain-elements')
 -- Windower element IDs: Fire through Dark. Physical/None have no decoration.
 local elementNames={[0]='fire','ice','wind','earth','lightning','water','light','dark'}
 local elementColors={
-    fire={255,125,110},ice={170,220,255},wind={135,235,175},
-    earth={225,195,130},lightning={205,175,255},water={120,175,255},
-    light={255,245,220},dark={205,180,245},
+    fire      = {255, 65, 50},
+    ice       = {130, 240, 255},
+    wind      = {50, 225, 120},
+    earth     = {235, 160, 50},
+    lightning = {185, 100, 255},
+    water     = {40, 140, 255},
+    light     = {255, 235, 150},
+    dark      = {155, 115, 190}
 }
+-- Names and blended colors are computed once, using the same mapping as
+-- magic-burst eligibility and the same palette as color_element.
+local skillchainDisplay={}
+for name,elements in pairs(skillchainElements) do
+    local rgb={0,0,0}
+    for _,element in ipairs(elements) do
+        local source=elementColors[element:lower()]
+        for channel=1,3 do rgb[channel]=rgb[channel]+source[channel] end
+    end
+    for channel=1,3 do rgb[channel]=math.floor(rgb[channel]/#elements+0.5) end
+    if name=='Light' or name=='Radiance' then
+        -- Lift the darkest channel to 220 by blending toward white, preserving
+        -- the elemental tint instead of flattening channels with a hard clamp.
+        local minimum=math.min(unpack(rgb))
+        if minimum<220 then
+            local lift=(220-minimum)/(255-minimum)
+            for channel=1,3 do
+                rgb[channel]=math.floor(rgb[channel]+(255-rgb[channel])*lift+0.5)
+            end
+        end
+    end
+    skillchainDisplay[name:lower()]={
+        text=('\\cs(%d,%d,%d)%s\\cr'):format(rgb[1],rgb[2],rgb[3],name),rgb=rgb}
+end
+
 function PanelContext.attach(context,canShareClaim)
     local latest
     local function color(text,r,g,b)
@@ -43,7 +64,10 @@ function PanelContext.attach(context,canShareClaim)
     context.color_skillchain=function(chain)
         local name=type(chain)=='table' and chain.name or chain
         if type(name)~='string' or name=='' then return color('--',160,160,160) end
-        return color(name,unpack(skillchainColors[name:lower()] or Theme.colors.body))
+        local display=skillchainDisplay[name:lower()]
+        if not display then return color(name,unpack(Theme.colors.body)) end
+        latest=display.rgb
+        return display.text
     end
     context.color_element=function(value)
         if type(value)~='table' then return value end

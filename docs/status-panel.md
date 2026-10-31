@@ -292,26 +292,33 @@ colors the target name first, then uses `color_latest` for its supplemental IDs.
 Tracking examples generally use expressions rather than local declarations or
 explicit return statements.
 
-`color_skillchain` recognizes names case-insensitively and updates `color_latest`.
-Unknown names retain their text in the normal body color. The stock skillchain
-progress row uses it automatically.
+`color_skillchain` recognizes names case-insensitively and displays the canonical
+English name. Level 1 chains use their element's color; multi-element chains
+use a single color calculated by averaging their elements' RGB values, rounded
+to the nearest integer. Light and Radiance additionally blend toward white until
+their darkest RGB channel reaches 220, preserving their tint while brightening
+the name. Decorated names and blended colors are computed once when the module
+loads, using the shared skillchain-element mapping and the
+same palette as `color_element`. `color_latest` receives that same blended
+color. Unknown names retain their
+text in the normal body color. The stock skillchain row uses this automatically.
 
-| Skillchain | Color |
+| Skillchain | Elements blended |
 |---|---|
-| Liquefaction | Coral red |
-| Induration | Pale blue |
-| Detonation | Mint green |
-| Scission | Sandy gold |
-| Impaction | Lavender |
-| Reverberation | Blue |
-| Transfixion | Pale yellow |
-| Compression | Purple |
-| Fusion | Orange |
-| Fragmentation | Turquoise |
-| Distortion | Blue-violet |
-| Gravitation | Muted plum |
-| Light / Radiance | Warm white |
-| Darkness / Umbra | Light violet |
+| Liquefaction | Fire |
+| Induration | Ice |
+| Detonation | Wind |
+| Scission | Earth |
+| Impaction | Lightning |
+| Reverberation | Water |
+| Transfixion | Light |
+| Compression | Dark |
+| Fusion | Fire, Light |
+| Fragmentation | Wind, Lightning |
+| Distortion | Ice, Water |
+| Gravitation | Earth, Dark |
+| Light / Radiance | Fire, Wind, Lightning, Light |
+| Darkness / Umbra | Earth, Ice, Water, Dark |
 
 ## Include another tracking set
 

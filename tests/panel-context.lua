@@ -101,15 +101,34 @@ local chains={'Liquefaction','Induration','Detonation','Scission','Impaction','R
 for _,name in ipairs(chains) do
     local result=context.color_skillchain(name)
     assert(result==context.color_skillchain({name=name}))
-    assert(result:find(name..'\\cr',1,true))
-    assert(context.color_latest(name)==result)
+    assert(require('./lib/ux/log-buffer').uncolored(result)==name)
+    local mapping=require('./lib/skillchain-elements')[name]
+    local sums={0,0,0}
+    for _,element in ipairs(mapping) do
+        local r,g,b=context.color_element({name='extra',element=element}):match('^\\cs%((%d+),(%d+),(%d+)%)')
+        sums[1]=sums[1]+tonumber(r); sums[2]=sums[2]+tonumber(g); sums[3]=sums[3]+tonumber(b)
+    end
+    for channel=1,3 do sums[channel]=math.floor(sums[channel]/#mapping+0.5) end
+    if name=='Light' or name=='Radiance' then
+        local minimum=math.min(unpack(sums))
+        local lift=(220-minimum)/(255-minimum)
+        if lift>0 then
+            for channel=1,3 do sums[channel]=math.floor(sums[channel]+(255-sums[channel])*lift+0.5) end
+        end
+        assert(math.min(unpack(sums))>=220)
+    end
+    local prefix=('\\cs(%d,%d,%d)'):format(unpack(sums))
+    assert(result==prefix..name..'\\cr')
+    context.color_skillchain(name)
+    assert(context.color_latest('extra')==prefix..'extra\\cr')
+    assert(context.color_skillchain(name:lower())==result)
 end
 assert(context.color_skillchain(nil)=='\\cs(160,160,160)--\\cr')
 assert(context.color_skillchain({})=='\\cs(160,160,160)--\\cr')
 assert(context.color_skillchain('Unknown')==('\\cs(%d,%d,%d)Unknown\\cr'):format(unpack(Theme.colors.body)))
 local fn=factory.get(Config.defaults.tracking.sets.default[2].expression[1])
 setfenv(fn,trackingEnv)
-assert(fn():find('\\cs(255,245,220)Light\\cr',1,true))
+assert(fn():find(context.color_skillchain('Light'),1,true))
 print('PASS: skillchain palette, object/name inputs, latest color and tracking integration')
 assert(context.color_number('3.0')=='\\cs(241,241,183)3.0\\cr')
 assert(context.color_number(42)=='\\cs(241,241,183)42\\cr')
@@ -142,6 +161,6 @@ trackingEnv.gambit.last_ability.element=0
 for index=2,4 do
     local expression=factory.get(Config.defaults.tracking.sets.default[index].expression[1])
     setfenv(expression,trackingEnv)
-    assert(expression():find('\\cs(255,125,110)',1,true))
+    assert(expression():find(context.color_element({name='',element=0}):sub(1,-4),1,true))
 end
 print('PASS: tracked weapon skill, spell and ability names use element colors')
