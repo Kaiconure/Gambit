@@ -1146,30 +1146,7 @@ handlers['config'] = function(args)
     end
 
     if cp > 0 then
-        local hasCpChanges = false
-
-        cp = args[cp + 1]
-        settings.cloudPanel = settings.cloudPanel or {}
-
-        if cp == 'on' then
-            settings.cloudPanel.enabled = true
-            hasChanges = true
-            hasCpChanges = true
-        elseif cp == 'off' then
-            settings.cloudPanel.enabled = false
-            hasChanges = true
-            hasCpChanges = true 
-        end
-
-        if hasCpChanges then
-            if globals.cloud_panel then
-                globals.cloud_panel:configure(settings.cloudPanel)
-            end
-        end
-
-        writeMessage('Cloud panel display: %s':format(
-            settings.cloudPanel.enabled and text_green('on') or text_red('off')
-        ))
+        writeMessage('The cloud panel is retired. Use gbt panel show for the status panel.')
     end
 
     if slowTargetTransitions > 0 then

@@ -251,7 +251,7 @@ On load, Gambit also registers these Windower shortcuts:
 
 ```text
 //gbt config -distance 20 -chasetime 15
-//gbt config -cloudpanel on
+//gbt panel show
 //gbt verbosity -level normal
 ```
 
@@ -265,7 +265,7 @@ On load, Gambit also registers these Windower shortcuts:
 | `-chasetime <seconds>` | `-ct` | Maximum chase time; clamped to 5–60. |
 | `-skillchaindelay <seconds>` | `-scdelay`, `-scd` | Skillchain delay; requires a positive input and is capped by Gambit's maximum skillchain time. |
 | `-targetingduration <seconds>` | `-td` | Targeting duration; clamped to 1–20. |
-| `-cloudpanel on/off` | `-cp` | Enable or disable the cloud panel. |
+| `-cloudpanel on/off` | `-cp` | Retired; displays a notice without changing saved settings. Use `gbt panel show`. |
 | `-rawdistance on/off` | `-rd` | Toggle raw-distance mode. This option alone does not trigger a settings save. |
 | `-debugging on/off` | — | Toggle additional debugging details. |
 | `-stt on/off` | — | Toggle slower target transitions. |

@@ -43,7 +43,6 @@ images = require('images')
 skillchain_helper = require('lib/skillchain-helper')
 
 require('ux/core')
-require('ux/cloud-panel')
 
 require('actions')
 
@@ -449,7 +448,8 @@ windower.register_event('load', function()
             return remaining<=0
         end,
     })
-    globals.cloud_panel = ux.cloud_panel.new()
+    -- Legacy cloud-panel code/assets/settings are retained, but no display is
+    -- created. The status panel is the supported UI, regardless of saved flags.
     globals.status_panel_ready = false
     globals.status_panel = require('./lib/ux/status-panel').new({
         windower=windower, texts=texts, images=images,

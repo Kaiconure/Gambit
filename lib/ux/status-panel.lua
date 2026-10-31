@@ -293,7 +293,7 @@ function Status:update()
     end
     self.panel.width=math.ceil(width)
     self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
-    self.version.x=self.panel.width-self.versionWidth-2
+    self.version.x=self.panel.width-self.versionWidth-6
     -- Expression arrays can change size at runtime: reflow rows and automatic
     -- height before clipping, without rebuilding controls or disturbing dragging.
     local lineHeight=math.ceil(self.options.font_size*1.8)
