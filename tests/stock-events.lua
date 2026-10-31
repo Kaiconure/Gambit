@@ -117,6 +117,21 @@ blu.vars.gear.spells.blue.pre=set('blue general')
 blu.vars.gear.spells.blue['White Wind']={pre={neck={name='blue specific'}}}
 local blueResult=run(blu,'spells','pre',{name='White Wind',blue=true})
 assert(blueResult.head=='blue general' and blueResult.neck=='blue specific')
+for _,phase in ipairs({'pre','mid'}) do
+    blu.vars.gear.spells.blue[phase]=set('blue general')
+    blu.vars.gear.spells.blue['Spectral Floe']={[phase]={neck={name='blue named'}}}
+    blu.vars.gear.spells.magic_burst[phase]=set('blue burst')
+    blu.vars.gear.spells.magic_burst['Spectral Floe']={[phase]={neck={name='blue burst named'}}}
+    local event={name='Spectral Floe',blue=true}
+    assert(run(blu,'spells',phase,event,nil,true).head=='blue general') -- No Burst Affinity.
+    assert(run(blu,'spells',phase,event,{['Burst Affinity']=true},false).head=='blue general')
+    local result=run(blu,'spells',phase,event,{['Burst Affinity']=true},true)
+    assert(result.head=='blue burst' and result.neck=='blue burst named')
+    blu.vars.gear.spells.magic_burst[phase]=nil
+    assert(run(blu,'spells',phase,event,{['Burst Affinity']=true},true).neck=='blue burst named')
+    blu.vars.gear.spells.magic_burst[phase]={head={name='stop burst'},meta={stop=true}}
+    assert(run(blu,'spells',phase,event,{['Burst Affinity']=true},true).neck=='blue named')
+end
 local bst=load('BST')
 bst.vars.gear.beastmaster.ready.pre=set('ready delay')
 bst.vars.gear.beastmaster.ready.mid=set('ready potency')

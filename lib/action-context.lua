@@ -5652,6 +5652,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.canMagicBurst = function(spell, target)
         return magicBurst.check(spell, target, context, {
             findSpell = findSpell,
+            findMonsterAbility = function(name)
+                return findResourceByName(resources.monster_abilities,name,'English')
+            end,
             elements = resources.elements,
             getSkillchain = function(mob) return actionStateManager:getSkillchain(mob) end,
         })

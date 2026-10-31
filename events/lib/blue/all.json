@@ -1,9 +1,15 @@
 {
-  "imports": ["lib/spells/pre"],
+  "imports": [
+    "lib/spells/pre"
+  ],
   "vars": {
     "gear": {
       "spells": {
         "blue": {
+          "pre": null,
+          "mid": null
+        },
+        "magic_burst": {
           "pre": null,
           "mid": null
         }
@@ -13,7 +19,10 @@
   "spells": {
     "pre": [
       {
-        "when": ["event.blue", "vars.gear.spells.blue.pre"],
+        "when": [
+          "event.blue",
+          "vars.gear.spells.blue.pre"
+        ],
         "commands": [
           "equipMany(vars.gear.spells.blue.pre)",
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
@@ -30,11 +39,40 @@
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
         "id": "spells-blue-named-pre"
+      },
+      {
+        "when": [
+          "event.blue",
+          "vars.gear.spells.magic_burst.pre",
+          "hasBuff(\"Burst Affinity\")",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst.pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-magic-burst-pre"
+      },
+      {
+        "when": [
+          "event.blue",
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].pre",
+          "hasBuff(\"Burst Affinity\")",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-magic-burst-named-pre"
       }
     ],
     "mid": [
       {
-        "when": ["event.blue", "vars.gear.spells.blue.mid"],
+        "when": [
+          "event.blue",
+          "vars.gear.spells.blue.mid"
+        ],
         "commands": [
           "equipMany(vars.gear.spells.blue.mid)",
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
@@ -51,6 +89,32 @@
           "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
         ],
         "id": "spells-blue-named-mid"
+      },
+      {
+        "when": [
+          "event.blue",
+          "vars.gear.spells.magic_burst.mid",
+          "hasBuff(\"Burst Affinity\")",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst.mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-magic-burst-mid"
+      },
+      {
+        "when": [
+          "event.blue",
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].mid",
+          "hasBuff(\"Burst Affinity\")",
+          "canMagicBurst(event)"
+        ],
+        "commands": [
+          "equipMany(vars.gear.spells.magic_burst[event.name].mid)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "spells-blue-magic-burst-named-mid"
       }
     ]
   }

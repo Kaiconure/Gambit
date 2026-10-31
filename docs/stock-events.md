@@ -164,7 +164,7 @@ The stock spell categories under `vars.gear.spells` are:
 | `enfeebling` | Spells using the Enfeebling Magic skill, such as Dispel and Sleep |
 | `enhancing` | Spells using the Enhancing Magic skill, such as Haste and Protect |
 | `elemental` | Spells using the Elemental Magic skill, such as Fire and Blizzard; not every spell with an element |
-| `magic_burst` | Elemental or Divine Magic spells whose element matches the target's current tracked magic-burst window; overlays their category gear |
+| `magic_burst` | Elemental or Divine Magic, plus Blue Magic with Burst Affinity, whose element matches the target's current tracked magic-burst window; overlays their category gear |
 | `geomancy` | Geomancy spells, including Indi- and Geo-spells; supplied by the GEO module |
 | `blue` | Blue Magic spells, including Blue Magic cures; supplied by the BLU module |
 
@@ -862,6 +862,15 @@ it is included only once.
 - **GEO:** geomancy remains under `gear.spells.geomancy`. Configure player
   abilities such as luopan-related job abilities under `gear.job_abilities`.
 - **BLU:** Blue Magic has its own category; Blue cures do not set `event.curing`.
+  With Burst Affinity active and `canMagicBurst(event)` true, shared
+  `gear.spells.magic_burst.pre` / `.mid` gear overlays Blue Magic gear, followed by
+  `gear.spells.magic_burst["Spectral Floe"].pre` / `.mid` (or another spell's
+  English name). Named burst sets work without a general burst set. General and
+  named Blue Magic sets run first; final spell-name overrides still run afterward.
+  `canMagicBurst` also requires a matching `monster_abilities` resource by English
+  spell name with `skillchain_a == nil`. A present field, including an empty
+  string, identifies a physical ability and prevents burst gear; missing resource
+  matches are excluded as well.
 - **BST:** Ready rules target named pet monster abilities. Reward is a player
   job ability. Random Sic moves and autonomous pet actions are not covered by
   the same command-correlated lifecycle.

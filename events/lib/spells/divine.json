@@ -40,8 +40,8 @@
       {
         "when": [
           "event.divine",
-          "canMagicBurst(event)",
-          "vars.gear.spells.magic_burst.pre"
+          "vars.gear.spells.magic_burst.pre",
+          "canMagicBurst(event)"
         ],
         "commands": [
           "equipMany(vars.gear.spells.magic_burst.pre)",
@@ -52,8 +52,8 @@
       {
         "when": [
           "event.divine",
-          "canMagicBurst(event)",
-          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].pre"
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].pre",
+          "canMagicBurst(event)"
         ],
         "commands": [
           "equipMany(vars.gear.spells.magic_burst[event.name].pre)",
@@ -88,8 +88,8 @@
       {
         "when": [
           "event.divine",
-          "canMagicBurst(event)",
-          "vars.gear.spells.magic_burst.mid"
+          "vars.gear.spells.magic_burst.mid",
+          "canMagicBurst(event)"
         ],
         "commands": [
           "equipMany(vars.gear.spells.magic_burst.mid)",
@@ -100,8 +100,8 @@
       {
         "when": [
           "event.divine",
-          "canMagicBurst(event)",
-          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].mid"
+          "vars.gear.spells.magic_burst[event.name] and vars.gear.spells.magic_burst[event.name].mid",
+          "canMagicBurst(event)"
         ],
         "commands": [
           "equipMany(vars.gear.spells.magic_burst[event.name].mid)",
