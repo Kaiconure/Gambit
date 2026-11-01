@@ -1,0 +1,67 @@
+{
+  "loading": {
+    "actions": [
+      {
+        "commands": [
+          "setVar('gear.enemy_abilities', resourceAliasKeys(vars.gear.enemy_abilities))"
+        ],
+        "id": "gear-enemy_abilities-name-aliases"
+      }
+    ]
+  },
+  "vars": {
+    "gear": {
+      "enemy_abilities": {}
+    }
+  },
+  "enemy_abilities": {
+    "pre": [
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "vars.gear.enemy_abilities[event.name] and vars.gear.enemy_abilities[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_abilities[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-abilities-named-pre"
+      },
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "event.id and vars.gear.enemy_abilities['' .. event.id] and vars.gear.enemy_abilities['' .. event.id].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_abilities['' .. event.id].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-abilities-id-pre"
+      }
+    ],
+    "post": [
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "vars.gear.enemy_abilities[event.name] and vars.gear.enemy_abilities[event.name].post"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_abilities[event.name].post)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-abilities-named-post"
+      },
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "event.id and vars.gear.enemy_abilities['' .. event.id] and vars.gear.enemy_abilities['' .. event.id].post"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_abilities['' .. event.id].post)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-abilities-id-post"
+      }
+    ]
+  }
+}

@@ -1,6 +1,7 @@
 # Events: user guide
 
-Gambit events react to actions you initiate and to status or zone changes. They
+Gambit events react to your actions, enemy spells/abilities, and buff, status,
+or zone changes. They
 run even when normal Gambit automation is disabled. Manual actions and actions
 issued by Gambit use the same event rules.
 
@@ -21,6 +22,8 @@ and serves as a reference when writing or extending rules.
 | React to a spell or ability | `pre`, `mid`, and `post` arrays |
 | React to engagement, disengagement, or death | `statuses.<category>.enter` / `.leave` |
 | React to zoning | `zones.enter` / `.leave` |
+| React to buffs received or lost | `buffs.added` / `.removed`, filtered with `event.matches(nameOrId)` |
+| React to enemy casting or readying | `enemy_spells.pre` / `.post`, `enemy_abilities.pre` / `.post` |
 | Initialize variables once per load | `loading.actions` |
 | Reuse complete rule modules | Top-level `imports` |
 | Extend stock behavior without replacing it | Top-level `contributions`, including in `.vars.json` files |
@@ -74,7 +77,7 @@ Every phase is an ordered array. A rule can have `when`, `commands`, `stop`,
   "spells": {
     "pre": [
       {
-        "when": ["event.name == 'Dispel'"],
+        "when": ["event.matches('Dispel')"],
         "stop": true,
         "id": "leave-dispel-alone"
       },
@@ -124,15 +127,38 @@ adding executable work. IDs can replace imported or contributed rules.
 
 ## Event types and timing
 
-| Configuration | `event.kind` | Phases |
-|---|---|---|
-| `spells` | `spell` | `pre`, `mid`, `post` |
-| `job_abilities` | `job_ability` | `pre`, `mid`, `post` |
-| `weapon_skills` | `weapon_skill` | `pre`, `mid`, `post` |
-| `pet_abilities` | `pet_ability` | `pre`, observed `mid`, `post` |
-| `statuses.battle`, `.idle`, `.death` | `status` | `enter`, `leave` |
-| `zones` | `zone` | `enter`, `leave` |
-| `loading` | `loading` | `actions` |
+### Event identity fields: complete reference
+
+Every rule can read `event.kind` (event type) and `event.phase` (the phase being
+executed). `event.category` is only set for status events. The complete supported
+values and combinations are:
+
+| Configuration | `event.kind` | `event.phase` | `event.category` |
+|---|---|---|---|
+| `spells` | `spell` | `pre`, `mid`, `post` | nil |
+| `job_abilities` | `job_ability` | `pre`, `mid`, `post` | nil |
+| `weapon_skills` | `weapon_skill` | `pre`, `mid`, `post` | nil |
+| `pet_abilities` | `pet_ability` | `pre`, `mid`, `post` | nil |
+| `statuses.battle` | `status` | `enter`, `leave` | `battle` |
+| `statuses.idle` | `status` | `enter`, `leave` | `idle` |
+| `statuses.death` | `status` | `enter`, `leave` | `death` |
+| `zones` | `zone` | `enter`, `leave` | nil |
+| `buffs` | `buff` | `added`, `removed` | nil |
+| `enemy_spells` | `enemy_spell` | `pre`, `post` | nil |
+| `enemy_abilities` | `enemy_ability` | `pre`, `post` | nil |
+| `loading` | `loading` | `actions` | nil |
+
+These values use singular event kinds even where the JSON section is plural.
+`event.category` is not the raw numeric action-packet category or a substitute
+for `event.kind`. Raw player status values are exposed separately as
+`event.status` and `event.old_status`.
+
+Contribution suffixes `before` and `after` describe positions within a phase,
+not additional phases or categories. A rule contributed to
+`enemy_abilities.pre.after` sees `event.kind == 'enemy_ability'` and
+`event.phase == 'pre'`. A contribution to `statuses.idle.enter.before` sees
+`event.kind == 'status'`, `event.phase == 'enter'`, and
+`event.category == 'idle'`. There is no `event.phase == 'before'` or `'after'`.
 
 ### Spells, job abilities, and weapon skills
 
@@ -144,6 +170,39 @@ adding executable work. IDs can replace imported or contributed rules.
   and very fast casts may resolve before mid gear arrives.
 - **Post:** after a matching result, interruption, recognized failure, or lifecycle
   cleanup. Weapon-skill post can arrive before its visible animation finishes.
+
+### Match event names and IDs
+
+Prefer `event.matches(value)` for identity conditions instead of comparing
+`event.name` directly. It accepts English names case-insensitively, numeric IDs,
+or numeric strings:
+
+```json
+{
+  "when": ["event.matches('Dispel')"],
+  "commands": ["log(event.name)"]
+}
+```
+
+For buffs, spells, job abilities, weapon skills, pet abilities, and enemy action events it compares
+`event.name` or `event.id`. Buff names use the resource name, not condition
+descriptions such as `doomed`. `event.matches('Doom')`, `event.matches('doom')`,
+and `event.matches('DOOM')` are equivalent. `event.matches(15)` and
+`event.matches('15')` both select buff ID 15. Missing names still allow ID matches;
+unsupported values and events without an applicable identity return false.
+
+Action events also recognize the explicit [English resource-name aliases](functions.md#english-resource-name-aliases).
+For example, `event.matches('Nat. Meditation')` and
+`event.matches("Nature's Meditation")` match either resource spelling.
+This does not rewrite `event.name`, merge IDs, or alias buff condition descriptions.
+Configured table keys can opt into the same pairs with `resourceAliasKeys(table)`
+in a loading action; matching does not automatically rewrite variables.
+
+For status events, names match the category (`battle`, `idle`, `death`); numeric
+values match the old status on leave and current status on enter. Zone events
+match the departing zone's English name/ID on leave and the destination's on
+enter. Zone search names are not aliases. `event.name` and all other metadata
+retain their original values for display.
 
 ### Pet abilities
 
@@ -158,6 +217,69 @@ Use `event.type == 'BloodPactRage'` or `'BloodPactWard'` for pacts.
 `.index` identify the pet. Simple commands such as Heel can complete on the
 player's acknowledgment. Unknown results use timeout cleanup. Uncommanded
 automaton actions and random Sic move correlation are not covered.
+
+### Enemy spells and abilities
+
+Enemy events observe nearby monster actions independently of normal automation.
+`enemy_spells.pre` means casting was observed starting; `enemy_abilities.pre`
+means a monster ability was observed readying. `post` reports the observed result
+or interruption. These are notifications, not opportunities to intercept or
+cancel the enemy's action. There is no `mid` phase or equipment dispatch barrier
+holding up the enemy.
+
+```json
+{
+  "enemy_spells": {
+    "pre": [
+      {
+        "when": ["event.matches('Firaga III')", "bt and event.actor.id == bt.id"],
+        "commands": ["log('Battle target started casting', event.name)"]
+      }
+    ]
+  },
+  "enemy_abilities": {
+    "post": [
+      {
+        "when": ["event.matches('Mortal Ray')"],
+        "commands": ["log(event.actor.name, event.outcome)"]
+      }
+    ]
+  }
+}
+```
+
+Lua observes monster actors (`spawn_type == 16`) generally; custom rules may
+select any actor. The stock gear rules explicitly require the current `bt` in
+JSON. They are not a restriction on contributions or custom event files.
+
+| Field | Meaning |
+|---|---|
+| `event.id`, `.name`, `.matches(value)` | Spell or monster-ability resource identity and English name |
+| `event.actor_id`, `.actor` | Acting monster; actor includes shared target classification and live metadata |
+| `event.target`, `.targets` | First reported target (always a table) and all reported target snapshots; an AoE packet dispatches once, not once per target |
+| `event.element`, `.element_name`, `.type` | Resource metadata, when available |
+| `event.skill`, `.skill_name`, `.cast_time` | Spell metadata, when available; spell classification flags are also exposed |
+| `event.outcome` | Post only: `completed`, `interrupted`, or a recognized `failed` result |
+| `event.completed`, `.interrupted`, `.failed` | Corresponding booleans; false in pre |
+
+Unknown resources retain a reported ID when available, with a nil name.
+Interruption packets may omit the action identity altogether; those posts still
+identify the actor and outcome, but cannot match a name or ID. There is no
+remembered lifecycle used to guess missing identity or synthesize outcomes.
+This initially covers casting packets (categories 8/4) and monster ability
+readying/results (7/11), not melee swings, ranged attacks, or player job abilities.
+
+Pre and post are independent: instant actions and missed starts can produce
+post-only notifications, while missing results do not produce timeout posts.
+Each notification has isolated event variables and its own equipment batch.
+Gear persists, and automatic equipment snapshots are not supported. Do not rely
+on a pre push being balanced by a post pop, especially if `bt` changes. Request
+explicit gear sets instead. `stopEvent()` is supported; cancellation is not.
+
+Imports, contributions, and processed exports work normally. Built-in hooks
+include `enemy_spells.pre.before`, `.pre.after`, `.post.before`, `.post.after`,
+and the corresponding `enemy_abilities` hooks. These observations currently do
+not change the backing state of `enemyUsedAbility` or `enemyCastingSpell`.
 
 ### Statuses
 
@@ -177,6 +299,67 @@ new category's enter handlers. Changing 2 to 3 does not re-enter death.
 Uncategorized statuses can leave/enter known categories but have no handlers
 of their own. Fields are `event.category`, `event.status`, and `event.old_status`.
 Zoning suppresses category notifications while departure/arrival is in progress.
+
+### Buffs received and removed
+
+`buffs.added` and `buffs.removed` are ordered rule arrays for buffs gained or
+lost by your own character. They use Windower's gain/lose buff notifications and
+run even when automation is disabled. They do not observe party-member buffs or
+synthesize notifications for buffs already active when events load/reload.
+
+```json
+{
+  "buffs": {
+    "added": [
+      {
+        "when": ["event.matches('Doom')"],
+        "commands": ["equipMany({ring1={name=\"Eshmun's Ring\", lock_when={\"hasBuff('Doom')\"}}})"],
+        "id": "doom-ring"
+      }
+    ],
+    "removed": [
+      {
+        "when": ["event.matches('Doom')"],
+        "commands": ["log('Doom removed')"],
+        "id": "doom-removed"
+      }
+    ]
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `event.kind` | `buff` |
+| `event.phase` | `added` or `removed` |
+| `event.id` | Numeric buff ID, including for unknown resource entries |
+| `event.name` | English resource name; nil for an unknown buff ID |
+| `event.name_lower` | Precomputed lowercase English buff name; nil when the name is unknown |
+| `event.actor_id` | Your character's ID |
+| `event.time` / `event.request_id` | Notification time and runtime sequence ID |
+
+Use `event.matches(15)` or `event.matches('15')` to select an exact buff ID.
+`event.matches('Doom')` compares English names without regard to capitalization.
+Name conditions
+intentionally match all IDs carrying that name; they do not identify the caster
+or source spell. Filter within the arrays using `when`, rather than nested
+name-keyed event sections. Every matching rule runs in order unless stopped.
+
+These are observations, not cancellable action lifecycles: no `pre`/`mid`/`post`,
+automatic snapshot restoration, or `use_equipment_snapshot`. Each notification
+has isolated event variables and one batched equipment phase; its gear persists.
+`stopEvent()` and rule `stop` work; `cancelEvent()` and `stopEvent(true)` do not.
+
+Use [conditional equipment locks](equipment.md#conditional-slot-locks) to keep a
+buff-triggered piece on through later battle/idle swaps. Removing the buff lets
+the next competing equipment request expire its lock; it does not itself restore
+gear. Configure a removed handler to request replacement gear if desired.
+
+Built-in contribution slots are `buffs.added.before`, `buffs.added.after`,
+`buffs.removed.before`, and `buffs.removed.after`. Imports, rule IDs, custom slots,
+vars-file contributions, and processed JSON exports work as for other events.
+The stock `lib/buffs/all` module adds name-based gear sets and later ID-specific
+overrides; see [buff gear configuration](stock-events.md#configure-buff-specific-gear).
 
 ### Zones
 
@@ -336,7 +519,7 @@ and `loading.actions.after`.
 {
   "contributions": {
     "spells.pre.after": [
-      {"when": ["event.name == 'Dispel'"],
+      {"when": ["event.matches('Dispel')"],
        "commands": ["log('Dispel requested')"], "id": "my-dispel-note"}
     ]
   }

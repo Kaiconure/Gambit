@@ -1,4 +1,14 @@
 {
+  "loading": {
+    "actions": [
+      {
+        "commands": [
+          "setVar('gear.pet_abilities', resourceAliasKeys(vars.gear.pet_abilities))"
+        ],
+        "id": "gear-pet_abilities-name-aliases"
+      }
+    ]
+  },
   "vars": {
     "gear": {
       "pet_abilities": {}

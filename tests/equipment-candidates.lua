@@ -40,6 +40,44 @@ local function ack(slot,index)
     local item=items.wardrobe[index]
     manager.queue:ack(slot,{localId=index,bagId=index==0 and 0 or 8,id=item and item.id or 0})
 end
+-- Conditional metadata follows only the selected candidate and protects restoration.
+reset()
+local doom=true
+manager.locks.deps.context=function() return {hasBuff=function() return doom end} end
+local lockContext=context()
+lockContext.equipPush({back={{name='Missing',lock_when={"hasBuff('Doom')"}},
+    {name='Fallback Mantle',lock_when={"hasBuff('Doom')"}}}})
+assert(manager.locks.slots[15] and #sent==1)
+lockContext.equipPop()
+assert(#sent==1) -- Snapshot restore cannot override an active lock.
+ack(15,2)
+doom=false
+lockContext.equipMany({back='Original Mantle'})
+assert(#sent==2 and not manager.locks.slots[15])
+reset()
+manager.locks.deps.context=function() return {hasBuff=function() return true end} end
+lockContext=context()
+assert(lockContext.checkEquipMany({back={name='Fallback Mantle',lock_when={"hasBuff('Doom')"}}})==1)
+assert(not manager.locks.slots[15]) -- Simulating an equipment request never owns a lock.
+lockContext.equip('back',{name='Original Mantle',lock_when={"hasBuff('Doom')"}})
+assert(manager.locks.slots[15] and not manager.locks.slots[15].pending and #sent==0)
+lockContext.equipMany({back='Fallback Mantle'}); assert(#sent==0)
+ack(15,2); assert(not manager.locks.slots[15]) -- External/manual change releases the lock.
+lockContext.equip({slot='back',name='Fallback Mantle',lock_when={"hasBuff('Doom')"}})
+assert(manager.locks.slots[15])
+manager:clearLocks(); assert(not manager.locks.slots[15])
+reset()
+lockContext=context()
+lockContext.equipMany({back={name='Missing',lock_when={"hasBuff('Doom')"}}})
+assert(not manager.locks.slots[15])
+-- Phase plans honor locks immediately; discarding a phase does not register a global lock.
+manager.locks.deps.context=function() return {hasBuff=function() return true end} end
+local phase=manager:session()
+phase.inventory.equip_many({back={name='Fallback Mantle',lock_when={"hasBuff('Doom')"}}})
+phase.inventory.equip_many({back={name='Original Mantle'}})
+assert(phase.planned[15].item.id==2 and not manager.locks.slots[15])
+phase:discard(); assert(not manager.locks.slots[15])
+print('PASS: item locks through equip/push/pop, candidates, already-equipped pieces and phase plans')
 reset()
 local ctx=context()
 local set={back={{name='Better Mantle'},{name='Fallback Mantle'}},meta={stop=true}}

@@ -57,6 +57,10 @@ for _,name in ipairs({'default','compact'}) do
     assert(evaluate(3):find('Target: ',1,true)==1)
     env.bt=nil
     assert(evaluate(3)=='Target: \\cs(255,130,130)Enemy\\cr (\\cs(241,241,183)123\\cr / \\cs(241,241,183)00A\\cr)')
+    env.cursor.distance=12.345
+    assert(evaluate(3)=='Target: \\cs(255,130,130)Enemy\\cr (\\cs(241,241,183)123\\cr / \\cs(241,241,183)00A\\cr)')
+    env.cursor.distance=0
+    assert(not evaluate(3):find('0.00\\cr',1,true))
     env.cursor=nil
     assert(evaluate(3)=='Target: \\cs(160,160,160)--\\cr')
 end

@@ -50,6 +50,9 @@ end
 function Runtime:observe(event,phase)
     local section=event.kind=='status' and ('statuses.'..tostring(event.category))
         or event.kind=='zone' and 'zones'
+        or event.kind=='buff' and 'buffs'
+        or event.kind=='enemy_spell' and 'enemy_spells'
+        or event.kind=='enemy_ability' and 'enemy_abilities'
     local rules=self.config.rules[section]
     if not rules or not rules[phase] or #rules[phase]==0 then return end
     if self.running then self.deps.report('Event rules cannot dispatch nested events'); return end
@@ -60,7 +63,7 @@ function Runtime:observe(event,phase)
     event.cancelled=false
     local vars=copy(self.config.vars)
     vars._={eq_stack={}}
-    local request={section=section,event=event,variables={vars=vars,original=copy(vars)}}
+    local request={section=section,event=event,observational=true,variables={vars=vars,original=copy(vars)}}
     self:run(request,phase)
     request.variables.vars._.eq_stack={}
 end

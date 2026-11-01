@@ -40,4 +40,15 @@ function values.copy(value, seen)
     return result
 end
 
+-- General opt-in shallow key normalization. Values retain their original data.
+function values.caseInsensitiveKeys(value)
+    assert(type(value)=='table','caseInsensitiveKeys expects a table')
+    local result={}
+    for key,child in pairs(value) do
+        local normalized=type(key)=='string' and key:lower() or key
+        assert(result[normalized]==nil,'Case-insensitive key collision: '..tostring(key))
+        result[normalized]=child
+    end
+    return result
+end
 return values

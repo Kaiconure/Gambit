@@ -1,11 +1,13 @@
 -- Own equipment state/listeners for normal actions and event handlers alike.
 local Queue=require('./lib/equipment/queue')
+local Locks=require('./lib/equipment/locks')
 local Service={}
 Service.__index=Service
 local fields={'main','sub','range','ammo','head','body','hands','legs','feet','neck','waist',
     'left_ear','right_ear','left_ring','right_ring','back'}
 function Service.new(deps)
     local self=setmetatable({deps=deps,listeners={}},Service)
+    self.locks=Locks.new({context=deps.context or function() end,report=deps.report})
     local function identity(slot,bag,index,items)
         if index==0 then return {localId=0,bagId=0,id=0} end
         local item=items and deps.inventory.get_item_from_bag(items,bag,index)
@@ -14,6 +16,9 @@ function Service.new(deps)
         return {localId=index,bagId=bag,id=item and item.id}
     end
     self.queue=Queue.new({clock=deps.clock or os.clock,report=deps.report,
+        allows=function(slot,item) return self.locks:allows(slot,item) end,
+        observed=function(slot,item) self.locks:observe(slot,item) end,
+        failed=function(slot,item) self.locks:failed(slot,item) end,
         read=function()
             local items=deps.windower.ffxi.get_items()
             local result={}
@@ -63,7 +68,7 @@ function Service.new(deps)
             self.queue:tick()
         end
     end)
-    listen('logout',function() self.queue:clear() end)
+    listen('logout',function() self.locks:clear(); self.queue:clear() end)
     listen('login',function() self:resync() end)
     listen('zone change',function() self:resync() end)
     listen('job change',function() self:resync() end)
@@ -81,9 +86,13 @@ function Service:snapshot(items,confirmed)
     return result
 end
 function Service:slotField(slot) return fields[slot+1] end
-function Service:resync() return self.queue:resync() end
+function Service:resync() self.locks:clear(); return self.queue:resync() end
+function Service:clearLocks() self.locks:clear() end
 function Service:session() return require('./lib/equipment/session').new(self,self.deps.inventory) end
 function Service:submit(ops)
+    if self.queue.clearing then return 0 end
+    ops=self.locks:filter(ops)
+    for slot,item in pairs(self.queue:view(true)) do self.locks:observe(slot,item) end
     local current=self.queue:view()
     local main,sub
     for _,op in ipairs(ops) do
@@ -92,6 +101,14 @@ function Service:submit(ops)
     local previous=current[0]
     local mainChanged=main and (not previous or (previous.id~=nil and main.item.id~=nil and previous.id~=main.item.id)
         or previous.localId~=main.item.localId or previous.bagId~=main.item.bagId)
+    -- Main-hand changes can implicitly remove the offhand. Preserve an owned
+    -- offhand rather than trying to work around its lock by unequipping first.
+    if mainChanged and current[1] and current[1].localId~=0 and self.locks:active(1) then
+        local filtered={}
+        for _,op in ipairs(ops) do if op.slot~=0 then filtered[#filtered+1]=op end end
+        self.locks:failed(0,main.item)
+        ops=filtered; mainChanged=false
+    end
     if mainChanged and sub and current[1] and current[1].localId~=0 then
         local ordered={{slot=1,item={localId=0,bagId=0,id=0}}}
         for _,op in ipairs(ops) do
@@ -99,7 +116,7 @@ function Service:submit(ops)
             if item.slot==0 then item.after=1 end
             ordered[#ordered+1]=item
         end
-        ops=ordered
+        ops=self.locks:filter(ordered)
     end
     local count=self.queue:submit(ops)
     if count>0 and self.deps.verbose then
@@ -111,5 +128,6 @@ function Service:barrier(fn) return self.queue:barrier(fn) end
 function Service:destroy()
     for _,id in ipairs(self.listeners) do self.deps.windower.unregister_event(id) end
     self.queue:clear()
+    self.locks:clear()
 end
 return Service

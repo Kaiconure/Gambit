@@ -4,6 +4,61 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Case-insensitive table keys
+
+`caseInsensitiveKeys(table)` returns a new table with its immediate string keys
+lowercased. Numeric keys and all values are preserved; nested keys, item names,
+and expression strings are not altered. Ambiguous keys such as `Doom` and `doom`
+raise an error. The input table is not modified.
+
+```lua
+setVar('my_named_sets', caseInsensitiveKeys(vars.my_named_sets))
+```
+
+This is an opt-in helper available to normal actions and event rules. Loading
+actions can normalize configuration once per load. Later additions/replacements
+must follow the same key convention or be normalized again. No variable paths
+are automatically normalized by Gambit.
+
+Event conditions should use `event.matches(nameOrId)` for case-insensitive
+English-name comparisons or numeric/numeric-string ID comparisons; see
+[matching events](events.md#match-event-names-and-ids).
+
+## English resource-name aliases
+
+`resourceAliasKeys(table)` returns a shallow copy with both spellings of known
+English resource-name pairs available as keys. Values, numeric keys, and
+unrelated names are preserved. It does not generally lowercase table keys.
+Defining conflicting values under both aliases raises an error; applying the
+helper repeatedly to its own output is safe. When replacing a definition after
+expansion, build a fresh definition table or remove the old mirrored alias first,
+so two aliases do not retain conflicting values.
+
+```lua
+setVar('my_spell_sets', resourceAliasKeys(vars.my_spell_sets))
+```
+
+Use this opt-in helper in loading actions for custom named gear tables. Keys
+added/replaced later should be expanded again. Gambit does not inspect variable
+paths automatically. `event.matches(...)` independently accepts either spelling
+for spell, ability, weapon-skill, pet-ability, and enemy-action events.
+
+| Monster ability name | Blue Magic spell name |
+|---|---|
+| Atramentous Libations | Atra. Libations |
+| Everyone's Grudge | Evryone. Grudge |
+| Nature's Meditation | Nat. Meditation |
+| Orcish Counterstance | O. Counterstance |
+| Quadratic Continuum | Quad. Continuum |
+| Tempestuous Upheaval | Tem. Upheaval |
+| Winds of Promyvion | Winds of Promy. |
+
+The explicit pairs live in `meta/resource-name-aliases.lua`. Both lookup
+directions are prepared once; internal spell and monster-ability lookups retain
+the resource-name cache. Resource IDs and original displayed names are unchanged.
+Aliases do not merge same-named resources or make IDs interchangeable between
+resource tables. Buff, status, and zone matching do not use these action aliases.
+
 ## Panel checklist state
 
 `checklistSet(checklistId, itemId, checked)` saves a boolean at

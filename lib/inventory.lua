@@ -287,6 +287,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
 
     local flags = { equippable = true, equipped = false }
     local swaps = { }
+    local lockRequests={}
 
     -- Resolve in slot order as well as sending in slot order. Candidate copies
     -- reserved by one slot cannot be reused by a later slot in this request.
@@ -303,7 +304,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
             local choices=type(piece)=='table' and #piece>0 and piece
                 or type(nested)=='table' and nested or {piece}
             local equipped=inventory.find_equipment_in_slot(slot,all_items,false,session)
-            local selected
+            local selected,selectedChoice
             for _,choice in ipairs(choices) do
                 if type(choice)=='string' then choice={name=choice} end
                 assert(type(choice)=='table','Equipment candidates must be item names or tables')
@@ -328,11 +329,15 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                             if candidate.raw_slots[info.id] then selected=candidate; break end
                         end
                     end
-                    if selected then break end
+                    if selected then selectedChoice=choice; break end
                 end
             end
             if selected then
                 exclusion_list[#exclusion_list+1]=selected
+                if selectedChoice.lock_when~=nil then
+                    lockRequests[info.id]={slot=info.id,item={id=selected.id,
+                        localId=selected.localId,bagId=selected.bagId},lock_when=selectedChoice.lock_when}
+                end
                 if selected~=equipped then
                     swaps[#swaps+1]={slot_id=info.id,slot=slot,item=selected,augments=selected.matched_augments}
                 end
@@ -397,6 +402,16 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
         end
         local manager=session or inventory.equipment_manager
         if manager then
+            for _,op in ipairs(operations) do
+                if lockRequests[op.slot] then
+                    op.lock_when=lockRequests[op.slot].lock_when
+                    lockRequests[op.slot]=nil
+                end
+            end
+            -- An explicit request for the already-equipped piece still establishes ownership.
+            for _,info in ipairs(GEAR_SLOT_INFO) do
+                if lockRequests[info.id] then operations[#operations+1]=lockRequests[info.id] end
+            end
             manager:submit(operations)
         else
             for _,op in ipairs(operations) do windower.ffxi.set_equip(op.item.localId,op.slot,op.item.bagId) end

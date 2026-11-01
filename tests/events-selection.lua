@@ -26,9 +26,14 @@ local service=setmetatable({deps={
     windower={ffxi={get_player=function() return {name='Tester',id=1,main_job='PLD'} end}},
     report=function(message) error(message) end,
 }}, {__index=Service})
+local lockResets=0
+service.deps.clearEquipmentLocks=function() lockResets=lockResets+1 end
 service:reload(false,'empty'); assert(service.selectedFile=='empty' and service.runtime.config.path==empty.path)
+assert(lockResets==1)
 local previous=service.runtime
 assert(not pcall(service.reload,service,false,'missing') and service.runtime==previous and service.selectedFile=='empty')
+assert(lockResets==1) -- Failed reload retains active runtime locks too.
 service:reload() -- Full settings reload does not pass a selection.
 assert(service.selectedFile==nil and service.runtime.config.path==paths[1])
+assert(lockResets==2)
 print('PASS: explicit event hierarchy selection, imports/vars, validation, failed reload retention and full-reload reset')

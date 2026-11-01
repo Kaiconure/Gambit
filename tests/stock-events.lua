@@ -10,7 +10,7 @@ local function load(job)
         local source=file:read('*a'); file:close()
         local document=json.parse(source)
         local function validate(section)
-            for _,phase in ipairs({'pre','mid','post','enter','leave','actions'}) do
+            for _,phase in ipairs({'pre','mid','post','enter','leave','actions','added','removed'}) do
                 local seen={}
                 for _,rule in ipairs(section[phase] or {}) do
                     assert(rule.id and not seen[rule.id],path..': duplicate/missing rule ID')
@@ -18,7 +18,7 @@ local function load(job)
                 end
             end
         end
-        for _,section in ipairs({'spells','job_abilities','weapon_skills','pet_abilities','zones','loading'}) do
+        for _,section in ipairs({'spells','job_abilities','weapon_skills','pet_abilities','zones','loading','buffs','enemy_spells','enemy_abilities'}) do
             if document[section] then validate(document[section]) end
         end
         for _,section in pairs(document.statuses or {}) do validate(section) end
@@ -26,11 +26,19 @@ local function load(job)
     end)
 end
 local function set(name) return {head={name=name}} end
-local function run(config,section,phase,event,buffs,magicBurst)
+local function run(config,section,phase,event,buffs,magicBurst,bt)
     local worn={}
     local context=function(_,state)
         local ctx
-        ctx={vars=state.vars,ipairs=ipairs,
+        ctx={vars=state.vars,ipairs=ipairs,bt=bt,
+        caseInsensitiveKeys=require('./lib/variable-values').caseInsensitiveKeys,
+        resourceAliasKeys=require('./lib/resource-name-aliases').keys,
+        setVar=function(path,value)
+            local parts=require('./lib/variable-values').path(path)
+            local current=state.vars
+            for i=1,#parts-1 do current=current[parts[i]] end
+            current[parts[#parts]]=value
+        end,
         canMagicBurst=function() return magicBurst or false end,
         hasBuff=function(...)
             for _,name in ipairs({...}) do if buffs and buffs[name] then return true end end
@@ -52,10 +60,60 @@ local function run(config,section,phase,event,buffs,magicBurst)
         return ctx
     end
     local runtime=Runtime.new(config,{context=context,clock=function() return 0 end,report=function(err) error(err) end})
+    runtime:loading()
     config.vars._={eq_stack={}}
     event.target=event.target or {}
     assert(runtime:run({section=section,event=event,variables={vars=config.vars}},phase))
     return worn
+end
+for _,section in ipairs({'enemy_spells','enemy_abilities'}) do
+    local config=load('WAR')
+    for _,phase in ipairs({'pre','post'}) do
+        config.vars.gear[section].Gaze={[phase]={head={name='name set'},neck={name='name neck'}}}
+        config.vars.gear[section]['20']={[phase]=set('id override')}
+        local event={kind=section=='enemy_spells' and 'enemy_spell' or 'enemy_ability',name='Gaze',id=20,actor={id=200}}
+        assert(next(run(config,section,phase,event))==nil)
+        assert(next(run(config,section,phase,event,nil,nil,{id=300}))==nil)
+        local result=run(config,section,phase,event,nil,nil,{id=200})
+        assert(result.head=='id override' and result.neck=='name neck')
+        event.name=nil; event.id=nil
+        assert(next(run(config,section,phase,event,nil,nil,{id=200}))==nil)
+    end
+end
+for _,setup in ipairs({
+    {'BLU','spells',{'spells','blue'},'mid',true},
+    {'BLU','spells',{'spells'},'mid',true},
+    {'WAR','enemy_abilities',{'enemy_abilities'},'pre',false},
+    {'WAR','enemy_spells',{'enemy_spells'},'post',false},
+    {'SMN','pet_abilities',{'pet_abilities'},'mid',false},
+}) do
+    for _,configured in ipairs({"Nature's Meditation",'Nat. Meditation'}) do
+        local config=load(setup[1])
+        local path=config.vars.gear
+        for _,key in ipairs(setup[3]) do path=path[key] end
+        path[configured]={[setup[4]]=set('alias piece')}
+        local event={name=configured=="Nature's Meditation" and 'Nat. Meditation' or "Nature's Meditation",
+            id=99,blue=setup[5],actor={id=200}}
+        assert(run(config,setup[2],setup[4],event,nil,nil,{id=200}).head=='alias piece')
+    end
+end
+for _,job in ipairs({'WAR','BLU','BRD','BST','GEO','NIN','PUP','RUN','SCH','SMN'}) do
+    local config=load(job)
+    assert(config.vars.gear.buffs)
+    for _,phase in ipairs({'added','removed'}) do
+        config.vars.gear.buffs={Refresh={[phase]={head={name='name head'},neck={name='name neck'}}}}
+        config.vars.gear.buffs['1002']={[phase]={head={name='id head'}}}
+        local named=run(config,'buffs',phase,{kind='buff',id=1001,name='Refresh'})
+        assert(named.head=='name head' and named.neck=='name neck')
+        local lower=run(config,'buffs',phase,{kind='buff',id=1001,name='refresh'})
+        assert(lower.head=='name head' and lower.neck=='name neck')
+        local specific=run(config,'buffs',phase,{kind='buff',id=1002,name='Refresh'})
+        assert(specific.head=='id head' and specific.neck=='name neck')
+        assert(run(config,'buffs',phase,{kind='buff',id=1002}).head=='id head')
+        assert(next(run(config,'buffs',phase,{kind='buff',id=999,name='Other'}))==nil)
+        config.vars.gear.buffs.refresh[phase].meta={stop=true}
+        assert(run(config,'buffs',phase,{kind='buff',id=1002,name='Refresh'}).head=='name head')
+    end
 end
 for _,job in ipairs({'WAR','MNK','WHM','BLM','RDM','THF','PLD','DRK','BST','BRD','RNG','SAM','NIN','DRG',
     'SMN','BLU','COR','PUP','DNC','SCH','GEO','RUN'}) do
