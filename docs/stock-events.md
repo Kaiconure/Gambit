@@ -601,6 +601,25 @@ own entry point's name would create a cycle.
 
 ## Gear set format
 
+### Resource-name aliases in named gear sets
+
+Stock loading rules accept either spelling of known English resource-name pairs,
+such as `Nat. Meditation` and `Nature's Meditation`, in these named gear tables:
+
+- `gear.spells` (final named overrides)
+- `gear.spells.blue`
+- `gear.spells.magic_burst`
+- `gear.enemy_spells`
+- `gear.enemy_abilities`
+- `gear.pet_abilities`
+
+Define one spelling per action; conflicting definitions under both aliases are
+rejected. These modules explicitly call the general `resourceAliasKeys` helper
+during loading. Other names, variable tables, item names, and resource IDs are
+not rewritten. Re-expand a table if code adds/replaces alias keys later.
+`event.matches(nameOrId)` accepts either action spelling independently of this
+gear configuration. See [alias pairs and custom usage](functions.md#english-resource-name-aliases).
+
 ### Equipment slot names
 
 Use these keys inside any gear set. Slot names are case-insensitive; lowercase
@@ -930,6 +949,139 @@ snapshot can replace intentional gear changes made during the lifecycle.
 Status-enter gear rules do not capture or restore an action baseline.
 
 ## Extending stock behavior with contributions
+
+### Equip gear for your battle target's actions
+
+Every stock entry point except `empty.json` imports `lib/enemy_spells/all` and
+`lib/enemy_abilities/all`. Configure named `pre` / `post` sets under
+`gear.enemy_spells` or `gear.enemy_abilities`; quoted numeric IDs provide a later,
+more specific override in the same table:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "enemy_spells": {
+        "Firaga III": {
+          "pre": {"body": {"name": "Your Magic Defense Body"}},
+          "post": {"body": {"var": "gear.battle.body"}}
+        }
+      },
+      "enemy_abilities": {
+        "Mortal Ray": {
+          "pre": {"neck": {"name": "Your Defensive Necklace"}},
+          "post": {"neck": {"var": "gear.battle.neck"}}
+        }
+      }
+    }
+  }
+}
+```
+
+Replace placeholder gear and configure the referenced replacement pieces. Stock
+handlers require `bt and event.actor and event.actor.id == bt.id` in both phases.
+Name-based gear runs first, ID-specific gear second; these optional sets batch
+together and support `meta.stop` and `lock_when` as usual. Named keys use English
+resource spelling or a supported English name alias. For custom conditions,
+prefer `event.matches(nameOrId)`.
+
+`pre` observes the start; it cannot pause the enemy or cancel its action. Posts
+may occur without pre, and lost result packets are not synthesized. If your
+battle target changes, the previous enemy's post no longer passes the stock
+filter. Consequently, these are explicit gear requests, not paired snapshot
+push/pop operations. Ordinary gear changes may replace the pieces later.
+Contributions such as `enemy_spells.pre.after` can use different actor filters
+or execute custom code. See [enemy events](events.md#enemy-spells-and-abilities).
+
+### Configure buff-specific gear
+
+Every stock entry point except `empty.json` imports `lib/buffs/all`. Define
+`gear.buffs["English buff name"].added` / `.removed` in your `.vars.json` file.
+For more specific overrides, use `gear.buffs["buff id"].added` / `.removed`:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "buffs": {
+        "Doom": {
+          "added": {
+            "ring1": {"name": "Eshmun's Ring", "lock_when": ["hasBuff('Doom')"]}
+          },
+          "removed": {
+            "ring1": {"name": "Your Normal Ring"}
+          }
+        },
+        "15": {
+          "added": {
+            "ring2": {"name": "Your Other Doom Ring", "lock_when": ["hasBuff('Doom')"]}
+          },
+          "removed": {
+            "ring2": {"name": "Your Normal Second Ring"}
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Replace placeholder item names with your equipment. JSON object keys are strings,
+so ID buckets use quoted IDs such as `"15"`. Name-based gear runs first, then
+ID-specific gear. ID sets override overlapping slots and retain other pieces
+from the name set. Both sets are optional and use the same batched equipment
+phase. There is no automatic snapshot restoration for buff notifications.
+
+Buff gear names are case-insensitive (`Doom`, `doom`, and `DOOM` are equivalent).
+Do not define multiple keys differing only in case. The stock buff module
+normalizes its immediate gear keys during loading using the general
+`caseInsensitiveKeys` helper; other stock gear tables keep their existing key
+behavior. If code replaces or adds mixed-case buff keys later, normalize that
+table again with `setVar('gear.buffs', caseInsensitiveKeys(vars.gear.buffs))`.
+
+Names use English resources. A name can match multiple buff IDs; an ID set can
+also run when the name is unknown. Sets support equipment candidates, variable
+references, `lock_when`, and `meta.stop` like other stock gear sets. A name set
+with `meta.stop=true` intentionally prevents the later ID override and further
+handlers in that phase. Prefer leaving it unset when layering gear or cleanup.
+
+### React to buffs without replacing the stock entry point
+
+For behavior beyond the gear sets above, add rules to a character/job `.vars.json` file using `buffs.added.after` and
+`buffs.removed.after`. For example, equip a Doom-specific ring and protect it
+from other Gambit gear changes while Doom remains active:
+
+```json
+{
+  "contributions": {
+    "buffs.added.after": [
+      {
+        "when": ["event.matches('Doom')"],
+        "commands": ["equipMany({ring1={name=\"Eshmun's Ring\", lock_when={\"hasBuff('Doom')\"}}})"],
+        "id": "doom-ring"
+      }
+    ],
+    "buffs.removed.after": [
+      {
+        "when": [
+          "event.matches('Doom')",
+          "me.is_engaged and vars.gear.battle or (not me.is_engaged and vars.gear.idle)"
+        ],
+        "commands": ["equipMany(me.is_engaged and vars.gear.battle or vars.gear.idle)"],
+        "id": "doom-restore"
+      }
+    ]
+  }
+}
+```
+
+Your idle/battle set must include a replacement for `ring1`; partial sets leave
+unspecified slots alone. The lock expires when Doom is absent and the replacement
+request is checked. These notifications concern your own character and run even
+when automation is disabled. They do not replay already-active buffs on reload.
+Use `event.id` rather than `event.name` when multiple buffs share a name. See
+[buff events](events.md#buffs-received-and-removed) for fields and behavior, and
+[conditional locks](equipment.md#conditional-slot-locks) for equipment ownership.
 
 ### Stock example: shared post-equipment rules
 

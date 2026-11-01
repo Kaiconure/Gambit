@@ -419,6 +419,7 @@ windower.register_event('load', function()
 
     globals.equipment_manager = require('./lib/equipment/init').new({
         windower=windower,inventory=inventory,packets=packets,
+        context=ActionContext.createTemporary,
         report=function(message) writeError('[equipment] '..message) end,
         verbose=function(message) writeVerbose(message) end,
         formatCount=function(count) return text_number(count, Colors.verbose) end,
@@ -437,6 +438,7 @@ windower.register_event('load', function()
         barrier=function(fn) globals.equipment_manager:barrier(fn) end,
         equipmentSession=function() return globals.equipment_manager:session() end,
         equipmentPending=function() return #globals.equipment_manager.queue.batches>0 end,
+        clearEquipmentLocks=function() globals.equipment_manager:clearLocks() end,
         abilityReady=function(player,ability)
             local timers=windower.ffxi.get_ability_recasts()
             local remaining=timers and timers[ability.recast_id]

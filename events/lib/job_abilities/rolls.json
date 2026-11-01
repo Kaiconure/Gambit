@@ -9,7 +9,7 @@
       {
         "when": [
           "vars.gear.rolls",
-          "event.type == 'CorsairRoll' or event.name == 'Double-Up'"
+          "event.type == 'CorsairRoll' or event.matches('Double-Up')"
         ],
         "commands": [
           "equipMany(vars.gear.rolls)",

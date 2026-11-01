@@ -6,10 +6,12 @@ local importDocuments=require('./lib/events/imports')
 local eventSlots=require('./lib/events/slots')
 local Config={kinds={'spells','job_abilities','weapon_skills','pet_abilities'},phases={'pre','mid','post'}}
 local statusCategories=require('./lib/events/statuses').categories
-local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading'}
+local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading','buffs','enemy_spells','enemy_abilities'}
 for _,category in ipairs(statusCategories) do sections[#sections+1]='statuses.'..category end
 local function phases(kind)
     if kind=='loading' then return {'actions'} end
+    if kind=='buffs' then return {'added','removed'} end
+    if kind=='enemy_spells' or kind=='enemy_abilities' then return {'pre','post'} end
     return (kind=='zones' or kind:match('^statuses%.')) and {'enter','leave'} or Config.phases
 end
 local function array(value,label)
@@ -95,7 +97,8 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
                 if category then section=document.statuses and document.statuses[category] end
                 if section then
                     assert(type(section)=='table',path..': '..kind..' must be an object')
-                    local observational=kind=='zones' or kind=='loading' or category~=nil
+                    local observational=kind=='zones' or kind=='loading' or kind=='buffs'
+                        or kind=='enemy_spells' or kind=='enemy_abilities' or category~=nil
                     assert(not observational or section.use_equipment_snapshot==nil,
                         path..': '..kind..' does not support use_equipment_snapshot')
                     assert(section.use_equipment_snapshot==nil or type(section.use_equipment_snapshot)=='boolean',

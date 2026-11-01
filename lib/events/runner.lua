@@ -1,5 +1,6 @@
 -- Event rules must finish synchronously; the normal yielding scheduler is unused.
 local copy=require('./lib/variable-values').copy
+local Matches=require('./lib/events/matches')
 local Runner={}
 Runner.__index=Runner
 function Runner.new(config,context,report,equipmentSession,targetSnapshot)
@@ -40,11 +41,13 @@ function Runner:run(request,phase)
         context.event.target=self.targetSnapshot(request.event.target)
     end
     context.event.phase=phase
+    Matches.attach(context.event)
     local active=true
     local phaseFailed=false
     local stopped=false
     context.cancelEvent=function(reason)
-        assert(active and phase=='pre' and not request.finished,'cancelEvent is only valid during this request\'s pre phase')
+        assert(active and phase=='pre' and not request.finished and not request.observational,
+            'cancelEvent is only valid during this request\'s pre phase for an outgoing player action')
         request.event.cancelled=true
         request.event.reason=request.event.reason or (reason and tostring(reason))
         context.event.cancelled=true
@@ -78,7 +81,7 @@ function Runner:run(request,phase)
                 phaseFailed=true
                 rule.failed=true
                 self.report(rule.source..': '..tostring(message))
-                if phase=='pre' then
+                if phase=='pre' and not request.observational then
                     request.event.cancelled=true
                     request.event.reason=request.event.reason or 'pre-rule error'
                 end
@@ -86,8 +89,10 @@ function Runner:run(request,phase)
         elseif phase=='pre' then
             phaseFailed=true
             -- A quarantined pre rule must not silently bypass its cancellation.
-            request.event.cancelled=true
-            request.event.reason=request.event.reason or 'pre-rule disabled after error'
+            if not request.observational then
+                request.event.cancelled=true
+                request.event.reason=request.event.reason or 'pre-rule disabled after error'
+            end
         end
         if stopped then break end
     end

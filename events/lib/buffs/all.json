@@ -1,0 +1,68 @@
+{
+  "vars": {
+    "gear": {
+      "buffs": {}
+    }
+  },
+  "loading": {
+    "actions": [
+      {
+        "commands": [
+          "setVar('vars.gear.buffs', caseInsensitiveKeys(vars.gear.buffs))"
+        ],
+        "id": "buffs-normalize-keys",
+        "comment": [
+          "This step is required because Windower had a data bug where most buff names were lower-case.",
+          "This couldn't be fixed, because at that point it would have broken existing code. So now",
+          "we're stuck with it and need to work around it."
+        ]
+      }
+    ]
+  },
+  "buffs": {
+    "added": [
+      {
+        "when": [
+          "vars.gear.buffs[event.name_lower] and vars.gear.buffs[event.name_lower].added"
+        ],
+        "commands": [
+          "equipMany(vars.gear.buffs[event.name_lower].added)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "buffs-named-added"
+      },
+      {
+        "when": [
+          "vars.gear.buffs['' .. event.id] and vars.gear.buffs['' .. event.id].added"
+        ],
+        "commands": [
+          "equipMany(vars.gear.buffs['' .. event.id].added)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "buffs-id-added"
+      }
+    ],
+    "removed": [
+      {
+        "when": [
+          "vars.gear.buffs[event.name_lower] and vars.gear.buffs[event.name_lower].removed"
+        ],
+        "commands": [
+          "equipMany(vars.gear.buffs[event.name_lower].removed)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "buffs-named-removed"
+      },
+      {
+        "when": [
+          "vars.gear.buffs['' .. event.id] and vars.gear.buffs['' .. event.id].removed"
+        ],
+        "commands": [
+          "equipMany(vars.gear.buffs['' .. event.id].removed)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "buffs-id-removed"
+      }
+    ]
+  }
+}

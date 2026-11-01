@@ -53,6 +53,7 @@ function Queue:barrier(callback)
 end
 function Queue:ack(slot,item,defer)
     self.confirmed[slot]=copy(item)
+    if self.deps.observed then self.deps.observed(slot,item) end
     local batch=self.batches[1]
     if batch and batch.ops then
         for _,op in ipairs(batch.ops) do
@@ -84,23 +85,32 @@ function Queue:tick()
                     end
                     local now=self.deps.clock()
                     if ready and (op.state=='queued' or now-op.sent_at>=0.75) then
-                        if op.attempts>=3 or not self.deps.valid(op.item) then
+                        if self.deps.allows and not self.deps.allows(op.slot,op.item) then
+                            -- Discard blocked work; it must not run later when the lock expires.
+                            op.state='acknowledged'
+                        elseif op.attempts>=3 or not self.deps.valid(op.item) then
                             op.state='failed'; failed=true
                             self.deps.report('Equipment swap failed for slot '..op.slot)
                             break
-                        end
-                        op.attempts=op.attempts+1
-                        op.state='sent'; op.sent_at=now
-                        local ok,err=pcall(self.deps.send,op.slot,op.item)
-                        if not ok then
-                            op.state='failed'; failed=true
-                            self.deps.report('Equipment submission: '..tostring(err)); break
+                        else
+                            op.attempts=op.attempts+1
+                            op.state='sent'; op.sent_at=now
+                            local ok,err=pcall(self.deps.send,op.slot,op.item)
+                            if not ok then
+                                op.state='failed'; failed=true
+                                self.deps.report('Equipment submission: '..tostring(err)); break
+                            end
                         end
                     end
                 end
             end
             if complete or failed then
                 table.remove(self.batches,1)
+                if failed and self.deps.failed then
+                    for _,op in ipairs(batch.ops) do
+                        if op.state~='acknowledged' then self.deps.failed(op.slot,op.item) end
+                    end
+                end
                 if failed then self.failed=true end
             else break end
         end

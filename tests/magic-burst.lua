@@ -65,9 +65,16 @@ local body=assert(source:match('(    context.canMagicBurst = function.-)\n    co
 local ctx={bt={id=100},skillchain={name='Fusion'}}
 local chunk=assert(loadstring(body))
 setfenv(chunk,{context=ctx,magicBurst=burst,findSpell=deps.findSpell,resources={elements=deps.elements},
+    findMonsterAbility=function(name,language)
+        assert(language=='English')
+        assert(require('./lib/resource-name-aliases').monster(name)=="Nature's Meditation")
+        return {}
+    end,
     actionStateManager={getSkillchain=function(_,target) return deps.getSkillchain(target) end}})
 chunk()
 chains[100]={name='Fusion',time=10}
 assert(ctx.canMagicBurst('Fire'))
 assert(ctx.canMagicBurst({kind='spell',id=2,target={id=200}}))
+spells['Nat. Meditation']={id=102,en='Nat. Meditation',name='Nat. Meditation',skill=43,element=0}
+assert(ctx.canMagicBurst(spells['Nat. Meditation']))
 print('PASS: burst elements, spell/event/name/ID inputs, target precedence, authoritative context/manager state and context wrapper')

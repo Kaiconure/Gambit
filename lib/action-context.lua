@@ -3,6 +3,7 @@ local settingsPaths = require('./lib/settings-paths')
 local movementReservations = require('./lib/movement-reservations')
 local engagementHelpers = require('./lib/engagement-helpers')
 local variableValues = require('./lib/variable-values')
+local resourceNameAliases = require('./lib/resource-name-aliases')
 local targetSelectors = require('./lib/target-selectors')
 local multiStageParticipants = require('./lib/multi-stage-participants')
 local targetedAction = require('./lib/targeted-action')
@@ -2338,6 +2339,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --
     context.equip = function(slot, name)
         local augments = nil
+        if type(slot)=='table' and slot.lock_when~=nil then
+            if not slot.slot then return end
+            context.equipMany({[slot.slot]=slot})
+            return true
+        end
         
         if slot == nil and name == nil then
             if context.item then
@@ -2352,7 +2358,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 name = slot.name
                 slot = slot.slot
                 augments = slot.matched_augments
-            elseif type(name) == 'table' and (#name>0 or name.var~=nil) then
+            elseif type(name) == 'table' and (#name>0 or name.var~=nil or name.lock_when~=nil) then
                 if not slot then return end
                 context.equipMany({[slot]=name})
                 return true
@@ -2419,7 +2425,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         local slot = entry.slot
                         local equipment = entry.equipment or entry.item or entry.gear or entry.name
                         if slot and equipment then
-                            _entries[slot] = { equipment = equipment, augments = entry.augments }
+                            _entries[slot] = { equipment = equipment, augments = entry.augments,lock_when=entry.lock_when }
                         end
                     end
                     entries = _entries
@@ -5653,7 +5659,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return magicBurst.check(spell, target, context, {
             findSpell = findSpell,
             findMonsterAbility = function(name)
-                return findResourceByName(resources.monster_abilities,name,'English')
+                return findMonsterAbility(name,'English')
             end,
             elements = resources.elements,
             getSkillchain = function(mob) return actionStateManager:getSkillchain(mob) end,
@@ -6788,6 +6794,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.number = context_number
     context.string = context_string
     context.format = string.format
+    context.caseInsensitiveKeys = variableValues.caseInsensitiveKeys
+    context.resourceAliasKeys = resourceNameAliases.keys
     context.recastTime = context_recastTime
     context.recastReady = context_recastReady
     context.noop = context_noop

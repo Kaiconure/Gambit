@@ -2,6 +2,22 @@
   "imports": [
     "lib/spells/pre"
   ],
+  "loading": {
+    "actions": [
+      {
+        "commands": [
+          "setVar('gear.spells.blue', resourceAliasKeys(vars.gear.spells.blue))"
+        ],
+        "id": "gear-spells-blue-name-aliases"
+      },
+      {
+        "commands": [
+          "setVar('gear.spells.magic_burst', resourceAliasKeys(vars.gear.spells.magic_burst))"
+        ],
+        "id": "gear-spells-magic_burst-name-aliases"
+      }
+    ]
+  },
   "vars": {
     "gear": {
       "spells": {

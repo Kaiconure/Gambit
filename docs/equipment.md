@@ -26,6 +26,55 @@ requested, not that the server has confirmed them.
 
 ## Equipment views
 
+### Conditional slot locks
+
+An item can declare `lock_when` to keep Gambit from swapping it out while all
+conditions are true:
+
+```json
+{
+  "ring1": {
+    "name": "Eshmun's Ring",
+    "lock_when": ["hasBuff('Doom')"]
+  }
+}
+```
+
+Pass this set to `equipMany` or `equipPush`, or use
+`equip('ring1', {name="Eshmun's Ring", lock_when={"hasBuff('Doom')"}})`.
+Variable references preserve the conditions. In a candidate list, only the
+selected available item's conditions apply. Missing items never acquire locks.
+Explicitly requesting an already-equipped item can acquire a lock without a swap.
+
+Conditions are compiled and cached when encountered, then ANDed against a fresh
+shared automation context when competing equipment requests are considered.
+Use current state such as `hasBuff('Doom')`; event-local variables and `event`
+are not retained. Conditions must be short, synchronous expressions. An empty
+array does not register a lock. Errors keep an existing lock and report once;
+an unavailable context also keeps it until evaluation is possible.
+
+The lock protects the exact resolved bag/index, including pending equipment
+acknowledgements. Gambit skips conflicting changes to that slot while processing
+the rest of the set. This applies to phase batches, normal actions, and exact
+snapshot restoration (`equipPop` / `equipRestore`). Main-hand changes are also
+skipped while an occupied offhand is locked, to avoid implicitly removing it.
+Blocked requests are discarded, not deferred until unlock. Equipment helper
+return values still describe resolved requests, not guaranteed server changes;
+locks can suppress those requests before dispatch.
+
+When any condition becomes false, the lock expires on its next check. It does
+not restore equipment automatically; a later normal equipment request can do so.
+Manual equipment changes remain unrestricted. Once the protected item has been
+confirmed, an observed change to another item removes the lock. Failed equipment
+requests release their pending locks.
+
+Locks are runtime state, not part of the equipment stack or persisted settings.
+A successful events reload clears them after cleaning up the previous event
+runtime, leaving the gear itself alone. Failed reloads retain the old state.
+Login/logout, zoning, job changes, and addon unload also clear tracking. After
+clearing, Gambit does not infer locks from what is already worn; a new explicit
+equipment request containing `lock_when` is required to establish one.
+
 ### Ordered item candidates
 
 `equip('back', {'Aptitude Mantle +1', 'Aptitude Mantle'})` chooses the first

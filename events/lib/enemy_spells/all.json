@@ -1,0 +1,67 @@
+{
+  "loading": {
+    "actions": [
+      {
+        "commands": [
+          "setVar('gear.enemy_spells', resourceAliasKeys(vars.gear.enemy_spells))"
+        ],
+        "id": "gear-enemy_spells-name-aliases"
+      }
+    ]
+  },
+  "vars": {
+    "gear": {
+      "enemy_spells": {}
+    }
+  },
+  "enemy_spells": {
+    "pre": [
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "vars.gear.enemy_spells[event.name] and vars.gear.enemy_spells[event.name].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_spells[event.name].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-spells-named-pre"
+      },
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "event.id and vars.gear.enemy_spells['' .. event.id] and vars.gear.enemy_spells['' .. event.id].pre"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_spells['' .. event.id].pre)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-spells-id-pre"
+      }
+    ],
+    "post": [
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "vars.gear.enemy_spells[event.name] and vars.gear.enemy_spells[event.name].post"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_spells[event.name].post)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-spells-named-post"
+      },
+      {
+        "when": [
+          "bt and event.actor and event.actor.id == bt.id",
+          "event.id and vars.gear.enemy_spells['' .. event.id] and vars.gear.enemy_spells['' .. event.id].post"
+        ],
+        "commands": [
+          "equipMany(vars.gear.enemy_spells['' .. event.id].post)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "enemy-spells-id-post"
+      }
+    ]
+  }
+}

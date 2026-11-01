@@ -8,6 +8,7 @@ local magicSkills=require('./meta/magic-skills')
 local cureSpell=require('./lib/cure-spell')
 local targetMetadata=require('./lib/target-metadata')
 local pets=require('./lib/events/pets')
+local enemies=require('./lib/events/enemies')
 local Service={}
 Service.__index=Service
 local outgoing={ [3]={'spell','spells'},[7]={'weapon_skill','weapon_skills'},[9]={'job_ability','job_abilities'} }
@@ -42,12 +43,17 @@ function Service.new(deps)
         if self.transitionLogout then self.transitionLogout() end
     end)
     require('./lib/events/transitions').attach(self,listen)
+    require('./lib/events/buffs').attach(self,listen)
     return self
 end
 function Service:reload(outputProcessed,entryName)
     local deps=self.deps
     local player=deps.windower.ffxi.get_player()
-    if not player then self:clear('reloaded'); self.runtime=nil; self.selectedFile=nil; return end
+    if not player then
+        self:clear('reloaded')
+        if deps.clearEquipmentLocks then deps.clearEquipmentLocks() end
+        self.runtime=nil; self.selectedFile=nil; return
+    end
     local read=deps.read or function(path)
         local file=io.open((deps.windower.addon_path or '')..path,'r')
         if not file then return nil end
@@ -71,6 +77,7 @@ function Service:reload(outputProcessed,entryName)
     end
     -- Load/compile completely before replacing the active configuration.
     self:clear('reloaded')
+    if deps.clearEquipmentLocks then deps.clearEquipmentLocks() end
     self.selectedFile=entryName
     self.runtime=Runtime.new(config,{context=deps.context,report=deps.report,
         debug=function(message,lostLifecycle)
@@ -230,6 +237,7 @@ function Service:send(packet)
 end
 function Service:action(action)
     if not self.runtime or not action then return end
+    if enemies.action(self,action,rejected) then return end
     if pets.action(self,action) then return end
     local player=self.deps.windower.ffxi.get_player()
     if not player or action.actor_id~=player.id then return end

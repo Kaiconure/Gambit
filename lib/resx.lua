@@ -153,32 +153,22 @@ function findWeaponSkill(name)
     return findResourceByName(resources.weapon_skills, name)
 end
 
--- Some monster abilities that are learnable blue magic spells have different names
--- between ability and spell. This maps them across.
-local monster_abilities_to_spells = 
-{
-    ["Atramentous Libations"] = "Atra. Libations",
-    ["Everyone's Grudge"]     = "Evryone. Grudge",
-    ["Nature's Meditation"]   = "Nat. Meditation",
-    ["Orcish Counterstance"]  = "O. Counterstance",
-    ["Quadratic Continuum"]   = "Quad. Continuum",
-    ["Tempestuous Upheaval"]  = "Tem. Upheaval",    
-    ["Winds of Promyvion"]    = "Winds of Promy."
-}
+local resourceNameAliases = require('./lib/resource-name-aliases')
 
-
---------------------------------------------------------------------------------------
---
 function findSpell(name)
 
     -- Perform the name mapping if this is a blue magic monster ability name that requires it
-    name = (type(name) == 'string' and monster_abilities_to_spells[name]) or name
+    name = resourceNameAliases.spell(name)
 
     return findResourceByName(resources.spells, name)
 end
 
 --------------------------------------------------------------------------------------
 --
+function findMonsterAbility(name, language)
+    return findResourceByName(resources.monster_abilities, resourceNameAliases.monster(name), language)
+end
+
 function findJobAbility(name)
     return findResourceByName(resources.job_abilities, name)
 end

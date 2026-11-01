@@ -2,6 +2,9 @@
   "imports": [
     "lib/on-battle",
     "lib/on-idle",
+    "lib/buffs/all",
+    "lib/enemy_spells/all",
+    "lib/enemy_abilities/all",
     "lib/weapon_skills/all",
     "lib/songs/all",
     "lib/spells/all",

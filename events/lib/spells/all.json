@@ -1,4 +1,20 @@
 {
+  "loading": {
+    "actions": [
+      {
+        "commands": [
+          "setVar('gear.spells', resourceAliasKeys(vars.gear.spells))"
+        ],
+        "id": "gear-spells-name-aliases"
+      },
+      {
+        "commands": [
+          "setVar('gear.spells.magic_burst', resourceAliasKeys(vars.gear.spells.magic_burst))"
+        ],
+        "id": "gear-spells-magic_burst-name-aliases"
+      }
+    ]
+  },
   "vars": {
     "gear": {
       "spells": {}
