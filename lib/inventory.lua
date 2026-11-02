@@ -155,7 +155,7 @@ end
 -- Find the actual item resource represented by the specified bag location.
 --
 inventory.get_item_from_bag = function (items, bagId, localId)
-    if localId <= 0 then
+    if type(items)~='table' or type(localId)~='number' or localId <= 0 then
         return
     end
     
@@ -563,6 +563,8 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
 
     items = items or windower.ffxi.get_items()
     if not flags.usable then items=equipment_view(items,flags.confirmed,session) end
+    -- Inventory can be absent or partially populated while zoning.
+    if type(items)~='table' then return end
 
     for bagId, bagInfo in pairs(bags_to_search) do
         local bag_is_usable = bagInfo.usable
@@ -572,7 +574,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
             (bag_is_usable or not only_usable) and
             (bag_is_equippable or not only_equippable)
         then
-            local bag = items[bagInfo.field]
+            local bag = items[bagInfo.field] or empty
             local bagItems = nil
 
             if flags.local_id then
@@ -745,7 +747,7 @@ end
 --
 inventory.get_ranged_equipment = function (session)
     local items = equipment_view(windower.ffxi.get_items(),false,session)
-    if items then
+    if items and type(items.equipment)=='table' then
         local range = inventory.get_item_from_bag(items, items.equipment.range_bag, items.equipment.range)
         local ammo = inventory.get_item_from_bag(items, items.equipment.ammo_bag, items.equipment.ammo)
 

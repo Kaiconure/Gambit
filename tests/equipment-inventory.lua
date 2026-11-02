@@ -37,3 +37,19 @@ inventory.equipment_manager.queue:tick()
 assert(inventory.find_equipment_in_slot('ring1').name=='Original')
 inventory.equipment_manager:destroy(); inventory.equipment_manager=nil
 print('PASS: real inventory selection, pending equipment queries, confirmed queries, snapshots and queued restoration')
+
+-- Zoning snapshots can be absent or omit equipment fields/bags.
+items=nil
+assert(not inventory.get_ranged_equipment())
+assert(not inventory.find_item('Original',{equippable=true}))
+assert(not inventory.find_item('Original',{usable=true}))
+assert(not inventory.get_item_from_bag(nil,8,1))
+items={}
+assert(not inventory.get_ranged_equipment())
+assert(not inventory.find_item('Original',{equippable=true,local_id=1,bag_id=8}))
+items={equipment={}}
+assert(not inventory.get_ranged_equipment())
+assert(not inventory.get_item_from_bag(items,8,nil))
+items={equipment={range=1,range_bag=8},wardrobe={}}
+assert(not inventory.get_ranged_equipment())
+print('PASS: inventory/ranged lookups tolerate absent zoning snapshots, equipment fields and bags')
