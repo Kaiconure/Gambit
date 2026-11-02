@@ -108,6 +108,11 @@ ActionPacket.open_listener(function (act)
                     if selfResult and selfResult.kind=='weapon_skill' then
                         ability=selfResult.resource
                         is_ws=true
+                    elseif selfResult and selfResult.kind=='job_ability' then
+                        -- Respect the shared decoder's resource type even when
+                        -- this JA used the weapon-skill packet category.
+                        local resource=selfResult.resource
+                        if resource and (resource.id==209 or resource.id==320) then ability=resource end
                     elseif id then
                         if
                             fields.ability

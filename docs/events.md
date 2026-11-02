@@ -391,7 +391,12 @@ These are transitions, not callbacks on every render or addon load.
 ```
 
 Loading actions run once per successful configuration load/reload, after imports,
-variable merging, CSV expansion, and contributions. Successful variable changes
+variable merging, CSV expansion, and contributions. If player or equipment state
+is not ready, execution stays pending until readiness, just like `zones.enter`.
+This includes login when the addon was loaded at character selection. Context
+and equipment snapshots are created when the actions actually run; waiting does
+not consume equipment acknowledgment timeouts. A newer reload supersedes the
+pending load, and logout/unload discards it. Successful variable changes
 become the defaults copied by later events. Reload starts from files again.
 Equipment changes persist. On a loading-rule error, its phase gear and variable
 changes are discarded; the new configuration keeps its file-defined defaults.
@@ -606,6 +611,48 @@ for restoring first and then applying idle/battle gear, and
 [equipment reference](equipment.md) for candidates, augments, and queue details.
 
 ## Reloading and troubleshooting
+
+For a real-time equipment order report, use `//gbt events verify start` and
+`//gbt events verify stop`. Verification is off by default and remains opt-in
+for production use. It covers handled spell and weapon skill lifecycles without
+adding delays or dispatch barriers. Queue-count messages are debug-level output;
+normal failures remain visible.
+
+The verifier checks requested pre equipment against confirmed gear at dispatch,
+and spell mid equipment against confirmed gear at result receipt. Weapon skill
+pre gear is expected to remain in effect through the result. It watches for
+acknowledged displacement during the action, then waits for post operations and
+automatic snapshot restoration to settle before reporting once:
+
+- **PASS**: requested equipment was confirmed at the observed boundaries and
+  post operations settled. Normal interruption, cancellation, server rejection,
+  or lifecycle teardown can also pass as `handled <outcome>` once cleanup is
+  confirmed; aborted actions do not require mid gear at a successful result.
+  Phases with no equipment requests say `no swaps`.
+- **WARNING**: observed gear differed, was displaced, or a post swap failed.
+  Fast spells whose mid gear is not confirmed before the result can warn.
+- **INCOMPLETE**: lost lifecycle tracking, missing identity/state, stopping
+  verification early, or a post wait exceeding ten seconds prevented a complete
+  check. Stopping reports any still-pending verifications as incomplete.
+
+Verification checks resolved equipment operations; it does not guarantee that
+every optional item named in a set was available. Like tracing, it verifies
+client-observed ordering, not the server's internal damage calculation. When
+disabled it performs no verification snapshots or report formatting.
+
+To investigate weapon skill equipment timing, run `//gbt events trace start`,
+perform one or two weapon skills, then run `//gbt events trace stop`. The JSON
+capture is saved in the character's `.output` directory under the active settings
+namespace. Capture is opt-in and limited to 2048 entries; stopping saves the
+captured entries even if that limit was reached.
+
+The trace records relative times, lifecycle phases, equipment sends and
+acknowledgments, weapon skill dispatch/result, and confirmed/planned equipment
+at phase completion, dispatch, and result receipt. Observed outgoing equipment
+and weapon skill chunks include header sequence values and injected/blocked
+flags. Other addons' equipment requests are visible too. These are client-side
+observations, not proof of the server's internal damage-calculation timing.
+Chat messages may be printed after post restoration has already been queued.
 
 Use `//gbt events r -e empty` to select `empty.json`, or
 `//gbt events r -e lib/my-events` for a library-style path. The name resolves

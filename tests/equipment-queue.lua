@@ -79,6 +79,7 @@ callbacks.logout()
 items.equipment.main=50
 assert(adapter:snapshot(items,true).equipment.main==nil) -- No cache fallback after reset.
 callbacks.login()
+assert(not adapter:isReady())
 assert(adapter:snapshot(items,true).equipment.main==50)
 items.equipment.main=60
 callbacks.prerender()
@@ -89,6 +90,8 @@ assert(adapter:snapshot(items,true).equipment.main==61 and adapter.queue:view(tr
 metadataReady=true
 callbacks['job change']()
 assert(adapter:snapshot(items,true).equipment.main==60)
+callbacks.prerender(); now=now+1; callbacks.prerender()
+assert(adapter:isReady())
 callbacks['zone change']()
 assert(adapter:snapshot(items,true).equipment.main==nil)
 callbacks['incoming chunk'](0x01D,string.char(0,0,0,0,1,18),nil,false)
@@ -131,6 +134,11 @@ now=now+1; callbacks.prerender()
 assert(#sent==resumedSent+1 and sent[#sent].item.id==46)
 ack(13,46); callbacks.prerender()
 assert(adapter:snapshot(items,true).equipment.left_ring==46)
+adapter.deps.debug=function() error('Muted debug must not emit queue counts') end
+adapter.deps.formatCount=function() error('Muted debug must not format queue counts') end
+adapter.deps.debugEnabled=function() return false end
+adapter:submit({{slot=14,item=item(47)}})
+ack(14,47); callbacks.prerender()
 adapter:destroy()
 -- Bootstrap once, then accept only packet updates, including idle slots that
 -- have never participated in a queued swap. Polling cannot change the ledger.

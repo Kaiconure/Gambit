@@ -1,6 +1,7 @@
 {
   "imports": [
-    "lib/spells/pre"
+    "lib/spells/pre",
+    "lib/spells/mid"
   ],
   "loading": {
     "actions": [

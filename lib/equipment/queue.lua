@@ -1,5 +1,7 @@
 -- Ordered equipment batches and dispatch barriers, independent of Windower.
 local copy=require('./lib/variable-values').copy
+local trace=require('./lib/events/weapon-skill-trace')
+local verify=require('./lib/events/verification')
 local Queue={}
 Queue.__index=Queue
 local function same(a,b)
@@ -41,6 +43,7 @@ function Queue:submit(ops)
             current[op.slot]=entry.item
         end
     end
+    if verify.active() then verify.operations(ops,planned) end
     if #planned==0 then return 0 end
     self.batches[#self.batches+1]={ops=planned}
     self:tick()
@@ -52,6 +55,8 @@ function Queue:barrier(callback)
     self:tick()
 end
 function Queue:ack(slot,item,defer)
+    if verify.active() then verify.ack(slot,item) end
+    if trace.active() then trace.record('equipment_ack',{slot=slot,item=item}) end
     self.confirmed[slot]=copy(item)
     if self.deps.observed then self.deps.observed(slot,item) end
     local batch=self.batches[1]
@@ -60,6 +65,8 @@ function Queue:ack(slot,item,defer)
             if op.slot==slot and op.state=='sent' and same(op.item,item) then op.state='acknowledged'; break end
         end
     end
+    -- Settle verification before another batch can change the slot again.
+    if verify.active() then verify.tick() end
     if not defer then self:tick() end
 end
 function Queue:tick()
@@ -119,6 +126,7 @@ function Queue:tick()
                                 op.ackTimeout=self.deps.ackTimeout and self.deps.ackTimeout() or 2.25
                             end
                             op.state='sent'; op.sent_at=now
+                            if trace.active() then trace.record('equipment_send',{slot=op.slot,item=op.item,attempt=op.attempts}) end
                             local ok,err=pcall(self.deps.send,op.slot,op.item)
                             if not ok then
                                 op.state='failed'; failed=true
@@ -130,6 +138,7 @@ function Queue:tick()
             end
             if complete or failed then
                 table.remove(self.batches,1)
+                if failed and verify.active() then verify.failed(batch.ops) end
                 if failed and self.deps.failed then
                     for _,op in ipairs(batch.ops) do
                         if op.state~='acknowledged' then self.deps.failed(op.slot,op.item) end

@@ -22,6 +22,7 @@
   },
   "imports": [
     "lib/spells/pre",
+    "lib/spells/mid",
     "lib/spells/curing",
     "lib/spells/divine",
     "lib/spells/enfeebling",

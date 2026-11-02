@@ -7,6 +7,7 @@ local resourceNameAliases = require('./lib/resource-name-aliases')
 local targetSelectors = require('./lib/target-selectors')
 local multiStageParticipants = require('./lib/multi-stage-participants')
 local targetedAction = require('./lib/targeted-action')
+local actionCategories = require('./meta/outgoing-action-categories')
 local magicBurst = require('./lib/magic-burst')
 local magicSkills = require('./meta/magic-skills')
 local cureSpell = require('./lib/cure-spell')
@@ -2860,13 +2861,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             type(weaponSkill.targets) ~= nil
         then
             
-            local waitTime = 3.0
-            local command = string.format('input %s "%s" <%s>',
-                weaponSkill.prefix,
-                weaponSkill.name,
-                weaponSkill.targets.Self and 'me' or 't'
-            )
-
             local target = weaponSkill.targets.Self and context.me or context.bt
             if type(weaponSkill.range) == 'number' and type(target.model_size) == 'number' then
                 if target and target.distance > ((2 * weaponSkill.range) + target.model_size) then
@@ -2877,12 +2871,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             --writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
 
-            return sendActionCommand(
-                command,
-                context,
-                waitTime,
-                false -- We don't need to stop walking to use weapon skills
-            )
+            return sendObservedAction(actionCategories.WEAPON_SKILL,weaponSkill,weaponSkill.targets.Self and 'me' or 't',context,
+                {result_timeout=3,padding=1},false)
         end
     end
 
@@ -3564,11 +3554,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 explicitId and tostring(explicitId) or ('<' .. target.symbol .. '>')
             )
             if explicitId then
-                command = function() return targetedAction.send(9, ability, explicitId) end
+                command = function() return targetedAction.send(actionCategories.JOB_ABILITY, ability, explicitId) end
             end
 
             writeVerbose('Using ability: %s':format(text_ability(ability.name)))
 
+            -- Pet commands retain their distinct player/pet lifecycle policy.
+            if ability.prefix~='/pet' then
+                return sendObservedAction(actionCategories.JOB_ABILITY,ability,explicitId or target.symbol,context,
+                    {result_timeout=3,minimum=waitTime,padding=0.2},stopWalk)
+            end
             return sendActionCommand(
                 command,
                 context,

@@ -425,8 +425,9 @@ windower.register_event('load', function()
         windower=windower,inventory=inventory,packets=packets,
         context=ActionContext.createTemporary,
         report=function(message) writeError('[equipment] '..message) end,
-        verbose=function(message) writeVerbose(message) end,
-        formatCount=function(count) return text_number(count, Colors.verbose) end,
+        debug=function(message) writeDebug(message) end,
+        debugEnabled=function() return hasVerbosity(VERBOSITY_DEBUG) end,
+        formatCount=function(count) return text_number(count, Colors.debug) end,
     })
     inventory.equipment_manager=globals.equipment_manager
     globals.event_system = require('./lib/events/init').new({
@@ -453,6 +454,16 @@ windower.register_event('load', function()
         barrier=function(fn) globals.equipment_manager:barrier(fn) end,
         equipmentSession=function() return globals.equipment_manager:session() end,
         equipmentPending=function() return #globals.equipment_manager.queue.batches>0 end,
+        traceEquipment=function()
+            local function slots(confirmed)
+                local result={}
+                for slot,item in pairs(globals.equipment_manager.queue:view(confirmed)) do result[tostring(slot)]=item end
+                return result
+            end
+            return {confirmed=slots(true),planned=slots(false)}
+        end,
+        verifyEquipment=function() return globals.equipment_manager.queue.confirmed end,
+        verifyReport=function(message) writeMessage('[verify] '..message) end,
         zoneReady=function() return globals.equipment_manager:isReady() end,
         clearEquipmentLocks=function() globals.equipment_manager:clearLocks() end,
         abilityReady=function(player,ability)

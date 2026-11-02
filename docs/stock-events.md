@@ -104,6 +104,7 @@ the same file or repeat object keys.
 | I want to... | Recipe |
 |---|---|
 | Use a shared Fast Cast set | [General spell pre-cast](#use-one-fast-cast-set-for-spells) |
+| Use a shared mid-cast set | [General spell mid-cast](#use-one-general-mid-cast-set) |
 | Enhance cures, enfeebles, or nukes | [Spell categories and named overrides](#layer-spell-category-and-named-gear) |
 | Add magic-burst or buff-dependent gear | [Burst and buff overlays](#add-burst-and-buff-dependent-overlays) |
 | Return to normal gear | [Idle/battle gear and restoration](#equip-idlebattle-gear-and-restore-partial-sets) |
@@ -155,6 +156,31 @@ gear arrives. For such spells, put essential result gear in their named pre set:
 ```
 
 This overlays the shared Fast Cast set; it doesn't replace every slot.
+
+### Use one general mid-cast set
+
+Configure `gear.spells.mid` for gear shared across spells:
+
+```json
+{
+  "vars": {
+    "gear": {
+      "spells": {
+        "mid": {
+          "back": {"name": "Your General Mid Cape"},
+          "body": {"name": "Your General Mid Body"}
+        }
+      }
+    }
+  }
+}
+```
+
+This runs first in mid, including specialized spell modules. Category and named
+sets then overlay their supplied slots. Leave `meta.stop` unset to allow those
+layers. Fast spells can finish before mid gear is acknowledged; keep essential
+gear in pre when necessary. Post continues to use the shared restoration and
+idle/battle rules, without a general `gear.spells.post` variable.
 
 ### Layer spell category and named gear
 
@@ -725,6 +751,7 @@ below describes an object key, not literal JSON punctuation.
 | `gear.idle` | Gear on entering idle and after an action while idle |
 | `gear.battle` | Gear on entering battle and after an action while engaged |
 | `gear.spells.pre` | General pre-cast set, including specialized spell modules; useful for Fast Cast |
+| `gear.spells.mid` | General mid-cast set before specialized, category, and named overlays |
 | `gear.spells.<category>.pre` / `.mid` | General set for a spell category |
 | `gear.spells.<category>[<name>].pre` / `.mid` | Named override within that category |
 | `gear.spells[<name>].pre` / `.mid` | Named override for any spell |
@@ -741,8 +768,8 @@ below describes an object key, not literal JSON punctuation.
 | `post_equip.restore_snapshot` | Restore starting gear before the post idle/battle overlay; default `false` |
 
 Common spell categories are `curing`, `divine`, `enfeebling`, `enhancing`, `elemental`, and
-`magic_burst`. GEO adds `geomancy`; BLU adds `blue`. There is no general
-`gear.spells.mid` rule: use categories or named sets for result-enhancing gear.
+`magic_burst`. GEO adds `geomancy`; BLU adds `blue`. General `gear.spells.mid`
+gear applies before these categories and named sets.
 
 `curing` includes Cure, Curaga, Cura, and Full Cure, but not all Healing Magic.
 `elemental` describes the Elemental Magic skill. `magic_burst` additionally requires
@@ -792,7 +819,7 @@ before mid gear arrives; put essential gear in pre when necessary.
 
 ### Spell layering and stops
 
-The common spell modules apply general pre gear first, then category gear and
+The common spell modules apply general gear first in pre and mid, then category gear and
 category-specific named overrides. Elemental gear precedes burst gear, with
 general and named sets checked independently. Buff overlays follow those
 categories, then the general named-spell override runs.
@@ -871,8 +898,8 @@ their variables in the same character/job vars file.
 | `run.json` | `gear.runefencer.runes`, `.wards`, `.effusions`: each accepts `.pre` and `[<name>].pre` |
 | `sch.json` | `gear.scholar.light_arts.pre` / `.mid`, `.dark_arts.pre` / `.mid`, and `.stratagems` |
 
-Every specialized spell module also imports the shared general spell-pre rule;
-it is included only once.
+Every specialized spell module also imports the shared general spell pre and
+mid rules; each is included only once.
 
 - **BRD:** song classification comes from the spell's Singing skill. Choose the
   instrument in your gear set; the event does not infer instrument skill flags
@@ -1210,7 +1237,7 @@ not have to be reached at runtime. A normal contributed rule with the same ID
 replaces the earlier definition and takes the contribution's position.
 Replacement is different from stopping: it changes the configuration itself.
 
-Useful IDs include `general-spell-pre`, `spells-named-pre`, `spells-named-mid`,
+Useful IDs include `general-spell-pre`, `general-spell-mid`, `spells-named-pre`, `spells-named-mid`,
 `spells-buff-overlays-pre`, `spells-buff-overlays-mid`, `rolls-pre`, and
 `post-equip-restore`. Category IDs include `spells-curing-mid` and
 `spells-curing-named-mid`. Inspect the shipped module or processed output for

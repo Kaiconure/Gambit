@@ -10,6 +10,9 @@ local targetMetadata=require('./lib/target-metadata')
 local pets=require('./lib/events/pets')
 local enemies=require('./lib/events/enemies')
 local observations=require('./lib/action-observation')
+local actionWait=require('./lib/action-wait')
+local trace=require('./lib/events/weapon-skill-trace')
+local verify=require('./lib/events/verification')
 local Service={}
 Service.__index=Service
 local outgoing={ [3]={'spell','spells'},[7]={'weapon_skill','weapon_skills'},[9]={'job_ability','job_abilities'} }
@@ -34,6 +37,8 @@ function Service.new(deps)
         if self.transitionIncoming then self.transitionIncoming(...) end
     end)
     listen('prerender',function()
+        if verify.active() then verify.tick() end
+        self:loadingTick()
         pets.tick(self)
         self:validatePendingTargets()
         if self.runtime then self.runtime:tick() end
@@ -46,6 +51,17 @@ function Service.new(deps)
     require('./lib/events/transitions').attach(self,listen)
     require('./lib/events/buffs').attach(self,listen)
     return self
+end
+function Service:verification(command)
+    if command=='start' then
+        assert(self.deps.verifyEquipment and self.deps.verifyReport,'Equipment verification is unavailable')
+        verify.start({clock=self.deps.clock,snapshot=self.deps.verifyEquipment,report=self.deps.verifyReport})
+        return 'Event equipment verification started.'
+    elseif command=='stop' then
+        verify.stop()
+        return 'Event equipment verification stopped.'
+    end
+    return 'Usage: gbt events verify [start|stop]'
 end
 function Service:reload(outputProcessed,entryName)
     local deps=self.deps
@@ -94,8 +110,10 @@ function Service:reload(outputProcessed,entryName)
             if player then return deps.abilityReady(player,ability) end
         end,
         clock=deps.clock or os.clock,schedule=deps.schedule,barrier=deps.barrier,equipmentSession=deps.equipmentSession,
+        traceEquipment=deps.traceEquipment,
         targetSnapshot=function(target) return targetMetadata.refresh(target,deps.windower.ffxi) end})
-    self.runtime:loading()
+    self.loadingPending=self.runtime
+    self:loadingTick()
     if deps.announce then
         local path=config.path and (deps.formatPath and deps.formatPath(config.path) or config.path)
         deps.announce(path and ('Active event file: '..path) or 'No active event file (no matching file found).')
@@ -112,7 +130,42 @@ function Service:reload(outputProcessed,entryName)
     end
     return config
 end
+function Service:weaponSkillTrace(command)
+    if command=='start' then
+        trace.start(self.deps.clock)
+        return 'Weapon skill trace started (maximum 2048 entries).'
+    end
+    if command~='stop' then return 'Usage: gbt events trace [start|stop]' end
+    local result=trace.stop()
+    if not result then return 'No weapon skill trace is active.' end
+    local player=self.deps.windower.ffxi.get_player()
+    assert(player and self.deps.writeProcessed,'A logged-in character and trace file writer are required')
+    local path=paths.writePath(player.name,'.output/ws-trace-'..os.date('%Y%m%d-%H%M%S')..'.json')
+    self.deps.writeProcessed(path,result)
+    return 'Weapon skill trace saved: '..path
+end
+function Service:loadingTick()
+    local runtime=self.loadingPending
+    if not runtime or runtime~=self.runtime then return end
+    local deps=self.deps
+    local ffxi=deps.windower.ffxi
+    local player=ffxi.get_player()
+    if not player then return end
+    if ffxi.get_info then
+        local info=ffxi.get_info()
+        if not info or info.logged_in==false or info.zone==0 then return end
+    end
+    if ffxi.get_mob_by_target then
+        local mob=ffxi.get_mob_by_target('me')
+        if not mob or mob.id~=player.id or not mob.valid_target then return end
+    end
+    if deps.zoneReady and not deps.zoneReady() then return end
+    self.loadingPending=nil
+    runtime:loading()
+end
 function Service:clear(outcome)
+    actionWait.clear(outcome,(self.deps.clock or os.clock)())
+    if outcome=='reloaded' or outcome=='logout' or outcome=='unloaded' then self.loadingPending=nil end
     if self.runtime then self.runtime:clear(outcome) end
 end
 function Service:pruneInjections()
@@ -135,6 +188,10 @@ function Service:consumeInjection(original,modified)
     end
 end
 function Service:inject(packet)
+    if trace.active() and packet.Category==7 then
+        trace.record('action_inject',{id=packet.Param,target=packet.Target,
+            equipment=self.deps.traceEquipment and self.deps.traceEquipment()})
+    end
     self:pruneInjections()
     local permit={payload=self.deps.packets.build(packet):sub(5),expires=(self.deps.clock or os.clock)()+10}
     if #self.injections>=128 then table.remove(self.injections,1) end
@@ -148,8 +205,17 @@ function Service:inject(packet)
     end
     return true
 end
-function Service:outgoing(id,original,modified,injected,blocked)
+function Service:outgoing(id,original,modified,injected,blocked,observation)
     if id~=0x01A then return end
+    if trace.active() then
+        local packet=self.deps.packets.parse('outgoing',modified or original)
+        if packet.Category==7 then
+            local data=modified or original
+            trace.record('outgoing_action_observed',{packet=id,id=packet.Param,target=packet.Target,
+                injected=not not injected,blocked_on_entry=not not blocked,
+                sequence=type(data)=='string' and #data>=4 and (data:byte(3)+data:byte(4)*256) or nil})
+        end
+    end
     if injected and self:consumeInjection(original,modified) then return end
     if blocked or not self.runtime then return end
     local deps=self.deps
@@ -164,8 +230,13 @@ function Service:outgoing(id,original,modified,injected,blocked)
         -- Normal command-driven actions also honor already-queued gear, even
         -- when this action type has no event rules.
         if self.deps.equipmentPending and self.deps.equipmentPending() then
+            if observation then observation.queued=true end
             self.deps.barrier(function(ready)
-                if ready then self:inject(packet) end
+                if observation and observation.abandoned then return end
+                if ready then
+                    if observation then observation.sent_at=(self.deps.clock or os.clock)() end
+                    self:inject(packet)
+                elseif observation then observation.outcome='failed' end
             end)
             return true
         end
@@ -212,6 +283,7 @@ function Service:outgoing(id,original,modified,injected,blocked)
     end
     event.target=targetMetadata.snapshot(event.target,target,player.id)
     return self.runtime:submit(event,function()
+        if observation and observation.abandoned then return false end
         local current=deps.windower.ffxi.get_player()
         local mob=deps.windower.ffxi.get_mob_by_id(event.target.id)
         if not current or current.id~=player.id or not mob or not mob.valid_target then return false end
@@ -221,19 +293,37 @@ function Service:outgoing(id,original,modified,injected,blocked)
         end
         packet['Target Index']=mob.index
         return self:inject(packet)
-    end)
+    end,observation)
 end
 -- Gambit's explicit packet dispatch goes through here too: it does not depend
 -- on whether Windower echoes an addon's own injections to its chunk listener.
-function Service:send(packet)
+function Service:send(packet,observation)
     local raw=self.deps.packets.build(packet)
-    if self:outgoing(0x01A,raw,raw,true,false) then return true end
+    if self:outgoing(0x01A,raw,raw,true,false,observation) then
+        if observation and not observation.sent_at and not observation.outcome then
+            -- A lifecycle may be pending behind equipment; its dispatch will set sent_at.
+            local pending=false
+            for _,request in ipairs(self.runtime and self.runtime.pending or {}) do
+                if request.observation==observation then pending=true; break end
+            end
+            if not pending and not observation.queued then observation.outcome='cancelled' end
+        end
+        return true
+    end
     if self.deps.barrier then
         self.deps.barrier(function(ready)
-            if ready then self:inject(packet) else self.deps.report('Action withheld after equipment failure') end
+            if observation and observation.abandoned then observation.outcome='cancelled'; return end
+            if ready then
+                if observation then observation.sent_at=(self.deps.clock or os.clock)() end
+                self:inject(packet)
+            else
+                if observation then observation.outcome='failed' end
+                self.deps.report('Action withheld after equipment failure')
+            end
         end)
         return true
     end
+    if observation then observation.sent_at=(self.deps.clock or os.clock)() end
     return self:inject(packet)
 end
 function Service:enemyAction(action)
@@ -242,6 +332,7 @@ end
 function Service:selfSpellAction(action)
     local observation=observations.selfSpell(action,self.deps.windower.ffxi,self.deps.resources,rejected)
     if not observation then return false end
+    actionWait.observe(observation,(self.deps.clock or os.clock)())
     if self.runtime and pets.action(self,action) then return true end
     if self.deps.observeSelfSpell then self.deps.observeSelfSpell(observation) end
     if self.runtime then
@@ -260,6 +351,11 @@ end
 function Service:selfResultAction(action)
     local observation=observations.selfResult(action,self.deps.windower.ffxi,self.deps.resources,rejected)
     if not observation then return false end
+    actionWait.observe(observation,(self.deps.clock or os.clock)())
+    if trace.active() and observation.kind=='weapon_skill' then
+        trace.record('result',{id=observation.id,outcome=observation.outcome,target=observation.target_id,
+            equipment=self.deps.traceEquipment and self.deps.traceEquipment()})
+    end
     if self.deps.observeSelfResult then self.deps.observeSelfResult(observation) end
     if self.runtime then
         if pets.action(self,action) then return observation end
@@ -293,6 +389,8 @@ end
 -- Common explicit rejection messages. Unknown failures expire via timeout;
 -- do not interpret every action message as a terminal result.
 function Service:reject(kind,rejectionMessage)
+    actionWait.reject(kind,(self.deps.clock or os.clock)())
+    if not self.runtime then return end
     -- These messages do not consistently identify resource type/ID. Prefer a
     -- sole candidate, or a clearly newer recent dispatch; otherwise wait.
     local candidate,previous
@@ -332,16 +430,17 @@ function Service:validatePendingTargets()
     end
 end
 function Service:incoming(id,original,modified,injected,blocked)
-    if id~=0x029 or injected or not self.runtime then return end
+    if id~=0x029 or injected then return end
     -- Blocking a message's display does not undo the server's rejection.
     local packet=self.deps.packets.parse('incoming',original or modified)
-    if pets.incoming(self,packet) then return end
+    if self.runtime and pets.incoming(self,packet) then return end
     local player=self.deps.windower.ffxi.get_player()
     if not player or packet.Actor~=player.id or not rejected[messageId(packet.Message)] then return end
     self:reject(nil,messageId(packet.Message))
 end
 function Service:destroy()
     self:clear('unloaded')
+    if verify.active() then verify.stop() end
     self.runtime=nil
     for _,id in ipairs(self.listeners) do self.deps.windower.unregister_event(id) end
     self.listeners={}

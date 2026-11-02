@@ -34,7 +34,7 @@ Config.defaults =
                 {
                     name='Skillchain',
                     expression={
-                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
+                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%s)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1fs', (skillchain or party_weapon_skill).lifetime)))"
                     }
                 },
                 {

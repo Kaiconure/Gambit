@@ -5,6 +5,7 @@ local context={me={symbol='me'},player={}}
 local passed, sent, packetCategory
 local current={id=123,valid_target=true}
 local env=setmetatable({context=context,
+ actionCategories=require('./meta/outgoing-action-categories'),
  targetedAction={send=function(category,resource,id) packetCategory=category;sent=id;return true end},
  is_known_targeting_symbol=function(t) return t=='t' end,
  windower={ffxi={get_mob_by_id=function(id) assert(id==123);return current end,
@@ -12,6 +13,7 @@ local env=setmetatable({context=context,
  canUseSpell=function() return true end,canUseAbility=function() return true end,
  isMobPlayer=function() return false end, hasAnyFlagMatch=function() return false end,
  sendSpellCastingCommand=function(spell,target) passed=target;return true end,
+ sendObservedAction=function(category,resource,target) packetCategory=category;sent=target;return true end,
  sendActionCommand=function(command) if type(command)=='function' then return command() end;sent=command;return true end,
  SPECIAL_NEXT_ATTACK_JOB_ABILITIES={},FAST_JOB_ABILITIES={},
  writeVerbose=function() end,text_ability=function(s) return s end,
@@ -27,13 +29,13 @@ assert(context.useSpell(mob,spell) and passed==123 and mob.symbol==nil)
 assert(context.useAbility(mob,ability) and sent==123 and packetCategory==9 and mob.symbol==nil)
 assert(context.useSpell({id=123,index=45,symbol='bt'},spell) and passed==123)
 assert(context.useSpell('t',spell) and passed=='t')
-assert(context.useAbility('t',ability) and sent=='input /ja "Provoke" <t>')
+assert(context.useAbility('t',ability) and sent=='t')
 context.spell=spell;context.ability=ability
 context.bt={symbol='bt'}
 assert(context.useSpell() and passed=='bt')
 assert(context.useSpell(nil,spell) and passed=='bt')
-assert(context.useAbility() and sent=='input /ja "Provoke" <bt>')
-assert(context.useAbility(nil,ability) and sent=='input /ja "Provoke" <bt>')
+assert(context.useAbility() and sent=='bt')
+assert(context.useAbility(nil,ability) and sent=='bt')
 assert(not context.useSpell(spell) and not context.useAbility(ability))
 current=nil
 assert(not context.useSpell(mob,spell) and not context.useAbility(mob,ability))

@@ -27,11 +27,13 @@ local function load(job)
 end
 local function set(name) return {head={name=name}} end
 assert(load('WAR').path=='./events/(all).json')
-local function run(config,section,phase,event,buffs,magicBurst,bt)
+local function run(config,section,phase,event,buffs,magicBurst,bt,playerState)
     local worn={}
     local context=function(_,state)
         local ctx
         ctx={vars=state.vars,ipairs=ipairs,bt=bt,
+        me=playerState or {is_idle=false,is_engaged=false},
+        equipRestore=function() error('Loading must not restore a snapshot') end,
         caseInsensitiveKeys=require('./lib/variable-values').caseInsensitiveKeys,
         resourceAliasKeys=require('./lib/resource-name-aliases').keys,
         setVar=function(path,value)
@@ -62,10 +64,21 @@ local function run(config,section,phase,event,buffs,magicBurst,bt)
     end
     local runtime=Runtime.new(config,{context=context,clock=function() return 0 end,report=function(err) error(err) end})
     runtime:loading()
+    if section=='loading' then return worn end
     config.vars._={eq_stack={}}
     event.target=event.target or {}
     assert(runtime:run({section=section,event=event,variables={vars=config.vars}},phase))
     return worn
+end
+do
+    local config=load('WAR')
+    config.vars.gear.idle=set('idle gear')
+    config.vars.gear.battle=set('battle gear')
+    config.vars.post_equip.restore_snapshot=true
+    assert(run(config,'loading','actions',{},nil,nil,nil,{is_idle=true,is_engaged=false}).head=='idle gear')
+    assert(next(run(config,'loading','actions',{},nil,nil,nil,{is_idle=false,is_engaged=true}))==nil)
+    config.vars.post_equip.enabled=false
+    assert(next(run(config,'loading','actions',{},nil,nil,nil,{is_idle=true,is_engaged=false}))==nil)
 end
 for _,section in ipairs({'enemy_spells','enemy_abilities'}) do
     local config=load('WAR')
@@ -123,6 +136,9 @@ for _,job in ipairs({'WAR','MNK','WHM','BLM','RDM','THF','PLD','DRK','BST','BRD'
     local count=0
     for _,rule in ipairs(config.rules.spells.pre) do if rule.id=='general-spell-pre' then count=count+1 end end
     assert(count==1 and config.rules.spells.pre[1].id=='general-spell-pre',job)
+    count=0
+    for _,rule in ipairs(config.rules.spells.mid) do if rule.id=='general-spell-mid' then count=count+1 end end
+    assert(count==1 and config.rules.spells.mid[1].id=='general-spell-mid',job)
 end
 for _,case in ipairs({{'BRD','songs','singing'},{'NIN','ninjutsu','ninjutsu'},{'SMN','summoning','summoning'}}) do
     local job,key,flag=unpack(case)
@@ -133,6 +149,23 @@ for _,case in ipairs({{'BRD','songs','singing'},{'NIN','ninjutsu','ninjutsu'},{'
     gear.Test={pre={neck={name='specific'}}}
     local result=run(config,'spells','pre',{name='Test',[flag]=true})
     assert(result.head=='specialized' and result.neck=='specific',job)
+    config.vars.gear.spells.mid={head={name='general mid'},body={name='general body'}}
+    gear=key=='summoning' and config.vars.gear.summoning.avatar or config.vars.gear[key]
+    gear.mid=set('specialized mid')
+    gear.Test.mid={neck={name='specific mid'}}
+    result=run(config,'spells','mid',{name='Test',[flag]=true})
+    assert(result.head=='specialized mid' and result.body=='general body' and result.neck=='specific mid',job)
+end
+do
+    local config=load('RDM')
+    config.vars.gear.spells.mid={back={name='general cape'},body={name='general body'}}
+    config.vars.gear.spells.enhancing.mid={body={name='enhancing body'}}
+    config.vars.gear.spells['Refresh III']={mid={neck={name='named override'}}}
+    local result=run(config,'spells','mid',{name='Refresh III',enhancing=true})
+    assert(result.back=='general cape' and result.body=='enhancing body' and result.neck=='named override')
+    config.vars.gear.spells.mid.meta={stop=true}
+    result=run(config,'spells','mid',{name='Refresh III',enhancing=true})
+    assert(result.body=='general body' and result.neck==nil)
 end
 local geo=load('GEO')
 local divine=load('WHM')

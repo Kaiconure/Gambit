@@ -7,8 +7,7 @@
       "backup_healer": true
     },
     "^cure_sequence": {
-      "suppress_curaga": null,
-      "gear": null
+      "suppress_curaga": null
     }
   },
   "actions": [

@@ -2,6 +2,8 @@
 local copy=require('./lib/variable-values').copy
 local Runner=require('./lib/events/runner')
 local restoreEquipment=require('./lib/equipment/restore')
+local trace=require('./lib/events/weapon-skill-trace')
+local verify=require('./lib/events/verification')
 local Runtime={}
 Runtime.__index=Runtime
 local sections={spell='spells',job_ability='job_abilities',weapon_skill='weapon_skills',pet_ability='pet_abilities'}
@@ -26,9 +28,17 @@ function Runtime.new(config,deps)
         runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession,deps.targetSnapshot)},Runtime)
 end
 function Runtime:run(request,phase)
+    local verifying=verify.active()
+    local previous
+    if verifying then previous=verify.enter(request,phase) end
+    local tracing=trace.active() and request.event.kind=='weapon_skill'
+    if tracing then trace.record('phase_begin',{request=request.event.request_id,phase=phase,id=request.event.id}) end
     self.running=true
     local ok,result=pcall(self.runner.run,self.runner,request,phase)
     self.running=false
+    if verifying then verify.leave(previous,ok and result or false,phase) end
+    if tracing then trace.record('phase_end',{request=request.event.request_id,phase=phase,id=request.event.id,
+        ok=ok and result,equipment=self.deps.traceEquipment and self.deps.traceEquipment()}) end
     if not ok then self.deps.report('Event '..phase..': '..tostring(result)); return false end
     return result
 end
@@ -70,6 +80,10 @@ end
 function Runtime:finish(request,outcome)
     if request.finished then return end
     request.finished=true
+    if request.observation and outcome~='completed' and outcome~='interrupted' then
+        request.observation.outcome=request.observation.outcome or outcome
+    end
+    if verify.active() then verify.result(request,outcome) end
     request.event.outcome=outcome
     request.event.completed=outcome=='completed'
     request.event.interrupted=outcome=='interrupted'
@@ -88,6 +102,8 @@ function Runtime:finish(request,outcome)
         if entry.event_baseline then baseline=entry.removed; break end
     end
     if self.config.rules[request.section].use_equipment_snapshot and baseline then
+        local previous
+        if verify.active() then previous=verify.enter(request,'post') end
         local ok,message=pcall(function()
             local session=self.deps.equipmentSession()
             local restored,err=pcall(function()
@@ -96,12 +112,14 @@ function Runtime:finish(request,outcome)
             end)
             if not restored then session:discard(); error(err,0) end
         end)
+        if verify.active() then verify.leave(previous,ok,'post restoration') end
         if not ok then self.deps.report('Event equipment restoration: '..tostring(message)) end
     end
+    if verify.active() then verify.finish(request) end
     request.variables.vars._.eq_stack={}
     for i=#self.pending,1,-1 do if self.pending[i]==request then table.remove(self.pending,i) end end
 end
-function Runtime:submit(event,dispatch)
+function Runtime:submit(event,dispatch,observation)
     local section=sections[event.kind]
     if not section then return end
     local rules=self.config.rules[section]
@@ -139,7 +157,8 @@ function Runtime:submit(event,dispatch)
     event.cancelled=false
     local vars=copy(self.config.vars)
     vars._={eq_stack={}}
-    local request={section=section,event=event,variables={vars=vars,original=copy(vars)}}
+    local request={section=section,event=event,variables={vars=vars,original=copy(vars)},observation=observation}
+    if verify.active() then verify.begin(request) end
     do
         local ok,message=pcall(function()
             assert(self.deps.equipmentSession,'Equipment sessions are unavailable')
@@ -150,6 +169,7 @@ function Runtime:submit(event,dispatch)
             vars._.eq_stack[1]={removed=snapshot,event_baseline=true}
         end)
         if not ok then
+            if verify.active() then verify.abort(request,'equipment snapshot unavailable') end
             self.deps.report('Event equipment snapshot: '..tostring(message))
             return true -- Fail closed before running any rules or dispatching.
         end
@@ -167,6 +187,12 @@ function Runtime:submit(event,dispatch)
             if request.finished then return end
             if ready==false then self:finish(request,'failed'); return end
             request.sent_at=self.deps.clock()
+            if observation then observation.sent_at=request.sent_at end
+            if verify.active() then verify.dispatch(request) end
+            if trace.active() and event.kind=='weapon_skill' then
+                trace.record('dispatch',{request=event.request_id,id=event.id,
+                    equipment=self.deps.traceEquipment and self.deps.traceEquipment()})
+            end
             local ok,message=pcall(dispatch)
             if not ok or message==false then
                 self.deps.report('Event dispatch failed: '..tostring(message))

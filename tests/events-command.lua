@@ -40,4 +40,14 @@ service.reload=function() return nil end
 env.handlers.events({'reload'}); assert(output[#output]:find('No character',1,true))
 env.globals.event_system=nil
 env.handlers.events({'reload'}); assert(output[#output]=='Event system is unavailable.')
+env.globals.event_system=service
+local traceCommand
+service.weaponSkillTrace=function(_,command) traceCommand=command; return 'trace '..command end
+env.handlers.events({'trace','start'}); assert(traceCommand=='start' and output[#output]=='trace start')
+env.handlers.events({'trace','stop'}); assert(traceCommand=='stop' and output[#output]=='trace stop')
+env.handlers.events({'trace','invalid'}); assert(output[#output]:find('Usage:',1,true))
+service.verification=function(_,command) return 'verify '..command end
+env.handlers.events({'verify','start'}); assert(output[#output]=='verify start')
+env.handlers.events({'verify','stop'}); assert(output[#output]=='verify stop')
+env.handlers.events({'verify','invalid'}); assert(output[#output]:find('Usage:',1,true))
 print('PASS: event-only reload command, errors, usage, unavailable service and logged-out state')

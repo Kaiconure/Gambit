@@ -189,6 +189,17 @@ end
 
 handlers['events'] = function(args)
     local command=(args[1] or 'status'):lower()
+    if command=='trace' or command=='verify' then
+        local service=globals.event_system
+        if not service then writeMessage('Event system is unavailable.'); return end
+        if #args~=2 or (args[2]~='start' and args[2]~='stop') then
+            writeMessage('Usage: gbt events '..command..' [start|stop]'); return
+        end
+        local method=command=='trace' and service.weaponSkillTrace or service.verification
+        local ok,message=pcall(method,service,args[2])
+        if ok then writeMessage(message) else writeError('Event '..command..': '..tostring(message)) end
+        return
+    end
     if command=='r' then command='reload' elseif command=='s' then command='status' end
     local outputProcessed=false
     local entryName

@@ -1,7 +1,7 @@
 local json=dofile('lib/jsonlua.lua')
 local file=assert(io.open('actions/lib/nukes/use-aspir.json'))
 local config=json.parse(file:read('*a')); file:close()
-local condition=config.actions[3].when[1]
+local condition=config.actions[1].when[1]
 local env={vars={use_aspir=config.vars['^use_aspir']}}
 local check=assert(loadstring('return ' .. condition)); setfenv(check,env)
 local function eligible(name)

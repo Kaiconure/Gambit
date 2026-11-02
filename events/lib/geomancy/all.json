@@ -1,5 +1,5 @@
 {
-  "imports": ["lib/spells/pre"],
+  "imports": ["lib/spells/pre", "lib/spells/mid"],
   "vars": {
     "gear": {
       "spells": {

@@ -1,12 +1,24 @@
 -- Own equipment state/listeners for normal actions and event handlers alike.
 local Queue=require('./lib/equipment/queue')
 local Locks=require('./lib/equipment/locks')
+local trace=require('./lib/events/weapon-skill-trace')
 local Service={}
 Service.__index=Service
 local fields={'main','sub','range','ammo','head','body','hands','legs','feet','neck','waist',
     'left_ear','right_ear','left_ring','right_ring','back'}
 function Service.new(deps)
     local self=setmetatable({deps=deps,listeners={}},Service)
+    local ffxi=deps.windower.ffxi
+    if ffxi.get_player and ffxi.get_mob_by_target then
+        local player=ffxi.get_player()
+        local mob=ffxi.get_mob_by_target('me')
+        local info=ffxi.get_info and ffxi.get_info()
+        local items=ffxi.get_items()
+        if not player or not mob or mob.id~=player.id or not mob.valid_target
+            or (info and info.logged_in==false) or not items or not items.equipment then
+            self.zoneLoading=true; self.zoneArrived=true
+        end
+    end
     self.locks=Locks.new({context=deps.context or function() end,report=deps.report})
     local function identity(slot,bag,index,items)
         if index==0 then return {localId=0,bagId=0,id=0} end
@@ -60,6 +72,22 @@ function Service.new(deps)
             else deps.windower.ffxi.set_equip(item.localId,slot,item.bagId) end
         end})
     local function listen(name,fn) self.listeners[#self.listeners+1]=deps.windower.register_event(name,fn) end
+    listen('outgoing chunk',function(id,original,modified,injected,blocked)
+        if not trace.active() or (id~=0x050 and id~=0x051) then return end
+        local data=modified or original
+        if type(data)~='string' or #data<7 then return end
+        local entries={}
+        if id==0x050 then
+            entries[1]={index=data:byte(5),slot=data:byte(6),bag=data:byte(7)}
+        else
+            for index=1,math.min(data:byte(5),16) do
+                local offset=9+(index-1)*4
+                if #data>=offset+2 then entries[#entries+1]={index=data:byte(offset),slot=data:byte(offset+1),bag=data:byte(offset+2)} end
+            end
+        end
+        trace.record('outgoing_equipment_observed',{packet=id,sequence=data:byte(3)+data:byte(4)*256,
+            injected=not not injected,blocked_on_entry=not not blocked,items=entries})
+    end)
     listen('prerender',function()
         if self.zoneLoading and self.zoneArrived then
             local ffxi=deps.windower.ffxi
@@ -95,6 +123,8 @@ function Service.new(deps)
             self.locks:clear(); self.queue:clear()
         elseif id==0x050 then
             local index,slot,bag=data:byte(5,7)
+            if trace.active() and slot then trace.record('incoming_equipment_packet',{packet=id,
+                sequence=data:byte(3)+data:byte(4)*256,slot=slot,index=index,bag=bag}) end
             local items=deps.windower.ffxi.get_items()
             if slot and slot<=15 then
                 local item=identity(slot,bag,index,items)
@@ -110,8 +140,14 @@ function Service.new(deps)
             self.queue:tick()
         end
     end)
-    listen('logout',function() self.locks:clear(); self.queue:clear() end)
-    listen('login',function() self:resync() end)
+    listen('logout',function()
+        self.zoneLoading=true; self.zoneArrived=true; self.zoneReadySince=nil
+        self.locks:clear(); self.queue:clear()
+    end)
+    listen('login',function()
+        self.zoneLoading=true; self.zoneArrived=true; self.zoneReadySince=nil
+        self:resync()
+    end)
     listen('zone change',function()
         if not self.zoneLoading then self.locks:clear(); self.queue:clear() end
         self.zoneLoading=true
@@ -166,8 +202,8 @@ function Service:submit(ops)
         ops=self.locks:filter(ordered)
     end
     local count=self.queue:submit(ops)
-    if count>0 and self.deps.verbose then
-        self.deps.verbose('Queued equipment changes: '..(self.deps.formatCount and self.deps.formatCount(count) or count))
+    if count>0 and self.deps.debug and (not self.deps.debugEnabled or self.deps.debugEnabled()) then
+        self.deps.debug('Queued equipment changes: '..(self.deps.formatCount and self.deps.formatCount(count) or count))
     end
     return count
 end
