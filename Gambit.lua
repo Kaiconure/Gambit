@@ -1,4 +1,4 @@
-__version = '1.0.6.1'
+__version = '1.0.6.2'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -41,6 +41,10 @@ texts = require('texts')
 images = require('images')
 
 skillchain_helper = require('lib/skillchain-helper')
+local selfSpellState = require('./lib/self-spell-state')
+local selfActionState = require('./lib/self-action-state')
+local actionObservation = require('./lib/action-observation')
+local handleActionEffects
 
 require('ux/core')
 
@@ -429,6 +433,17 @@ windower.register_event('load', function()
         windower=windower,packets=packets,resources=resources,
         writeProcessed=writeJsonToFile,
         context=ActionContext.createTemporary,
+        externalEnemyActions=true,
+        externalSelfSpells=true,
+        externalSelfResults=true,
+        observeSelfResult=function(observation) selfActionState.apply(observation,actionStateManager,globals) end,
+        observeSelfSpell=function(observation) selfSpellState.apply(observation,actionStateManager,globals) end,
+        afterSelfSpell=reportSelfSpellObservation,
+        observeEnemy=function(observation)
+            actionStateManager:observeEnemyAction(observation)
+        end,
+        afterEnemy=reportEnemyObservation,
+        afterAction=function(action) return handleActionEffects(action) end,
         schedule=function(fn,delay) return coroutine.schedule(fn,delay) end,
         report=function(message) writeError('[events] '..message) end,
         announce=function(message) writeMessage('[events] '..message) end,
@@ -438,6 +453,7 @@ windower.register_event('load', function()
         barrier=function(fn) globals.equipment_manager:barrier(fn) end,
         equipmentSession=function() return globals.equipment_manager:session() end,
         equipmentPending=function() return #globals.equipment_manager.queue.batches>0 end,
+        zoneReady=function() return globals.equipment_manager:isReady() end,
         clearEquipmentLocks=function() globals.equipment_manager:clearLocks() end,
         abilityReady=function(player,ability)
             local timers=windower.ffxi.get_ability_recasts()
@@ -670,137 +686,12 @@ windower.register_event('action', function(action)
         and actor.valid_target 
         and actor.hpp 
         and actor.hpp > 0
-    local isActorEnemy  = isActorValid and actor.spawn_type == SPAWN_TYPE_MOB
 
     if isActorValid then
-        local isSpellStart              = action.category == CATEGORY_SPELL_START and action.param == PARAM_STARTED
-        local isSpellInterrupted        = action.category == CATEGORY_SPELL_INTERRUPT and action.param == PARAM_INTERRUPTED
-        local isSpellSuccessful         = action.category == CATEGORY_SPELL_END
-        local isSpellCastingComplete    = isSpellInterrupted or isSpellSuccessful
-
         local isRangedStart         = action.category == CATEGORY_RANGED_START and action.param == PARAM_STARTED
         local isRangedInterrupted   = action.category == CATEGORY_RANGED_INTERRUPT and action.param == PARAM_INTERRUPTED
         local isRangedSuccessful    = action.category == CATEGORY_RANGED_END
         local isRangedComplete      = isRangedInterrupted or isRangedSuccessful
-
-        if isSelf then
-            if isSpellStart then
-                if isSelf then     
-                    globals.isSpellCasting = true
-                    globals.currentSpell = nil
-                    globals.spellTarget = nil
-                end
-
-                local actionTarget = action.targets and action.targets[1]
-
-                if actionTarget then
-                    local targetId = actionTarget.id
-                    if targetId then
-                        globals.spellTarget = windower.ffxi.get_mob_by_id(targetId)
-                    end
-
-                    local spellId = actionTarget.actions and actionTarget.actions[1] and actionTarget.actions[1].param
-                    local spell = spellId and resources.spells[spellId]
-
-                    globals.currentSpell = spell
-                end
-
-                if globals.currentSpell then
-                    actionStateManager:setSpellStart(globals.currentSpell, actionTarget and actionTarget.id)
-
-                    local message = 'Casting %s':format(text_spell(globals.currentSpell.name, Colors.verbose))
-                    if globals.spellTarget then
-                        message = '%s %s %s':format(message, CHAR_RIGHT_ARROW, text_target(globals.spellTarget.name, Colors.verbose))
-                    end
-                    writeVerbose(message)
-                else
-                    writeVerbose('Casting has started')
-                end
-
-            elseif globals.isSpellCasting and isSpellCastingComplete then
-                actionStateManager:setSpellCompleted(isSpellInterrupted)
-
-                if not isSpellSuccessful then
-                    writeVerbose('  %s has %s!':format(
-                        globals.currentSpell and (text_spell(globals.currentSpell.name, Colors.verbose)) or 'Casting',
-                        text_red('been interrupted')
-                    ))
-                else
-                    if globals.spellTarget and globals.currentSpell then
-                        local first_action = action.targets and
-                            action.targets[1] and
-                            action.targets[1].actions and
-                            action.targets[1].actions[1]
-                        local damage = first_action and first_action.param
-                        local message_id = first_action and first_action.message
-                        local message = message_id and resources.action_messages[message_id] and resources.action_messages[message_id].en
-                        local fields = fieldsearch(message)
-
-                        local damage_text = nil
-                        if damage then                            
-                            if fields.status then
-                                local status = resources.buffs[damage]
-                                if status then
-                                    damage_text = '(' .. text_buff(status.name) .. ')'
-                                end
-                            elseif string.find(message or '', 'resists the spell') then
-                                damage_text = ''
-                            else
-                                if damage > 0 then
-                                    damage_text = 'for %s%s':format(
-                                        text_number(compress_number(damage), Colors.verbose),
-                                        string.find(message or '', 'Magic Burst!') and text_green(' Magic Burst!') or ''
-                                    )
-                                end
-                            end
-                        end
-
-                        --writeJsonToFile('data/spells/%d_%s_on_%s.json':format(os.clock(), globals.currentSpell.name, globals.spellTarget.name), action)
-
-                        writeVerbose('  Completed! %s %s %s %s':format(
-                                text_spell(globals.currentSpell.name, Colors.verbose),
-                                CHAR_RIGHT_ARROW,
-                                text_target(globals.spellTarget.name, Colors.verbose),
-                                damage_text or ''
-                            ))
-                    end
-                end
-                
-                globals.isSpellCasting = false
-                globals.currentSpell = nil
-                globals.spellTarget = nil
-            end
-        else
-            if isSpellStart then
-                local actionTarget = action.targets and action.targets[1]
-                local target = nil
-                local spell = nil
-
-                if actionTarget then
-                    local targetId = actionTarget.id
-                    if targetId then
-                        target = windower.ffxi.get_mob_by_id(targetId)
-                    end
-
-                    local spellId = actionTarget.actions and actionTarget.actions[1] and actionTarget.actions[1].param
-                    spell = spellId and resources.spells[spellId]
-                end
-
-                if spell and target then
-                    -- writeMessage('%s casting spell %s':format(
-                    --     text_mob(actor.name),
-                    --     text_spell(spell.name)
-                    -- ))
-                    actionStateManager:setOthersSpellStart(spell, actor, target)
-                end
-            elseif isSpellCastingComplete then
-                -- writeMessage('%s\'s casting %s!':format(
-                --     text_mob(actor.name),
-                --     isSpellInterrupted and text_red('interrupted') or text_green('completed')
-                -- ))
-                actionStateManager:setOthersSpellCompleted(actor, isSpellInterrupted)
-            end
-        end
 
         -- NOTE: For now, ranged tracking is only for self
         if isSelf then
@@ -1160,6 +1051,7 @@ local function reaction_statusAddition(action, actor, target, reaction, param, b
     -- Resisted:    Reaction = 1, Param = <buff-id>
 
     local buff = buffId and resources.buffs[buffId]
+    if not buff then return end
 
     if reaction == 1 then
         if param == 0 then
@@ -1336,8 +1228,9 @@ local _handle_lockTargetChunk = function(id, data, modified_data, injected, bloc
     end
 end
 
-local _handle_actionChunk = function(id, data)
-    local packet = packets.parse('incoming', data)
+handleActionEffects = function(rawAction)
+    local packet = actionObservation.effectsPacket(rawAction)
+    local effects={statuses={}}
 
     local count = tonumber(packet['Target Count']) or 0
     if count < 1 then return end
@@ -1354,47 +1247,8 @@ local _handle_actionChunk = function(id, data)
 
     local category = tonumber(packet['Category']) or 0
 
-    -- Record completed self job abilities before effect handling can return.
-    if category == 6 or     -- Job ability completed
-        category == 14     -- Unblinkable job ability completed
-    then
-        local player = windower.ffxi.get_player()
-        local ability = resources.job_abilities[actionId]
-        if player and actorId == player.id and ability then
-            local targetId = tonumber(packet['Target 1 ID'])
-            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
-            globals.last_ability = {id=ability.id, name=ability.name, element=ability.element, time=os.clock(),
-                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
-        end
-    end
-    if category == 8 and actionId == 24931 then -- Spell casting started
-        local player = windower.ffxi.get_player()
-        local spellId = tonumber(packet['Target 1 Action 1 Param'])
-        local spell = spellId and resources.spells[spellId]
-        if player and actorId == player.id and spell then
-            local targetId = tonumber(packet['Target 1 ID'])
-            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
-            globals.last_spell = {id=spell.id, name=spell.name, element=spell.element, time=os.clock(), status='casting',
-                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
-        end
-    elseif category == 8 and actionId == 28787 then -- Spell casting interrupted
-        local player = windower.ffxi.get_player()
-        if player and actorId == player.id and globals.last_spell and globals.last_spell.status=='casting' then
-            globals.last_spell.status='interrupted'
-            globals.last_spell.time=os.clock()
-        end
-    elseif category == 4 then  -- Spell casting completed
-        local player = windower.ffxi.get_player()
-        local spell = resources.spells[actionId]
-        if player and actorId == player.id and spell then
-            local targetId = tonumber(packet['Target 1 ID'])
-            local target = targetId and windower.ffxi.get_mob_by_id(targetId)
-            globals.last_spell = {id=spell.id, name=spell.name, element=spell.element, time=os.clock(), status='completed',
-                target=targetId and {id=targetId, name=target and target.name, index=target and target.index} or nil}
-        end
-    end
-
     local actor = windower.ffxi.get_mob_by_id(actorId)
+    if not actor then return effects end
     local action = nil
     local actionStatus = nil
     local statusReaction = nil
@@ -1415,7 +1269,7 @@ local _handle_actionChunk = function(id, data)
         category == 4   -- Category 4 means this was a spell        
     then
         action = resources.spells[actionId]
-        buffId = tonumber(action.status) or 0
+        buffId = action and tonumber(action.status) or 0
         
         if action then
             isDispel    = arrayIndexOf(meta.dispel.spells, action.id)
@@ -1578,23 +1432,17 @@ local _handle_actionChunk = function(id, data)
                             reaction_statusRemoval(action, actor, target, reaction, param)
                         end
 
-                        -- We're done if this is a removal operation. We won't try to add buffs.
-                        return
-                    end
-                    
-                    -- If the buff id is still nil, see if there's some other way to sort it out
-                    if 
-                        buffId == nil
-                    then
-                        -- Some actions use a reaction to indicate whether a status was applied. If the actual
-                        -- reaction matches the status-indicator reaction for this action, try using that.
-                        if reaction == statusReaction then
-                            buffId = param
+                    else
+                        local targetBuffId=buffId
+                        -- Status inference belongs to this target's result, not
+                        -- the next target in the same multi-target action.
+                        if targetBuffId==nil and reaction==statusReaction then
+                            targetBuffId=param
                         end
-                    end
-
-                    if buffId and buffId > 0 then
-                        reaction_statusAddition(action, actor, target, reaction, param, buffId, packet)
+                        if targetBuffId and targetBuffId>0 then
+                            reaction_statusAddition(action,actor,target,reaction,param,targetBuffId,packet)
+                            effects.statuses[target.id]=targetBuffId
+                        end
                     end
                 end
             end
@@ -1666,10 +1514,11 @@ local _handle_actionChunk = function(id, data)
                     ability.id == 233   -- Sublimation
                 )
             then
-                actionStateManager:markTimedAbility(ability, target)
+                actionStateManager:markTimedAbility(ability, firstTarget or actor)
             end
         end
     end
+    return effects
 end
 
 local _handle_actionMessageChunk = function(id, data)
@@ -1826,10 +1675,6 @@ windower.register_event('incoming chunk', function (id, data, modified_data, inj
         id == 0x076     -- Party buffs update
     then
         _handle_partyBuffsChunk(id, data)
-    elseif 
-        id == 0x028     -- Action (Tracks incoming spells, abilities, etc)
-    then
-        _handle_actionChunk(id, data)
     elseif
         id == 0x029     -- Action message (tracks expiring effects, etc)
     then

@@ -29,7 +29,7 @@ assert(result.event_namespace=='boss/_vagary')
 env.eventPath='.\\settings\\_ns\\xp\\players\\Carbonite\\events\\pld.json'
 assert(context().events_relative=='players/Carbonite/events/pld.json')
 assert(context().event_namespace=='xp')
-env.eventPath='./events/common.json'
-assert(context().events=='common' and context().events_relative=='events/common.json')
+env.eventPath='./events/(all).json'
+assert(context().events=='(all)' and context().events_relative=='events/(all).json')
 assert(context().event_namespace==nil)
 print('PASS: entry-point context names, original paths, normalized extensionless paths and absent settings')

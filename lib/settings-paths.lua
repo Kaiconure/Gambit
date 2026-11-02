@@ -272,7 +272,7 @@ function paths.eventFiles(playerName, mainJob, groups)
         result[#result+1]=directory..'/'..mainJob:lower()..'.json'
         for _,group in ipairs(positives) do result[#result+1]=directory..'/('..group..').json' end
         for _,group in ipairs(inverses) do result[#result+1]=directory..'/('..group..').json' end
-        result[#result+1]=directory..'/common.json'
+        result[#result+1]=directory..'/(all).json'
     end
     for _,root in ipairs(roots) do
         local characterRoot=root==SETTINGS_ROOT and root or root..'/players'

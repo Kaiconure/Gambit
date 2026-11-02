@@ -9,6 +9,7 @@ local cureSpell=require('./lib/cure-spell')
 local targetMetadata=require('./lib/target-metadata')
 local pets=require('./lib/events/pets')
 local enemies=require('./lib/events/enemies')
+local observations=require('./lib/action-observation')
 local Service={}
 Service.__index=Service
 local outgoing={ [3]={'spell','spells'},[7]={'weapon_skill','weapon_skills'},[9]={'job_ability','job_abilities'} }
@@ -235,40 +236,59 @@ function Service:send(packet)
     end
     return self:inject(packet)
 end
-function Service:action(action)
-    if not self.runtime or not action then return end
-    if enemies.action(self,action,rejected) then return end
-    if pets.action(self,action) then return end
-    local player=self.deps.windower.ffxi.get_player()
-    if not player or action.actor_id~=player.id then return end
-    local category=action.category
-    if category==8 and action.param==24931 then
-        local target=action.targets and action.targets[1]
-        local detail=target and target.actions and target.actions[1]
-        if detail then self.runtime:spellStarted(detail.param,target.id) end
-        return
-    end
-    if category==8 and action.param==28787 then
-        self.runtime:complete('spell',nil,nil,'interrupted')
-        return
-    end
-    local kind=category==4 and 'spell' or (category==6 or category==14) and 'job_ability'
-        or category==3 and 'weapon_skill'
-    if kind then
-        -- AoE result order need not match the selected target: match resource.
-        local first=action.targets and action.targets[1]
-        local detail=first and first.actions and first.actions[1]
-        local failed=detail and rejected[messageId(detail.message)]
-        local matched=self.runtime:complete(kind,action.param,nil,failed and 'failed' or 'completed')
-        -- Double-Up is requested as ability 123, but the server reports the
-        -- resulting CorsairRoll resource. Prefer an exact roll request first;
-        -- only a dispatched Double-Up may consume the unmatched roll result.
-        local ability=kind=='job_ability' and self.deps.resources.job_abilities[action.param]
-        if not matched and ability and ability.type=='CorsairRoll' then
-            matched=self.runtime:complete('job_ability',123,nil,failed and 'failed' or 'completed')
+function Service:enemyAction(action)
+    return enemies.action(self,action,rejected)
+end
+function Service:selfSpellAction(action)
+    local observation=observations.selfSpell(action,self.deps.windower.ffxi,self.deps.resources,rejected)
+    if not observation then return false end
+    if self.runtime and pets.action(self,action) then return true end
+    if self.deps.observeSelfSpell then self.deps.observeSelfSpell(observation) end
+    if self.runtime then
+        if observation.phase=='mid' then
+            if observation.detail then self.runtime:spellStarted(observation.id,observation.target_id) end
+        else
+            local matched=self.runtime:complete('spell',observation.id,nil,observation.outcome)
+            if observation.outcome=='failed' and not matched then
+                self:reject('spell',messageId(observation.detail.message))
+            end
         end
-        if failed and not matched then self:reject(kind,messageId(detail.message)) end
     end
+    if self.deps.afterSelfSpell then self.deps.afterSelfSpell(observation) end
+    return true
+end
+function Service:selfResultAction(action)
+    local observation=observations.selfResult(action,self.deps.windower.ffxi,self.deps.resources,rejected)
+    if not observation then return false end
+    if self.deps.observeSelfResult then self.deps.observeSelfResult(observation) end
+    if self.runtime then
+        if pets.action(self,action) then return observation end
+        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome)
+        -- The server reports the roll resource for Double-Up. Exact roll
+        -- matching wins; only then try an outstanding dispatched Double-Up.
+        local ability=observation.kind=='job_ability' and observation.resource
+        if not matched and ability and ability.type=='CorsairRoll' then
+            matched=self.runtime:complete('job_ability',123,nil,observation.outcome)
+        end
+        if observation.outcome=='failed' and not matched then self:reject(observation.kind,observation.message) end
+    end
+    return observation
+end
+function Service:action(action)
+    if not action then return end
+    if self.deps.externalSelfResults and (action.category==3 or action.category==6 or action.category==14) then
+        local player=self.deps.windower.ffxi.get_player()
+        if player and action.actor_id==player.id then return end
+    end
+    if not self.deps.externalSelfResults and self:selfResultAction(action) then return end
+    if self.deps.externalSelfSpells and (action.category==4 or action.category==8) then
+        local player=self.deps.windower.ffxi.get_player()
+        if player and action.actor_id==player.id then return end
+    end
+    if not self.deps.externalSelfSpells and self:selfSpellAction(action) then return end
+    if not self.deps.externalEnemyActions and self:enemyAction(action) then return end
+    if not self.runtime then return end
+    if pets.action(self,action) then return end
 end
 -- Common explicit rejection messages. Unknown failures expire via timeout;
 -- do not interpret every action message as a terminal result.

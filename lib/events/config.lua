@@ -123,10 +123,26 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
     -- Highest specificity first: the shared loader preserves earlier values at
     -- equal priority, while ! and ^ explicitly override ordinary precedence.
     local variables=variableLoader.new(warn)
+    local variablePaths,seenVariables={},{}
+    local function addVariables(path)
+        if not seenVariables[path] then
+            seenVariables[path]=true
+            variablePaths[#variablePaths+1]=path
+        end
+    end
     for _,candidate in ipairs(paths) do
-        local path=candidate:gsub('%.json$','.vars.json')
+        if candidate:match('%.json$') then
+            addVariables((candidate:gsub('%.json$','.vars.json')))
+            -- Shared configuration remains additive, independent of which
+            -- entry point is selected. It is not a rule-file fallback.
+            if candidate:match('/%(all%)%.json$') then
+                addVariables((candidate:gsub('/%(all%)%.json$','/common.vars.json')))
+            end
+        end
+    end
+    for _,path in ipairs(variablePaths) do
         local document
-        if candidate:match('%.json$') then document=read(path) end
+        document=read(path)
         if document~=nil then
             assert(type(document)=='table',path..': expected an object')
             for key in pairs(document) do assert(key=='vars' or key=='contributions',path..': vars files only support vars and contributions') end

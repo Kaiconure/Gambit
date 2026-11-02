@@ -53,7 +53,7 @@ local binding=assert(source:match('(    local globalVars = .-)    context.skillc
 local wired={action=a}
 local bind=assert(loadstring(binding))
 setfenv(bind,setmetatable({context=wired,actionStateManager={vars=global,originalVars=values.copy(global),variableScopes=state},
-    variableValues=values,attachVariableHelpers=attach},{__index=_G}))
+    checklist=require('./lib/checklist'),variableValues=values,attachVariableHelpers=attach},{__index=_G}))
 bind();attach(wired)
 wired.setVarGlobal('haste_cycle.count',77)
 assert(global.haste_cycle.count==77 and wired.vars.haste_cycle.count==20)
@@ -70,7 +70,7 @@ local eventContext={vars=isolated.vars,action=a}
 local eventBind=assert(loadstring(binding))
 setfenv(eventBind,setmetatable({context=eventContext,variableState=isolated,
     actionStateManager={vars=global,originalVars=values.copy(global),variableScopes=state},
-    variableValues=values,attachVariableHelpers=attach},{__index=_G}))
+    checklist=require('./lib/checklist'),variableValues=values,attachVariableHelpers=attach},{__index=_G}))
 eventBind();attach(eventContext)
 eventContext.setVar('shared',9)
 eventContext.setVarGlobal('haste_cycle.count',12)

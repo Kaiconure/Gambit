@@ -27,9 +27,11 @@ queue:submit({{slot=13,item=item(32)}})
 local start=#sent
 for i=1,3 do now=now+1; queue:tick() end
 assert(#sent==start+2 and #reports==1)
+assert(reports[1]:find('no acknowledgment after 3 attempts',1,true))
 queue:barrier(function(ok) assert(ok==false) end)
 queue:submit({{slot=13,item=item(999)}})
 assert(#sent==start+2 and #reports==2)
+assert(reports[2]:find('item unavailable or changed at its inventory location',1,true))
 queue:barrier(function(ok) assert(ok==false) end)
 queue:submit({{slot=13,item=item(33)}})
 local cleared=false
@@ -41,8 +43,11 @@ now=100; local count=#sent; queue:tick(); assert(#sent==count)
 local Service=require('./lib/equipment/init')
 local callbacks={}
 local metadataReady=true
+local playerReady=true
 local items={equipment={main=10,main_bag=8,sub=20,sub_bag=8},bag={}}
 local adapter=Service.new({windower={ffxi={get_items=function() return items end,
+    get_player=function() return {id=100} end,
+    get_mob_by_target=function() return {id=100,valid_target=playerReady} end,
     set_equip=function(index,slot,bag) sent[#sent+1]={slot=slot,item=item(index)} end},
     register_event=function(name,fn) callbacks[name]=fn; return name end,unregister_event=function() end},
     packets={new=function(direction,id,values) assert(direction=='outgoing' and id==0x050); return values end,
@@ -85,7 +90,47 @@ metadataReady=true
 callbacks['job change']()
 assert(adapter:snapshot(items,true).equipment.main==60)
 callbacks['zone change']()
+assert(adapter:snapshot(items,true).equipment.main==nil)
+callbacks['incoming chunk'](0x01D,string.char(0,0,0,0,1,18),nil,false)
+callbacks.prerender()
+now=now+1; callbacks.prerender()
 assert(adapter:snapshot(items,true).equipment.main==60)
+-- Departure suspends submissions/barriers until destination arrival and stable
+-- player/inventory state; no inventory-finished packet is required.
+callbacks['incoming chunk'](0x00B,string.char(0,0,0,0),nil,false)
+callbacks['zone change']()
+local zoneSent=#sent
+adapter:submit({{slot=13,item=item(44)}})
+local zoneBarrier
+adapter:barrier(function(ok) zoneBarrier=ok end)
+now=now+100
+callbacks.prerender()
+assert(#sent==zoneSent and zoneBarrier==nil)
+callbacks['incoming chunk'](0x01D,string.char(0,0,0,0,0,8),nil,false)
+callbacks.prerender(); assert(#sent==zoneSent)
+playerReady=false
+items.equipment.left_ring=44; items.equipment.left_ring_bag=8
+callbacks['incoming chunk'](0x01D,string.char(0,0,0,0,1,18),nil,false)
+callbacks.prerender(); assert(#sent==zoneSent and zoneBarrier==nil)
+playerReady=true
+callbacks.prerender(); now=now+1; callbacks.prerender(); callbacks.prerender()
+assert(#sent==zoneSent and zoneBarrier==true) -- Already equipped: no redundant request/ack needed.
+adapter:submit({{slot=13,item=item(45)}})
+assert(#sent==zoneSent+1)
+ack(13,45); callbacks.prerender()
+assert(adapter:snapshot(items,true).equipment.left_ring==45)
+-- Reproduce the live regression: no 0x01D on a later zone, a real destination
+-- swap, and work queued between departure and the zone-change notification.
+callbacks['incoming chunk'](0x00B,string.char(0,0,0,0),nil,false)
+local resumedSent=#sent
+adapter:submit({{slot=13,item=item(46)}})
+callbacks['zone change']()
+callbacks.prerender()
+assert(#sent==resumedSent)
+now=now+1; callbacks.prerender()
+assert(#sent==resumedSent+1 and sent[#sent].item.id==46)
+ack(13,46); callbacks.prerender()
+assert(adapter:snapshot(items,true).equipment.left_ring==46)
 adapter:destroy()
 -- Bootstrap once, then accept only packet updates, including idle slots that
 -- have never participated in a queued swap. Polling cannot change the ledger.
@@ -106,4 +151,56 @@ assert(next(push:view(true))==nil and reads==2)
 -- A packet can establish a slot even before its inventory metadata arrives.
 push:ack(13,{localId=42,bagId=8})
 assert(push:view(true)[13].localId==42 and reads==2)
+-- Only exhausted retries may consult live equipment. Exact physical identity
+-- recovers a missing/no-op acknowledgment; another copy or unknown item fails.
+local reconciles,issues=0,{}
+local live=item(71)
+local recovery=Queue.new({read=function() return {[13]=item(70)} end,
+    clock=function() return now end,valid=function() return true end,send=function() end,
+    readSlot=function(slot) assert(slot==13); reconciles=reconciles+1; return live end,
+    report=function(message) issues[#issues+1]=message end})
+recovery:submit({{slot=13,item=item(71)}})
+assert(reconciles==0)
+for i=1,3 do now=now+1; recovery:tick() end
+local recovered
+recovery:barrier(function(ok) recovered=ok end)
+assert(reconciles==1 and recovered==true and #issues==0 and recovery:view(true)[13].id==71)
+recovery:submit({{slot=13,item=item(72)}})
+live={localId=73,bagId=8,id=72} -- Same named/resource item, different physical copy.
+for i=1,3 do now=now+1; recovery:tick() end
+assert(#issues==1)
+assert(issues[1]:find('live slot does not match request',1,true))
+recovery:barrier(function(ok) assert(not ok) end)
+now=now+1
+recovery:ack(13,item(72))
+assert(#issues==1 and recovery:view(true)[13].id==72) -- Late packets still update actual state, quietly.
+recovery:ack(13,item(72)); assert(#issues==1)
+-- Zone-specific acknowledgment grace keeps the three-send cap, but does not
+-- fail a successful change whose confirmation arrives after the normal window.
+local grace=true
+local sends,graceErrors=0,{}
+local delayed=Queue.new({read=function() return {[13]=item(80)} end,
+    clock=function() return now end,valid=function() return true end,
+    ackTimeout=function() return grace and 6 or 2.25 end,
+    send=function() sends=sends+1 end,
+    report=function(message) graceErrors[#graceErrors+1]=message end})
+delayed:submit({{slot=13,item=item(81)}})
+local graceBarrier
+delayed:barrier(function(ok) graceBarrier=ok end)
+local began=now
+for i=1,4 do now=began+i; delayed:tick() end
+assert(sends==3 and #graceErrors==0 and graceBarrier==nil)
+now=began+4.18; delayed:ack(13,item(81)); delayed:tick()
+assert(graceBarrier==true and #graceErrors==0)
+grace=false
+delayed:submit({{slot=13,item=item(82)}})
+for i=1,3 do now=now+1; delayed:tick() end
+assert(#graceErrors==1) -- Normal retry/failure timing remains unchanged.
+grace=true
+delayed:submit({{slot=13,item=item(83)}})
+began=now
+for i=1,5 do now=began+i; delayed:tick() end
+assert(#graceErrors==1)
+now=began+6; delayed:tick()
+assert(#graceErrors==2) -- Grace is bounded even if confirmation never arrives.
 print('PASS: ordered queue, projected queries, barriers, dependencies, acknowledgments, bounded retries and lifecycle cleanup')

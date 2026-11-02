@@ -52,18 +52,18 @@ for _,comment in ipairs({false,42,{'valid',false},{text='not an array'}}) do
 end
 Paths.setLoadedNamespace('child',{'child','parent'})
 local paths=Paths.eventFiles('Tester','RDM')
-assert(paths[1]=='./settings/_ns/child/players/Tester/events/rdm.json' and paths[4]=='./settings/_ns/child/events/common.json')
+assert(paths[1]=='./settings/_ns/child/players/Tester/events/rdm.json' and paths[4]=='./settings/_ns/child/events/(all).json')
 assert(paths[5]=='./settings/_ns/parent/players/Tester/events/rdm.json')
 assert(paths[9]=='./settings/Tester/events/rdm.json')
 local available={
-    ['./settings/_ns/child/events/common.json']={},
+    ['./settings/_ns/child/events/(all).json']={},
     ['./settings/Tester/events/rdm.json']={vars={wrong_scope=true}},
 }
 local function selected() return Config.load(paths,function(path) return available[path] end) end
-assert(selected().path=='./settings/_ns/child/events/common.json')
-available['./settings/_ns/child/players/Tester/events/common.json']={}
+assert(selected().path=='./settings/_ns/child/events/(all).json')
+available['./settings/_ns/child/players/Tester/events/(all).json']={}
 available['./settings/_ns/child/events/rdm.json']={}
-assert(selected().path=='./settings/_ns/child/players/Tester/events/common.json')
+assert(selected().path=='./settings/_ns/child/players/Tester/events/(all).json')
 available['./settings/_ns/child/players/Tester/events/rdm.json']={}
 assert(selected().path=='./settings/_ns/child/players/Tester/events/rdm.json')
 assert(not Paths.validateNamespace('child/events/test'))
@@ -75,7 +75,7 @@ for index,path in ipairs(groupPaths) do positions[path]=index end
 local root='./settings/events/'
 assert(positions[root..'(~melee).json'] and not positions[root..'(melee).json'])
 assert(positions[root..'(mages).json'] and positions[root..'(leader).json'])
-assert(positions[root..'common.json']>positions[root..'(~melee).json'])
+assert(positions[root..'(all).json']>positions[root..'(~melee).json'])
 assert(positions[root..'(~melee).json']>positions[root..'(mages).json'])
 assert(positions[root..'(mages).json']>positions[root..'rdm.json'])
 assert(positions['./settings/Tester/events/(mages).json'])
@@ -378,7 +378,7 @@ packet={Category=3,Param=10,Target=200,['Target Index']=20}
 service:send(packet)
 local beforeReload=injected
 adapterDeps.read=function(path)
-    if path=='./settings/events/common.json' then return {spells={post={{commands={'mark(event.outcome)'}}}}} end
+    if path=='./settings/events/(all).json' then return {spells={post={{commands={'mark(event.outcome)'}}}}} end
     if path=='./settings/events/(mages).json' then return {vars={group_loaded=true}} end
     if path=='./settings/Tester/events/(leader).json' then return {vars={leader_loaded=true}} end
 end

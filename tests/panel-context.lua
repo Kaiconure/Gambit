@@ -1,5 +1,6 @@
 local PanelContext=require('./lib/ux/panel-context')
 local Theme=require('./lib/ux/theme')
+local numberPrefix=('\\cs(%d,%d,%d)'):format(unpack(Theme.colors.number))
 local context={}
 local reset=PanelContext.attach(context)
 assert(context.color_text('Ready',1,2,3)=='\\cs(1,2,3)Ready\\cr')
@@ -40,7 +41,7 @@ print('PASS: panel-only colors, target classification precedence and isolated la
 local Config=require('./lib/ux/status-config')
 local factory=require('./lib/execution-factory')
 for _,name in ipairs({'default','compact'}) do
-    local env={format=string.format,gambit={entrypoint_relative='actions/pld.json',events_relative='events/common.json'},
+    local env={format=string.format,gambit={entrypoint_relative='actions/pld.json',events_relative='events/(all).json'},
         bt={name='Enemy',id=123,index=0xA,valid_target=true,is_mob=true,is_engaged=true}}
     local reset=PanelContext.attach(env)
     local function evaluate(index)
@@ -49,16 +50,16 @@ for _,name in ipairs({'default','compact'}) do
         setfenv(fn,env)
         return fn()
     end
-    assert(evaluate(1)=='Actions: \\cs(100,235,130)actions/pld.json (global namespace)\\cr')
-    assert(evaluate(2)=='Events: \\cs(100,235,130)events/common.json (global namespace)\\cr')
+    assert(evaluate(1)=='Actions: \\cs(0,255,255)global\\cr → \\cs(241,241,183)actions/pld.json\\cr')
+    assert(evaluate(2)=='Events: \\cs(0,255,255)global\\cr → \\cs(241,241,183)events/(all).json\\cr')
     assert(#Config.defaults.tracking.sets[name][1].expression==3)
     assert(evaluate(3)=='Target: \\cs(160,160,160)--\\cr') -- Battle target is not the cursor.
     env.cursor=env.bt
     assert(evaluate(3):find('Target: ',1,true)==1)
     env.bt=nil
-    assert(evaluate(3)=='Target: \\cs(255,130,130)Enemy\\cr (\\cs(241,241,183)123\\cr / \\cs(241,241,183)00A\\cr)')
+    assert(evaluate(3)=='Target: \\cs(255,130,130)Enemy\\cr ('..numberPrefix..'123\\cr / '..numberPrefix..'00A\\cr)')
     env.cursor.distance=12.345
-    assert(evaluate(3)=='Target: \\cs(255,130,130)Enemy\\cr (\\cs(241,241,183)123\\cr / \\cs(241,241,183)00A\\cr)')
+    assert(evaluate(3)=='Target: \\cs(255,130,130)Enemy\\cr ('..numberPrefix..'123\\cr / '..numberPrefix..'00A\\cr)')
     env.cursor.distance=0
     assert(not evaluate(3):find('0.00\\cr',1,true))
     env.cursor=nil
@@ -95,7 +96,7 @@ for index=2,4 do
     setfenv(fn,trackingEnv)
     local result=fn()
     assert(result:find('\\cs(255,130,130)Target\\cr',1,true))
-    if index==2 then assert(result:find('(~\\cs(241,241,183)3.0\\crs)',1,true)) end
+    if index==2 then assert(result:find('(~'..numberPrefix..'3.0\\crs)',1,true)) end
     if index==3 then assert(result:find('(\\cs(100,235,130)completed\\cr)',1,true)) end
 end
 print('PASS: skillchain, spell and ability tracking color their targets')
@@ -134,8 +135,8 @@ local fn=factory.get(Config.defaults.tracking.sets.default[2].expression[1])
 setfenv(fn,trackingEnv)
 assert(fn():find(context.color_skillchain('Light'),1,true))
 print('PASS: skillchain palette, object/name inputs, latest color and tracking integration')
-assert(context.color_number('3.0')=='\\cs(241,241,183)3.0\\cr')
-assert(context.color_number(42)=='\\cs(241,241,183)42\\cr')
+assert(context.color_number('3.0')==numberPrefix..'3.0\\cr')
+assert(context.color_number(42)==numberPrefix..'42\\cr')
 for status,role in pairs({casting='status_pending',interrupted='status_interrupted',completed='status_completed'}) do
     local expected=('\\cs(%d,%d,%d)%s\\cr'):format(Theme.colors[role][1],Theme.colors[role][2],Theme.colors[role][3],status)
     assert(context.color_status(status)==expected)

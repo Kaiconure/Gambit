@@ -64,6 +64,7 @@ function Queue:ack(slot,item,defer)
 end
 function Queue:tick()
     if self.running then return end
+    if self.deps.ready and not self.deps.ready() then return end
     self.running=true
     while self.batches[1] do
         local batch=self.batches[1]
@@ -84,16 +85,39 @@ function Queue:tick()
                         if (op.after==earlier.slot or op.slot==earlier.slot) and earlier.state~='acknowledged' then ready=false end
                     end
                     local now=self.deps.clock()
-                    if ready and (op.state=='queued' or now-op.sent_at>=0.75) then
-                        if self.deps.allows and not self.deps.allows(op.slot,op.item) then
+                    if ready and (op.state=='queued' or now-op.sent_at>=0.75)
+                        and (op.attempts<3 or now-op.first_sent_at>=(op.ackTimeout or 2.25)) then
+                        if op.state=='queued' and same(self.confirmed[op.slot],op.item) then
+                            -- A refreshed zone baseline may already contain this
+                            -- item; the server need not acknowledge a no-op equip.
+                            op.state='acknowledged'
+                        elseif self.deps.allows and not self.deps.allows(op.slot,op.item) then
                             -- Discard blocked work; it must not run later when the lock expires.
                             op.state='acknowledged'
+                        elseif op.attempts>=3 and self.deps.readSlot then
+                            -- Exceptional reconciliation only: an already-equipped
+                            -- request may not produce a new acknowledgment.
+                            local actual=self.deps.readSlot(op.slot)
+                            if same(actual,op.item) and (op.item.localId==0 or actual.id==op.item.id) then
+                                self:ack(op.slot,actual,true)
+                            else
+                                op.state='failed'; failed=true
+                                self.deps.report('Equipment swap failed for slot '..op.slot..
+                                    ' (no acknowledgment after 3 attempts; live slot does not match request)')
+                                break
+                            end
                         elseif op.attempts>=3 or not self.deps.valid(op.item) then
                             op.state='failed'; failed=true
-                            self.deps.report('Equipment swap failed for slot '..op.slot)
+                            local reason=op.attempts>=3 and 'no acknowledgment after 3 attempts'
+                                or 'item unavailable or changed at its inventory location'
+                            self.deps.report('Equipment swap failed for slot '..op.slot..' ('..reason..')')
                             break
                         else
                             op.attempts=op.attempts+1
+                            if not op.first_sent_at then
+                                op.first_sent_at=now
+                                op.ackTimeout=self.deps.ackTimeout and self.deps.ackTimeout() or 2.25
+                            end
                             op.state='sent'; op.sent_at=now
                             local ok,err=pcall(self.deps.send,op.slot,op.item)
                             if not ok then

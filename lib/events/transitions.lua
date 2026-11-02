@@ -20,6 +20,7 @@ function transitions.attach(service,listen)
         if service.runtime then service.runtime:observe(event,phase) end
     end
     local function leave(destination,old)
+        pending=nil -- A new departure supersedes any undispatched arrival.
         if departing then return end
         departing=true
         service:clear('zoned')
@@ -50,6 +51,7 @@ function transitions.attach(service,listen)
         local mob=ffxi.get_mob_by_target and ffxi.get_mob_by_target('me')
         if not state or state.zone~=pending.zone or state.logged_in==false
             or not player or not mob or mob.id~=player.id or not mob.valid_target then return end
+        if deps.zoneReady and not deps.zoneReady() then return end
         local event=pending
         pending=nil
         departing=false

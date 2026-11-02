@@ -9,11 +9,14 @@ context fields, imports, and the full contribution interface.
 
 These files live in the addon's top-level `events/` directory. Closer user or
 namespace files take precedence. Jobs without a dedicated entry point use
-`common.json`; they can still have their own `<job>.vars.json` configuration.
+`(all).json`; they can still have their own `<job>.vars.json` configuration.
+The shared `settings/events/common.vars.json` file continues to merge alongside
+each character's applicable vars files. It configures the rules; `(all).json`
+is a selectable rule entry point, not an additional shared layer.
 
 | File | Included behavior |
 |---|---|
-| `common.json` | Shared spells, job abilities (including Corsair rolls), weapon skills, named pet abilities, idle/battle transitions, and post-equipment rules |
+| `(all).json` | Shared spells, job abilities (including Corsair rolls), weapon skills, named pet abilities, idle/battle transitions, and post-equipment rules |
 | `blu.json` | Common behavior plus Blue Magic sets and named overrides |
 | `brd.json` | Common behavior plus song sets and named overrides |
 | `bst.json` | Common behavior plus general and named Ready sets |
@@ -563,7 +566,7 @@ really should be skipped; avoid stopping post cleanup.
 
 1. Run `//gbt events s` to inspect the selected entry point, imports, and vars files.
 2. Run `//gbt events r` after editing JSON; `//gbt events r -r` preserves an
-   explicitly selected file. Use `//gbt events r -e common` to temporarily choose
+   explicitly selected file. Use `//gbt events r -e (all)` to temporarily choose
    a different entry point, or full `//gbt r` to return to automatic selection.
 3. Add `-v` to export final variables, expanded rules, IDs, and source metadata.
 4. Check exact English names, the correct variable phase/path, and earlier stops.
@@ -852,7 +855,7 @@ rule also skips these commands.
 
 ## Job-specific modules
 
-`common.json` is the fallback for jobs without a dedicated entry point.
+`(all).json` is the fallback for jobs without a dedicated entry point.
 Dedicated files import the common behavior plus the modules below. Configure
 their variables in the same character/job vars file.
 
