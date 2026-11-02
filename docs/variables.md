@@ -170,7 +170,10 @@ changing one later does not modify the other.
 - Expansion works recursively in both normal-action and event variables.
 - Names are case-sensitive and surrounding whitespace is trimmed.
 - Prefixes work: `!csv(A, B)` and `^csv(A, B)` apply their priority to both keys.
-- An explicit sibling key wins over a generated key at the same priority.
+- At equal priority, an explicit sibling object merges into the CSV-generated
+  object: its supplied fields override shared fields, while omitted fields remain.
+  Nested objects merge recursively; explicit arrays and scalar values replace
+  their generated counterparts. Prefix priorities still apply normally.
 - Malformed syntax, empty names, or overlapping CSV declarations at the same
   priority in one object cause loading errors. There is no escaping for commas
   inside names and no range/wildcard expansion.

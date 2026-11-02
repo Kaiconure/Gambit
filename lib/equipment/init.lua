@@ -16,6 +16,20 @@ function Service.new(deps)
         return {localId=index,bagId=bag,id=item and item.id}
     end
     self.queue=Queue.new({clock=deps.clock or os.clock,report=deps.report,
+        ready=function() return not self.zoneLoading end,
+        ackTimeout=function()
+            local now=(deps.clock or os.clock)()
+            return self.zoneAckGraceUntil and now<=self.zoneAckGraceUntil and 6 or 2.25
+        end,
+        readSlot=function(slot)
+            local items=deps.windower.ffxi.get_items()
+            local equipment=items and items.equipment
+            local field=fields[slot+1]
+            local index=equipment and equipment[field]
+            if type(index)=='number' then
+                return identity(slot,equipment[field..'_bag'] or 0,index,items)
+            end
+        end,
         allows=function(slot,item) return self.locks:allows(slot,item) end,
         observed=function(slot,item) self.locks:observe(slot,item) end,
         failed=function(slot,item) self.locks:failed(slot,item) end,
@@ -46,12 +60,40 @@ function Service.new(deps)
             else deps.windower.ffxi.set_equip(item.localId,slot,item.bagId) end
         end})
     local function listen(name,fn) self.listeners[#self.listeners+1]=deps.windower.register_event(name,fn) end
-    listen('prerender',function() self.queue:tick() end)
+    listen('prerender',function()
+        if self.zoneLoading and self.zoneArrived then
+            local ffxi=deps.windower.ffxi
+            local player=ffxi.get_player and ffxi.get_player()
+            local mob=ffxi.get_mob_by_target and ffxi.get_mob_by_target('me')
+            local info=ffxi.get_info and ffxi.get_info()
+            local items=ffxi.get_items()
+            local usable=player and mob and mob.id==player.id and mob.valid_target
+                and (not info or info.logged_in~=false) and items and items.equipment
+            if usable then
+                local now=(deps.clock or os.clock)()
+                self.zoneReadySince=self.zoneReadySince or now
+                -- A quiet interval avoids sending while the client is still
+                -- transitioning. Do not require a full inventory retransmission.
+                if now-self.zoneReadySince>=1 then
+                    self.queue:bootstrap()
+                    for slot,item in pairs(self.queue.confirmed) do self.locks:observe(slot,item) end
+                    self.zoneLoading=false
+                    self.zoneAckGraceUntil=now+10
+                end
+            else
+                self.zoneReadySince=nil
+            end
+        end
+        self.queue:tick()
+    end)
     listen('incoming chunk',function(id,original,modified,injected)
         if injected then return end
         local data=original or modified
         if type(data)~='string' then return end
-        if id==0x050 then
+        if id==0x00B then
+            self.zoneLoading=true; self.zoneArrived=false; self.zoneReadySince=nil
+            self.locks:clear(); self.queue:clear()
+        elseif id==0x050 then
             local index,slot,bag=data:byte(5,7)
             local items=deps.windower.ffxi.get_items()
             if slot and slot<=15 then
@@ -70,7 +112,11 @@ function Service.new(deps)
     end)
     listen('logout',function() self.locks:clear(); self.queue:clear() end)
     listen('login',function() self:resync() end)
-    listen('zone change',function() self:resync() end)
+    listen('zone change',function()
+        if not self.zoneLoading then self.locks:clear(); self.queue:clear() end
+        self.zoneLoading=true
+        self.zoneArrived=true; self.zoneReadySince=nil
+    end)
     listen('job change',function() self:resync() end)
     return self
 end
@@ -86,6 +132,7 @@ function Service:snapshot(items,confirmed)
     return result
 end
 function Service:slotField(slot) return fields[slot+1] end
+function Service:isReady() return not self.zoneLoading and not self.queue.clearing end
 function Service:resync() self.locks:clear(); return self.queue:resync() end
 function Service:clearLocks() self.locks:clear() end
 function Service:session() return require('./lib/equipment/session').new(self,self.deps.inventory) end

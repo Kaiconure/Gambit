@@ -57,6 +57,105 @@ function markMobAbilityEnd(mob)
     actionStateManager:clearMobAbility(mob)
 end
 
+-- Presentation stays after event dispatch, retaining the original t/bt scope.
+function reportEnemyObservation(observation)
+    if not hasVerbosity(VERBOSITY_VERBOSE) then return end
+    local spell=observation.kind=='enemy_spell'
+    if not spell and (observation.kind~='enemy_ability' or observation.phase~='pre' or not observation.resource) then return end
+    local t=windower.ffxi.get_mob_by_target('t')
+    local bt=windower.ffxi.get_mob_by_target('bt')
+    local actor=observation.actor
+    if not ((t and t.id==actor.id) or (bt and bt.id==actor.id)) then return end
+    local target=observation.target
+    local targetName=target and target.name or '--'
+    if spell then
+        local resource=observation.resource
+        local spellName=resource and (resource.en or resource.name) or 'Spell'
+        if observation.phase=='pre' then
+            writeVerbose('%s: Casting %s %s %s':format(
+                text_mob(actor.name,Colors.verbose),text_spell(spellName,Colors.verbose),
+                CHAR_RIGHT_ARROW,text_target(targetName,Colors.verbose)))
+        else
+            local outcome=observation.outcome or 'completed'
+            writeVerbose('%s: %s %s':format(text_mob(actor.name,Colors.verbose),
+                text_spell(spellName,Colors.verbose),
+                outcome=='completed' and text_green('completed') or text_red(outcome)))
+        end
+        return
+    end
+    writeVerbose('%s: Preparing %s %s %s':format(
+        text_mob(actor.name,Colors.verbose),
+        text_weapon_skill(observation.resource.name or observation.resource.en,Colors.verbose),
+        CHAR_RIGHT_ARROW,
+        target and target.spawn_type==SPAWN_TYPE_MOB and text_mob(targetName) or text_player(targetName)))
+end
+
+-- Self casting presentation follows lifecycle dispatch.
+function reportSelfSpellObservation(observation)
+    if not hasVerbosity(VERBOSITY_VERBOSE) then return end
+    local spell=observation.resource
+    local target=observation.target
+    if observation.phase~='mid' then
+        spell=observation.previous_spell
+        target=observation.previous_target
+    end
+    if observation.phase=='mid' then
+        if spell then
+
+            local message = 'Casting %s':format(text_spell(spell.name, Colors.verbose))
+            if target then
+                message = '%s %s %s':format(message, CHAR_RIGHT_ARROW, text_target(target.name, Colors.verbose))
+            end
+            writeVerbose(message)
+        else
+            writeVerbose('Casting has started')
+        end
+
+    elseif observation.was_casting then
+        if observation.outcome == 'interrupted' then
+            writeVerbose('  %s has %s!':format(
+                spell and (text_spell(spell.name, Colors.verbose)) or 'Casting',
+                text_red('been interrupted')
+            ))
+        else
+            if target and spell then
+                local first_action = observation.detail
+                local damage = first_action and first_action.param
+                local message_id = first_action and first_action.message
+                local message = message_id and resources.action_messages[message_id] and resources.action_messages[message_id].en
+                local fields = fieldsearch(message)
+
+                local damage_text = nil
+                if damage then
+                    if fields.status then
+                        local status = resources.buffs[damage]
+                        if status then
+                            damage_text = '(' .. text_buff(status.name) .. ')'
+                        end
+                    elseif string.find(message or '', 'resists the spell') then
+                        damage_text = ''
+                    else
+                        if damage > 0 then
+                            damage_text = 'for %s%s':format(
+                                text_number(compress_number(damage), Colors.verbose),
+                                string.find(message or '', 'Magic Burst!') and text_green(' Magic Burst!') or ''
+                            )
+                        end
+                    end
+                end
+
+                writeVerbose('  Completed! %s %s %s %s':format(
+                        text_spell(spell.name, Colors.verbose),
+                        CHAR_RIGHT_ARROW,
+                        text_target(target.name, Colors.verbose),
+                        damage_text or ''
+                    ))
+            end
+        end
+
+    end
+end
+
 function setPartyWeaponSkill(actor, skill, mob)
     if globals.cloud_panel and globals.cloud_panel:enabled() then
         if skill and mob and mob.id then

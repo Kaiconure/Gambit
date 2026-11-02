@@ -48,7 +48,7 @@ Paths.setLoadedNamespace(nil)
 local bundledPaths=Paths.eventFiles('Tester','GEO',{'mages'})
 assert(bundledPaths[#bundledPaths-2]=='./events/geo.json')
 assert(bundledPaths[#bundledPaths-1]=='./events/(mages).json')
-assert(bundledPaths[#bundledPaths]=='./events/common.json')
+assert(bundledPaths[#bundledPaths]=='./events/(all).json')
 local bundled={
     ['./events/geo.json']={vars={value='inline'},spells={pre={{commands={'true'}}}}},
     ['./events/common.vars.json']={vars={value='bundled',onlyBundled=true}},
@@ -57,8 +57,18 @@ local bundled={
 local function loadBundled() return Config.load(bundledPaths,function(path) return bundled[path] end) end
 local shipped=loadBundled()
 assert(shipped.path=='./events/geo.json' and shipped.vars.value=='user' and shipped.vars.onlyBundled)
-bundled['./settings/events/common.json']={}
-assert(loadBundled().path=='./settings/events/common.json') -- Even user common beats shipped exact job.
+bundled['./settings/events/common.json']={vars={mustNotSelect=true}}
+assert(loadBundled().path=='./events/geo.json') -- Shared vars do not imply a common rule entry point.
+bundled['./settings/events/(all).vars.json']={vars={allJobs=true,value='all-jobs'}}
+shipped=loadBundled()
+assert(shipped.vars.allJobs and shipped.vars.value=='all-jobs' and shipped.vars.onlyBundled)
+local sharedCount=0
+for _,path in ipairs(shipped.vars_files) do
+    if path=='./settings/events/common.vars.json' then sharedCount=sharedCount+1 end
+end
+assert(sharedCount==1)
+bundled['./settings/events/(all).json']={}
+assert(loadBundled().path=='./settings/events/(all).json') -- Even user all-jobs beats shipped exact job.
 bundled['./settings/Tester/events/geo.json']={}
 assert(loadBundled().path=='./settings/Tester/events/geo.json')
 print('PASS: event vars namespace/character/job/group layering, implicit defaults, explicit priorities, isolation and validation')

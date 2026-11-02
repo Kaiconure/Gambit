@@ -1,20 +1,23 @@
 local Config=require('./lib/events/config')
-local paths={'./settings/Tester/events/pld.json','./settings/events/common.json','./events/common.json'}
+local paths={'./settings/Tester/events/pld.json','./settings/events/(all).json','./events/(all).json'}
 local docs={
     [paths[1]]={vars={automatic=true}},
+    ['./events/(all).json']={vars={allJobs=true}},
     ['./settings/Tester/events/empty.json']={},
     ['./events/empty.json']={vars={wrong=true}},
-    ['./events/custom.json']={imports={'lib/shared'},vars={custom=true}},
+    ['./events/custom.json']={imports={'(all)','lib/shared'},vars={custom=true}},
     ['./events/lib/shared.json']={vars={imported=true}},
     ['./settings/Tester/events/pld.vars.json']={vars={personal=true}},
 }
 local function load(name) return Config.load(paths,function(path) return docs[path] end,nil,nil,name) end
 assert(load().path==paths[1])
+assert(load('(all)').path=='./events/(all).json' and load('(all).json').vars.allJobs)
 local empty=load('empty')
 assert(empty.path=='./settings/Tester/events/empty.json' and empty.vars.personal and not empty.vars.wrong)
 assert(load('empty.json').path==empty.path)
 local custom=load('custom')
 assert(custom.path=='./events/custom.json' and custom.vars.custom and custom.vars.imported and custom.vars.personal)
+assert(custom.vars.allJobs)
 for _,name in ipairs({'missing','../empty','/empty','C:/empty','lib/../empty'}) do assert(not pcall(load,name)) end
 assert(load().path==paths[1])
 

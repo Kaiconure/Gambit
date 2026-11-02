@@ -41,70 +41,37 @@ local sc_categories = S{
     'job_ability_unblinkable',
 }
 
+-- Shared by skillchain reporting as well as target-related observations.
 local function isMyBattleTarget(id)
-    local t = windower.ffxi.get_mob_by_target('t')
-    local bt = windower.ffxi.get_mob_by_target('bt')
-
-    return 
-        (t and t.id == id and t.spawn_type == SPAWN_TYPE_MOB) or
-        (bt and bt.id == id and bt.spawn_type == SPAWN_TYPE_MOB)
+    local target = windower.ffxi.get_mob_by_target('t')
+    local battleTarget = windower.ffxi.get_mob_by_target('bt')
+    return
+        (target and target.id == id and target.spawn_type == SPAWN_TYPE_MOB) or
+        (battleTarget and battleTarget.id == id and battleTarget.spawn_type == SPAWN_TYPE_MOB)
 end
 
 -- Refer to: https://github.com/ekrividus/autoSC/blob/main/autoSC.lua
 ActionPacket.open_listener(function (act)
-    local actionPacket = ActionPacket.new(act)
-    local category = actionPacket:get_category_string()
-
-    -------------------------------------------------------------------------------------
-    -- Mob TP moves
-    if category == 'weaponskill_begin' or category == 'mob_tp_finish' then
-        local actorId = actionPacket:get_id()
-
-        -- NOTE: For now, this only finds skills used by our current battle target. Maybe change this to be:
-        --  - Skills used by any mob engaged with a party member
-        if isMyBattleTarget(actorId) then
-            local actor = actorId and windower.ffxi.get_mob_by_id(actorId)
-
-            local targetInfo = actionPacket:get_targets()()
-            local target = targetInfo and targetInfo.id and windower.ffxi.get_mob_by_id(targetInfo.id)
-            local action = targetInfo:get_actions()()
-
-            -- NOTES:
-            --  - weaponskill_begin:
-            --      - action.param is the monster ability id of the action
-            --  - mob_tp_finish: 
-            --      - actionPacket.raw.param is the moster ability id of the action
-            --      - action.param is the damage dealt to the target
-
-            -- TODO: Look at monster skills as well
-
-            if category == 'weaponskill_begin' then
-                local ability = action and action.param and resources.monster_abilities[action.param]
-
-                if ability then
-                    -- Need to load all the targets rather than just the first
-                    markMobAbilityStart(actor, ability, {target})
-
-                    writeVerbose('%s: Preparing %s %s %s':format(
-                        text_mob(actor.name, Colors.verbose),
-                        text_weapon_skill(ability.name, Colors.verbose),
-                        CHAR_RIGHT_ARROW,
-                        target.spawn_type == SPAWN_TYPE_MOB and text_mob(target.name) or text_player(target.name)
-                    ))
-                end
-            elseif category == 'mob_tp_finish' then
-                local ability = actionPacket.raw.param and resources.monster_abilities[actionPacket.raw.param]
-
-                if ability then
-                    -- writeMessage('%s: finishing %s':format(
-                    --     text_mob(actor.name, Colors.verbose),
-                    --     text_weapon_skill(ability.name, Colors.verbose)
-                    -- ))
-                    markMobAbilityEnd(actor)
-                end
-            end
+    local selfResult
+    local effects
+    -- Enemy events/state take priority over secondary skillchain bookkeeping.
+    if globals and globals.event_system then
+        local resultOk,result=pcall(globals.event_system.selfResultAction,globals.event_system,act)
+        if resultOk then selfResult=result else writeError('Self action observation: '..tostring(result)) end
+        local selfOk,selfError=pcall(globals.event_system.selfSpellAction,globals.event_system,act)
+        if not selfOk then writeError('Self spell observation: '..tostring(selfError)) end
+        local ok,err=pcall(globals.event_system.enemyAction,globals.event_system,act)
+        if not ok then writeError('Enemy observation: '..tostring(err)) end
+        -- Opener/effect bookkeeping must precede detection of the resulting
+        -- skillchain, while lifecycle handlers retain first response priority.
+        local afterAction=globals.event_system.deps and globals.event_system.deps.afterAction
+        if afterAction then
+            local effectOk,result=pcall(afterAction,act)
+            if effectOk then effects=result else writeError('Action effects: '..tostring(result)) end
         end
     end
+    local actionPacket = ActionPacket.new(act)
+    local category = actionPacket:get_category_string()
 
     if
         category == 'weaponskill_finish' or
@@ -112,7 +79,7 @@ ActionPacket.open_listener(function (act)
         category == 'mob_tp_finish'
     then
         local actorId = actionPacket:get_id()
-        local actor = windower.ffxi.get_mob_by_id(actorId)
+        local actor = selfResult and selfResult.actor or windower.ffxi.get_mob_by_id(actorId)
         local context = actionStateManager:getContext()
         local my_target = (context and context.bt and context.bt.mob) or
             windower.ffxi.get_mob_by_target('bt') or
@@ -126,7 +93,7 @@ ActionPacket.open_listener(function (act)
             if
                 targetInfo and targetInfo.id -- Require a target
             then
-                local target = windower.ffxi.get_mob_by_id(targetInfo.id)
+                local target = selfResult and selfResult.target or windower.ffxi.get_mob_by_id(targetInfo.id)
                 if target and target.id then
                     local action = targetInfo:get_actions()()
 
@@ -138,7 +105,10 @@ ActionPacket.open_listener(function (act)
 
                     local ability = nil
                     local is_ws = false
-                    if id then
+                    if selfResult and selfResult.kind=='weapon_skill' then
+                        ability=selfResult.resource
+                        is_ws=true
+                    elseif id then
                         if
                             fields.ability
                         then
@@ -180,26 +150,29 @@ ActionPacket.open_listener(function (act)
 
                         local damage = (action and type(action.param) == 'number' and action.param) or nil
                         local damage_text = ''
+                        -- Decode each target's own result; the first target may
+                        -- land a status while another target resists it.
+                        for _,entry in ipairs(targets or {}) do
+                            local detail=entry.actions and entry.actions[1]
+                            local messageId=detail and (tonumber(detail.message) or 0)%32768
+                            local messageResource=messageId and resources.action_messages[messageId]
+                            local targetFields=fieldsearch(messageResource and messageResource.en or '')
+                            local status=targetFields.status and detail and resources.buffs[detail.param]
+                            if status then
+                                local mt=windower.ffxi.get_mob_by_id(entry.id)
+                                if mt and mt.valid_target and not (effects and effects.statuses and effects.statuses[mt.id]==status.id) then
+                                    local me=windower.ffxi.get_mob_by_target('me')
+                                    actionStateManager:setMobBuff(mt,status.id,true,ability.duration or 60,
+                                        me and actorId==me.id or false,actor)
+                                end
+                            end
+                        end
                         if damage then
                             if fields.status then
                                 local status = resources.buffs[damage]
                                 if status then
                                     damage_text = '(' .. text_buff(status.name) .. ')'
 
-                                    local me = windower.ffxi.get_mob_by_target('me')
-                                    local is_actor_self = me and actorId == me.id
-                                    for ti, t in ipairs(targets) do
-                                        local mt = windower.ffxi.get_mob_by_id(t.id)
-                                        if mt and mt.valid_target then
-                                            actionStateManager:setMobBuff(mt,
-                                                status.id,
-                                                true,
-                                                ability.duration or 60,
-                                                is_actor_self,
-                                                actor
-                                            )
-                                        end
-                                    end
                                 end
                             else
                                 damage_text = damage > 0 and
@@ -218,10 +191,12 @@ ActionPacket.open_listener(function (act)
                             (ability.skillchain_b or '') ~= '' or
                             (ability.skillchain_c or '') ~= ''
                         then
-                            if damage > 0 then
+                            if damage and damage > 0 then
                                 -- Note: This will actually send blue magic abilities used by and on mobs. It's handled in
                                 -- the underlying implementation of setPartyWeaponSkill.
-                                setPartyWeaponSkill(actor, ability, target)
+                                if not (selfResult and selfResult.weapon_skill_published) then
+                                    setPartyWeaponSkill(actor, ability, target)
+                                end
                             end
                         else
                             if settings.verbosity >= VERBOSITY_DEBUG then
@@ -267,7 +242,7 @@ ActionPacket.open_listener(function (act)
                     -- NOTE: action.param is the closing WS damage; action.add_effect_param is the SC damage.
                     local damage = (action and type(action.add_effect_param) == 'number' and action.add_effect_param) or nil
                     local multiplier = 0
-                    if type(action.param) == 'number' and action.param > 0 then
+                    if damage and type(action.param) == 'number' and action.param > 0 then
                         multiplier = action.add_effect_param / action.param
                     end
 

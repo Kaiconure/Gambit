@@ -531,6 +531,23 @@ state_manager.setMobAbility = function(self, mob, ability, targets)
     }
 end
 
+-- Minimal state publication precedes event rules so helper queries agree with
+-- the current observation. There is no inferred identity or event lifecycle here.
+state_manager.observeEnemyAction = function(self, observation)
+    if observation.kind=='enemy_spell' or observation.kind=='allied_spell' then
+        if observation.phase=='pre' and observation.resource and
+            (observation.kind~='allied_spell' or observation.resolved_targets[observation.target and observation.target.id]) then
+            self:setOthersSpellStart(observation.resource,observation.actor,observation.target)
+        elseif observation.phase=='post' then
+            self:setOthersSpellCompleted(observation.actor,observation.outcome=='interrupted')
+        end
+    elseif observation.phase=='pre' then
+        if observation.resource then self:setMobAbility(observation.actor,observation.resource,observation.targets) end
+    else
+        self:clearMobAbility(observation.actor)
+    end
+end
+
 -----------------------------------------------------------------------------------------
 -- This ensures we don't have an ever-increasing list of mob abilities. It should
 -- be called periodically to purge stale abilities.

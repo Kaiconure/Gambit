@@ -26,8 +26,8 @@ Config.defaults =
                 {
                     name='Automation',
                     expression={
-                        '"Actions: " .. color_text(format("%s (%s namespace)", gambit.entrypoint_relative, gambit.namespace or "global"), 100,235,130)',
-                        '"Events: " .. color_text(format("%s (%s namespace)", gambit.events_relative, gambit.event_namespace or "global"), 100,235,130)',
+                        '"Actions: " .. format("%s", color_text(gambit.namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.entrypoint_relative), 241, 241, 183)',
+                        '"Events: " .. format("%s", color_text(gambit.event_namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.events_relative), 241, 241, 183)',
                         '"Target: " .. color_mob(cursor) .. (cursor and cursor.valid_target and format(" (%s / %s)", color_number(cursor.id), color_number(format("%03X", cursor.index))) or "")'
                     }
                 },
@@ -54,8 +54,8 @@ Config.defaults =
                 {
                     name='Automation',
                     expression={
-                        '"Actions: " .. color_text(format("%s (%s namespace)", gambit.entrypoint_relative, gambit.namespace or "global"), 100,235,130)',
-                        '"Events: " .. color_text(format("%s (%s namespace)", gambit.events_relative, gambit.event_namespace or "global"), 100,235,130)',
+                        '"Actions: " .. format("%s", color_text(gambit.namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.entrypoint_relative), 241, 241, 183)',
+                        '"Events: " .. format("%s", color_text(gambit.event_namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.events_relative), 241, 241, 183)',
                         '"Target: " .. color_mob(cursor) .. (cursor and cursor.valid_target and format(" (%s / %s)", color_number(cursor.id), color_number(format("%03X", cursor.index))) or "")'
                     }
                 }

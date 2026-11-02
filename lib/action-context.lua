@@ -5841,9 +5841,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if info then
                 -- We'll match if either no filters were provided, or if the current spell is in the filter list
                 if 
-                    spells[1] == nil or
-                    arrayIndexOf(spells, "*") or
-                    arrayIndexOfStrI(spells, info.spell.name) 
+                    resourceNameAliases.matchesAny(info.spell, spells)
                 then
                     context.enemy_spell = info.spell
 
@@ -5875,9 +5873,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if info then
                 -- We'll match if either no filters were provided, or if the current ability is in the filter list
                 if 
-                    skills[1] == nil or
-                    arrayIndexOf(skills, "*") or
-                    arrayIndexOfStrI(skills, info.ability.name) 
+                    resourceNameAliases.matchesAny(info.ability, skills)
                 then
                     -- Clear the mob ability. It will still be available for what we're calling 'windowed' detection via
                     -- context.enemyUsedAbility. That is, the ability will be detectable for a certain window of time.
@@ -5904,9 +5900,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if info then
                 -- We'll match if either no filters were provided, or if the current ability is in the filter list
                 if 
-                    skills[1] == nil or
-                    arrayIndexOf(skills, "*") or
-                    arrayIndexOfStrI(skills, info.ability.name) 
+                    resourceNameAliases.matchesAny(info.ability, skills)
                 then
                     -- We do NOT clear the ability at all here. It will still be available for subsequent
                     -- calls, until the ability ends. A call to enemyUsingAbility(enemy_ability) from
@@ -5929,8 +5923,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if info then
                 -- We'll match if either no filters were provided, or if the current  ability is in the filter list
                 if 
-                    skills[1] == nil or
-                    arrayIndexOfStrI(skills, info.ability.name) 
+                    resourceNameAliases.matchesAny(info.ability, skills)
                 then
                     -- Clear the mob ability for good. When the second argument is true, it will no longer be tracked.
                     actionStateManager:clearMobAbility(context.bt, true)
@@ -5952,8 +5945,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if info then
                 -- We'll match if either no filters were provided, or if the current  ability is in the filter list
                 if 
-                    skills[1] == nil or
-                    arrayIndexOfStrI(skills, info.ability.name) 
+                    resourceNameAliases.matchesAny(info.ability, skills)
                 then
                     -- Clear the mob ability for good. When the second argument is false, it will continue to be tracked.
                     actionStateManager:clearMobAbility(context.bt, false)
@@ -6879,6 +6871,14 @@ return {
         if not settings or not windower.ffxi.get_player() or
             not windower.ffxi.get_mob_by_target('me') then return nil end
         local target = globals.target and globals.target:mob()
+        -- Events/manual evaluations also run without an automation-selected
+        -- target. Use the actual battle target in that case, not the cursor.
+        if not target then
+            local battleTarget = windower.ffxi.get_mob_by_target('bt')
+            if battleTarget and battleTarget.spawn_type == SPAWN_TYPE_MOB then
+                target = battleTarget
+            end
+        end
         local context = makeActionContext('function', os.clock(), target, 0, -1, windower.ffxi.get_party(), variableState)
         context.action = {
             name=name or 'manual execution', importedFrom='manual command',

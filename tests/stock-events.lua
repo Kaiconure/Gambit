@@ -26,6 +26,7 @@ local function load(job)
     end)
 end
 local function set(name) return {head={name=name}} end
+assert(load('WAR').path=='./events/(all).json')
 local function run(config,section,phase,event,buffs,magicBurst,bt)
     local worn={}
     local context=function(_,state)

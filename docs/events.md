@@ -40,7 +40,7 @@ also contribute rules at named slots.
 | Shared job configuration | `settings/events/geo.vars.json` |
 | Character job configuration | `settings/Aidelle/events/geo.vars.json` |
 | Character rule override | `settings/Aidelle/events/geo.json` |
-| Shipped rule defaults | `events/geo.json`, or `events/common.json` |
+| Shipped rule defaults | `events/geo.json`, or `events/(all).json` |
 
 Namespace equivalents are
 `settings/_ns/<namespace>/events/` and
@@ -54,18 +54,22 @@ Namespace equivalents are
 
 Within each settings scope, character directories precede shared directories.
 Within a directory, exact main-job files precede matching positive group files,
-then matching inverse groups, then `common.json`. Job filenames are lowercase.
+then matching inverse groups, then `(all).json`. Job filenames are lowercase.
 Examples include `(mages).json`, `(healers).json`, and `(~melee).json`.
 
 Smaller matching job groups win; inverse groups use their complement's size.
 Equal sizes use alphabetical order. `(leader)` keeps its established alphabetical
 position among matching positive selectors. Scope/location precedence comes
-before filename specificity. Event entry points do not use `(all).json` or
-important `(!group)` selectors.
+before filename specificity. Event entry points do not use important
+`(!group)` selectors.
 
 An empty matching rule file deliberately overrides all more distant defaults.
 To extend defaults instead, import them or use contributions. All matching
 `.vars.json` files are layered independently of the selected entry point.
+`common.vars.json` remains a shared variable layer in each applicable event
+directory; it is loaded alongside job, group, and `(all).vars.json` files.
+It does not require a `common.json` rule file. Use `(all).json` for an all-jobs
+rule entry point; `common.json` is no longer an automatic entry-point candidate.
 
 ## Writing rules
 
@@ -366,7 +370,7 @@ overrides; see [buff gear configuration](stock-events.md#configure-buff-specific
 `zones.leave` runs on departure after pending action cleanup. Destination fields
 can be nil because the zone-out notification does not identify the destination.
 If departure wasn't observed, the zone-change callback supplies a fallback leave.
-`zones.enter` waits for matching destination game info and a valid player mob.
+`zones.enter` waits for matching destination game info, a valid player mob, and equipment readiness. It stays pending until those conditions are met, then runs once with a fresh context and equipment snapshot. Another departure supersedes an undispatched arrival; logout clears it. Readiness waiting does not consume the equipment acknowledgment timeout, which starts when a swap is actually sent.
 These are transitions, not callbacks on every render or addon load.
 
 | Current/destination field | Previous field |
