@@ -1,0 +1,42 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/indrik",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.indrik)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "indrik": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_indrik",
+            "name": "Abyssea Uleguerand: Indrik",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item('Stone of Ardor')", "color_mob('Indrik')", "color_pos('J-10/J-11')"],
+                "id": "stone_of_ardor",
+                "checked_when": ["findItem('Stone of Ardor')"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Coin of Ardor')", "color_mob('Indrik')", "color_pos('J-10/J-11')"],
+                "id": "coin_of_ardor",
+                "checked_when": ["findItem('Coin of Ardor')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "color_green('ready')", "color_mob('Indrik')", "color_number('timed spawn')"],
+                "id": "indrik",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

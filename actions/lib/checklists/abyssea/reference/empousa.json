@@ -1,0 +1,42 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/empousa",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.empousa)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "empousa": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_empousa",
+            "name": "Abyssea Uleguerand: Empousa",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Stone of Ardor')", "color_mob('Empousa')"],
+                "id": "stone_of_ardor",
+                "checked_when": ["findItem('Stone of Ardor')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Card of Ardor')", "color_mob('Empousa')"],
+                "id": "card_of_ardor",
+                "checked_when": ["findItem('Card of Ardor')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "color_green('ready')", "color_mob('Empousa')", "color_number('timed spawn')"],
+                "id": "empousa",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

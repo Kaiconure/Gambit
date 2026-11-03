@@ -1,0 +1,76 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/iratham",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.iratham)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "iratham": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_iratham",
+            "name": "Abyssea Tahrongi: Iratham",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Stone of Balance')",
+                  "color_mob('Iratham')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "stone_of_balance",
+                "checked_when": ["findItem('Stone of Balance')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Card of Balance')",
+                  "color_mob('Iratham')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "card_of_balance",
+                "checked_when": ["findItem('Card of Balance')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item(\"Ravager's Seal: Head\")",
+                  "color_mob('Iratham')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "ravager_seal_head",
+                "checked_when": ["findItem(\"Ravager's Seal: Head\")"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Goetia Seal: Body')",
+                  "color_mob('Iratham')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "goetia_seal_body",
+                "checked_when": ["findItem('Goetia Seal: Body')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (17:00–21:00)",
+                  "color_green('ready')",
+                  "color_mob('Iratham')"
+                ],
+                "id": "iratham",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

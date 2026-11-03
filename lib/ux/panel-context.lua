@@ -56,6 +56,37 @@ function PanelContext.attach(context,canShareClaim)
     context.color_number=function(value)
         return color(value,unpack(Theme.colors.number))
     end
+    context.color_item=function(text)
+        return color(text,unpack(Theme.colors.item))
+    end
+    context.color_ki=function(text)
+        return color(text,unpack(Theme.colors.key_item))
+    end
+    context.color_pos=function(text)
+        return color(text,unpack(Theme.colors.position))
+    end
+    context.color_npc=function(text)
+        return color(text,unpack(Theme.colors.target_npc))
+    end
+    context.color_green=function(text)
+        return color(text,unpack(Theme.colors.green))
+    end
+    context.color_yellow=function(text)
+        return color(text,unpack(Theme.colors.yellow))
+    end
+    context.color_red=function(text)
+        return color(text,unpack(Theme.colors.red))
+    end
+    context.color_gold=function(text)
+        return color(text,unpack(Theme.colors.gold))
+    end
+    context.color_job=function(text)
+        return color(text,unpack(Theme.colors.position))
+    end
+    context.color_muted=function(text)
+        return color(text,unpack(Theme.colors.light_gray))
+    end
+    
     context.color_status=function(status)
         local role=({casting='status_pending',interrupted='status_interrupted',
             completed='status_completed'})[status] or 'body'
@@ -79,6 +110,9 @@ function PanelContext.attach(context,canShareClaim)
         return color(value.name,unpack(rgb))
     end
     context.color_mob=function(mob)
+        -- Static encounter labels have no live entity state; use the idle
+        -- monster color until a real mob object is supplied.
+        if type(mob)=='string' then return color(mob,unpack(Theme.colors.target_engaged)) end
         local role='target_npc'
         local name=mob and mob.name
         if not mob or not mob.valid_target or not name then

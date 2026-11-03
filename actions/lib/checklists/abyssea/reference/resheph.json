@@ -1,0 +1,47 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/resheph",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.resheph)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "resheph": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_resheph",
+            "name": "Abyssea Uleguerand: Resheph",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Jewel of Wieldance')", "color_mob('Resheph')"],
+                "id": "jewel_of_wieldance",
+                "checked_when": ["findItem('Jewel of Wieldance')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Stone of Wieldance')", "color_mob('Resheph')"],
+                "id": "stone_of_wieldance",
+                "checked_when": ["findItem('Stone of Wieldance')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Decaying Diremite Fang')", "color_mob('Awahondo')", "color_pos('K-6/K-7')"],
+                "id": "awahondo",
+                "checked_when": ["findKeyItem('decaying diremite fang')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('decaying diremite fang') and color_green('ready') or color_yellow('not ready')", "color_mob('Resheph')", "color_npc('??? near Flux #5')"],
+                "id": "resheph",
+                "checked_when": ["findKeyItem('decaying diremite fang')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

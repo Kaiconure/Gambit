@@ -286,6 +286,19 @@ end
 
 -- Namespace character/common paths precede base character/common paths.
 -- An explicit scope limits lookup to character or common files in both roots.
+-- Entry points resolve a complete selector search within each namespace.
+-- Global character/shared directories are separate implicit fallback layers.
+function paths.entryPointLayers(playerName,relative)
+    local result={}
+    for _,name in ipairs(loadedPrecedence) do
+        local root=paths.namespacePath(name)
+        result[#result+1]={root..'/players/'..playerName..'/'..relative,root..'/'..relative}
+    end
+    result[#result+1]=SETTINGS_ROOT..'/'..playerName..'/'..relative
+    result[#result+1]=SETTINGS_ROOT..'/'..relative
+    return result
+end
+
 function paths.candidates(playerName, relative, scope)
     local roots = {}
     for _, name in ipairs(loadedPrecedence) do roots[#roots + 1] = paths.namespacePath(name) end

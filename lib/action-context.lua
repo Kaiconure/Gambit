@@ -2890,6 +2890,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return context.item
     end
 
+    -- Resource-name resolution uses the shared resource cache. Ownership is
+    -- queried live, so acquiring/consuming key items never leaves stale state.
+    context.findKeyItem = function(name)
+        context.key_item = nil
+        local resource = findKeyItem(name)
+        if not resource then return end
+        for _,id in ipairs(windower.ffxi.get_key_items() or {}) do
+            if id == resource.id then
+                context.key_item = resource
+                return resource
+            end
+        end
+    end
+
     -- Find the item equipped in the specified slot
     context.findEquipmentInSlot = function(slot, confirmed)
         context.item = inventory.find_equipment_in_slot(slot,nil,confirmed)

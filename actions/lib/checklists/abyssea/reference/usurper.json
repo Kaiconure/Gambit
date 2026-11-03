@@ -1,0 +1,57 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/usurper",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.usurper)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "usurper": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_usurper",
+            "name": "Abyssea Tahrongi: Usurper",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Balance Jewel')",
+                  "color_mob('Usurper')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "balance_jewel",
+                "checked_when": ["findItem('Balance Jewel')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Balance Stone')",
+                  "color_mob('Usurper')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "balance_stone",
+                "checked_when": ["findItem('Balance Stone')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s; Viridian demilune abyssite)",
+                  "findKeyItem('viridian demilune abyssite') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Usurper')",
+                  "color_pos('Roaming')"
+                ],
+                "id": "usurper",
+                "checked_when": ["findKeyItem('viridian demilune abyssite')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

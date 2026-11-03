@@ -227,6 +227,8 @@ On load, Gambit also registers these Windower shortcuts:
 | `varget <name>` | `gbt varget <name>` |
 | `varset <name> <value>` | `gbt varset <name> <value>` |
 
+List functions with `//gbt func -list`. Filter by a case-insensitive, literal prefix with `//gbtfn -f abyssea` or `//gbtfn -filter abyssea`. Filtering implies listing. The earlier forms `//gbt func -list -prefix abyssea/` and `//gbtfn abyssea/ -list` remain supported. Descriptions are shown with matching functions; the count reports only matches. `//gbtfn <name>` without listing options still executes the named function.
+
 ## Variables and Lua evaluation
 
 | Command | Behavior |

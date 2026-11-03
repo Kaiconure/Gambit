@@ -1,0 +1,82 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/shaula",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.shaula)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "shaula": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_shaula",
+            "name": "Abyssea Altepa: Shaula",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Orison Seal: Body')", "color_mob('Shaula')"],
+                "id": "orison_seal_body",
+                "checked_when": ["findItem('Orison Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Raider's Seal: Body\")", "color_mob('Shaula')"],
+                "id": "raiders_seal_body",
+                "checked_when": ["findItem(\"Raider's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Lancer's Seal: Body\")", "color_mob('Shaula')"],
+                "id": "lancers_seal_body",
+                "checked_when": ["findItem(\"Lancer's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Sylvan Seal: Body')", "color_mob('Shaula')"],
+                "id": "sylvan_seal_body",
+                "checked_when": ["findItem('Sylvan Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Aoidos' Seal: Hands\")", "color_mob('Vadleany')"],
+                "id": "aoidos_seal_hands",
+                "checked_when": ["findItem(\"Aoidos' Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Tantra Seal: Hands')", "color_mob('Vadleany')"],
+                "id": "tantra_seal_hands",
+                "checked_when": ["findItem('Tantra Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Lancer's Seal: Hands\")", "color_mob('Vadleany')"],
+                "id": "lancers_seal_hands",
+                "checked_when": ["findItem(\"Lancer's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_item('Vadleany Fluid')", "color_mob('Vadleany')", "color_pos('H-6')"],
+                "id": "vadleany_fluid",
+                "checked_when": ["findItem('Vadleany Fluid')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Ladybird Leaf')", "color_mob('Nannakola')"],
+                "id": "nannakola",
+                "checked_when": ["findItem('Ladybird Leaf')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('High-Quality Scorpion Claw')", "color_mob('Akrab')"],
+                "id": "akrab",
+                "checked_when": ["findItem('High-Quality Scorpion Claw')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Vadleany Fluid') and findItem('High-Quality Scorpion Claw') and color_green('ready') or color_yellow('not ready')", "color_mob('Shaula')", "color_npc('??? at H-5')"],
+                "id": "shaula",
+                "checked_when": ["findItem('Vadleany Fluid') and findItem('High-Quality Scorpion Claw')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

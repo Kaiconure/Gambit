@@ -1,0 +1,142 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/hadhayosh",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.hadhayosh)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "hadhayosh": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_hadhayosh",
+            "name": "Abyssea La Theine: Hadhayosh",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Coin of Voyage')",
+                  "color_mob('Hadhayosh')",
+                  "color_npc('???')",
+                  "color_pos('J-8')"
+                ],
+                "id": "coin_of_voyage",
+                "checked_when": ["findItem('Coin of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Jewel of Voyage')",
+                  "color_mob('Hadhayosh')",
+                  "color_npc('???')",
+                  "color_pos('J-8')"
+                ],
+                "id": "jewel_of_voyage",
+                "checked_when": ["findItem('Jewel of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Blood-smeared Gigas Helm')",
+                  "color_mob('Briareus')",
+                  "color_npc('???')",
+                  "color_pos('G-6')"
+                ],
+                "id": "blood_smeared_gigas_helm",
+                "checked_when": ["findKeyItem('blood-smeared gigas helm')"]
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('   → See Briareus checklist for its full pop chain')"
+                ],
+                "id": "briareus_reference",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Bloodied Saber Tooth')",
+                  "color_mob('Megantereon')",
+                  "color_npc('???')",
+                  "color_pos('C-7')"
+                ],
+                "id": "bloodied_saber_tooth",
+                "checked_when": ["findKeyItem('bloodied saber tooth')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Gargantuan Black Tiger Fang')",
+                  "color_mob('Angler Tiger')",
+                  "color_pos('C-7')"
+                ],
+                "id": "gargantuan_black_tiger_fang",
+                "checked_when": ["findItem('Gargantuan Black Tiger Fang')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Glittering Pixie Choker')",
+                  "color_mob('Carabosse')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "glittering_pixie_choker",
+                "checked_when": ["findKeyItem('glittering pixie choker')"]
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('   → See Carabosse checklist for its full pop chain')"
+                ],
+                "id": "carabosse_reference",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Marbled Mutton Chop')",
+                  "color_mob('Trudging Thomas')",
+                  "color_npc('???')",
+                  "color_pos('J-8')"
+                ],
+                "id": "marbled_mutton_chop",
+                "checked_when": ["findKeyItem('marbled mutton chop')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Raw Mutton Chop')",
+                  "color_mob('Hammering Ram')",
+                  "color_pos('J-8')"
+                ],
+                "id": "raw_mutton_chop",
+                "checked_when": ["findItem('Raw Mutton Chop')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s)",
+                  "findKeyItem('blood-smeared gigas helm') and findKeyItem('bloodied saber tooth') and findKeyItem('glittering pixie choker') and findKeyItem('marbled mutton chop') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Hadhayosh')",
+                  "color_npc('???')",
+                  "color_pos('J-8')"
+                ],
+                "id": "hadhayosh",
+                "checked_when": [
+                  "findKeyItem('blood-smeared gigas helm') and findKeyItem('bloodied saber tooth') and findKeyItem('glittering pixie choker') and findKeyItem('marbled mutton chop')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+﻿{
+  "functions": [
+    {
+      "name": "checklists/abyssea/itzpapalotl",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.itzpapalotl)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "itzpapalotl": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_itzpapalotl",
+            "name": "Abyssea Attohwa: Itzpapalotl",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Bulbous crawler cocoon')",
+                  "color_mob('Blazing Eruca')",
+                  "color_npc('???')",
+                  "color_pos('J-10')"
+                ],
+                "id": "blazing_eruca",
+                "checked_when": ["findKeyItem('bulbous crawler cocoon')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Eruca Egg')",
+                  "color_mob('Ignis Eruca')",
+                  "color_pos('I-10')"
+                ],
+                "id": "ignis_eruca",
+                "checked_when": ["findItem('Eruca Egg')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Venomous wamoura feeler')",
+                  "color_mob('Granite Borer')",
+                  "color_npc('???')",
+                  "color_pos('K-10')"
+                ],
+                "id": "granite_borer",
+                "checked_when": ["findKeyItem('venomous wamoura feeler')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Withered Cocoon')",
+                  "color_mob('Gullycampa')",
+                  "color_pos('K-10')"
+                ],
+                "id": "gullycampa",
+                "checked_when": ["findItem('Withered Cocoon')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s) (%s)",
+                  "color_ki('Distended chigoe abdomen')",
+                  "color_mob('Tunga')",
+                  "color_pos('L-9')",
+                  "color_pos('L-10')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "tunga",
+                "checked_when": ["findKeyItem('distended chigoe abdomen')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, %s)",
+                  "findKeyItem('bulbous crawler cocoon') and findKeyItem('venomous wamoura feeler') and findKeyItem('distended chigoe abdomen') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Itzpapalotl')",
+                  "color_npc('???')",
+                  "color_pos('K-10')",
+                  "color_npc('Conflux #07')"
+                ],
+                "id": "itzpapalotl",
+                "checked_when": [
+                  "findKeyItem('bulbous crawler cocoon') and findKeyItem('venomous wamoura feeler') and findKeyItem('distended chigoe abdomen')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/karkinos",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.karkinos)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "karkinos": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_karkinos",
+            "name": "Abyssea La Theine: Karkinos",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Coin of Voyage')",
+                  "color_mob('Karkinos')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "coin_of_voyage",
+                "checked_when": ["findItem('Coin of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Jewel of Voyage')",
+                  "color_mob('Karkinos')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "jewel_of_voyage",
+                "checked_when": ["findItem('Jewel of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Creed Seal: Feet')",
+                  "color_mob('Karkinos')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "creed_seal_feet",
+                "checked_when": ["findItem('Creed Seal: Feet')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Monarch Beetle Saliva')",
+                  "color_mob('Karkinos')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "monarch_beetle_saliva",
+                "checked_when": ["findItem('Monarch Beetle Saliva')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Smoldering Crab Shell')",
+                  "color_mob('Nahn')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "smoldering_crab_shell",
+                "checked_when": ["findKeyItem('smoldering crab shell')"]
+              },
+              {
+                "format": [
+                  "   • %s (fished from one of the zone's ponds)",
+                  "color_mob('Nahn')"
+                ],
+                "id": "nahn",
+                "checked_when": ["true"]
+              },
+              {
+                "format": [
+                  "%s (fishing bait)",
+                  "color_item('Dried Squid')"
+                ],
+                "id": "dried_squid",
+                "checked_when": ["findItem('Dried Squid')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, fish up with Dried Squid)",
+                  "findKeyItem('smoldering crab shell') and findItem('Dried Squid') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Karkinos')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "karkinos",
+                "checked_when": ["findKeyItem('smoldering crab shell') and findItem('Dried Squid')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

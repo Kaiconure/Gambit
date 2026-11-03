@@ -1,0 +1,80 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/lacovie",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.lacovie)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "lacovie": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_lacovie",
+            "name": "Abyssea Tahrongi: Lacovie",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Chipped Sandworm Tooth')",
+                  "color_mob('Glavoid')",
+                  "color_npc('???')",
+                  "color_pos('I-5')",
+                  "color_npc('Conflux #08')"
+                ],
+                "checked_when": ["findKeyItem('chipped sandworm tooth')"],
+                "id": "glavoid_ki"
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('  → See Glavoid checklist for progression')"
+                ],
+                "id": "glavoid_subtext",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Overgrown Mandragora Flower')",
+                  "color_mob('Chloris')",
+                  "color_npc('???')",
+                  "color_pos('I-8')",
+                  "color_npc('Conflux #08')"
+                ],
+                "checked_when": ["findKeyItem('overgrown mandragora flower')"],
+                "id": "chloris_ki"
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('  → See Chloris checklist for progression')"
+                ],
+                "id": "chloris_subtext",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s)",
+                  "findKeyItem('chipped sandworm tooth') and findKeyItem('overgrown mandragora flower') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Lacovie')",
+                  "color_npc('???')",
+                  "color_pos('F-5')"
+                ],
+                "id": "lacovie",
+                "checked_when": [
+                  "findKeyItem('chipped sandworm tooth') and findKeyItem('overgrown mandragora flower')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

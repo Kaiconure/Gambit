@@ -640,6 +640,23 @@ every optional item named in a set was available. Like tracing, it verifies
 client-observed ordering, not the server's internal damage calculation. When
 disabled it performs no verification snapshots or report formatting.
 
+### Discover weakness and proc signals
+
+For an experimental Abyssea recording, use:
+
+```text
+//gbt events discover start
+//gbt events discover stop
+```
+
+Start shortly before a fight, perform a few proc attempts, and stop after a weakness hint or successful proc. The stop command prints the saved JSON path under the character's current settings `.output` directory (`discovery-<timestamp>-<sequence>.json`). Capture one or two short encounters rather than a long farming session. Note which hint/proc you saw and approximately when, so it can be compared with the recording.
+
+The recorder captures original/modified incoming chat text, decoded combat actions, outgoing action-request packets (`0x01A`), and selected incoming packets (`0x029`, `0x02A`, `0x02D`, `0x038`). Packet entries include original bytes as hexadecimal, numeric/boolean decoded fields, and injected/blocked flags. Entries have ordered sequence numbers, relative timestamps, zone, and cursor/battle target snapshots. Combat actions also retain actor/target identity and resource-name candidates from the different resource tables; candidates are not confirmed action classifications.
+
+Recording is off by default, independent of verbosity and configured event handlers, and does not change cycling, facing, movement, chat, or action dispatch. It records activity beyond your battle target so party actions and unattributed hints remain available for comparison. It does not yet emit weakness/proc events or infer that a nearby action caused a proc.
+
+The in-memory buffer stops collecting at 8192 entries; `stop` still exports it and reports truncation. An existing recording cannot be overwritten by another `start`. A failed export retains the data for another `stop` attempt. Save before unloading/reloading Lua: recordings are not persisted until exported. Event-rule reloads do not stop the capture.
+
 To investigate weapon skill equipment timing, run `//gbt events trace start`,
 perform one or two weapon skills, then run `//gbt events trace stop`. The JSON
 capture is saved in the character's `.output` directory under the active settings

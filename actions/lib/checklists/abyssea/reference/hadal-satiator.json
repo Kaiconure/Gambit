@@ -1,0 +1,60 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/hadal-satiator",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.hadal_satiator)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "hadal_satiator": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_hadal_satiator",
+            "name": "Abyssea Konschtat: Hadal Satiator",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Vision Jewel')",
+                  "color_mob('Hadal Satiator')",
+                  "color_npc('???')",
+                  "color_pos('F-8')"
+                ],
+                "id": "vision_jewel",
+                "checked_when": ["findItem('Vision Jewel')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Vision Stone')",
+                  "color_mob('Hadal Satiator')",
+                  "color_npc('???')",
+                  "color_pos('F-8')"
+                ],
+                "id": "vision_stone",
+                "checked_when": ["findItem('Vision Stone')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, Azure demilune abyssite)",
+                  "findKeyItem('azure demilune abyssite') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Hadal Satiator')",
+                  "color_npc('???')",
+                  "color_pos('F-8')"
+                ],
+                "id": "hadal_satiator",
+                "checked_when": ["findKeyItem('azure demilune abyssite')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

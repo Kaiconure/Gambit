@@ -16,6 +16,23 @@ Actions that equip gear for a specific operation, such as selecting an Abyssea p
 
 ## The Basics
 
+### Library imports versus in-place actions
+
+Both entry points and imported libraries can define a top-level `imports` array. Its entries can be direct strings or import objects, including a mixture of both:
+
+```json
+{
+  "imports": [
+    "lib/setup",
+    "lib/checklists/all"
+  ]
+}
+```
+
+These imports are resolved in the separate, non-executable imports area. Libraries can recursively import variables, macros, named functions, and explicit loading actions without placing ordinary actions into the caller's battle/idle/etc. list. Explicit `loading` actions still run at load; named `functions` remain callable functions.
+
+A library's top-level `actions` array continues to replace its import at the caller's position. Use `actions` for rules that should execute in that area, and top-level `imports` for dependencies outside it. Scoped variable overrides and preconditions on the importing action are inherited by its library dependencies. A direct string is shorthand for `{"import": "a"}`; use the object form for options such as `with_vars`, `precondition`, or `silent`. Grouped objects such as `{"imports": ["a", "b"]}` remain supported. Direct string entries are supported only in top-level `imports`, not executable action arrays.
+
 Spell, job ability, and weapon skill commands wait on matching packet observations, even when no event handlers are configured. Equipment preparation has a separate bounded wait; action deadlines begin at dispatch. Missing notifications and rejections return control rather than leaving automation waiting indefinitely.
 
 Spells allow up to two seconds for casting to start, then wait for completion or interruption and apply two seconds of recovery padding. Job abilities retain their ability-specific minimum spacing from dispatch. Weapon skills wait for their result plus a one-second safety margin; deliberate skillchain spacing remains separate. Items and pet commands retain their existing timing.

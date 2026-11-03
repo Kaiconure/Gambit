@@ -3,6 +3,7 @@ local jobInfoRecords = require('./lib/job-info')
 local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
+local gearExport = require('./lib/equipment/export')
 handlers['panel'] = function(args)
     local function showHelp()
         writeMessage('Panel commands:')
@@ -189,13 +190,35 @@ end
 
 handlers['events'] = function(args)
     local command=(args[1] or 'status'):lower()
-    if command=='trace' or command=='verify' then
+    if command=='save-gear' or command=='sg' then
+        if #args~=1 then writeMessage('Usage: gbt events save-gear (alias: sg)'); return end
+        local ok,result=pcall(function()
+            local player=windower.ffxi.get_player()
+            assert(player and player.name and player.main_job,'Log in before exporting equipment')
+            local manager=globals.equipment_manager
+            assert(not manager or manager:isReady(),'Wait for equipment readiness before exporting')
+            assert(not manager or #manager.queue.batches==0,'Wait for pending equipment swaps before exporting')
+            local contents=gearExport.render(inventory,windower.ffxi.get_items())
+            local directory='./settings/'..player.name..'/data'
+            windower.create_dir((windower.addon_path or '')..directory)
+            local base=directory..'/'..player.main_job:lower()..'-'..os.date('%Y%m%d-%H%M%S')
+            local path=base..'.vars.json'
+            local suffix=1
+            while files.new(path):exists() do path=base..'-'..suffix..'.vars.json'; suffix=suffix+1 end
+            writeStringToFile(path,contents)
+            return path
+        end)
+        if ok then writeMessage('Equipment variables saved: '..result)
+        else writeError('Could not save equipment: '..tostring(result)) end
+        return
+    end
+    if command=='trace' or command=='verify' or command=='discover' then
         local service=globals.event_system
         if not service then writeMessage('Event system is unavailable.'); return end
         if #args~=2 or (args[2]~='start' and args[2]~='stop') then
             writeMessage('Usage: gbt events '..command..' [start|stop]'); return
         end
-        local method=command=='trace' and service.weaponSkillTrace or service.verification
+        local method=command=='trace' and service.weaponSkillTrace or command=='discover' and service.discovery or service.verification
         local ok,message=pcall(method,service,args[2])
         if ok then writeMessage(message) else writeError('Event '..command..': '..tostring(message)) end
         return
@@ -1254,13 +1277,17 @@ handlers['function'] = function(args)
     --print('Running: [gbt function %s]':format(trimString(table.concat(args, ' '))))
 
     local max_iterations = getArgValue(args, '-max')
-    if list or not name then
-        local count = 0
-        writeMessage('Registered function list:')
+    local prefix = getArgValue(args, '-filter') or getArgValue(args, '-f') or getArgValue(args, '-prefix')
+    if list or not name or prefix then
+        prefix = prefix or (list and name and name:sub(1,1)~='-' and name) or ''
+        local normalizedPrefix = string.lower(prefix)
+        writeMessage(prefix~='' and ('Registered function list (prefix: %s):'):format(prefix) or 'Registered function list:')
 
         local keys = {}
         for key, _ in pairs(actionStateManager.functions) do
-            keys[#keys + 1] = key
+            if string.lower(key):sub(1,#normalizedPrefix)==normalizedPrefix then
+                keys[#keys + 1] = key
+            end
         end
         table.sort(keys, function (a, b) return a < b end)
         for i, key in ipairs(keys) do
@@ -1271,7 +1298,7 @@ handlers['function'] = function(args)
             end
         end
 
-        writeMessage('You have %s configured!':format(pluralize(#keys, 'function', 'functions')))
+        writeMessage((prefix~='' and 'Found %s matching this prefix.' or 'You have %s configured!'):format(pluralize(#keys, 'function', 'functions')))
 
         return
     end

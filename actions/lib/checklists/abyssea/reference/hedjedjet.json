@@ -1,0 +1,42 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/hedjedjet",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.hedjedjet)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "hedjedjet": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_hedjedjet",
+            "name": "Abyssea Altepa: Hedjedjet",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item('Jewel of Ardor')", "color_mob('Hedjedjet')", "color_pos('H-5/H-6')"],
+                "id": "jewel_of_ardor",
+                "checked_when": ["findItem('Jewel of Ardor')"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Card of Ardor')", "color_mob('Hedjedjet')", "color_pos('H-5/H-6')"],
+                "id": "card_of_ardor",
+                "checked_when": ["findItem('Card of Ardor')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "color_green('ready')", "color_mob('Hedjedjet')", "color_number('timed spawn')"],
+                "id": "hedjedjet",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

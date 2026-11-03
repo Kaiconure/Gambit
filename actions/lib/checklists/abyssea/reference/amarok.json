@@ -1,0 +1,67 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/amarok",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.amarok)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "amarok": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_amarok",
+            "name": "Abyssea Altepa: Amarok and Sharabha seals",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Creed Seal: Body')", "color_mob('Amarok')"],
+                "id": "creed_seal_body",
+                "checked_when": ["findItem('Creed Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Goetia Seal: Body')", "color_mob('Amarok')"],
+                "id": "goetia_seal_body",
+                "checked_when": ["findItem('Goetia Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Bale Seal: Hands')", "color_mob('Sharabha')"],
+                "id": "bale_seal_hands",
+                "checked_when": ["findItem('Bale Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Goetia Seal: Hands')", "color_mob('Sharabha')"],
+                "id": "goetia_seal_hands",
+                "checked_when": ["findItem('Goetia Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Cirque Seal: Hands')", "color_mob('Sharabha')"],
+                "id": "cirque_seal_hands",
+                "checked_when": ["findItem('Cirque Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Iga Seal: Hands')", "color_mob('Sharabha')"],
+                "id": "iga_seal_hands",
+                "checked_when": ["findItem('Iga Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s", "color_number('See the existing Abyssea Altepa: Orthrus checklist for the complete Amarok pop chain')"],
+                "id": "orthrus_reference",
+                "checked_when": ["true"]
+              },
+              {
+                "format": ["You are %s to farm %s", "findItem('High-Quality Dhalmel Hide') and findItem('Sharabha Hide') and findItem('Tiger King Hide') and color_green('ready') or color_yellow('not ready')", "color_mob('Amarok')"],
+                "id": "amarok",
+                "checked_when": ["findItem('High-Quality Dhalmel Hide') and findItem('Sharabha Hide') and findItem('Tiger King Hide')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

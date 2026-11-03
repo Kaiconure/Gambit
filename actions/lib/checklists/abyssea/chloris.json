@@ -1,0 +1,164 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/chloris",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.chloris)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "chloris": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_chloris",
+            "name": "Abyssea Tahrongi: Chloris",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Overgrown Mandragora Flower')",
+                  "color_mob('Ophanim')",
+                  "color_npc('???')",
+                  "color_pos('G-9')",
+                  "color_npc('Conflux #01')"
+                ],
+                "checked_when": ["findKeyItem('overgrown mandragora flower')"],
+                "id": "ophanim"
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Bloodshot Hecteye')",
+                  "color_mob('Beholder')",
+                  "color_pos('G-8')"
+                ],
+                "id": "beholder",
+                "checked_when": ["findItem('Bloodshot Hecteye')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Shriveled Wing')",
+                  "color_mob('Halimede')",
+                  "color_npc('???')",
+                  "color_pos('G-12')"
+                ],
+                "id": "halimede",
+                "checked_when": ["findItem('Shriveled Wing')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s/%s)",
+                  "color_item('H.Q. Clionid Wing')",
+                  "color_mob('Gully Clionid')",
+                  "color_pos('F-11')",
+                  "color_pos('I-12')"
+                ],
+                "id": "gully_clionid",
+                "checked_when": ["findItem('H.Q. Clionid Wing')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Tarnished Pincer')",
+                  "color_mob('Vetehinen')",
+                  "color_npc('???')",
+                  "color_pos('I-11')"
+                ],
+                "id": "vetehinen",
+                "checked_when": ["findItem('Tarnished Pincer')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s/%s)",
+                  "color_item('H.Q. Limule Pincer')",
+                  "color_mob('Gulch Limule')",
+                  "color_pos('H-10')",
+                  "color_pos('I-11')"
+                ],
+                "id": "gulch_limule",
+                "checked_when": ["findItem('H.Q. Limule Pincer')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Gory Scorpion Claw')",
+                  "color_mob('Hedetet')",
+                  "color_npc('???')",
+                  "color_pos('F-7')",
+                  "color_npc('Conflux #04')"
+                ],
+                "checked_when": ["findKeyItem('gory scorpion claw')"],
+                "id": "hedetet"
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s/%s)",
+                  "color_item('Venomous Scorpion Stinger')",
+                  "color_mob('Canyon Scorpion')",
+                  "color_pos('F-7')",
+                  "color_pos('G-8')"
+                ],
+                "id": "canyon_scorpion",
+                "checked_when": ["findItem('Venomous Scorpion Stinger')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s, %s)",
+                  "color_item('Acidic Humus')",
+                  "color_mob('Gancanagh')",
+                  "color_npc('???')",
+                  "color_pos('H-8')",
+                  "color_npc('Conflux #02')"
+                ],
+                "id": "gancanagh",
+                "checked_when": ["findItem('Acidic Humus')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s)",
+                  "color_item('Alkaline Humus')",
+                  "color_mob('Pachypodium')",
+                  "color_pos('I-8')"
+                ],
+                "id": "pachypodium",
+                "checked_when": ["findItem('Alkaline Humus')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s) (%s)",
+                  "color_ki('Mossy Adamantoise Shell')",
+                  "color_mob('Chukwa')",
+                  "color_pos('E-5')",
+                  "color_pos('F-5')",
+                  "color_number('10-15 min.')"
+                ],
+                "checked_when": ["findKeyItem('mossy adamantoise shell')"],
+                "id": "chukwa"
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, %s)",
+                  "findKeyItem('overgrown mandragora flower') and findKeyItem('gory scorpion claw') and findKeyItem('mossy adamantoise shell') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Chloris')",
+                  "color_npc('???')",
+                  "color_pos('I-8')",
+                  "color_npc('Conflux #08')"
+                ],
+                "id": "chloris",
+                "checked_when": [
+                  "findKeyItem('overgrown mandragora flower') and findKeyItem('gory scorpion claw') and findKeyItem('mossy adamantoise shell')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

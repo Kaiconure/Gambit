@@ -1,0 +1,47 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/amphitrite",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.amphitrite)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "amphitrite": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_amphitrite",
+            "name": "Abyssea Grauberg: Amphitrite",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item('Card of Wieldance')", "color_mob('Amphitrite')", "color_pos('F-10')"],
+                "id": "card_of_wieldance",
+                "checked_when": ["findItem('Card of Wieldance')"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Jewel of Wieldance')", "color_mob('Amphitrite')", "color_pos('F-10')"],
+                "id": "jewel_of_wieldance",
+                "checked_when": ["findItem('Jewel of Wieldance')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Variegated Uragnite Shell')", "color_mob('Melo Melo')", "color_pos('G-11')"],
+                "id": "melo_melo",
+                "checked_when": ["findKeyItem('variegated uragnite shell')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('variegated uragnite shell') and color_green('ready') or color_yellow('not ready')", "color_mob('Amphitrite')", "color_npc('??? at F-10')"],
+                "id": "amphitrite",
+                "checked_when": ["findKeyItem('variegated uragnite shell')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

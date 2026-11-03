@@ -1,0 +1,57 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/koios",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.koios)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "koios": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_koios",
+            "name": "Abyssea Altepa: Koios",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Ravager's Seal: Body\")", "color_mob('Koios')"],
+                "id": "ravager_seal_body",
+                "checked_when": ["findItem(\"Ravager's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Ferine Seal: Body')", "color_mob('Koios')"],
+                "id": "ferine_seal_body",
+                "checked_when": ["findItem('Ferine Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Cirque Seal: Body')", "color_mob('Koios')"],
+                "id": "cirque_seal_body",
+                "checked_when": ["findItem('Cirque Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Caller's Seal: Body\")", "color_mob('Koios')"],
+                "id": "callers_seal_body",
+                "checked_when": ["findItem(\"Caller's Seal: Body\")"]
+              },
+              {
+                "format": ["   • %s→rest to spawn %s", "color_ki('Colorful Demilune Abyssite')", "color_mob('Koios')"],
+                "id": "colorful_demilune_abyssite",
+                "checked_when": ["findKeyItem('colorful demilune abyssite')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('colorful demilune abyssite') and color_green('ready') or color_yellow('not ready')", "color_mob('Koios')", "color_pos('north of Flux #5')"],
+                "id": "koios",
+                "checked_when": ["findKeyItem('colorful demilune abyssite')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

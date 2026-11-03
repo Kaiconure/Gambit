@@ -147,6 +147,8 @@ These functions are related to the use of job abilities.
 
 ## Item Functions
 
+`findKeyItem(nameOrId)` returns the key-item resource only if you currently own it, otherwise nil. It also sets `key_item` on success and clears it on failure. For example, `findKeyItem('chipped sandworm tooth')` or `findKeyItem(1477)` checks the same Abyssea key item. Name lookup uses the shared resource cache; ownership is read live on each call, including after acquiring or consuming a key item. This context helper differs from the internal resource-only lookup of the same name.
+
 These functions are related to the use of items.
 
 - `canUseItem(name1, name2, ... , nameN)` - Results in the first usable item from the list of provided items that is ready to be used, or nil if none are usable. Typically used in the `when` condition to determine if an item can be used. The match will be saved to the context symbol `item`, and subsequent calls to `useItem` without an item name will use this instead. 

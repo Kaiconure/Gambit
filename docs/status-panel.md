@@ -250,11 +250,13 @@ evaluation:
 | Helper | Result |
 |---|---|
 | `color_text(text, r, g, b)` | Wrap text in RGB color markup; components are integers from 0 to 255 |
-| `color_mob(mob)` | Color the mob's name; unavailable/invalid targets return gray `--` |
+| `color_mob(mobOrName)` | Color a live mob's name by state, or a string such as `color_mob('Amarok')` in the unengaged-monster color; unavailable/invalid mob objects return gray `--` |
 | `color_skillchain(chain)` | Color a skillchain name or an object's `name`; missing names return gray `--` |
 | `color_element(object)` | Color an object's `name` using its `element`; missing/invalid elements leave the name unchanged |
 | `color_number(value)` | Color a number or preformatted numeric string in pale gold |
 | `color_status(status)` | Casting in pending gold, interrupted in red, completed in green; unknown statuses use body color |
+| `color_item(text)` | Item text in RGB `188, 241, 114` |
+| `color_ki(text)` | Key-item text in RGB `179, 154, 255` |
 | `color_latest(text)` | Color text using the most recent color chosen by either helper above |
 
 Players outside your party/alliance are white; party/alliance players are
@@ -392,7 +394,7 @@ pointer is over its icon or row. A checklist takes precedence over both
 `expression` and `value`; those fields are ignored when `checklist` is present.
 An empty checklist hides the entry, including its heading.
 
-The checklist requires an `id`. Each item requires single-line `text` and may
+The checklist requires an `id`. Each item requires `format`, a string `expression`, or single-line `text` and may
 provide an `id`; omitted IDs become `objective_1`, `objective_2`, and so on using
 their position in the array. Explicit item IDs remain stable when you reorder
 objectives. IDs start with a letter or underscore and contain only letters,
@@ -417,6 +419,66 @@ to be currently displayed. Direct variable access remains available at the path
 above; event handlers can use `setVarGlobal` for that lower-level interface.
 
 Code-driven changes appear on the next panel refresh; clicks refresh immediately.
+
+### Automatically checked objectives
+
+Checklist labels accept `format`, `expression`, or `text`, in that order of precedence. A `format` array starts with a literal format string; remaining entries are argument expressions. Keep static text directly in the format string:
+
+```json
+{
+  "id": "tooth",
+  "format": [
+    "%s: %s (E-6, Conflux #07)",
+    "color_ki('Steaming Cerberus Tongue (KI)')",
+    "color_mob('Amarok')"
+  ],
+  "checked_when": ["findKeyItem('steaming cerberus tongue')"]
+}
+```
+
+Arguments evaluate in order and each supplies one value to Lua's `string.format`. A format-string-only array is also supported. Argument expressions compile when rows are built, reevaluate on refresh, and share `color_latest` within the same item. Invalid expressions or format mismatches show `[error]`.
+
+Alternatively, use a single panel `expression`. It takes precedence over `text` when both are present. Expressions compile when rows are built and reevaluate on refresh, with all panel color helpers available:
+
+```json
+{
+  "id": "tooth",
+  "expression": "color_ki('Chipped sandworm tooth')",
+  "checked_when": ["findKeyItem('chipped sandworm tooth')"]
+}
+```
+
+Each item stays on one line; newline characters in results become spaces. A nil result gives an empty label, while evaluation/compilation errors show `[error]`. Label expressions do not change click behavior: only `checked_when` makes an item condition-controlled.
+
+Add `checked_when` to an individual checklist item to derive its check mark from conditions instead of manual state:
+
+```json
+{
+  "id": "abyssea_items",
+  "name": "Abyssea key items",
+  "checklist": [
+    {
+      "id": "sandworm_tooth",
+      "text": "Chipped sandworm tooth",
+      "checked_when": ["findKeyItem('chipped sandworm tooth')"]
+    },
+    {
+      "id": "both_pieces",
+      "text": "Both sandworm pieces",
+      "checked_when": [
+        "findKeyItem('chipped sandworm tooth')",
+        "findKeyItem('sodden sandworm husk')"
+      ]
+    }
+  ]
+}
+```
+
+Every expression must return a truthy Lua value. Conditions run in order and stop at the first false/nil result or error. They compile when tracking rows are built and reevaluate on panel refresh, so consuming an item unchecks the objective again. An empty condition array is always checked. Invalid expressions or unavailable context leave the objective unchecked.
+
+Condition-controlled rows do not toggle on click or show the clickable hover highlight. Their displayed state overrides the manual checklist variable without writing to it; `checklistSet`/`checklistGet` continue to manage manual state. Omit `checked_when` to retain normal clickable behavior.
+
+Use `findItem('item name')` for ordinary inventory items or `findKeyItem('key item name')` for owned key items. Both can return a resource/item table as a truthy condition. These lookups do not consume the item.
 Sets with the same checklist and item IDs share state. Switching tracking sets or
 changing panel preferences does not clear that state. Completion is runtime
 variable state, not a saved panel preference; initialize or reset it through

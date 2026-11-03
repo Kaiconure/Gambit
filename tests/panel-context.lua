@@ -5,6 +5,12 @@ local context={}
 local reset=PanelContext.attach(context)
 assert(context.color_text('Ready',1,2,3)=='\\cs(1,2,3)Ready\\cr')
 assert(context.color_latest('More')=='\\cs(1,2,3)More\\cr')
+assert(context.color_mob('Amarok')=='\\cs(241,241,183)Amarok\\cr')
+assert(context.color_latest(' nearby')=='\\cs(241,241,183) nearby\\cr')
+assert(context.color_item('Potion')=='\\cs(188,241,114)Potion\\cr')
+assert(context.color_latest(' item')=='\\cs(188,241,114) item\\cr')
+assert(context.color_ki('chipped sandworm tooth')=='\\cs(179,154,255)chipped sandworm tooth\\cr')
+assert(context.color_latest(' key item')=='\\cs(179,154,255) key item\\cr')
 assert(context.color_mob(nil)=='\\cs(160,160,160)--\\cr')
 assert(context.color_latest(' missing')=='\\cs(160,160,160) missing\\cr')
 for flag,role in pairs({is_pet='target_idle',is_trust='target_npc',is_player='target_other_player',is_mob='target_idle',is_npc='target_npc'}) do

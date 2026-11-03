@@ -1,0 +1,68 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/adze",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.adze)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "adze": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_adze",
+            "name": "Abyssea Tahrongi: Adze",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s/%s)",
+                  "color_ki('Sticky Gnat Wing')",
+                  "color_mob('Adze')",
+                  "color_pos('F-5')",
+                  "color_pos('G-5')"
+                ],
+                "id": "sticky_gnat_wing",
+                "checked_when": ["findKeyItem('sticky gnat wing')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item(\"Raider's Seal: Legs\")",
+                  "color_mob('Adze')",
+                  "color_pos('G-5')"
+                ],
+                "id": "raider_seal_legs",
+                "checked_when": ["findItem(\"Raider's Seal: Legs\")"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item(\"Aoidos' Seal: Hands\")",
+                  "color_mob('Adze')",
+                  "color_pos('G-5')"
+                ],
+                "id": "aoidos_seal_hands",
+                "checked_when": ["findItem(\"Aoidos' Seal: Hands\")"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s, timed spawn)",
+                  "color_green('ready')",
+                  "color_mob('Adze')",
+                  "color_pos('G-5')"
+                ],
+                "id": "adze",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

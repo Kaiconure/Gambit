@@ -13,6 +13,7 @@ local observations=require('./lib/action-observation')
 local actionWait=require('./lib/action-wait')
 local trace=require('./lib/events/weapon-skill-trace')
 local verify=require('./lib/events/verification')
+local discovery=require('./lib/events/discovery')
 local Service={}
 Service.__index=Service
 local outgoing={ [3]={'spell','spells'},[7]={'weapon_skill','weapon_skills'},[9]={'job_ability','job_abilities'} }
@@ -30,11 +31,23 @@ function Service.new(deps)
             return result
         end)
     end
-    listen('outgoing chunk',function(...) return self:outgoing(...) end)
+    listen('outgoing chunk',function(id,original,modified,injected,blocked)
+        local result=self:outgoing(id,original,modified,injected,blocked)
+        if discovery.active() then discovery.packet(id,original,modified,injected,blocked or result,deps,'outgoing') end
+        return result
+    end)
     listen('action',function(action) self:action(action) end)
-    listen('incoming chunk',function(...)
-        self:incoming(...)
-        if self.transitionIncoming then self.transitionIncoming(...) end
+    listen('incoming chunk',function(id,original,modified,injected,blocked)
+        self:incoming(id,original,modified,injected,blocked)
+        if self.transitionIncoming then self.transitionIncoming(id,original,modified,injected,blocked) end
+        if discovery.active() then discovery.packet(id,original,modified,injected,blocked,deps) end
+    end)
+    listen('incoming text',function(original,modified,mode)
+        if discovery.active() then
+            local data=discovery.context(deps.windower.ffxi)
+            data.original=original; data.modified=modified; data.mode=mode
+            discovery.record('text',data)
+        end
     end)
     listen('prerender',function()
         if verify.active() then verify.tick() end
@@ -143,6 +156,30 @@ function Service:weaponSkillTrace(command)
     local path=paths.writePath(player.name,'.output/ws-trace-'..os.date('%Y%m%d-%H%M%S')..'.json')
     self.deps.writeProcessed(path,result)
     return 'Weapon skill trace saved: '..path
+end
+function Service:discovery(command)
+    local deps=self.deps
+    local player=deps.windower.ffxi.get_player()
+    if command=='start' then
+        if self.discoveryResult then return 'Save the pending discovery recording with gbt events discover stop first.' end
+        if not player then return 'Log in before starting a discovery recording.' end
+        local metadata=discovery.context(deps.windower.ffxi)
+        metadata.player={id=player.id,name=player.name}
+        metadata.started_at=os.date('!%Y-%m-%dT%H:%M:%SZ')
+        if not discovery.start(deps.clock,metadata) then return 'A discovery recording already exists; stop/save it first.' end
+        return 'Discovery recording started (maximum 8192 entries). Reproduce hints/procs, then use gbt events discover stop.'
+    end
+    if command~='stop' then return 'Usage: gbt events discover [start|stop]' end
+    self.discoveryResult=self.discoveryResult or discovery.stop()
+    if not self.discoveryResult then return 'No discovery recording is active.' end
+    assert(deps.writeProcessed,'Discovery file writer is unavailable')
+    self.discoverySequence=(self.discoverySequence or 0)+1
+    local name=self.discoveryResult.metadata.player.name
+    local path=paths.writePath(name,'.output/discovery-'..os.date('%Y%m%d-%H%M%S')..'-'..self.discoverySequence..'.json')
+    deps.writeProcessed(path,self.discoveryResult)
+    local truncated=self.discoveryResult.truncated
+    self.discoveryResult=nil
+    return 'Discovery recording saved: '..path..(truncated and ' (entry limit reached; capture truncated)' or '')
 end
 function Service:loadingTick()
     local runtime=self.loadingPending
@@ -372,6 +409,7 @@ function Service:selfResultAction(action)
 end
 function Service:action(action)
     if not action then return end
+    if discovery.active() then discovery.action(action,self.deps.windower.ffxi,self.deps.resources) end
     if self.deps.externalSelfResults and (action.category==3 or action.category==6 or action.category==14) then
         local player=self.deps.windower.ffxi.get_player()
         if player and action.actor_id==player.id then return end
@@ -439,6 +477,7 @@ function Service:incoming(id,original,modified,injected,blocked)
     self:reject(nil,messageId(packet.Message))
 end
 function Service:destroy()
+    discovery.stop()
     self:clear('unloaded')
     if verify.active() then verify.stop() end
     self.runtime=nil

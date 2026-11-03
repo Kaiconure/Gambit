@@ -1,0 +1,72 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ironclad-triturator",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ironclad_triturator)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ironclad_triturator": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ironclad_triturator",
+            "name": "Abyssea Uleguerand: Ironclad Triturator",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Ferine Seal: Body')", "color_mob('Ironclad Triturator')"],
+                "id": "ferine_seal_body",
+                "checked_when": ["findItem('Ferine Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Tantra Seal: Body')", "color_mob('Ironclad Triturator')"],
+                "id": "tantra_seal_body",
+                "checked_when": ["findItem('Tantra Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Estoqueur's Seal: Hands\")", "color_mob('Koghatu')"],
+                "id": "estoqueurs_seal_hands",
+                "checked_when": ["findItem(\"Estoqueur's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Goetia Seal: Hands')", "color_mob('Koghatu')"],
+                "id": "goetia_seal_hands",
+                "checked_when": ["findItem('Goetia Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Orison Seal: Hands')", "color_mob('Koghatu')"],
+                "id": "orison_seal_hands",
+                "checked_when": ["findItem('Orison Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Bevel Gear')", "color_mob('Koghatu')"],
+                "id": "bevel_gear",
+                "checked_when": ["findItem('Bevel Gear')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Helical Gear')", "color_mob('Mechanical Menace')"],
+                "id": "helical_gear",
+                "checked_when": ["findItem('Helical Gear')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Gear Fluid')", "color_mob('Sub-zero Gear')"],
+                "id": "gear_fluid",
+                "checked_when": ["findItem('Gear Fluid')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Bevel Gear') and findItem('Gear Fluid') and color_green('ready') or color_yellow('not ready')", "color_mob('Ironclad Triturator')", "color_npc('??? at H-8')"],
+                "id": "ironclad_triturator",
+                "checked_when": ["findItem('Bevel Gear') and findItem('Gear Fluid')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

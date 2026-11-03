@@ -1,0 +1,23 @@
+{
+  "vars": {
+    "checklists": {
+      "abyssea": {}
+    }
+  },
+  "imports": [
+    "checklists/abyssea/alfard",
+    "checklists/abyssea/apademak",
+    "checklists/abyssea/briareus",
+    "checklists/abyssea/bukhis",
+    "checklists/abyssea/chloris",
+    "checklists/abyssea/cirein-croin",
+    "checklists/abyssea/glavoid",
+    "checklists/abyssea/itzpapalotl",
+    "checklists/abyssea/kukulkan",
+    "checklists/abyssea/lacovie",
+    "checklists/abyssea/orthrus",
+    "checklists/abyssea/sedna",
+    "checklists/abyssea/sobek",
+    "checklists/abyssea/ulhuadshi"
+  ]
+}

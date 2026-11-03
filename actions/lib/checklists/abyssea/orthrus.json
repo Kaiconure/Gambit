@@ -1,0 +1,94 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/orthrus",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.orthrus)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "orthrus": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_orthrus",
+            "name": "Abyssea Altepa: Orthrus",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Steaming cerberus tongue')",
+                  "color_mob('Amarok')",
+                  "color_npc('???')",
+                  "color_pos('E-6')",
+                  "color_npc('Conflux #07')"
+                ],
+                "checked_when": ["findKeyItem('steaming cerberus tongue')"],
+                "id": "amarok"
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s/%s)",
+                  "color_item('H.Q. Dhalmel Hide')",
+                  "color_mob('Camelopardalis')",
+                  "color_pos('G-7')",
+                  "color_pos('F-7')"
+                ],
+                "id": "camelopardalis",
+                "checked_when": ["findItem('H.Q. Dhalmel Hide')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s/%s) (%s)",
+                  "color_item('Tiger King Hide')",
+                  "color_mob('Ansherekh')",
+                  "color_pos('F-8')",
+                  "color_pos('G-8')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "ansherekh",
+                "checked_when": ["findItem('Tiger King Hide')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Sharabha Hide')",
+                  "color_mob('Sharabha')",
+                  "color_npc('???')",
+                  "color_pos('G-5')"
+                ],
+                "id": "sharabha",
+                "checked_when": ["findItem('Sharabha Hide')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s)",
+                  "color_item('Sand-caked Fang')",
+                  "color_mob('Dune Manticore')",
+                  "color_pos('F-6')"
+                ],
+                "id": "dune_manticore",
+                "checked_when": ["findItem('Sand-caked Fang')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, SE corner)",
+                  "findKeyItem('steaming cerberus tongue') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Orthrus')",
+                  "color_npc('???')",
+                  "color_pos('F-6')"
+                ],
+                "id": "orthrus",
+                "checked_when": ["findKeyItem('steaming cerberus tongue')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

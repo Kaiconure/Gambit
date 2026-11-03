@@ -314,6 +314,12 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
 
         for i = #actions, 1, -1 do
             local action = actions[i]
+            -- Top-level imports accept concise references as well as full
+            -- action objects. Executable sections still require objects.
+            if actionType=='imports' and type(action)=='string' then
+                action={import=action}
+                actions[i]=action
+            end
             variableScopes.prepare(baseActions, action)
             action.filter = action.filter or {}
 
@@ -429,12 +435,31 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                 end                        
                                 import.macros = nil
 
+                                -- Library-level imports belong to the non-executable
+                                -- imports area, not the caller's action position.
+                                if type(import.imports)=='table' then
+                                    for _,entry in ipairs(import.imports) do
+                                        if type(entry)=='string' then entry={import=entry} end
+                                        assert(type(entry)=='table','Library imports must contain import objects')
+                                        entry._slotContribution=action._slotContribution
+                                        actionPreconditions.inherit(action,entry)
+                                        variableScopes.inherit(action,entry)
+                                        entry.importedFrom=action_import
+                                        baseActions.imports[#baseActions.imports+1]=entry
+                                        baseActions._pendingLibraryImports=true
+                                    end
+                                end
+                                import.imports=nil
+
                                 -- Pull in functions actions
                                 if type(import.functions) == 'table' and #import.functions > 0 then
                                     -- If there are functions, we will insert them in-place after setting the as_function property. They will
                                     -- be processed properly on the next pass.
-                                    for _, fn in ipairs(import.functions) do
+                                    for functionIndex, fn in ipairs(import.functions) do
                                         if type(fn) == 'table' then
+                                            fn.id=fn.id or string.lower('$path=%s,$section=functions,$index=%d':format(fileName,functionIndex))
+                                            if action._slotContribution then fn.id=fn.id..',slot='..action._slotContribution end
+                                            fn.discriminator=string.lower('%s,$type=functions':format(fn.id))
                                             fn.as_function = true
                                             imported = true
                                             fn._slotContribution = action._slotContribution
@@ -451,8 +476,11 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                 if type(import.loading) == 'table' and #import.loading > 0 then
                                     -- If there are loading actions, we will insert them in place after setting the on_load property. They will
                                     -- be processed properly on the next pass.
-                                    for _, ld in ipairs(import.loading) do
+                                    for loadingIndex, ld in ipairs(import.loading) do
                                         if type(ld) == 'table' then
+                                            ld.id=ld.id or string.lower('$path=%s,$section=loading,$index=%d':format(fileName,loadingIndex))
+                                            if action._slotContribution then ld.id=ld.id..',slot='..action._slotContribution end
+                                            ld.discriminator=string.lower('%s,$type=loading':format(ld.id))
                                             ld.on_load = true
                                             imported = true
                                             ld._slotContribution = action._slotContribution
@@ -801,6 +829,24 @@ local function loadActionImports(playerName, actions, player, sourceFile)
             end
         end
 
+        -- A library discovered in a late section (including functions or slot
+        -- contributions) can add imports after that area was already visited.
+        local function drainLibraryImports()
+            local rounds=0
+            while actions._pendingLibraryImports do
+                actions._pendingLibraryImports=nil
+                rounds=rounds+1
+                assert(rounds<=MAX_PASSES,'Maximum library import depth exceeded')
+                for _,area in ipairs({'imports','loading','functions'}) do
+                    local passes=0
+                    while _loadActionImportsInternal(playerName,actions,area,passes+1,player,variables) do
+                        passes=passes+1
+                        assert(passes<=MAX_PASSES,'Maximum library import depth exceeded')
+                    end
+                end
+            end
+        end
+        drainLibraryImports()
         actionSlots.addAutomatic(actions, types)
         actions._slots.expand(types)
         -- Resolve contributed imports through the same loader as ordinary imports.
@@ -811,6 +857,8 @@ local function loadActionImports(playerName, actions, player, sourceFile)
                 assert(passes <= MAX_PASSES, 'Maximum contribution import depth exceeded')
             end
         end
+        drainLibraryImports()
+        actions._pendingLibraryImports=nil
         actions._slots = nil
         -- Distinct occurrences must not share discriminator-based scheduler/error state.
         for _, actionType in ipairs(types) do
@@ -1077,7 +1125,7 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     local subJob = player.sub_job
 
     if actions == nil then
-        local locations = settingsPaths.candidates(player.name, 'actions')
+        local locations = settingsPaths.entryPointLayers(player.name, 'actions')
         locations[#locations + 1] = './actions/standard'
         actionsFileName, actionsName = actionEntryPoints.find(
             locations, mainJob, subJob, targetSelectors.entryPointGroups(mainJob, loadingLeader),

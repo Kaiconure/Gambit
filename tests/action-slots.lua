@@ -336,3 +336,60 @@ replacement.imports={{import='discarded-priority'}}
 load('Tester',replacement,player,'entry')
 assert(#replacement.battle==1 and replacement.battle[1].commands[1]=='retained()')
 print('PASS: stable numeric/alias priorities, contiguous imported blocks, slot boundaries, replacement selection and validation')
+
+documents['library-parent']={
+    imports={{imports={'library-child'}}},
+    actions={{commands={'in_place()'}}},
+}
+documents['library-child']={
+    imports={{import='library-grandchild'}},
+    vars={library_value=42},macros={library_macro={'macro()'}},
+    functions={{name='library_function',commands={'function_body()'}}},
+    loading={{commands={'load_body()'}}},
+    actions={{commands={'must_not_enter_battle()'}}},
+}
+documents['library-grandchild']={functions={{name='nested_library_function',commands={'nested_body()'}}}}
+for _,area in ipairs({'battle','functions'}) do
+    local subject={[area]={{import='library-parent',with_vars={library_scope={value=7}},precondition='library_gate()'}}}
+    load('Tester',subject,player,'entry')
+    assert(subject.vars.library_value==42 and subject.macros.library_macro[1]=='macro()')
+    local found={}
+    for _,fn in ipairs(subject.functions) do if fn.name then found[fn.name]=fn end end
+    assert(found.library_function and found.nested_library_function)
+    assert(found.library_function._variableScope and found.nested_library_function._variableScope)
+    local inherited=preconditions.collect(found.nested_library_function)
+    assert(inherited[1].expression=='library_gate()')
+    for _,action in ipairs(subject.battle) do
+        assert(action.commands[1]~='must_not_enter_battle()')
+    end
+    if area=='battle' then assert(#subject.battle==1 and subject.battle[1].commands[1]=='in_place()') end
+    assert(#subject.loading==1 and subject.loading[1].commands[1]=='load_body()')
+end
+documents['library-loop']={imports={{import='library-loop'}}}
+assert(not pcall(load,'Tester',{imports={{import='library-loop'}}},player,'entry'))
+print('PASS: library top-level imports remain non-executable, recurse across late sections, inherit scopes/preconditions, and bound cycles')
+
+documents['short-library']={imports={'short-child',{import='library-grandchild'}},
+    functions={{name='short_parent',commands={'parent()'}}}}
+documents['short-child']={vars={short_value=123},functions={{name='short_child',commands={'child()'}}}}
+local function shortResult(imports)
+    local subject={imports=imports}
+    load('Tester',subject,player,'entry')
+    assert(subject.vars.short_value==123 and #subject.battle==0)
+    local names={}
+    for _,fn in ipairs(subject.functions) do if fn.name then names[#names+1]=fn.name end end
+    return table.concat(names,',')
+end
+assert(shortResult({'short-library',{import='library-grandchild'}})==
+    shortResult({{import='short-library'},{imports={'library-grandchild'}}}))
+local scopedShort={battle={{import='short-library',with_vars={short_scope={enabled=true}},precondition='short_gate()'}}}
+load('Tester',scopedShort,player,'entry')
+local matched=false
+for _,fn in ipairs(scopedShort.functions) do
+    if fn.name=='short_child' then
+        assert(fn._variableScope and preconditions.collect(fn)[1].expression=='short_gate()')
+        matched=true
+    end
+end
+assert(matched)
+print('PASS: direct-string and mixed top-level imports match object ordering and preserve nested dependency scopes')

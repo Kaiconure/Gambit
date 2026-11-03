@@ -1,0 +1,60 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ruminator",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ruminator)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ruminator": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ruminator",
+            "name": "Abyssea La Theine: Ruminator",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s/%s)",
+                  "color_item('Card of Voyage')",
+                  "color_mob('Ruminator')",
+                  "color_pos('F-9')",
+                  "color_pos('J-9')"
+                ],
+                "id": "card_of_voyage",
+                "checked_when": ["findItem('Card of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s)",
+                  "color_item('Stone of Voyage')",
+                  "color_mob('Ruminator')",
+                  "color_pos('F-9')",
+                  "color_pos('J-9')"
+                ],
+                "id": "stone_of_voyage",
+                "checked_when": ["findItem('Stone of Voyage')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s/%s; Scarlet demilune abyssite)",
+                  "findKeyItem('scarlet demilune abyssite') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Ruminator')",
+                  "color_pos('F-9')",
+                  "color_pos('J-9')"
+                ],
+                "id": "ruminator",
+                "checked_when": ["findKeyItem('scarlet demilune abyssite')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

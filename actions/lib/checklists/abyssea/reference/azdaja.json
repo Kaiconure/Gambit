@@ -1,0 +1,52 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/azdaja",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.azdaja)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "azdaja": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_azdaja",
+            "name": "Abyssea Grauberg: Azdaja",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item(\"Azdaja's Horn\")", "color_mob('Azdaja')", "color_pos('C-8')"],
+                "id": "azdajas_horn",
+                "checked_when": ["findItem(\"Azdaja's Horn\")"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Stone of Wieldance')", "color_mob('Azdaja')", "color_pos('C-8')"],
+                "id": "stone_of_wieldance",
+                "checked_when": ["findItem('Stone of Wieldance')"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Coin of Wieldance')", "color_mob('Azdaja')", "color_pos('C-8')"],
+                "id": "coin_of_wieldance",
+                "checked_when": ["findItem('Coin of Wieldance')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Vacant Bugard Eye')", "color_mob('Deelgeed')", "color_pos('F-9')"],
+                "id": "deelgeed",
+                "checked_when": ["findKeyItem('vacant bugard eye')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('vacant bugard eye') and color_green('ready') or color_yellow('not ready')", "color_mob('Azdaja')", "color_npc('??? at C-8')"],
+                "id": "azdaja",
+                "checked_when": ["findKeyItem('vacant bugard eye')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

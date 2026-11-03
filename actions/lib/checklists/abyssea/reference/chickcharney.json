@@ -1,0 +1,57 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/chickcharney",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.chickcharney)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "chickcharney": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_chickcharney",
+            "name": "Abyssea Altepa: Chickcharney",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Creed Seal: Hands')", "color_mob('Chickcharney')"],
+                "id": "creed_seal_hands",
+                "checked_when": ["findItem('Creed Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Estoqueur's Seal: Hands\")", "color_mob('Chickcharney')"],
+                "id": "estoqueurs_seal_hands",
+                "checked_when": ["findItem(\"Estoqueur's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Raider's Seal: Hands\")", "color_mob('Chickcharney')"],
+                "id": "raiders_seal_hands",
+                "checked_when": ["findItem(\"Raider's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Unkai Seal: Hands')", "color_mob('Chickcharney')"],
+                "id": "unkai_seal_hands",
+                "checked_when": ["findItem('Unkai Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('High-Quality Cockatrice Skin')", "color_mob('Dune Cockatrice')"],
+                "id": "dune_cockatrice",
+                "checked_when": ["findItem('High-Quality Cockatrice Skin')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('High-Quality Cockatrice Skin') and color_green('ready') or color_yellow('not ready')", "color_mob('Chickcharney')", "color_npc('??? at I-9')"],
+                "id": "chickcharney",
+                "checked_when": ["findItem('High-Quality Cockatrice Skin')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

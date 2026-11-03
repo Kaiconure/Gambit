@@ -1,0 +1,52 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/karkadann",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.karkadann)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "karkadann": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_karkadann",
+            "name": "Abyssea Uleguerand: Karkadann",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item('Card of Wieldance')", "color_mob('Karkadann')", "color_pos('G-8')"],
+                "id": "card_of_wieldance",
+                "checked_when": ["findItem('Card of Wieldance')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Malodorous Marid Fur')", "color_mob('Ayravata')", "color_pos('I-8')"],
+                "id": "ayravata",
+                "checked_when": ["findKeyItem('malodorous marid fur')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Warped Smilodon Choker')", "color_mob('Rakshas')", "color_pos('G-8')"],
+                "id": "rakshas",
+                "checked_when": ["findKeyItem('warped smilodon choker')"]
+              },
+              {
+                "format": ["      • %s←%s (%s)", "color_item('Black Whisker')", "color_mob('Slaughterous Smilodon')", "color_number('Abyssea - Vunkerl')"],
+                "id": "slaughterous_smilodon",
+                "checked_when": ["findItem('Black Whisker')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('malodorous marid fur') and findKeyItem('warped smilodon choker') and color_green('ready') or color_yellow('not ready')", "color_mob('Karkadann')", "color_npc('??? at G-8')"],
+                "id": "karkadann",
+                "checked_when": ["findKeyItem('malodorous marid fur') and findKeyItem('warped smilodon choker')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

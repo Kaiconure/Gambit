@@ -460,7 +460,8 @@ state_manager.setPartyWeaponSkill = function(self, actor, skill, mob)
     local mobId = tonumber(type(mob) == 'table' and mob.id)
     if mobId then
         if actor and skill then
-            if isMobPlayer(actor) then  
+            -- Trusts can open/continue player skillchains just like party PCs.
+            if isMobPlayer(actor) or actor.spawn_type == SPAWN_TYPE_TRUST then
 
                 -- writeMessage('Adding WS tracking of %s\'s %s on %s':format(
                 --     text_mob(actor.name, Colors.verbose),

@@ -1274,3 +1274,8 @@ interrupted, and rejected actions in game before relying on a new setup.
 
 For more details, see [the event guide](events.md),
 [equipment](equipment.md), and [commands](commands.md).
+## Export a baseline from equipped gear
+
+Use `//gbt events save-gear` (or `//gbt events sg`) while wearing your desired baseline set. Gambit writes a two-space-indented file to `settings/<player>/data/<job>-<timestamp>.vars.json`, adding a numeric suffix if needed. The location is global character data even when a namespace is active.
+
+The file contains only `vars.gear["csv(battle, idle)"]`, with every equipped slot's name and decoded augments. Empty slots and inventory-location metadata are omitted. Wait until equipment has settled before exporting. The command does not equip anything or load the generated file automatically; copy the gear into your event vars file, or move/rename the generated file to the appropriate events vars location after reviewing it.

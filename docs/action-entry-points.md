@@ -1,38 +1,53 @@
 # Automatic action entry points
 
-When no explicit action set is selected, Gambit searches for these entry points
-in order:
+When no explicit action set is selected, Gambit searches resolution layers in
+order: active namespace, each inherited namespace, global character settings,
+global shared settings, and shipped `actions/standard`. The first layer with a
+matching entry point wins. Within each layer, selectors are searched in order:
 
 1. Job/sub-job, such as `blm-rdm.json`.
 2. Job, such as `blm.json`.
 3. Matching role selectors, such as `(mages).json`.
 4. Matching inverse role selectors, such as `(~mages).json` for jobs outside the mages group.
 5. `(all).json`.
-6. The existing `actions/defaults/default-actions.json` starter fallback.
 
-Each stage searches all applicable locations: active namespace, inherited
-namespaces, base settings, and shipped standard actions. Character-specific
-locations precede shared locations. An inherited job file therefore wins over
-an ordinary role or catch-all file in a child namespace.
+If no layer matches, Gambit uses the existing
+`actions/defaults/default-actions.json` starter fallback.
+
+Each named namespace is one layer containing both
+`settings/_ns/<namespace>/players/<player>/actions` and
+`settings/_ns/<namespace>/actions`. For each selector, the character directory
+is checked before the shared directory. Thus a namespace's shared `blm.json`
+beats its character-specific `(all).json`, while a character `blm.json` wins
+over the shared `blm.json`. A child namespace's `(all).json` beats any inherited
+or shipped job-specific file.
+
+Global `settings/<player>/actions` and `settings/actions` are separate fallback
+layers; global character folders do not use a `players` subdirectory. For an
+inheritance chain C → B → A, resolution searches C, B, A, global character,
+global shared, then shipped standard actions.
 
 Role filenames reuse target-selector job membership: `melee`, `ranged`, `mage`,
 `healer`, `nuker`, `support`, and `tank`, including the aliases `mages`, `healers`,
 `nukers`, and `tanks`. Use these filenames inside an `actions` folder. On Windows,
 filename matching is case-insensitive. Multiple matching role files at one
-location are considered alphabetically. Only one entry point is loaded.
+layer are ordered by group size (smaller matching sets first), with the existing
+selector order breaking ties. Only one entry point is loaded.
 
-Positive role matches across all locations take precedence over inverse matches,
-so an inherited `(melee).json` beats a local `(~mages).json` for PLD. Inverse
-matches search closest locations first, alphabetically within each location.
+Positive role matches take precedence over inverse matches within a layer.
+An inverse match in a child namespace still beats a positive match in a parent.
+Inverse specificity uses the size of the complementary job set.
 Inverse selectors support the job groups and aliases listed above, including
 `melee_dps`; inverse leader and combined important/inverse syntax are not supported.
 
 ## Important entry points
 
-Use `(!mages).json` or `(!all).json` to override entry points from lower-priority
-locations. Exact job/sub-job and job files at that location or higher-priority
-locations still win. Matching important role files are considered alphabetically,
-before `(!all).json`.
+`(!mages).json` and `(!all).json` retain their important-selector behavior within
+a layer: exact job files at the same or closer character/shared location win,
+but exact files beyond that local override boundary do not. Matching important
+role files use selector specificity before `(!all).json`. Ordinary `(mages)` and
+`(all)` already take precedence over every lower-priority resolution layer;
+an important marker is not needed merely to override an inherited job file.
 
 For example, `bcnm/actions/(!mages).json` wins over an inherited
 `base/actions/blm.json`, but `bcnm/actions/blm.json` wins over both.
