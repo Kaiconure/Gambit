@@ -1,0 +1,153 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/glavoid",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.glavoid)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "glavoid": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_glavoid",
+            "name": "Abyssea Tahrongi: Glavoid",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Fat-lined Cockatrice Skin')",
+                  "color_mob('Alectryon')",
+                  "color_npc('???')",
+                  "color_pos('H-8')",
+                  "color_npc('Conflux #04')"
+                ],
+                "checked_when": ["findKeyItem('fat-lined cockatrice skin')"],
+                "id": "alectryon"
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Quivering Eft Egg')",
+                  "color_mob('Abas')",
+                  "color_npc('???')",
+                  "color_pos('K-10')"
+                ],
+                "id": "abas",
+                "checked_when": ["findItem('Quivering Eft Egg')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s/%s)",
+                  "color_item('Eft Egg')",
+                  "color_mob('Canyon Eft')",
+                  "color_pos('J-10')",
+                  "color_pos('J-11')"
+                ],
+                "id": "canyon_eft",
+                "checked_when": ["findItem('Eft Egg')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Cockatrice Tailmeat')",
+                  "color_mob('Cluckatrice')",
+                  "color_pos('G-7')"
+                ],
+                "id": "cluckatrice",
+                "checked_when": ["findItem('Cockatrice Tailmeat')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s, %s)",
+                  "color_ki('Luxuriant Manticore Mane')",
+                  "color_mob('Muscaliet')",
+                  "color_npc('???')",
+                  "color_pos('J-6')",
+                  "color_npc('Conflux #07')"
+                ],
+                "checked_when": ["findKeyItem('luxuriant manticore mane')"],
+                "id": "muscaliet"
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Smooth Whisker')",
+                  "color_mob('Tefenet')",
+                  "color_npc('???')",
+                  "color_pos('G-6')"
+                ],
+                "id": "tefenet",
+                "checked_when": ["findItem('Smooth Whisker')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s)",
+                  "color_item('Shocking Whisker')",
+                  "color_mob('Jaguarundi')",
+                  "color_pos('H-6')"
+                ],
+                "id": "jaguarundi",
+                "checked_when": ["findItem('Shocking Whisker')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s/%s)",
+                  "color_item('Resilient Mane')",
+                  "color_mob('Hieracosphinx')",
+                  "color_pos('I-6')",
+                  "color_pos('J-6')"
+                ],
+                "id": "hieracosphinx",
+                "checked_when": ["findItem('Resilient Mane')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s) (%s)",
+                  "color_ki('Sticky Gnat Wing')",
+                  "color_mob('Adze')",
+                  "color_pos('F-5')",
+                  "color_pos('G-5')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "adze",
+                "checked_when": ["findKeyItem('sticky gnat wing')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s) (%s)",
+                  "color_ki('Sodden Sandworm Husk')",
+                  "color_mob('Minhocao')",
+                  "color_pos('H-6')",
+                  "color_pos('I-6')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "minhocao",
+                "checked_when": ["findKeyItem('sodden sandworm husk')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, %s)",
+                  "findKeyItem('fat-lined cockatrice skin') and findKeyItem('luxuriant manticore mane') and findKeyItem('sticky gnat wing') and findKeyItem('sodden sandworm husk') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Glavoid')",
+                  "color_npc('???')",
+                  "color_pos('I-5')",
+                  "color_npc('Conflux #08')"
+                ],
+                "id": "glavoid",
+                "checked_when": [
+                  "findKeyItem('fat-lined cockatrice skin') and findKeyItem('luxuriant manticore mane') and findKeyItem('sticky gnat wing') and findKeyItem('sodden sandworm husk')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

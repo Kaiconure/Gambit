@@ -8,21 +8,12 @@
     },
     "^cure_sequence": {
       "silena_targets": null,
-      "suppress_curaga": null,
-      "gear": null
+      "suppress_curaga": null
     }
   },
   "macros": {
-    "set_cure_equip": [
-      "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipPush(vars.cure_sequence.gear.casting)"
-    ],
-    "restore_cure_equip": [
-      "vars.cure_sequence.gear and vars.cure_sequence.gear.casting and equipPop(vars.cure_sequence.gear.casting)"
-    ],
     "cure_member": [
-      "$macro:set_cure_equip",
-      "useSpell(member)",
-      "$macro:restore_cure_equip"
+      "useSpell(member)"
     ]
   },
   "actions": [

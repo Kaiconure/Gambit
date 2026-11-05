@@ -1,0 +1,82 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ovni",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ovni)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ovni": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ovni",
+            "name": "Abyssea La Theine: Ovni",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Card of Voyage')",
+                  "color_mob('Ovni')",
+                  "color_npc('???')",
+                  "color_pos('K-5')"
+                ],
+                "id": "card_of_voyage",
+                "checked_when": ["findItem('Card of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Stone of Voyage')",
+                  "color_mob('Ovni')",
+                  "color_npc('???')",
+                  "color_pos('K-5')"
+                ],
+                "id": "stone_of_voyage",
+                "checked_when": ["findItem('Stone of Voyage')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Bale Seal: Hands')",
+                  "color_mob('Ovni')",
+                  "color_npc('???')",
+                  "color_pos('K-5')"
+                ],
+                "id": "bale_seal_hands",
+                "checked_when": ["findItem('Bale Seal: Hands')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Ferine Seal: Head')",
+                  "color_mob('Ovni')",
+                  "color_npc('???')",
+                  "color_pos('K-5')"
+                ],
+                "id": "ferine_seal_head",
+                "checked_when": ["findItem('Ferine Seal: Head')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, timed spawn)",
+                  "color_green('ready')",
+                  "color_mob('Ovni')",
+                  "color_npc('???')",
+                  "color_pos('K-5')"
+                ],
+                "id": "ovni",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

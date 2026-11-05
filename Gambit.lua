@@ -1,4 +1,4 @@
-__version = '1.0.6.2'
+__version = '1.0.7.0'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -425,13 +425,18 @@ windower.register_event('load', function()
         windower=windower,inventory=inventory,packets=packets,
         context=ActionContext.createTemporary,
         report=function(message) writeError('[equipment] '..message) end,
-        verbose=function(message) writeVerbose(message) end,
-        formatCount=function(count) return text_number(count, Colors.verbose) end,
+        debug=function(message) writeDebug(message) end,
+        debugEnabled=function() return hasVerbosity(VERBOSITY_DEBUG) end,
+        formatCount=function(count) return text_number(count, Colors.debug) end,
     })
     inventory.equipment_manager=globals.equipment_manager
     globals.event_system = require('./lib/events/init').new({
         windower=windower,packets=packets,resources=resources,
         writeProcessed=writeJsonToFile,
+        writeDiscovery=function(path,result)
+            assert(files.new(path):create_path())
+            require('./lib/events/discovery-export').write(windower.addon_path..path,result)
+        end,
         context=ActionContext.createTemporary,
         externalEnemyActions=true,
         externalSelfSpells=true,
@@ -446,6 +451,7 @@ windower.register_event('load', function()
         afterAction=function(action) return handleActionEffects(action) end,
         schedule=function(fn,delay) return coroutine.schedule(fn,delay) end,
         report=function(message) writeError('[events] '..message) end,
+        notifyWeakness=function(message) writeMessage('[abyssea] '..message) end,
         announce=function(message) writeMessage('[events] '..message) end,
         debug=function(message) writeDebug('[events] '..message) end,
         diagnostic=function(message) printDebug('[events] %s',message) end,
@@ -453,6 +459,16 @@ windower.register_event('load', function()
         barrier=function(fn) globals.equipment_manager:barrier(fn) end,
         equipmentSession=function() return globals.equipment_manager:session() end,
         equipmentPending=function() return #globals.equipment_manager.queue.batches>0 end,
+        traceEquipment=function()
+            local function slots(confirmed)
+                local result={}
+                for slot,item in pairs(globals.equipment_manager.queue:view(confirmed)) do result[tostring(slot)]=item end
+                return result
+            end
+            return {confirmed=slots(true),planned=slots(false)}
+        end,
+        verifyEquipment=function() return globals.equipment_manager.queue.confirmed end,
+        verifyReport=function(message) writeMessage('[verify] '..message) end,
         zoneReady=function() return globals.equipment_manager:isReady() end,
         clearEquipmentLocks=function() globals.equipment_manager:clearLocks() end,
         abilityReady=function(player,ability)

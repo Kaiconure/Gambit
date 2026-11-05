@@ -1,6 +1,6 @@
 # Extending the base namespace: cheatsheet
 
-This guide targets this repository's `settings/_ns/_base` configuration. Examples
+This guide targets this repository's `settings/_namespaces/_base` configuration. Examples
 use a new namespace named `my-event`; substitute your own name. Commands use the
 Windower console form; prefix them with `//` in game chat.
 
@@ -34,7 +34,7 @@ the physical `_base` directory. Base is abstract: inherit it rather than select
 it directly. Existing `.nsconfig` files are preserved and must agree with the
 requested parent.
 
-Minimal `settings/_ns/my-event/.nsconfig`:
+Minimal `settings/_namespaces/my-event/.nsconfig`:
 
 ```json
 {
@@ -54,7 +54,7 @@ resolve through underscore-prefixed directories.
 
 ## Choose where a change belongs
 
-Paths below are relative to `settings/_ns/my-event/`.
+Paths below are relative to `settings/_namespaces/my-event/`.
 
 | Change | File |
 |---|---|
@@ -435,7 +435,7 @@ saved selection. `gbt r -settings-only` is not sufficient for action-file edits.
 
 ## Existing namespaces to learn from
 
-Paths are relative to `settings/_ns` and reflect the current repository.
+Paths are relative to `settings/_namespaces` and reflect the current repository.
 
 | Example | Pattern |
 |---|---|

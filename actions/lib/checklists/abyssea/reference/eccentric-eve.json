@@ -1,0 +1,143 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/eccentric-eve",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.eccentric_eve)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "eccentric_eve": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_eccentric_eve",
+            "name": "Abyssea Konschtat: Eccentric Eve",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Vision Card')",
+                  "color_mob('Eccentric Eve')",
+                  "color_npc('???')",
+                  "color_pos('I-7')"
+                ],
+                "id": "vision_card",
+                "checked_when": ["findItem('Vision Card')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Vision Stone')",
+                  "color_mob('Eccentric Eve')",
+                  "color_npc('???')",
+                  "color_pos('I-7')"
+                ],
+                "id": "vision_stone",
+                "checked_when": ["findItem('Vision Stone')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Fragrant Treant Petal')",
+                  "color_mob('Gangly Gean')",
+                  "color_npc('???')",
+                  "color_pos('E/F-10')"
+                ],
+                "id": "fragrant_treant_petal",
+                "checked_when": ["findKeyItem('fragrant treant petal')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Fetid Rafflesia Stalk')",
+                  "color_mob('Raskovnik')",
+                  "color_npc('???')",
+                  "color_pos('F/G-7')"
+                ],
+                "id": "fetid_rafflesia_stalk",
+                "checked_when": ["findKeyItem('fetid rafflesia stalk')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Decaying Morbol Tooth')",
+                  "color_mob('Clingy Clare')",
+                  "color_npc('???')",
+                  "color_pos('I-8')"
+                ],
+                "id": "decaying_morbol_tooth",
+                "checked_when": ["findKeyItem('decaying morbol tooth')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Tiny Morbol Vine')",
+                  "color_mob('Morboling')",
+                  "color_pos('I-8')"
+                ],
+                "id": "tiny_morbol_vine",
+                "checked_when": ["findItem('Tiny Morbol Vine')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Turbid Slime Oil')",
+                  "color_mob('Fistule')",
+                  "color_npc('???')",
+                  "color_pos('G-3')"
+                ],
+                "id": "turbid_slime_oil",
+                "checked_when": ["findKeyItem('turbid slime oil')"]
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('   → See Fistule checklist for its spawn details')"
+                ],
+                "id": "fistule_reference",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Venomous Peiste Claw')",
+                  "color_mob('Kukulkan')",
+                  "color_npc('???')",
+                  "color_pos('H-5')"
+                ],
+                "id": "venomous_peiste_claw",
+                "checked_when": ["findKeyItem('venomous peiste claw')"]
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('   → See Kukulkan checklist for its spawn details')"
+                ],
+                "id": "kukulkan_reference",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s)",
+                  "findKeyItem('fragrant treant petal') and findKeyItem('fetid rafflesia stalk') and findKeyItem('decaying morbol tooth') and findKeyItem('turbid slime oil') and findKeyItem('venomous peiste claw') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Eccentric Eve')",
+                  "color_npc('???')",
+                  "color_pos('I-7')"
+                ],
+                "id": "eccentric_eve",
+                "checked_when": [
+                  "findKeyItem('fragrant treant petal') and findKeyItem('fetid rafflesia stalk') and findKeyItem('decaying morbol tooth') and findKeyItem('turbid slime oil') and findKeyItem('venomous peiste claw')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

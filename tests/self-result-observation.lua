@@ -87,3 +87,20 @@ local chunk=assert(loadstring(source)); setfenv(chunk,env); chunk()
 order={}; listener(packet)
 assert(table.concat(order,',')=='state-ws,post,report')
 print('PASS: self JA/WS publication before post, history, Double-Up matching, rejection, misses, no-runtime state and single raw-listener WS write')
+
+-- Damaging JA results can use category 3; resource ID alone is ambiguous.
+resources.job_abilities[46]={id=46,en='Shield Bash',name='Shield Bash'}
+resources.weapon_skills[46]={id=46,en='Expiacion',name='Expiacion',skillchain_a='Distortion'}
+resources.action_messages[110]={en='${actor} uses ${ability}. ${target} takes ${number} points of damage.'}
+resources.action_messages[185]={en='${actor} uses ${weapon_skill}. ${target} takes ${number} points of damage.'}
+local Observation=require('./lib/action-observation')
+local bash=action(3,46,100,110)
+observation=Observation.selfResult(bash,ffxi,resources,{})
+assert(observation.kind=='job_ability' and observation.resource.en=='Shield Bash')
+State.apply(observation,state,globals)
+assert(globals.last_ability.name=='Shield Bash' and not observation.weapon_skill_published)
+observation=Observation.selfResult(action(3,46,100,185),ffxi,resources,{})
+assert(observation.kind=='weapon_skill' and observation.resource.en=='Expiacion')
+order={}; listener(bash)
+assert(table.concat(order,',')=='state-ja,post','Shield Bash must not publish/report Expiacion or open a skillchain')
+print('PASS: overlapping Shield Bash / Expiacion IDs preserve JA/WS identity in shared observations and reporting')

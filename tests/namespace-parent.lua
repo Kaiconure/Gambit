@@ -4,7 +4,7 @@ Colors = {error=1}
 text_namespace = function(value) return value end
 local disk, directories = {}, {base=true}
 local writes, creates = 0, 0
-local function config(name) return './settings/.ns/' .. name .. '/.nsconfig' end
+local function config(name) return './settings/namespaces/' .. name .. '/.nsconfig' end
 disk[config('base')] = '{}'
 files = {
     create_path=function() creates=creates+1; return true end,
@@ -15,7 +15,7 @@ files = {
     } end,
 }
 windower={addon_path='',dir_exists=function(path)
-    return path=='settings/.ns' or directories[path:gsub('^settings/%.ns/','')] == true
+    return path=='settings/namespaces' or directories[path:gsub('^settings/namespaces/','')] == true
 end}
 assert(paths.ensureNamespaceFolders('Player','child','base'))
 assert(json.parse(disk[config('child')]).inherits_from=='base')

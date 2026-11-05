@@ -43,8 +43,8 @@ also contribute rules at named slots.
 | Shipped rule defaults | `events/geo.json`, or `events/(all).json` |
 
 Namespace equivalents are
-`settings/_ns/<namespace>/events/` and
-`settings/_ns/<namespace>/players/<character>/events/`.
+`settings/_namespaces/<namespace>/events/` and
+`settings/_namespace-settings/<namespace>/players/<character>/events/`.
 
 **Exactly one rule entry point is selected.** The search order is:
 
@@ -391,7 +391,12 @@ These are transitions, not callbacks on every render or addon load.
 ```
 
 Loading actions run once per successful configuration load/reload, after imports,
-variable merging, CSV expansion, and contributions. Successful variable changes
+variable merging, CSV expansion, and contributions. If player or equipment state
+is not ready, execution stays pending until readiness, just like `zones.enter`.
+This includes login when the addon was loaded at character selection. Context
+and equipment snapshots are created when the actions actually run; waiting does
+not consume equipment acknowledgment timeouts. A newer reload supersedes the
+pending load, and logout/unload discards it. Successful variable changes
 become the defaults copied by later events. Reload starts from files again.
 Equipment changes persist. On a loading-rule error, its phase gear and variable
 changes are discarded; the new configuration keeps its file-defined defaults.
@@ -442,6 +447,22 @@ uses an explicit target if provided, then the object's target, then `bt`; it
 does not check MP, recast, range, or predicted landing time.
 
 ### Outcomes in post
+
+Weapon-skill post events separate execution from the effect on the requested
+target. `event.completed` means the WS executed; it can be true when
+`event.missed` is also true. `event.effect` is `landed`, `missed`, `no_effect`, or
+`unknown`; matching flags are `event.landed`, `event.missed`, and `event.no_effect`.
+Cancellation, rejection, and timeout without a result leave the effect unknown.
+`event.results` contains per-target entries with `target_id`, `outcome`, `effect`,
+the three effect flags, and numeric `messages`. The top-level effect comes from
+the requested target's ID, even if that target is not first in an AoE packet.
+Nearby targets' hits do not establish a hit on the requested target. Unknown
+message types are reported as unknown effects, not inferred hits. These fields
+are available for manual and automated WS when a matching event lifecycle exists.
+
+For example, a WS post rule can use `event.completed and event.missed` to report
+a completed miss, or `event.completed and event.landed` for confirmed damage/drain
+on its requested target. Landing does not by itself confirm a proc opportunity.
 
 `event.outcome` can be `completed`, `interrupted`, `failed`, `cancelled`,
 `timeout`, `reloaded`, `zoned`, `logout`, or `unloaded`.
@@ -606,6 +627,82 @@ for restoring first and then applying idle/battle gear, and
 [equipment reference](equipment.md) for candidates, augments, and queue details.
 
 ## Reloading and troubleshooting
+
+For a real-time equipment order report, use `//gbt events verify start` and
+`//gbt events verify stop`. Verification is off by default and remains opt-in
+for production use. It covers handled spell and weapon skill lifecycles without
+adding delays or dispatch barriers. Queue-count messages are debug-level output;
+normal failures remain visible.
+
+The verifier checks requested pre equipment against confirmed gear at dispatch,
+and spell mid equipment against confirmed gear at result receipt. Weapon skill
+pre gear is expected to remain in effect through the result. It watches for
+acknowledged displacement during the action, then waits for post operations and
+automatic snapshot restoration to settle before reporting once:
+
+- **PASS**: requested equipment was confirmed at the observed boundaries and
+  post operations settled. Normal interruption, cancellation, server rejection,
+  or lifecycle teardown can also pass as `handled <outcome>` once cleanup is
+  confirmed; aborted actions do not require mid gear at a successful result.
+  Phases with no equipment requests say `no swaps`.
+- **WARNING**: observed gear differed, was displaced, or a post swap failed.
+  Fast spells whose mid gear is not confirmed before the result can warn.
+- **INCOMPLETE**: lost lifecycle tracking, missing identity/state, stopping
+  verification early, or a post wait exceeding ten seconds prevented a complete
+  check. Stopping reports any still-pending verifications as incomplete.
+
+Verification checks resolved equipment operations; it does not guarantee that
+every optional item named in a set was available. Like tracing, it verifies
+client-observed ordering, not the server's internal damage calculation. When
+disabled it performs no verification snapshots or report formatting.
+
+### Discover weakness and proc signals
+
+For an experimental Abyssea recording, use:
+
+```text
+//gbt events discover start
+//gbt events discover stop
+```
+
+Start shortly before a fight, perform a few proc attempts, and stop after a weakness hint or successful proc. The stop command prints the saved JSON path under the character's current settings `.output` directory (`discovery-<timestamp>-<sequence>.json`). Capture one or two short encounters rather than a long farming session. Note which hint/proc you saw and approximately when, so it can be compared with the recording.
+
+The recorder captures original/modified incoming chat text, decoded combat actions, outgoing action-request packets (`0x01A`), and selected incoming packets (`0x029`, `0x02A`, `0x02D`, `0x038`). Packet entries include original bytes as hexadecimal, numeric/boolean decoded fields, and injected/blocked flags. Entries have ordered sequence numbers, relative timestamps, zone, and cursor/battle target snapshots. Combat actions also retain actor/target identity and resource-name candidates from the different resource tables; candidates are not confirmed action classifications.
+
+Recording is off by default, independent of verbosity and configured event handlers, and does not change cycling, facing, movement, chat, or action dispatch. It records activity beyond your battle target so party actions and unattributed hints remain available for comparison. It does not yet emit weakness/proc events or infer that a nearby action caused a proc.
+
+Abyssea red/yellow/blue observations and IPC sharing operate independently of recording.
+Read `abyssea.weaknesses.red`, `.yellow`, or `.blue` for the battle target, or use
+`abyssea.getWeaknesses(target)` for an explicit monster. Yellow hint and
+yellow-specific inability-to-cast confirmation do not set red state, and vice
+versa. Blue's weapon-type hint and inability-to-use-special-attacks confirmation
+update only blue state. The generic stagger announcement alone does not identify
+a proc color.
+
+The in-memory buffer stops collecting at 8192 entries; `stop` still exports it and reports truncation. An existing recording cannot be overwritten by another `start`. A failed export retains the data for another `stop` attempt. Save before unloading/reloading Lua: recordings are not persisted until exported. Event-rule reloads do not stop the capture.
+
+Discovery exports stream JSON through a small buffer to a `.partial` file, then
+rename it after writing and closing successfully. This avoids assembling the
+whole recording into an additional JSON string in memory. A failed export leaves
+the pending recording available for retry; a partial file is not a saved capture.
+For a still-loaded older Gambit instance that failed export with `not enough
+memory`, run `//lua i Gambit require ./lib/events/discovery-recovery`. The recovery module
+installs the streaming writer in that instance and attempts to save its retained
+capture without reloading. If it fails, retry `//gbt events discover stop`.
+
+To investigate weapon skill equipment timing, run `//gbt events trace start`,
+perform one or two weapon skills, then run `//gbt events trace stop`. The JSON
+capture is saved in the character's `.output` directory under the active settings
+namespace. Capture is opt-in and limited to 2048 entries; stopping saves the
+captured entries even if that limit was reached.
+
+The trace records relative times, lifecycle phases, equipment sends and
+acknowledgments, weapon skill dispatch/result, and confirmed/planned equipment
+at phase completion, dispatch, and result receipt. Observed outgoing equipment
+and weapon skill chunks include header sequence values and injected/blocked
+flags. Other addons' equipment requests are visible too. These are client-side
+observations, not proof of the server's internal damage-calculation timing.
+Chat messages may be printed after post restoration has already been queued.
 
 Use `//gbt events r -e empty` to select `empty.json`, or
 `//gbt events r -e lib/my-events` for a library-style path. The name resolves

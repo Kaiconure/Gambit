@@ -1,0 +1,77 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/turul",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.turul)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "turul": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_turul",
+            "name": "Abyssea Konschtat: Turul",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Vision Coin')",
+                  "color_mob('Turul')",
+                  "color_pos('H/I/J-6/7')"
+                ],
+                "id": "vision_coin",
+                "checked_when": ["findItem('Vision Coin')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Vision Jewel')",
+                  "color_mob('Turul')",
+                  "color_pos('H/I/J-6/7')"
+                ],
+                "id": "vision_jewel",
+                "checked_when": ["findItem('Vision Jewel')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item(\"Ravager's seal: feet\")",
+                  "color_mob('Turul')",
+                  "color_pos('H/I/J-6/7')"
+                ],
+                "id": "ravager_seal_feet",
+                "checked_when": ["findItem(\"Ravager's seal: feet\")"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Cirque Seal: Hands')",
+                  "color_mob('Turul')",
+                  "color_pos('H/I/J-6/7')"
+                ],
+                "id": "cirque_seal_hands",
+                "checked_when": ["findItem('Cirque Seal: Hands')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s, timed spawn)",
+                  "color_green('ready')",
+                  "color_mob('Turul')",
+                  "color_pos('H/I/J-6/7')"
+                ],
+                "id": "turul",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,74 @@
+﻿{
+  "functions": [
+    {
+      "name": "checklists/abyssea/sedna",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.sedna)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "sedna": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_sedna",
+            "name": "Abyssea Vunkerl: Sedna",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Glossy sea monk sucker')",
+                  "color_mob('Iku-Turso')",
+                  "color_npc('???')",
+                  "color_pos('J-7')"
+                ],
+                "id": "iku_turso",
+                "checked_when": ["findKeyItem('glossy sea monk sucker')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Moonbeam Clam')",
+                  "color_mob('Jasconius')",
+                  "color_pos('I-7/J-7')"
+                ],
+                "id": "jasconius",
+                "checked_when": ["findItem('Moonbeam Clam')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s) (%s)",
+                  "color_ki('Shimmering pugil scale')",
+                  "color_mob('Hrosshvalur')",
+                  "color_pos('J-6')",
+                  "color_pos('K-6')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "hrosshvalur",
+                "checked_when": ["findKeyItem('shimmering pugil scale')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, %s)",
+                  "findKeyItem('glossy sea monk sucker') and findKeyItem('shimmering pugil scale') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Sedna')",
+                  "color_npc('???')",
+                  "color_pos('K-6')",
+                  "color_npc('Conflux #03')"
+                ],
+                "id": "sedna",
+                "checked_when": [
+                  "findKeyItem('glossy sea monk sucker') and findKeyItem('shimmering pugil scale')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

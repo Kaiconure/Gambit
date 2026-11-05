@@ -1,0 +1,67 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/emperador-de-altepa",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.emperador_de_altepa)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "emperador_de_altepa": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_emperador_de_altepa",
+            "name": "Abyssea Altepa: Emperador de Altepa",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Aoidos' Seal: Body\")", "color_mob('Emperador de Altepa')"],
+                "id": "aoidos_seal_body",
+                "checked_when": ["findItem(\"Aoidos' Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Estoqueur's Seal: Body\")", "color_mob('Emperador de Altepa')"],
+                "id": "estoqueurs_seal_body",
+                "checked_when": ["findItem(\"Estoqueur's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Tantra Seal: Body')", "color_mob('Emperador de Altepa')"],
+                "id": "tantra_seal_body",
+                "checked_when": ["findItem('Tantra Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_item('Oasis Water')", "color_mob('Bugul Noz')", "color_pos('E-10')"],
+                "id": "bugul_noz",
+                "checked_when": ["findItem('Oasis Water')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Ferine Seal: Hands')", "color_mob('Bugul Noz')"],
+                "id": "ferine_seal_hands",
+                "checked_when": ["findItem('Ferine Seal: Hands')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Sabulous Clay')", "color_mob('Fear Dearg')"],
+                "id": "fear_dearg",
+                "checked_when": ["findItem('Sabulous Clay')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Giant Mistletoe')", "color_mob('Barrens Treant')"],
+                "id": "barrens_treant",
+                "checked_when": ["findItem('Giant Mistletoe')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Oasis Water') and findItem('Giant Mistletoe') and color_green('ready') or color_yellow('not ready')", "color_mob('Emperador de Altepa')", "color_npc('??? at F-11')"],
+                "id": "emperador_de_altepa",
+                "checked_when": ["findItem('Oasis Water') and findItem('Giant Mistletoe')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

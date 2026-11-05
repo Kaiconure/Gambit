@@ -81,10 +81,17 @@ function Observation.selfResult(action,ffxi,resources,failures)
     if not player or action.actor_id~=player.id then return end
     local first=action.targets and action.targets[1]
     local detail=first and first.actions and first.actions[1]
+    -- Some damaging job abilities arrive in the weapon-skill result category.
+    -- IDs overlap between resource tables (Shield Bash / Expiacion are both 46).
+    local message=(tonumber(detail and detail.message) or 0)%32768
+    local template=resources.action_messages and resources.action_messages[message]
+    if action.category==3 and template and template.en and template.en:find('{ability}',1,true) then
+        kind='job_ability'
+    end
     local source=kind=='job_ability' and resources.job_abilities or resources.weapon_skills
     local resource=source and source[action.param]
-    local message=(tonumber(detail and detail.message) or 0)%32768
     return {kind=kind,phase='post',id=action.param,resource=resource,detail=detail,message=message,
+        results=kind=='weapon_skill' and require('./lib/weapon-skill-result').targets(action.targets,failures) or nil,
         actor=ffxi.get_mob_by_id and ffxi.get_mob_by_id(action.actor_id),
         target_id=first and first.id,
         target=first and ffxi.get_mob_by_id and ffxi.get_mob_by_id(first.id),

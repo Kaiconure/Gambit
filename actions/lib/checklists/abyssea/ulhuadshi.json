@@ -1,0 +1,73 @@
+﻿{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ulhuadshi",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ulhuadshi)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ulhuadshi": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ulhuadshi",
+            "name": "Abyssea Attohwa: Ulhuadshi",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Mucid worm segment')",
+                  "color_mob('Pallid Percy')",
+                  "color_npc('???')",
+                  "color_pos('J-7')"
+                ],
+                "id": "pallid_percy",
+                "checked_when": ["findKeyItem('mucid worm segment')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Blanched Silver')",
+                  "color_mob('Entozoon')",
+                  "color_pos('J-7')"
+                ],
+                "id": "entozoon",
+                "checked_when": ["findItem('Blanched Silver')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s) (%s)",
+                  "color_ki('Shriveled hecteyes stalk')",
+                  "color_mob('Amun')",
+                  "color_pos('K-9')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "amun",
+                "checked_when": ["findKeyItem('shriveled hecteyes stalk')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, %s)",
+                  "findKeyItem('mucid worm segment') and findKeyItem('shriveled hecteyes stalk') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Ulhuadshi')",
+                  "color_npc('???')",
+                  "color_pos('J-7/K-7')",
+                  "color_npc('Conflux #03')"
+                ],
+                "id": "ulhuadshi",
+                "checked_when": [
+                  "findKeyItem('mucid worm segment') and findKeyItem('shriveled hecteyes stalk')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

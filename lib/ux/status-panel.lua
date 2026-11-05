@@ -91,6 +91,7 @@ function Status:configure(options,trackingOverride)
             for _,objective in ipairs(definition.checklist) do
                 local path='vars.panel.'..definition.id..'.'..objective.id
                 local button=self.panel:button(18,0,0,lineHeight,options.font_size,function()
+                    if objective.checked_when~=nil then return end
                     local context=self.deps.context('status panel checklist')
                     context.setVar(path,not context.getVar(path))
                     self.nextUpdate=0
@@ -98,12 +99,31 @@ function Status:configure(options,trackingOverride)
                 end,'subheading')
                 button.text:bold(false)
                 button.bold=false
+                Theme.color(button.text,'checklist')
                 button.onHover=function(hovered)
-                    Theme.color(button.text,hovered and 'yellow' or 'subheading')
+                    Theme.color(button.text,hovered and objective.checked_when==nil and 'yellow' or 'checklist')
                 end
                 local size=math.max(10,math.floor(options.font_size*1.2+0.5))
                 local icon=self.panel:icon(18,0,size)
-                entry.checks[#entry.checks+1]={button=button,path=path,objective=objective,icon=icon,size=size}
+                local check={button=button,path=path,objective=objective,icon=icon,size=size}
+                if objective.format~=nil then
+                    check.formatFns={}
+                    for index=2,#objective.format do
+                        local ok,fn=pcall(factory.get,objective.format[index])
+                        if ok then check.formatFns[#check.formatFns+1]=fn else check.labelError=true end
+                    end
+                elseif objective.expression~=nil then
+                    local ok,fn=pcall(factory.get,objective.expression)
+                    if ok then check.labelFn=fn else check.labelError=true end
+                end
+                if objective.checked_when~=nil then
+                    check.conditions={}
+                    for _,code in ipairs(objective.checked_when) do
+                        local ok,fn=pcall(factory.get,code)
+                        if ok then check.conditions[#check.conditions+1]=fn else check.conditionError=true end
+                    end
+                end
+                entry.checks[#entry.checks+1]=check
             end
         elseif definition.expression~=nil then
             if type(definition.expression)=='table' then
@@ -140,6 +160,17 @@ end
 function Status:setTracking(name)
     assert(self.options.tracking.sets[name], 'Unknown tracking set: '..tostring(name))
     local options=copy(self.options); options.tracking.current=name
+    self:configure(options,false); self:update(); self:persist()
+end
+function Status:saveTracking(name,force)
+    assert(type(name)=='string' and name:find('%S'), 'Tracking set name must not be empty')
+    assert(not Config.defaults.tracking.sets[name], 'Cannot overwrite built-in tracking set: '..name)
+    assert(force or not self.options.tracking.sets[name],
+        'Tracking set already exists: '..name..'. Use -force to overwrite it.')
+    local options=copy(self.options)
+    local current=self.trackingOverride or options.tracking.sets[options.tracking.current]
+    options.tracking.sets[name]=copy(Config.expandTracking(current,options.tracking.sets))
+    options.tracking.current=name
     self:configure(options,false); self:update(); self:persist()
 end
 function Status:setTemporaryTracking(entries,append)
@@ -262,14 +293,54 @@ function Status:update()
         if entry.checks then
             value={}
             local ok,context=pcall(self.deps.context,'status panel checklist')
+            local resetColor=ok and context and PanelContext.attach(context,self.deps.canShareClaim)
             for _,check in ipairs(entry.checks) do
                 local checked=not not (ok and context and context.getVar(check.path))
+                if check.conditions then
+                    checked=not not (ok and context and not check.conditionError)
+                    if checked then
+                        for _,fn in ipairs(check.conditions) do
+                            setfenv(fn,context)
+                            local success,result=pcall(fn)
+                            if not success or not result then checked=false; break end
+                        end
+                    end
+                end
                 if check.checked~=checked then
                     check.icon.image:path((self.deps.windower.addon_path or '')..
                         'content/ui/checklist/'..(checked and 'checked' or 'unchecked')..'.png')
                     check.checked=checked
                 end
-                check.display=Buffer.plain(check.objective.text,self.deps.windower.from_shift_jis)
+                local label=check.objective.text
+                if check.objective.format~=nil then
+                    label='[error]'
+                    if not ok or not context then label='[unavailable]'
+                    elseif not check.labelError then
+                        resetColor()
+                        local args={}
+                        local valid=true
+                        for index,fn in ipairs(check.formatFns) do
+                            setfenv(fn,context)
+                            local success,result=pcall(fn)
+                            if not success then valid=false; break end
+                            args[index]=result
+                        end
+                        if valid then
+                            local success,result=pcall(string.format,check.objective.format[1],unpack(args,1,#check.formatFns))
+                            if success then label=result end
+                        end
+                    end
+                elseif check.objective.expression~=nil then
+                    label='[error]'
+                    if not ok or not context then label='[unavailable]'
+                    elseif check.labelFn and not check.labelError then
+                        resetColor()
+                        setfenv(check.labelFn,context)
+                        local success,result=pcall(check.labelFn)
+                        if success and type(result)~='table' then label=result==nil and '' or tostring(result) end
+                    end
+                end
+                check.display=Buffer.plain(label,self.deps.windower.from_shift_jis):gsub('[\r\n]+',' ')
                 value[#value+1]=check.display
             end
         elseif entry.definition.expression~=nil then

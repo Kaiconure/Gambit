@@ -4,11 +4,23 @@ local output,errors={},{}
 local count=0
 local service={runtime={config={path='selected.json'}},reload=function() count=count+1; return {files={'selected.json'}} end}
 local env=setmetatable({handlers={},globals={event_system=service},
+    gearExport=require('./lib/equipment/export'),
     text_file=function(value) return '<file>'..value..'</file>' end,
     writeMessage=function(value) output[#output+1]=value end,
     writeError=function(value) errors[#errors+1]=value end,
     reloadSettings=function() error('must not reload normal settings') end},{__index=_G})
 local chunk=assert(loadstring(body)); setfenv(chunk,env); chunk()
+local exported
+env.windower={ffxi={get_player=function() return {name='Tester',main_job='BLM'} end,get_items=function() return {} end},
+    create_dir=function(path) assert(path=='./settings/Tester/data') end}
+env.gearExport={render=function() return 'formatted gear\n' end}
+env.files={new=function() return {exists=function() return false end} end}
+env.writeStringToFile=function(path,text) exported={path,text} end
+env.handlers.events({'sg'})
+assert(exported[1]:find('./settings/Tester/data/blm-',1,true) and exported[1]:match('%.vars%.json$'))
+assert(exported[2]=='formatted gear\n')
+env.handlers.events({'save-gear','extra'})
+assert(output[#output]=='Usage: gbt events save-gear (alias: sg)')
 env.handlers.events({'RELOAD'})
 assert(count==1 and output[#output]=='Event rules reloaded.')
 env.handlers.events({}); assert(output[#output]=='Active event file: <file>selected.json</file>' and count==1)
@@ -40,4 +52,18 @@ service.reload=function() return nil end
 env.handlers.events({'reload'}); assert(output[#output]:find('No character',1,true))
 env.globals.event_system=nil
 env.handlers.events({'reload'}); assert(output[#output]=='Event system is unavailable.')
+env.globals.event_system=service
+local traceCommand
+service.weaponSkillTrace=function(_,command) traceCommand=command; return 'trace '..command end
+env.handlers.events({'trace','start'}); assert(traceCommand=='start' and output[#output]=='trace start')
+env.handlers.events({'trace','stop'}); assert(traceCommand=='stop' and output[#output]=='trace stop')
+env.handlers.events({'trace','invalid'}); assert(output[#output]:find('Usage:',1,true))
+service.verification=function(_,command) return 'verify '..command end
+service.discovery=function(_,command) return 'discover '..command end
+env.handlers.events({'discover','start'}); assert(output[#output]=='discover start')
+env.handlers.events({'discover','stop'}); assert(output[#output]=='discover stop')
+env.handlers.events({'discover','invalid'}); assert(output[#output]=='Usage: gbt events discover [start|stop]')
+env.handlers.events({'verify','start'}); assert(output[#output]=='verify start')
+env.handlers.events({'verify','stop'}); assert(output[#output]=='verify stop')
+env.handlers.events({'verify','invalid'}); assert(output[#output]:find('Usage:',1,true))
 print('PASS: event-only reload command, errors, usage, unavailable service and logged-out state')

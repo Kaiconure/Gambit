@@ -1,0 +1,103 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/fistule",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.fistule)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "fistule": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_fistule",
+            "name": "Abyssea Konschtat: Fistule",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Fistule Discharge')",
+                  "color_mob('Fistule')",
+                  "color_npc('???')",
+                  "color_pos('G-3')"
+                ],
+                "id": "fistule_discharge",
+                "checked_when": ["findItem('Fistule Discharge')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Vision Card')",
+                  "color_mob('Fistule')",
+                  "color_npc('???')",
+                  "color_pos('G-3')"
+                ],
+                "id": "vision_card",
+                "checked_when": ["findItem('Vision Card')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Vision Stone')",
+                  "color_mob('Fistule')",
+                  "color_npc('???')",
+                  "color_pos('G-3')"
+                ],
+                "id": "vision_stone",
+                "checked_when": ["findItem('Vision Stone')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Eft Blood')",
+                  "color_mob('Gneiss Leech')",
+                  "color_npc('???')",
+                  "color_pos('G-5')"
+                ],
+                "id": "bloodguzzler",
+                "checked_when": ["findItem('Eft Blood')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s at %s)",
+                  "color_item('Giant Slug Eyestalk')",
+                  "color_mob('Gunge Slug')",
+                  "color_npc('???')",
+                  "color_pos('F-6')"
+                ],
+                "id": "lentor",
+                "checked_when": ["findItem('Giant Slug Eyestalk')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s, lottery)",
+                  "color_mob('Guimauve')",
+                  "color_mob('Licorice')",
+                  "color_pos('G-4/5')"
+                ],
+                "id": "guimauve",
+                "checked_when": ["true"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s)",
+                  "color_green('ready')",
+                  "color_mob('Fistule')",
+                  "color_npc('???')",
+                  "color_pos('G-3')"
+                ],
+                "id": "fistule",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

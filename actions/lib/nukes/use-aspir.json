@@ -5,12 +5,6 @@
       "max_mpp": 80,
       "max_ws_mpp": 30,
       "spells": ["Aspir III", "Aspir II", "Aspir"],
-      "gear": {
-        "casting": [],
-        "battle": [],
-        "inherit_casting_from": null,
-        "inherit_battle_from": null
-      },
       "targets": {
         "Air Elemental": true,
         "Apex Crab": true,
@@ -52,26 +46,6 @@
   "actions": [
     {
       "when": [
-        "arrayCount(vars.use_aspir.gear.casting) == 0 and vars.use_aspir.gear.inherit_casting_from"
-      ],
-      "commands": [
-        "false and log('Inheriting pre-Aspir casting gear from:', vars.use_aspir.gear.inherit_casting_from)",
-        "setVar('vars.use_aspir.gear.casting', getVar(vars.use_aspir.gear.inherit_casting_from))"
-      ],
-      "frequency": "infinity"
-    },
-    {
-      "when": [
-        "arrayCount(vars.use_aspir.gear.battle) == 0 and vars.use_aspir.gear.inherit_battle_from"
-      ],
-      "commands": [
-        "false and log('Inheriting post-Aspir battle gear from:', vars.use_aspir.gear.inherit_battle_from)",
-        "setVar('vars.use_aspir.gear.battle', getVar(vars.use_aspir.gear.inherit_battle_from))"
-      ],
-      "frequency": "infinity"
-    },
-    {
-      "when": [
         "bt and (vars.use_aspir.targets[bt.name] or (vars.use_aspir.targets[bt.name] == nil and vars.use_aspir.targets[bt.name:match('(%a+ Elemental)$') or '']))",
         "bt.distance <= 20",
         "me.mpp <= vars.use_aspir.max_mpp",
@@ -80,9 +54,7 @@
       ],
       "comment": "Prefixed elementals inherit eligibility from their base elemental name. An explicit target entry, including false, takes precedence.",
       "commands": [
-        "arrayCount(vars.use_aspir.gear.casting) > 0 and equipMany(vars.use_aspir.gear.casting)",
         "use(bt)",
-        "arrayCount(vars.use_aspir.gear.battle) > 0 and equipMany(vars.use_aspir.gear.battle)",
         "postpone(vars.use_aspir.frequency)"
       ]
     }

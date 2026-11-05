@@ -23,6 +23,7 @@ function transitions.attach(service,listen)
         pending=nil -- A new departure supersedes any undispatched arrival.
         if departing then return end
         departing=true
+        if service.weaknessClear then service.weaknessClear() end
         service:clear('zoned')
         emit(zoneEvent(destination,old or currentZone),'leave')
     end

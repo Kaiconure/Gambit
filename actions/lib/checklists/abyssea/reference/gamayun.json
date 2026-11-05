@@ -1,0 +1,52 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/gamayun",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.gamayun)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "gamayun": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_gamayun",
+            "name": "Abyssea Grauberg: Gamayun",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Aoidos' Seal: Body\")", "color_mob('Gamayun')"],
+                "id": "aoidos_seal_body",
+                "checked_when": ["findItem(\"Aoidos' Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Raider's Seal: Body\")", "color_mob('Gamayun')"],
+                "id": "raiders_seal_body",
+                "checked_when": ["findItem(\"Raider's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Tantra Seal: Body')", "color_mob('Gamayun')"],
+                "id": "tantra_seal_body",
+                "checked_when": ["findItem('Tantra Seal: Body')"]
+              },
+              {
+                "format": ["   • %s→rest to spawn %s", "color_ki('Colorful Demilune Abyssite')", "color_mob('Gamayun')"],
+                "id": "colorful_demilune_abyssite",
+                "checked_when": ["findKeyItem('colorful demilune abyssite')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('colorful demilune abyssite') and color_green('ready') or color_yellow('not ready')", "color_mob('Gamayun')", "color_pos('I-10')"],
+                "id": "gamayun",
+                "checked_when": ["findKeyItem('colorful demilune abyssite')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

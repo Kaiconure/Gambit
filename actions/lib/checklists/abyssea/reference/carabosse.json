@@ -1,0 +1,93 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/carabosse",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.carabosse)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "carabosse": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_carabosse",
+            "name": "Abyssea La Theine: Carabosse",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item(\"Carabosse's Gem\")",
+                  "color_mob('Carabosse')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "carabosse_gem",
+                "checked_when": ["findItem(\"Carabosse's Gem\")"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Pellucid Fly Eye')",
+                  "color_mob('La Theine Liege')",
+                  "color_npc('???')",
+                  "color_pos('I-7')"
+                ],
+                "id": "la_theine_liege",
+                "checked_when": ["findKeyItem('pellucid fly eye')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Transparent Insect Wing')",
+                  "color_mob('Plateau Glider')",
+                  "color_pos('H-7/8')"
+                ],
+                "id": "plateau_glider",
+                "checked_when": ["findItem('Transparent Insect Wing')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Shimmering Pixie Pinion')",
+                  "color_mob('Baba Yaga')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "baba_yaga",
+                "checked_when": ["findKeyItem('shimmering pixie pinion')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Piceous Scale')",
+                  "color_mob('Farfadet')",
+                  "color_pos('G/H-7')"
+                ],
+                "id": "farfadet",
+                "checked_when": ["findItem('Piceous Scale')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s)",
+                  "findKeyItem('pellucid fly eye') and findKeyItem('shimmering pixie pinion') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Carabosse')",
+                  "color_npc('???')",
+                  "color_pos('H-7')"
+                ],
+                "id": "carabosse",
+                "checked_when": [
+                  "findKeyItem('pellucid fly eye') and findKeyItem('shimmering pixie pinion')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

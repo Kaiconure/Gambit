@@ -1,0 +1,96 @@
+﻿{
+  "functions": [
+    {
+      "name": "checklists/abyssea/bukhis",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.bukhis)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "bukhis": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_bukhis",
+            "name": "Abyssea Vunkerl: Bukhis",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Ingrown taurus nail')",
+                  "color_mob('Khalkotaur')",
+                  "color_npc('???')",
+                  "color_pos('H-10')"
+                ],
+                "id": "khalkotaur",
+                "checked_when": ["findKeyItem('ingrown taurus nail')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s/%s)",
+                  "color_item('Gnarled Taurus Horn')",
+                  "color_mob('Aestutaur')",
+                  "color_pos('G-9')",
+                  "color_pos('G-10')"
+                ],
+                "id": "aestutaur",
+                "checked_when": ["findItem('Gnarled Taurus Horn')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Ossified gargouille hand')",
+                  "color_mob('Quasimodo')",
+                  "color_npc('???')",
+                  "color_pos('G-11')"
+                ],
+                "id": "quasimodo",
+                "checked_when": ["findKeyItem('ossified gargouille hand')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Gargouille Stone')",
+                  "color_mob('Gruesome Gargouille')",
+                  "color_pos('F-10')"
+                ],
+                "id": "gruesome_gargouille",
+                "checked_when": ["findItem('Gargouille Stone')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s/%s) (%s)",
+                  "color_ki('Imbrued vampyr fang')",
+                  "color_mob('Lord Varney')",
+                  "color_pos('G-10')",
+                  "color_pos('H-10')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "lord_varney",
+                "checked_when": ["findKeyItem('imbrued vampyr fang')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, %s)",
+                  "findKeyItem('ingrown taurus nail') and findKeyItem('ossified gargouille hand') and findKeyItem('imbrued vampyr fang') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Bukhis')",
+                  "color_npc('???')",
+                  "color_pos('G-10')",
+                  "color_npc('Conflux #04')"
+                ],
+                "id": "bukhis",
+                "checked_when": [
+                  "findKeyItem('ingrown taurus nail') and findKeyItem('ossified gargouille hand') and findKeyItem('imbrued vampyr fang')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/veri-selen",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.veri_selen)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "veri_selen": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_veri_selen",
+            "name": "Abyssea Uleguerand: Veri Selen",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Bale Seal: Hands')", "color_mob('Veri Selen')"],
+                "id": "bale_seal_hands",
+                "checked_when": ["findItem('Bale Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Ravager's Seal: Hands\")", "color_mob('Veri Selen')"],
+                "id": "ravagers_seal_hands",
+                "checked_when": ["findItem(\"Ravager's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Lancer's Seal: Hands\")", "color_mob('Veri Selen')"],
+                "id": "lancers_seal_hands",
+                "checked_when": ["findItem(\"Lancer's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Unkai Seal: Hands')", "color_mob('Veri Selen')"],
+                "id": "unkai_seal_hands",
+                "checked_when": ["findItem('Unkai Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Ice Wyvern Scale')", "color_mob('Svelldrake')"],
+                "id": "svelldrake",
+                "checked_when": ["findItem('Ice Wyvern Scale')"]
+              },
+              {
+                "format": ["You are %s for %s", "findItem('Ice Wyvern Scale') and color_green('ready') or color_yellow('not ready')", "color_mob('Veri Selen')"],
+                "id": "veri_selen",
+                "checked_when": ["findItem('Ice Wyvern Scale')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

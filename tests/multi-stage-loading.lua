@@ -1,4 +1,4 @@
-windower={addon_path='',dir_exists=function(path) return path=='settings/.ns' end}
+windower={addon_path='',dir_exists=function(path) return path=='settings/_namespaces' end}
 local copy = require('./lib/variable-values').copy
 local scopes = require('./lib/variable-scopes')
 local preconditions = require('./lib/action-preconditions')
@@ -14,7 +14,7 @@ local env = setmetatable({
     variableLoader=require('./lib/variable-loader'),
     settingsPaths={
         getLoadedPrecedence=function() return {'child','base'} end,
-        commonFiles=function() return {'./settings/.ns/base/common.json','./settings/.ns/child/common.json'} end,
+        commonFiles=function() return {'./settings/_namespaces/base/common.json','./settings/_namespaces/child/common.json'} end,
         importCandidates=function(_, name) return {name} end,
     },
     targetSelectors={entryPointGroups=function() return {} end},
@@ -38,7 +38,7 @@ local function readJson(path)
     return require('./lib/jsonlua').parse(text)
 end
 env.settingsPaths.commonFiles=function() return {} end
-documents['staged']=readJson('settings/_ns/_base/actions/lib/ws/staged/four-part-light.json')
+documents['staged']=readJson('settings/_namespaces/_base/actions/lib/ws/staged/four-part-light.json')
 documents['ws/multi-stage']=readJson('actions/lib/ws/multi-stage.json')
 documents['ws/common']={}
 documents['ws/terminal-reset']={}

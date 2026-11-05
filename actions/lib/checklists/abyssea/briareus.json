@@ -1,0 +1,103 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/briareus",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.briareus)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "briareus": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_briareus",
+            "name": "Abyssea La Theine: Briareus",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Dented Gigas Shield')",
+                  "color_mob('Adamastor')",
+                  "color_npc('???')",
+                  "color_pos('D-4')"
+                ],
+                "id": "adamastor",
+                "checked_when": ["findKeyItem('dented gigas shield')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Trophy Shield')",
+                  "color_mob('Bathyal Gigas')",
+                  "color_pos('C-4/C-5')"
+                ],
+                "id": "bathyal_gigas",
+                "checked_when": ["findItem('Trophy Shield')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Warped Gigas Armband')",
+                  "color_mob('Pantagruel')",
+                  "color_npc('???')",
+                  "color_pos('F-7')"
+                ],
+                "id": "pantagruel",
+                "checked_when": ["findKeyItem('warped gigas armband')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Oversized Sock')",
+                  "color_mob('Hadal Gigas')",
+                  "color_pos('F-6/F-7')"
+                ],
+                "id": "hadal_gigas",
+                "checked_when": ["findItem('Oversized Sock')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Severed Gigas Collar')",
+                  "color_mob('Grandgousier')",
+                  "color_npc('???')",
+                  "color_pos('F-10')"
+                ],
+                "id": "grandgousier",
+                "checked_when": ["findKeyItem('severed gigas collar')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Massive Armband')",
+                  "color_mob('Demersal Gigas')",
+                  "color_pos('E-9')"
+                ],
+                "id": "demersal_gigas",
+                "checked_when": ["findItem('Massive Armband')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s)",
+                  "findKeyItem('dented gigas shield') and findKeyItem('warped gigas armband') and findKeyItem('severed gigas collar') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Briareus')",
+                  "color_npc('???')",
+                  "color_pos('G-6')"
+                ],
+                "id": "briareus",
+                "checked_when": [
+                  "findKeyItem('dented gigas shield') and findKeyItem('warped gigas armband') and findKeyItem('severed gigas collar')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

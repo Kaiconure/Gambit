@@ -1,0 +1,82 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ironclad-sunderer",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ironclad_sunderer)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ironclad_sunderer": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ironclad_sunderer",
+            "name": "Abyssea Grauberg: Ironclad Sunderer",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Creed Seal: Body')", "color_mob('Ironclad Sunderer')"],
+                "id": "creed_seal_body",
+                "checked_when": ["findItem('Creed Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Ferine Seal: Body')", "color_mob('Ironclad Sunderer')"],
+                "id": "ferine_seal_body",
+                "checked_when": ["findItem('Ferine Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Charis Seal: Body')", "color_mob('Ironclad Sunderer')"],
+                "id": "charis_seal_body",
+                "checked_when": ["findItem('Charis Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Sylvan Seal: Body')", "color_mob('Ironclad Sunderer')"],
+                "id": "sylvan_seal_body",
+                "checked_when": ["findItem('Sylvan Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Aoidos' Seal: Hands\")", "color_mob('Teekesselchen')"],
+                "id": "aoidos_seal_hands",
+                "checked_when": ["findItem(\"Aoidos' Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Goetia Seal: Hands')", "color_mob('Teekesselchen')"],
+                "id": "goetia_seal_hands",
+                "checked_when": ["findItem('Goetia Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Cirque Seal: Hands')", "color_mob('Teekesselchen')"],
+                "id": "cirque_seal_hands",
+                "checked_when": ["findItem('Cirque Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Teekesselchen Fragment')", "color_mob('Teekesselchen')"],
+                "id": "teekesselchen_fragment",
+                "checked_when": ["findItem('Teekesselchen Fragment')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Bubbling Oil')", "color_mob('Sinister Seidel')"],
+                "id": "bubbling_oil",
+                "checked_when": ["findItem('Bubbling Oil')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Darkflame Arm')", "color_mob('Stygian Djinn')"],
+                "id": "darkflame_arm",
+                "checked_when": ["findItem('Darkflame Arm')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Teekesselchen Fragment') and findItem('Darkflame Arm') and color_green('ready') or color_yellow('not ready')", "color_mob('Ironclad Sunderer')", "color_npc('??? at J-6')"],
+                "id": "ironclad_sunderer",
+                "checked_when": ["findItem('Teekesselchen Fragment') and findItem('Darkflame Arm')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

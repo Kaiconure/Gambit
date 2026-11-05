@@ -1,7 +1,53 @@
 {
+  "actions": [
+    {
+      "import": "macros/skillchaining"
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.red_proc._allowed', not vars.abyssea.red_proc.bypass_auto_init)",
+        "setVar('vars.abyssea.red_proc._rotation', nil)"
+      ],
+      "comment": "Initialize once per battle; abyssea/red/use enables a manual search after engagement.",
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.red_proc._weapon_set_name', vars.abyssea.red_proc.weapon_set_name or vars.abyssea.weapon_set_name or 'weapons')",
+        "setVar('vars.abyssea.red_proc._weapons', arrayLength(vars.abyssea.red_proc[vars.abyssea.red_proc._weapon_set_name]) > 0 and vars.abyssea.red_proc[vars.abyssea.red_proc._weapon_set_name] or vars.abyssea[vars.abyssea.red_proc._weapon_set_name])",
+        "abyssea.runRedProc({state=vars.abyssea.red_proc, enabled=vars.abyssea.red_proc._allowed, is_active=\"vars.abyssea.weapon_proc == 'red'\", all_ws=vars.abyssea.red_proc.all_ws, weapons=vars.abyssea.red_proc._weapons, weapon_set_name=vars.abyssea.red_proc._weapon_set_name, on_stagger=vars.abyssea.red_proc.on_stagger, allow_outside_abyssea=vars.abyssea.allow_outside_abyssea, swap_delay=vars.abyssea.red_proc.swap_delay, refresh_delay=vars.abyssea.red_proc.refresh_delay, equip_timeout=vars.abyssea.red_proc.equip_timeout, empty_pass_delay=vars.abyssea.red_proc.empty_pass_delay, ws_allow_list=vars.abyssea.ws_allow_list, ws_black_list=vars.abyssea.ws_black_list})"
+      ],
+      "comment": "Hints narrow the weapon/WS rotation; confirmed red stagger applies on_stagger policy.",
+      "delay": 1,
+      "frequency": 0,
+      "scope": "battle",
+      "when": [
+        "vars.abyssea.weapon_proc == 'red'",
+        "vars.abyssea.red_proc._allowed",
+        "bt"
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "commands": [
+        "setVar('vars.abyssea.weapon_proc', 'red')",
+        "setVar('vars.abyssea.red_proc._allowed', true)",
+        "setVar('vars.abyssea.red_proc._rotation', nil)",
+        "log('Allowing initialization of red proc weapon skills for this battle.')",
+        "not me.is_engaged and logArray(usableWeaponSkills(vars.abyssea.red_proc.all_ws))"
+      ],
+      "max_iterations": 1,
+      "miss_frequency": 120,
+      "name": "abyssea/red/use",
+      "silent": true
+    }
+  ],
   "vars": {
     "^abyssea": {
-      "weapons": null,
+      "allow_outside_abyssea": false,
       "red_proc": {
         "all_ws": [
           "Cyclone",
@@ -18,155 +64,10 @@
           "Earth Crusher",
           "Sunburst"
         ],
+        "on_stagger": "stop",
         "reference": "https://www.bg-wiki.com/ffxi/Category:Abyssea#Red"
-      }
+      },
+      "weapon_proc": "none"
     }
-  },
-  "actions": [
-    {
-      "import": "macros/skillchaining"
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Determines if red procing is even allowed for this battle.",
-        " ================================================================================ "
-      ],
-      "commands": [
-        "setVar('vars.abyssea.red_proc._allowed', not vars.abyssea.red_proc.bypass_auto_init)"
-      ],
-      "delay": 0,
-      "frequency": "infinity",
-      "scope": "battle"
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Clears the list of already-tried weapon skills at the start of any fight.",
-        " ================================================================================ "
-      ],
-      "when": ["vars.abyssea.red_proc._allowed"],
-      "commands": [
-        "setVar('vars.abyssea.red_proc.used_ws', {})",
-        "setVar('vars.abyssea.red_proc.used_count', 0)",
-        "setVar('vars.abyssea.red_proc.usable_ws', {})",
-        "setVar('vars.abyssea.red_proc.reset', true)",
-        "setVar('vars.abyssea.red_proc._weapon_set_name', vars.abyssea.red_proc.weapon_set_name or vars.abyssea.weapon_set_name or 'weapons')",
-        "setVar('vars.abyssea.red_proc._weapons', arrayLength(vars.abyssea.red_proc[vars.abyssea.red_proc._weapon_set_name]) > 0 and vars.abyssea.red_proc[vars.abyssea.red_proc._weapon_set_name] or vars.abyssea[vars.abyssea.red_proc._weapon_set_name])",
-        "log('Identified', arrayLength(vars.abyssea.red_proc._weapons), 'RED PROC', '[' .. vars.abyssea.red_proc._weapon_set_name .. ']', 'weapon set(s) to cycle!')"
-      ],
-      "delay": 0,
-      "frequency": "infinity",
-      "scope": "battle"
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Resets the current weapon skill pool based on the currently equipped weapon type.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.red_proc.reset and vars.abyssea.red_proc._allowed"
-      ],
-      "commands": [
-        "setVar('vars.abyssea.red_proc.usable_ws', usableWeaponSkills(vars.abyssea.red_proc.all_ws))",
-        "setVar('vars.abyssea.red_proc.used_ws', {})",
-        "setVar('vars.abyssea.red_proc.used_count', 0)",
-        "setVar('vars.abyssea.red_proc.reset', false)",
-        "setVar('vars.abyssea.red_proc._allowed', true)",
-        "log('Identified', arrayCount(vars.abyssea.red_proc.usable_ws), 'usable RED PROC weapon skill(s)!')",
-        "(arrayCount(vars.abyssea.red_proc.usable_ws) == 0 and postpone(5)) or logArray(vars.abyssea.red_proc.usable_ws)"
-      ],
-      "delay": 0,
-      "frequency": 0,
-      "scope": "battle",
-      "scoped_enumerators": true
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Trigger a reset of the used weapon skills.",
-        "    - Fires when all known weapon skills for this weapon were used.",
-        "    - This variant only fires when there ARE weapon swaps defined.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.red_proc._allowed",
-        "(  \\",
-        "  hasAllFieldNames(vars.abyssea.red_proc.used_ws, vars.abyssea.red_proc.usable_ws) or \\",
-        "  (arrayLength(vars.abyssea.red_proc.usable_ws) == 0 and arrayLength(vars.abyssea.red_proc._weapons) > 0) or \\",
-        "  (arrayLength(vars.abyssea.red_proc.usable_ws) == 0 and not hasWeaponSkill(vars.abyssea.red_proc.usable_ws) and resetEnumerators('Red proc weapon change detected.')) \\",
-        ")",
-        "arrayLength(vars.abyssea.red_proc._weapons) > 0 and iterate(vars.abyssea.red_proc._weapons)",
-        "isTable(result) and checkEquipMany(result) or findUnequippedItem(result)"
-      ],
-      "commands": [
-        "log('All applicable RED PROC weapons skills have been used, moving to next set...')",
-        "isTable(result) and equipMany(result) or equip(item)",
-        "setVar('vars.abyssea.red_proc.reset', true)",
-        "wait(2)"
-      ],
-      "frequency": 1,
-      "scope": "battle",
-      "scoped_enumerators": true
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Trigger a reset of the used weapon skills.",
-        "    - Fires when all known weapon skills for this weapon were used.",
-        "    - This variant only fires when there are NO weapon swaps defined.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.red_proc._allowed",
-        "arrayLength(vars.abyssea.red_proc._weapons) <= 1",
-        "hasAllFieldNames(vars.abyssea.red_proc.used_ws, vars.abyssea.red_proc.usable_ws)"
-      ],
-      "commands": [
-        "log('All applicable RED PROC weapon skills have been used, restting...')",
-        "setVar('vars.abyssea.red_proc.reset', true)",
-        "wait(2)"
-      ],
-      "frequency": 5
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Uses the next available weapon skill for this weapon.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.red_proc._allowed",
-        "bt",
-        "(not vars.abyssea.ws_allow_list or vars.abyssea.ws_allow_list[bt.name])",
-        "(not vars.abyssea.ws_black_list or not vars.abyssea.ws_black_list[bt.name])",
-        "iterate(vars.abyssea.red_proc.usable_ws)",
-        "not getVarField('vars.abyssea.red_proc.used_ws', result)",
-        "canUseWeaponSkill(result)"
-      ],
-      "commands": [
-        "log('Using RED PROC weapon skill:', weapon_skill.name)",
-        "setVarField('vars.abyssea.red_proc.used_ws', result, true)",
-        "$macro:use_weapon_skill",
-        "varIncrement('vars.abyssea.red_proc.used_count')"
-      ],
-      "delay": 7,
-      "scope": "battle",
-      "scoped_enumerators": true
-    }
-  ],
-  "functions": [
-    {
-      "commands": [
-        "setVar('vars.abyssea.red_proc._allowed', true)",
-        "setVar('vars.abyssea.red_proc.reset', true)",
-        "log('Allowing initialization of red proc weapon skills for this battle.')",
-        "not me.is_engaged and logArray(usableWeaponSkills(vars.abyssea.red_proc.all_ws))"
-      ],
-      "name": "abyssea/red/use",
-      "max_iterations": 1,
-      "miss_frequency": 120
-    }
-  ]
+  }
 }

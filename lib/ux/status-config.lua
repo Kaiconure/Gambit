@@ -24,17 +24,18 @@ Config.defaults =
             default =
             {
                 {
-                    name='Automation',
+                    name='Summary',
                     expression={
-                        '"Actions: " .. format("%s", color_text(gambit.namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.entrypoint_relative), 241, 241, 183)',
-                        '"Events: " .. format("%s", color_text(gambit.event_namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.events_relative), 241, 241, 183)',
-                        '"Target: " .. color_mob(cursor) .. (cursor and cursor.valid_target and format(" (%s / %s)", color_number(cursor.id), color_number(format("%03X", cursor.index))) or "")'
+                        'format("%s %s%s%s", color_mob(me), color_job(me.main_job .. me.main_job_level), me.sub_job and ("/" .. color_job(me.sub_job .. me.sub_job_level)) or "", me.is_mastered and me.master_level and (" "..color_number("ML"..me.master_level)) or "")',
+                        '"  Actions: " .. format("%s", color_text(gambit.namespace or "global", 0, 255, 255)) .. "→" .. color_text(format("%s", gambit.entrypoint_relative), 241, 241, 183)',
+                        '"  Events: " .. format("%s", color_text(gambit.event_namespace or "global", 0, 255, 255)) .. "→" .. color_text(format("%s", gambit.events_relative), 241, 241, 183)',
+                        '"  Target: " .. color_mob(cursor) .. (cursor and cursor.valid_target and job_string(cursor) and (" " .. color_job(job_string(cursor))) or "") .. (cursor and cursor.valid_target and format("→%s %s•%s", color_number(format("%.2f", cursor.distance)), color_muted(cursor.id), color_muted(format("%03X", cursor.index))) or "")'
                     }
                 },
                 {
                     name='Skillchain',
                     expression={
-                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
+                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%s)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1fs', (skillchain or party_weapon_skill).lifetime)))"
                     }
                 },
                 {
@@ -52,11 +53,12 @@ Config.defaults =
             },
             compact = {
                 {
-                    name='Automation',
+                    name='Summary',
                     expression={
-                        '"Actions: " .. format("%s", color_text(gambit.namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.entrypoint_relative), 241, 241, 183)',
-                        '"Events: " .. format("%s", color_text(gambit.event_namespace or "global", 0, 255, 255)) .. " → " .. color_text(format("%s", gambit.events_relative), 241, 241, 183)',
-                        '"Target: " .. color_mob(cursor) .. (cursor and cursor.valid_target and format(" (%s / %s)", color_number(cursor.id), color_number(format("%03X", cursor.index))) or "")'
+                        'format("%s %s%s%s", color_mob(me), color_job(me.main_job .. me.main_job_level), me.sub_job and ("/" .. color_job(me.sub_job .. me.sub_job_level)) or "", me.is_mastered and me.master_level and (" "..color_number("ML"..me.master_level)) or "")',
+                        '"  Actions: " .. format("%s", color_text(gambit.namespace or "global", 0, 255, 255)) .. "→" .. color_text(format("%s", gambit.entrypoint_relative), 241, 241, 183)',
+                        '"  Events: " .. format("%s", color_text(gambit.event_namespace or "global", 0, 255, 255)) .. "→" .. color_text(format("%s", gambit.events_relative), 241, 241, 183)',
+                        '"  Target: " .. color_mob(cursor) .. (cursor and cursor.valid_target and job_string(cursor) and (" " .. color_job(job_string(cursor))) or "") .. (cursor and cursor.valid_target and format("→%s %s•%s", color_number(format("%.2f", cursor.distance)), color_muted(cursor.id), color_muted(format("%03X", cursor.index))) or "")'
                     }
                 }
             },
@@ -144,12 +146,31 @@ function Config.normalize(input)
                 for i,item in pairs(entry.checklist) do
                     assert(type(i)=='number' and i%1==0 and i>=1 and i<=#entry.checklist,
                         'Checklist must be an array')
-                    assert(type(item)=='table' and type(item.text)=='string' and not item.text:find('[\r\n]'),
-                        'Checklist items require single-line text')
+                    assert(type(item)=='table','Checklist items must be objects')
+                    if item.format~=nil then
+                        assert(type(item.format)=='table' and #item.format>=1,'Checklist format requires a format string')
+                        for index,code in pairs(item.format) do
+                            assert(type(index)=='number' and index%1==0 and index>=1 and index<=#item.format and
+                                type(code)=='string','Checklist format must be an array of strings')
+                        end
+                    elseif item.expression~=nil then
+                        assert(type(item.expression)=='string','Checklist item expression must be a string')
+                    else
+                        assert(type(item.text)=='string' and not item.text:find('[\r\n]'),
+                            'Checklist items require single-line text or an expression')
+                    end
                     item.id=item.id or ('objective_'..i)
                     assert(validId(item.id),'Checklist item ids must not contain dots or spaces')
                     assert(not ids[item.id],'Duplicate checklist item id: '..item.id)
                     ids[item.id]=true
+                    if item.checked_when~=nil then
+                        assert(type(item.checked_when)=='table','checked_when must be an array of expressions')
+                        for index,code in pairs(item.checked_when) do
+                            assert(type(index)=='number' and index%1==0 and index>=1 and
+                                index<=#item.checked_when and type(code)=='string',
+                                'checked_when must be an array of expressions')
+                        end
+                    end
                 end
             else
                 assert(entry.expression==nil or type(entry.expression)=='string' or type(entry.expression)=='table',

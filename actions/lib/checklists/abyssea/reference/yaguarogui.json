@@ -1,0 +1,77 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/yaguarogui",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.yaguarogui)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "yaguarogui": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_yaguarogui",
+            "name": "Abyssea Uleguerand: Yaguarogui",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Orison Seal: Body')", "color_mob('Yaguarogui')"],
+                "id": "orison_seal_body",
+                "checked_when": ["findItem('Orison Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Iga Seal: Body')", "color_mob('Yaguarogui')"],
+                "id": "iga_seal_body",
+                "checked_when": ["findItem('Iga Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Raider's Seal: Hands\")", "color_mob('Audumbla')"],
+                "id": "raiders_seal_hands",
+                "checked_when": ["findItem(\"Raider's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Tantra Seal: Hands')", "color_mob('Audumbla')"],
+                "id": "tantra_seal_hands",
+                "checked_when": ["findItem('Tantra Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Charis Seal: Hands')", "color_mob('Audumbla')"],
+                "id": "charis_seal_hands",
+                "checked_when": ["findItem('Charis Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Iga Seal: Hands')", "color_mob('Audumbla')"],
+                "id": "iga_seal_hands",
+                "checked_when": ["findItem('Iga Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Audumbla Hide')", "color_mob('Audumbla')"],
+                "id": "audumbla_hide",
+                "checked_when": ["findItem('Audumbla Hide')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('High-Quality Buffalo Horn')", "color_mob('Bluffalo')"],
+                "id": "high_quality_buffalo_horn",
+                "checked_when": ["findItem('High-Quality Buffalo Horn')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('High-Quality Black Tiger Hide')", "color_mob('Sierra Tiger')"],
+                "id": "high_quality_black_tiger_hide",
+                "checked_when": ["findItem('High-Quality Black Tiger Hide')"]
+              },
+              {
+                "format": ["You are %s for %s", "findItem('Audumbla Hide') and findItem('High-Quality Black Tiger Hide') and color_green('ready') or color_yellow('not ready')", "color_mob('Yaguarogui')"],
+                "id": "yaguarogui",
+                "checked_when": ["findItem('Audumbla Hide') and findItem('High-Quality Black Tiger Hide')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/chukwa",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.chukwa)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "chukwa": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_chukwa",
+            "name": "Abyssea Tahrongi: Chukwa",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s/%s)",
+                  "color_ki('Mossy Adamantoise Shell')",
+                  "color_mob('Chukwa')",
+                  "color_pos('E-5')",
+                  "color_pos('F-5')"
+                ],
+                "id": "mossy_adamantoise_shell",
+                "checked_when": ["findKeyItem('mossy adamantoise shell')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Creed Seal: Body')",
+                  "color_mob('Chukwa')",
+                  "color_pos('F-4/5')"
+                ],
+                "id": "creed_seal_body",
+                "checked_when": ["findItem('Creed Seal: Body')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Red Spriggan Spirit')",
+                  "color_mob('Chukwa')",
+                  "color_pos('F-4/5')"
+                ],
+                "id": "red_spriggan_spirit",
+                "checked_when": ["findItem('Red Spriggan Spirit')"]
+              },
+              {
+                "format": [
+                  "%s",
+                  "color_muted('   → See Chloris checklist for the related pop chain')"
+                ],
+                "id": "chloris_reference",
+                "checked_when": ["false"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s/%s, timed spawn)",
+                  "color_green('ready')",
+                  "color_mob('Chukwa')",
+                  "color_pos('F-4')",
+                  "color_pos('F-5')"
+                ],
+                "id": "chukwa",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

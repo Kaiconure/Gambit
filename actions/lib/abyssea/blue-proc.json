@@ -1,9 +1,119 @@
 {
+  "actions": [
+    {
+      "import": "macros/skillchaining"
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.blue_proc._allowed', not vars.abyssea.blue_proc.bypass_auto_init)",
+        "setVar('vars.abyssea.blue_proc._blue_rotation', nil)",
+        "setVar('vars.abyssea.blue_proc.all_ws', {})"
+      ],
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle"
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.blue_proc._blue_rotation', nil)",
+        "((game_time.hour - 6 ) % 24 < 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614)",
+        "((game_time.hour - 6 ) % 24 >= 8 and (game_time.hour - 6 ) % 24 < 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_1422)",
+        "((game_time.hour - 6 ) % 24 >= 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_2206)",
+        "log('Selected BLUE PROC pool:') and logArray(vars.abyssea.blue_proc.all_ws)"
+      ],
+      "comment": "Select the initial time window once; never change pool just because the clock advances mid-battle.",
+      "delay": 0,
+      "frequency": "infinity",
+      "scope": "battle",
+      "when": [
+        "vars.abyssea.weapon_proc == 'blue'",
+        "vars.abyssea.blue_proc._allowed",
+        "arrayLength(vars.abyssea.blue_proc.all_ws) == 0"
+      ]
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.blue_proc._weapon_set_name', vars.abyssea.blue_proc.weapon_set_name or vars.abyssea.weapon_set_name or 'weapons')",
+        "setVar('vars.abyssea.blue_proc._weapons', arrayLength(vars.abyssea.blue_proc[vars.abyssea.blue_proc._weapon_set_name]) > 0 and vars.abyssea.blue_proc[vars.abyssea.blue_proc._weapon_set_name] or vars.abyssea[vars.abyssea.blue_proc._weapon_set_name])",
+        "abyssea.runBlueProc({state=vars.abyssea.blue_proc, enabled=vars.abyssea.blue_proc._allowed, is_active=\"vars.abyssea.weapon_proc == 'blue'\", all_ws=vars.abyssea.blue_proc.all_ws, weapons=vars.abyssea.blue_proc._weapons, weapon_set_name=vars.abyssea.blue_proc._weapon_set_name, on_stagger=vars.abyssea.blue_proc.on_stagger, allow_outside_abyssea=vars.abyssea.allow_outside_abyssea, swap_delay=vars.abyssea.blue_proc.swap_delay, refresh_delay=vars.abyssea.blue_proc.refresh_delay, equip_timeout=vars.abyssea.blue_proc.equip_timeout, empty_pass_delay=vars.abyssea.blue_proc.empty_pass_delay, ws_allow_list=vars.abyssea.ws_allow_list, ws_black_list=vars.abyssea.ws_black_list})"
+      ],
+      "delay": 1,
+      "frequency": 0,
+      "scope": "battle",
+      "when": [
+        "vars.abyssea.weapon_proc == 'blue'",
+        "bt",
+        "vars.abyssea.blue_proc._allowed",
+        "arrayLength(vars.abyssea.blue_proc.all_ws) > 0"
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "commands": [
+        "setVar('vars.abyssea.weapon_proc', 'blue')",
+        "setVar('vars.abyssea.blue_proc._allowed', true)",
+        "setVar('vars.abyssea.blue_proc._blue_rotation', nil)",
+        "setVar('vars.abyssea.blue_proc.all_ws', arrayMerge(vars.abyssea.blue_proc.ws_0614, vars.abyssea.blue_proc.ws_1422, vars.abyssea.blue_proc.ws_2206))",
+        "log('Selected BLUE PROC pool:') and logArray(vars.abyssea.blue_proc.all_ws)"
+      ],
+      "max_iterations": 1,
+      "miss_frequency": 120,
+      "name": "abyssea/blue/use",
+      "silent": true
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.weapon_proc', 'blue')",
+        "setVar('vars.abyssea.blue_proc._allowed', true)",
+        "setVar('vars.abyssea.blue_proc._blue_rotation', nil)",
+        "((game_time.hour - 6 ) % 24 < 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614)",
+        "((game_time.hour - 6 ) % 24 >= 8 and (game_time.hour - 6 ) % 24 < 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_1422)",
+        "((game_time.hour - 6 ) % 24 >= 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_2206)",
+        "log('Selected BLUE PROC pool:') and logArray(vars.abyssea.blue_proc.all_ws)"
+      ],
+      "max_iterations": 1,
+      "miss_frequency": 120,
+      "name": "abyssea/blue/use-now",
+      "silent": true
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.weapon_proc', 'blue')",
+        "setVar('vars.abyssea.blue_proc._allowed', true)",
+        "setVar('vars.abyssea.blue_proc._blue_rotation', nil)",
+        "((game_time.hour - 6 - 8) % 24 < 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614)",
+        "((game_time.hour - 6 - 8) % 24 >= 8 and (game_time.hour - 6 - 8) % 24 < 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_1422)",
+        "((game_time.hour - 6 - 8) % 24 >= 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_2206)",
+        "log('Selected BLUE PROC pool:') and logArray(vars.abyssea.blue_proc.all_ws)"
+      ],
+      "max_iterations": 1,
+      "miss_frequency": 120,
+      "name": "abyssea/blue/use-previous",
+      "silent": true
+    },
+    {
+      "commands": [
+        "setVar('vars.abyssea.weapon_proc', 'blue')",
+        "setVar('vars.abyssea.blue_proc._allowed', true)",
+        "setVar('vars.abyssea.blue_proc._blue_rotation', nil)",
+        "((game_time.hour - 6 + 8) % 24 < 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614)",
+        "((game_time.hour - 6 + 8) % 24 >= 8 and (game_time.hour - 6 + 8) % 24 < 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_1422)",
+        "((game_time.hour - 6 + 8) % 24 >= 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_2206)",
+        "log('Selected BLUE PROC pool:') and logArray(vars.abyssea.blue_proc.all_ws)"
+      ],
+      "max_iterations": 1,
+      "miss_frequency": 120,
+      "name": "abyssea/blue/use-next",
+      "silent": true
+    }
+  ],
   "vars": {
     "^abyssea": {
-      "weapons": null,
+      "allow_outside_abyssea": false,
       "blue_proc": {
-        "weapon_set_name": null,
+        "on_stagger": "stop",
+        "reference": "https://www.bg-wiki.com/ffxi/Category:Abyssea#Blue",
         "ws_0614": [
           "Shadowstitch",
           "Dancing Edge",
@@ -46,7 +156,7 @@
           "Asuran Fists",
           "Skullbreaker",
           "True Strike",
-          "Judgement",
+          "Judgment",
           "Hexa Strike",
           "Black Halo",
           "Heavy Swing",
@@ -54,182 +164,9 @@
           "Full Swing",
           "Spirit Taker",
           "Retribution"
-        ],
-        "reference": "https://www.bg-wiki.com/ffxi/Category:Abyssea#Blue"
-      }
+        ]
+      },
+      "weapon_proc": "none"
     }
-  },
-  "actions": [
-    {
-      "import": "macros/skillchaining"
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Determines if blue procing is even allowed for this battle.",
-        " ================================================================================ "
-      ],
-      "commands": [
-        "setVar('vars.abyssea.blue_proc._allowed', not vars.abyssea.blue_proc.bypass_auto_init)"
-      ],
-      "delay": 0,
-      "frequency": "infinity",
-      "scope": "battle"
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Clears the list of already-tried weapon skills at the start of any fight.",
-        " ================================================================================ "
-      ],
-      "when": ["vars.abyssea.blue_proc._allowed"],
-      "commands": [
-        "setVar('vars.abyssea.blue_proc.used_ws', {})",
-        "setVar('vars.abyssea.blue_proc.used_count', 0)",
-        "setVar('vars.abyssea.blue_proc.all_ws', {})",
-        "setVar('vars.abyssea.blue_proc.usable_ws', {})",
-        "setVar('vars.abyssea.blue_proc.reset', true)",
-        "setVar('vars.abyssea.blue_proc._weapon_set_name', vars.abyssea.blue_proc.weapon_set_name or vars.abyssea.weapon_set_name or 'weapons')",
-        "setVar('vars.abyssea.blue_proc._weapons', arrayLength(vars.abyssea.blue_proc[vars.abyssea.blue_proc._weapon_set_name]) > 0 and vars.abyssea.blue_proc[vars.abyssea.blue_proc._weapon_set_name] or vars.abyssea[vars.abyssea.blue_proc._weapon_set_name])",
-        "log('Identified', arrayCount(vars.abyssea.blue_proc._weapons), 'BLUE PROC', '[' .. vars.abyssea.blue_proc._weapon_set_name .. ']', 'weapon set(s) to cycle!')"
-      ],
-      "delay": 0,
-      "frequency": "infinity",
-      "scope": "battle"
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Resets the current weapon skill pool based on time of day.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.blue_proc.reset and vars.abyssea.blue_proc._allowed"
-      ],
-      "commands": [
-        "inRange((game_time.hour - 6) % 24, 0, 8) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_0614) and log('Setting BLUE PROC pool to 06-14')",
-        "inRange((game_time.hour - 6) % 24, 8, 16) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_1422) and log('Setting BLUE PROC pool to 14-22')",
-        "inRange((game_time.hour - 6) % 24, 16, 24) and setVar('vars.abyssea.blue_proc.all_ws', vars.abyssea.blue_proc.ws_2206) and log('Setting BLUE PROC pool to 22-06')",
-        "setVar('vars.abyssea.blue_proc.used_ws', {})",
-        "setVar('vars.abyssea.blue_proc.used_count', 0)",
-        "setVar('vars.abyssea.blue_proc.usable_ws', usableWeaponSkills(vars.abyssea.blue_proc.all_ws))",
-        "setVar('vars.abyssea.blue_proc.reset', false)",
-        "log('Identified', arrayCount(vars.abyssea.blue_proc.usable_ws), 'usable time-based BLUE PROC weapon skill(s)!')",
-        "(arrayCount(vars.abyssea.blue_proc.usable_ws) == 0 and postpone(5)) or logArray(vars.abyssea.blue_proc.usable_ws)"
-      ],
-      "delay": 0,
-      "frequency": 0,
-      "scope": "battle",
-      "scoped_enumerators": true
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Trigger a reset of the used weapon skills.",
-        "    - Fires when all known weapon skills for this weapon were used.",
-        "    - This variant only fires when there ARE weapon swaps defined.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.blue_proc._allowed",
-        "(  \\",
-        "  hasAllFieldNames(vars.abyssea.blue_proc.used_ws, vars.abyssea.blue_proc.usable_ws) or \\",
-        "  (arrayLength(vars.abyssea.blue_proc.usable_ws) == 0 and arrayLength(vars.abyssea.blue_proc._weapons) > 0) or \\",
-        "  (arrayLength(vars.abyssea.blue_proc.usable_ws) == 0 and not hasWeaponSkill(vars.abyssea.blue_proc.usable_ws) and resetEnumerators('Blue proc weapon change detected.')) \\",
-        ")",
-        "arrayLength(vars.abyssea.blue_proc._weapons) > 0 and iterate(vars.abyssea.blue_proc._weapons)",
-        "isTable(result) and checkEquipMany(result) or findUnequippedItem(result)"
-      ],
-      "commands": [
-        "log('All applicable BLUE PROC weapons skills have been used, moving to next set...')",
-        "isTable(result) and equipMany(result) or equip(item)",
-        "setVar('vars.abyssea.blue_proc.reset', true)",
-        "wait(2)"
-      ],
-      "frequency": 1,
-      "scope": "battle",
-      "scoped_enumerators": true
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Trigger a reset of the used weapon skills.",
-        "    - Fires when all known weapon skills for this weapon were used.",
-        "    - This variant only fires when there are NO weapon swaps defined.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.blue_proc._allowed",
-        "arrayLength(vars.abyssea.blue_proc._weapons) <= 1",
-        "hasAllFieldNames(vars.abyssea.blue_proc.used_ws, vars.abyssea.blue_proc.usable_ws)"
-      ],
-      "commands": [
-        "log('All applicable BLUE PROC weapon skills have been used, starting over...')",
-        "setVar('vars.abyssea.blue_proc.reset', true)",
-        "wait(2)"
-      ],
-      "frequency": 5
-    },
-    {
-      "comment": [
-        " ================================================================================ ",
-        "  Uses the next available weapon skill for this weapon.",
-        " ================================================================================ "
-      ],
-      "when": [
-        "vars.abyssea.blue_proc._allowed",
-        "bt",
-        "iterate(vars.abyssea.blue_proc.usable_ws)",
-        "not getVarField('vars.abyssea.blue_proc.used_ws', result)",
-        "canUseWeaponSkill(result)"
-      ],
-      "commands": [
-        "log('Using BLUE PROC weapon skill:', weapon_skill.name)",
-        "setVarField('vars.abyssea.blue_proc.used_ws', result, true)",
-        "useWeaponSkill()",
-        "varIncrement('vars.abyssea.blue_proc.used_count')"
-      ],
-      "delay": 7,
-      "scope": "battle",
-      "scoped_enumerators": true
-    }
-  ],
-  "functions": [
-    {
-      "commands": [
-        "setVar('vars.abyssea.blue_proc._allowed', true)",
-        "log('Allowing initialization of CURRENT time slice blue proc weapon skills for this battle.')",
-        "inRange((game_time.hour - 6) % 24, 0, 8) and log('Weapon skills for 06-14:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_0614))",
-        "inRange((game_time.hour - 6) % 24, 8, 16) and log('Weapon skills for 14-22:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_1422))",
-        "inRange((game_time.hour - 6) % 24, 16, 24) and log('Weapon skills for 22-06:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_2206))"
-      ],
-      "name": "abyssea/blue/use",
-      "max_iterations": 1,
-      "miss_frequency": 120
-    },
-    {
-      "commands": [
-        "setVar('vars.abyssea.blue_proc._allowed', true)",
-        "log('Allowing initialization of PREVIOUS time slice blue proc weapon skills for this battle.')",
-        "inRange((game_time.hour - 6 - 8) % 24, 0, 8) and log('Weapon skills for 06-14:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_0614))",
-        "inRange((game_time.hour - 6 - 8) % 24, 8, 16) and log('Weapon skills for 14-22:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_1422))",
-        "inRange((game_time.hour - 6 - 8) % 24, 16, 24) and log('Weapon skills for 22-06:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_2206))"
-      ],
-      "name": "abyssea/blue/use-previous",
-      "max_iterations": 1,
-      "miss_frequency": 120
-    },
-    {
-      "commands": [
-        "setVar('vars.abyssea.blue_proc._allowed', true)",
-        "log('Allowing initialization of NEXT time slice blue proc weapon skills for this battle.')",
-        "inRange((game_time.hour - 6 + 8) % 24, 0, 8) and log('Weapon skills for 06-14:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_0614))",
-        "inRange((game_time.hour - 6 + 8) % 24, 8, 16) and log('Weapon skills for 14-22:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_1422))",
-        "inRange((game_time.hour - 6 + 8) % 24, 16, 24) and log('Weapon skills for 22-06:') and logArray(usableWeaponSkills(vars.abyssea.blue_proc.ws_2206))"
-      ],
-      "name": "abyssea/blue/use-next",
-      "max_iterations": 1,
-      "miss_frequency": 120
-    }
-  ]
+  }
 }

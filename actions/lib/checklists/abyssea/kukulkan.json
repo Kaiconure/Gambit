@@ -1,0 +1,105 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/kukulkan",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.kukulkan)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "kukulkan": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_kukulkan",
+            "name": "Abyssea Konschtat: Kukulkan",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Tattered Hippogryph Wing')",
+                  "color_mob('Alkonost')",
+                  "color_npc('???')",
+                  "color_pos('H-6')"
+                ],
+                "id": "alkonost",
+                "checked_when": ["findKeyItem('tattered hippogryph wing')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Giant Bugard Tusk')",
+                  "color_mob('Ypotryll')",
+                  "color_pos('I-6')"
+                ],
+                "id": "ypotryll",
+                "checked_when": ["findItem('Giant Bugard Tusk')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Cracked Wivre Horn')",
+                  "color_mob('Keratyrannos')",
+                  "color_npc('???')",
+                  "color_pos('G-6')"
+                ],
+                "id": "keratyrannos",
+                "checked_when": ["findKeyItem('cracked wivre horn')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Armored Dragonhorn')",
+                  "color_mob('Mesa Wivre')",
+                  "color_pos('H-5')"
+                ],
+                "id": "mesa_wivre",
+                "checked_when": ["findItem('Armored Dragonhorn')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Mucid Ahriman Eyeball')",
+                  "color_mob('Arimaspi')",
+                  "color_npc('???')",
+                  "color_pos('K-6')"
+                ],
+                "id": "arimaspi",
+                "checked_when": ["findKeyItem('mucid ahriman eyeball')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s/%s)",
+                  "color_item('Clouded Lens')",
+                  "color_mob('Deep Eye')",
+                  "color_pos('K-6')",
+                  "color_pos('J-7')"
+                ],
+                "id": "deep_eye",
+                "checked_when": ["findItem('Clouded Lens')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, E of %s)",
+                  "findKeyItem('tattered hippogryph wing') and findKeyItem('cracked wivre horn') and findKeyItem('mucid ahriman eyeball') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Kukulkan')",
+                  "color_npc('???')",
+                  "color_pos('H-5')",
+                  "color_npc('Conflux #6')"
+                ],
+                "id": "kukulkan",
+                "checked_when": [
+                  "findKeyItem('tattered hippogryph wing') and findKeyItem('cracked wivre horn') and findKeyItem('mucid ahriman eyeball')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

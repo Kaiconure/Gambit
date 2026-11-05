@@ -52,20 +52,20 @@ for _,comment in ipairs({false,42,{'valid',false},{text='not an array'}}) do
 end
 Paths.setLoadedNamespace('child',{'child','parent'})
 local paths=Paths.eventFiles('Tester','RDM')
-assert(paths[1]=='./settings/_ns/child/players/Tester/events/rdm.json' and paths[4]=='./settings/_ns/child/events/(all).json')
-assert(paths[5]=='./settings/_ns/parent/players/Tester/events/rdm.json')
+assert(paths[1]=='./settings/_namespace-settings/child/players/Tester/events/rdm.json' and paths[4]=='./settings/_namespaces/child/events/(all).json')
+assert(paths[5]=='./settings/_namespace-settings/parent/players/Tester/events/rdm.json')
 assert(paths[9]=='./settings/Tester/events/rdm.json')
 local available={
-    ['./settings/_ns/child/events/(all).json']={},
+    ['./settings/_namespaces/child/events/(all).json']={},
     ['./settings/Tester/events/rdm.json']={vars={wrong_scope=true}},
 }
 local function selected() return Config.load(paths,function(path) return available[path] end) end
-assert(selected().path=='./settings/_ns/child/events/(all).json')
-available['./settings/_ns/child/players/Tester/events/(all).json']={}
-available['./settings/_ns/child/events/rdm.json']={}
-assert(selected().path=='./settings/_ns/child/players/Tester/events/(all).json')
-available['./settings/_ns/child/players/Tester/events/rdm.json']={}
-assert(selected().path=='./settings/_ns/child/players/Tester/events/rdm.json')
+assert(selected().path=='./settings/_namespaces/child/events/(all).json')
+available['./settings/_namespace-settings/child/players/Tester/events/(all).json']={}
+available['./settings/_namespaces/child/events/rdm.json']={}
+assert(selected().path=='./settings/_namespace-settings/child/players/Tester/events/(all).json')
+available['./settings/_namespace-settings/child/players/Tester/events/rdm.json']={}
+assert(selected().path=='./settings/_namespace-settings/child/players/Tester/events/rdm.json')
 assert(not Paths.validateNamespace('child/events/test'))
 Paths.setLoadedNamespace(nil)
 local selectors=require('./lib/target-selectors')
@@ -274,7 +274,14 @@ metadata=service.runtime.pending[1].event
 assert(metadata.type==nil and metadata.element==nil and metadata.element_name==nil)
 assert(metadata.name=='Savage Blade' and metadata.en==nil and metadata.ja==nil)
 assert(metadata.healing==nil and metadata.enfeebling==nil)
-listeners.action({actor_id=100,category=3,param=12}); assert(#service.runtime.pending==0)
+listeners.action({actor_id=100,category=3,param=12,targets={{id=200,actions={{message=185,param=10}}}}}); assert(#service.runtime.pending==0)
+assert(metadata.completed and metadata.landed and not metadata.missed and metadata.effect=='landed')
+service:send(packet); flush()
+metadata=service.runtime.pending[1].event
+listeners.action({actor_id=100,category=3,param=12,targets={
+    {id=201,actions={{message=185,param=100}}},{id=200,actions={{message=188,param=0}}}}})
+assert(#service.runtime.pending==0 and metadata.completed and metadata.missed and not metadata.landed)
+assert(metadata.effect=='missed' and #metadata.results==2 and metadata.results[1].landed)
 service:send(packet); flush()
 packet={Actor=100,Message=17}
 listeners['incoming chunk'](0x029,'raw','raw',false,false); assert(#service.runtime.pending==0)

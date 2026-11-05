@@ -1,0 +1,108 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/myrmecoleon",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.myrmecoleon)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "myrmecoleon": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_myrmecoleon",
+            "name": "Abyssea Tahrongi: Myrmecoleon",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Balance Stone')",
+                  "color_mob('Myrmecoleon')",
+                  "color_pos('G-10')"
+                ],
+                "id": "balance_stone",
+                "checked_when": ["findItem('Balance Stone')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Balance Coin')",
+                  "color_mob('Myrmecoleon')",
+                  "color_pos('G-10')"
+                ],
+                "id": "balance_coin",
+                "checked_when": ["findItem('Balance Coin')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Creed Seal: Hands')",
+                  "color_mob('Myrmecoleon')",
+                  "color_pos('G-10')"
+                ],
+                "id": "creed_seal_hands",
+                "checked_when": ["findItem('Creed Seal: Hands')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_item('Bale Seal: Legs')",
+                  "color_mob('Myrmecoleon')",
+                  "color_pos('G-10')"
+                ],
+                "id": "bale_seal_legs",
+                "checked_when": ["findItem('Bale Seal: Legs')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_item('Moaning Vestige')",
+                  "color_mob('Lamenter')",
+                  "color_npc('???')",
+                  "color_pos('F-10/G-10')"
+                ],
+                "id": "moaning_vestige",
+                "checked_when": ["findItem('Moaning Vestige')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_mob('Lachrymater')",
+                  "color_item('Moaning Vestige')",
+                  "color_pos('F-10/G-10')"
+                ],
+                "id": "lachrymater",
+                "checked_when": ["findItem('Moaning Vestige')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s)",
+                  "color_mob('Myrmecoleon')",
+                  "color_mob('Lachrymater')",
+                  "color_pos('G-10')"
+                ],
+                "id": "myrmecoleon_spawn",
+                "checked_when": ["findItem('Moaning Vestige')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s; walk over the spawn point)",
+                  "findItem('Moaning Vestige') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Myrmecoleon')",
+                  "color_pos('G-10')"
+                ],
+                "id": "myrmecoleon",
+                "checked_when": ["findItem('Moaning Vestige')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

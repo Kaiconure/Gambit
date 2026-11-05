@@ -17,6 +17,7 @@ characters running the addon locally.
 | [Equipment queue](docs/equipment.md) | Ordered swaps, pending/confirmed queries, retries, and action barriers |
 | [Action properties](docs/properties.md) | Values available in action contexts |
 | [Action functions](docs/functions.md) | Lua helpers used by actions |
+| [Abyssea interface](docs/abyssea.md) | Custom proc actions, observations, configuration, and testing |
 | [Action slots](docs/action-slots.md) | Contributions, replacements, fallbacks, and priorities |
 | [Action entrypoints](docs/action-entry-points.md) | Job, group, inverse-group, and leader filenames |
 | [Namespace paths](docs/namespace-folders.md) | Folder layout and underscore aliases |
@@ -97,7 +98,7 @@ settings/
       lib/
   actions/
     lib/
-  _ns/
+  _namespaces/
     my-event/
       .nsconfig
       actions/
@@ -108,6 +109,8 @@ settings/
             whm.json
             (mages).json
             (~mages).json
+  _namespace-settings/
+    my-event/
       players/
         CharacterName/
           main.json
@@ -166,8 +169,7 @@ cycles are rejected. Existing namespaces are inheritable by default. Set
 `"inheritable": false` to forbid inheritance, or `"abstract": true` for a shared
 parent that cannot be selected directly.
 
-`settings/_ns` is preferred; an existing `settings/.ns` remains a compatibility
-fallback when `_ns` is absent. Exact directory names win, with underscore-prefixed
+`settings/_namespaces` is the user namespace root. Exact directory names win, with underscore-prefixed
 aliases supported per segment: logical `base` can resolve to `_base`. Namespace
 segments cannot use reserved `actions`/`players` names or Windows device names.
 

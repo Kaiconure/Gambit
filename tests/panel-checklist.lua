@@ -46,7 +46,7 @@ assert(first.hovered and first.text.rgb[1]==Theme.colors.yellow[1])
 panel.nextUpdate=0; panel:update()
 assert(first.hovered and first.text.rgb[1]==Theme.colors.yellow[1])
 panel.panel:mouse(0,hx,hy,true)
-assert(not first.hovered and first.text.rgb[1]==Theme.colors.subheading[1])
+assert(not first.hovered and first.text.rgb[1]==Theme.colors.checklist[1])
 panel.panel:mouse(0,hx,hy,false)
 panel.panel:show(false)
 assert(not first.hovered)
@@ -92,5 +92,65 @@ invalid({name='Bad path',id='a.b',checklist={}})
 invalid({name='Duplicate',id='test',checklist={{id='objective_2',text='One'},{text='Two'}}})
 invalid({name='Bad item',id='test',checklist={{text='Two\nlines'}}})
 invalid({name='Not array',id='test',checklist={key={text='One'}}})
+invalid({name='Bad condition',id='test',checklist={{text='One',checked_when='true'}}})
+invalid({name='Bad condition item',id='test',checklist={{text='One',checked_when={true}}}})
+context.owned=false
+context.calls=0
+context.checkSecond=function() context.calls=context.calls+1; return true end
+panel:setTemporaryTracking({{id='automatic',name='Items',checklist={
+    {id='owned',text='Owned items',checked_when={'owned','checkSecond()'}},
+    {text='Empty conditions',checked_when={}},
+    {text='Compile error',checked_when={'not valid lua !'}},
+    {text='Runtime error',checked_when={'missing.functionCall()'}},
+}}})
+panel.nextUpdate=0; panel:update()
+local automatic=panel.entries[1].checks
+assert(not automatic[1].checked and context.calls==0)
+assert(automatic[2].checked and not automatic[3].checked and not automatic[4].checked)
+click(automatic[1].button)
+assert(not context.getVar('vars.panel.automatic.owned'))
+context.owned=true
+panel.nextUpdate=0; panel:update()
+assert(automatic[1].checked and context.calls==1)
+click(automatic[1].button)
+assert(automatic[1].checked and not context.getVar('vars.panel.automatic.owned'))
+context.owned=false
+panel.nextUpdate=0; panel:update()
+assert(not automatic[1].checked)
+panel:setTemporaryTracking({{id='labels',name='Labels',checklist={
+    {text='Ignored',expression="color_ki('Tooth')",checked_when={'owned'}},
+    {expression="color_item('Potion')"},
+    {expression="color_latest('Independent')"},
+    {expression='missing.call()'},
+    {expression='not valid lua !'},
+}}})
+panel.nextUpdate=0; panel:update()
+local labels=panel.entries[1].checks
+assert(labels[1].display=='\\cs(179,154,255)Tooth\\cr' and not labels[1].checked)
+assert(labels[2].display=='\\cs(188,241,114)Potion\\cr')
+assert(labels[3].display==('\\cs(%d,%d,%d)Independent\\cr'):format(unpack(Theme.colors.body)))
+assert(labels[4].display=='[error]' and labels[5].display=='[error]')
+context.owned=true
+panel.nextUpdate=0; panel:update()
+assert(labels[1].checked)
+click(labels[2].button)
+assert(context.getVar('vars.panel.labels.objective_2')==true)
+invalid({id='bad_expression',name='Bad expression',checklist={{expression={"'text'"}}}})
+panel:setTemporaryTracking({{id='formats',name='Formats',checklist={
+    {text='ignored',expression='missing.call()',format={'%s: %s (E-6)',"color_ki('Tooth')","color_mob('Amarok')"}},
+    {format={'Literal location (E-6)'}},
+    {format={'%d','nil'}},
+    {format={'%s','missing.call()'}},
+    {format={'%s','invalid lua !'}},
+    {format={'%s%s',"color_item('Item')","color_latest(' suffix')"}},
+}}})
+panel.nextUpdate=0; panel:update()
+local formats=panel.entries[1].checks
+assert(formats[1].display=='\\cs(179,154,255)Tooth\\cr: '..('\\cs(%d,%d,%d)Amarok\\cr (E-6)'):format(unpack(Theme.colors.target_engaged)))
+assert(formats[2].display=='Literal location (E-6)')
+for index=3,5 do assert(formats[index].display=='[error]') end
+assert(formats[6].display=='\\cs(188,241,114)Item\\cr\\cs(188,241,114) suffix\\cr')
+invalid({id='empty_format',name='Bad format',checklist={{format={}}}})
+invalid({id='bad_format',name='Bad format',checklist={{format={'%s',123}}}})
 panel:destroy()
 print('PASS: checklist precedence, rendering, clicks, external updates, generated ids and validation')

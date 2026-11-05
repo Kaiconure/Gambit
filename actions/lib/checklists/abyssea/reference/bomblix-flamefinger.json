@@ -1,0 +1,62 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/bomblix-flamefinger",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.bomblix_flamefinger)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "bomblix_flamefinger": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_bomblix_flamefinger",
+            "name": "Abyssea Grauberg: Bomblix Flamefinger",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Estoqueur's Seal: Body\")", "color_mob('Bomblix Flamefinger')"],
+                "id": "estoqueurs_seal_body",
+                "checked_when": ["findItem(\"Estoqueur's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Cirque Seal: Body')", "color_mob('Bomblix Flamefinger')"],
+                "id": "cirque_seal_body",
+                "checked_when": ["findItem('Cirque Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Navarch's Seal: Body\")", "color_mob('Bomblix Flamefinger')"],
+                "id": "navarchs_seal_body",
+                "checked_when": ["findItem(\"Navarch's Seal: Body\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Goblin Oil')", "color_mob('Goblin Meatgrinder')"],
+                "id": "goblin_oil",
+                "checked_when": ["findItem('Goblin Oil')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Goblin Gunpowder')", "color_mob('Burstrox Powderpate')"],
+                "id": "goblin_gunpowder",
+                "checked_when": ["findItem('Goblin Gunpowder')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Goblin Rope')", "color_mob('Goblin Plunderer')"],
+                "id": "goblin_rope",
+                "checked_when": ["findItem('Goblin Rope')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Goblin Oil') and findItem('Goblin Gunpowder') and color_green('ready') or color_yellow('not ready')", "color_mob('Bomblix Flamefinger')", "color_npc('??? at J-11/K-11')"],
+                "id": "bomblix_flamefinger",
+                "checked_when": ["findItem('Goblin Oil') and findItem('Goblin Gunpowder')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

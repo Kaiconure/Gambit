@@ -1,0 +1,77 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/blanga",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.blanga)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "blanga": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_blanga",
+            "name": "Abyssea Uleguerand: Blanga",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Aoidos' Seal: Body\")", "color_mob('Blanga')"],
+                "id": "aoidos_seal_body",
+                "checked_when": ["findItem(\"Aoidos' Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Creed Seal: Body')", "color_mob('Blanga')"],
+                "id": "creed_seal_body",
+                "checked_when": ["findItem('Creed Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Raider's Seal: Body\")", "color_mob('Blanga')"],
+                "id": "raiders_seal_body",
+                "checked_when": ["findItem(\"Raider's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Sylvan Seal: Body')", "color_mob('Blanga')"],
+                "id": "sylvan_seal_body",
+                "checked_when": ["findItem('Sylvan Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Ferine Seal: Hands')", "color_mob('Chillwing Hwitti')"],
+                "id": "ferine_seal_hands",
+                "checked_when": ["findItem('Ferine Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Navarch's Seal: Hands\")", "color_mob('Chillwing Hwitti')"],
+                "id": "navarchs_seal_hands",
+                "checked_when": ["findItem(\"Navarch's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Rimed Wing')", "color_mob('Chillwing Hwitti')"],
+                "id": "rimed_wing",
+                "checked_when": ["findItem('Rimed Wing')"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item(\"Imp Sentry's Horn\")", "color_mob('Ermit Imp')"],
+                "id": "imp_sentrys_horn",
+                "checked_when": ["findItem(\"Imp Sentry's Horn\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Benumbed Eye')", "color_mob('Benumbed Vodoriga')"],
+                "id": "benumbed_eye",
+                "checked_when": ["findItem('Benumbed Eye')"]
+              },
+              {
+                "format": ["You are %s for %s", "findItem('Rimed Wing') and findItem('Benumbed Eye') and color_green('ready') or color_yellow('not ready')", "color_mob('Blanga')"],
+                "id": "blanga",
+                "checked_when": ["findItem('Rimed Wing') and findItem('Benumbed Eye')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

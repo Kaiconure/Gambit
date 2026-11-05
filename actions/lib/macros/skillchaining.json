@@ -24,31 +24,21 @@
     }
   },
   "macros": {
-    "equip_for_ws": ["vars.gear and vars.gear.ws and equipMany(vars.gear.ws)"],
-    "equip_for_battle": [
-      "vars.gear and vars.gear.battle and equipMany(vars.gear.battle)"
-    ],
     "check_pre_ws_abilities": [
       "(me.tp >= 1800 and canUseAbility('Sekkanoki')) or (vars.ws.pre_ws_abilities and canUseAbility(vars.ws.pre_ws_abilities)) or 1 == 1"
     ],
     "close_skillchain": [
       "logf('Preparing to close SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
-      "$macro:equip_for_ws",
       "waitSkillchainWithAbility() and useAbility(me)",
-      "useWeaponSkill()",
-      "$macro:equip_for_battle"
+      "useWeaponSkill()"
     ],
     "open_skillchain": [
       "logf('Preparing to open SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
-      "$macro:equip_for_ws",
       "recastReady(ability_recast) and useAbility() and wait(0.5)",
-      "useWeaponSkill()",
-      "$macro:equip_for_battle"
+      "useWeaponSkill()"
     ],
     "use_weapon_skill": [
-      "$macro:equip_for_ws",
-      "useWeaponSkill()",
-      "$macro:equip_for_battle"
+      "useWeaponSkill()"
     ],
     "check_using_ws": ["(partyUsingWeaponSkill2)"],
     "check_skillchaining": ["(skillchaining2)"],

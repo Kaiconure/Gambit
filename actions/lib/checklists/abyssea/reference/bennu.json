@@ -1,0 +1,47 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/bennu",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.bennu)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "bennu": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_bennu",
+            "name": "Abyssea Altepa: Bennu",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item('Card of Ardor')", "color_mob('Bennu')", "color_pos('I-8')"],
+                "id": "card_of_ardor",
+                "checked_when": ["findItem('Card of Ardor')"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Coin of Ardor')", "color_mob('Bennu')", "color_pos('I-8')"],
+                "id": "coin_of_ardor",
+                "checked_when": ["findItem('Coin of Ardor')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Resplendent Roc Quill')", "color_mob('Ouzelum')", "color_pos('I-8/J-9')"],
+                "id": "ouzelum",
+                "checked_when": ["findKeyItem('resplendent roc quill')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('resplendent roc quill') and color_green('ready') or color_yellow('not ready')", "color_mob('Bennu')", "color_npc('??? at I-8')"],
+                "id": "bennu",
+                "checked_when": ["findKeyItem('resplendent roc quill')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,87 @@
+﻿{
+  "functions": [
+    {
+      "name": "checklists/abyssea/alfard",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.alfard)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "alfard": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_alfard",
+            "name": "Abyssea Grauberg: Alfard",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s)",
+                  "color_ki('Venomous Hydra Fang')",
+                  "color_mob('Ningishzida')",
+                  "color_pos('I-7/I-8 near Conflux #08')"
+                ],
+                "id": "venomous_hydra_fang",
+                "checked_when": ["findKeyItem('venomous hydra fang')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Minaruja Skull')",
+                  "color_mob('Minaruja')",
+                  "color_npc('??? at I-10')"
+                ],
+                "id": "minaruja_skull",
+                "checked_when": ["findItem('Minaruja Skull')"]
+              },
+              {
+                "format": [
+                  "      • %s←%s (%s)",
+                  "color_item(\"Pursuer's Wing\")",
+                  "color_mob('Faunus Wyvern')",
+                  "color_pos('I-9/I-10')"
+                ],
+                "id": "pursuers_wing",
+                "checked_when": ["findItem(\"Pursuer's Wing\")"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('High-Quality Wivre Hide')",
+                  "color_mob('Glade Wivre')",
+                  "color_pos('I-8')"
+                ],
+                "id": "high_quality_wivre_hide",
+                "checked_when": ["findItem('High-Quality Wivre Hide')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Jaculus Wing')",
+                  "color_mob('Jaculus')",
+                  "color_npc('north of Conflux #03')"
+                ],
+                "id": "jaculus_wing",
+                "checked_when": ["findItem('Jaculus Wing')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s)",
+                  "findKeyItem('venomous hydra fang') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Alfard')",
+                  "color_npc('??? at J-8')"
+                ],
+                "id": "alfard",
+                "checked_when": ["findKeyItem('venomous hydra fang')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

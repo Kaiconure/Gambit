@@ -1,0 +1,82 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ironclad-smiter",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ironclad_smiter)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ironclad_smiter": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ironclad_smiter",
+            "name": "Abyssea Altepa: Ironclad Smiter",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Bale Seal: Body')", "color_mob('Ironclad Smiter')"],
+                "id": "bale_seal_body",
+                "checked_when": ["findItem('Bale Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Iga Seal: Body')", "color_mob('Ironclad Smiter')"],
+                "id": "iga_seal_body",
+                "checked_when": ["findItem('Iga Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Unkai Seal: Body')", "color_mob('Ironclad Smiter')"],
+                "id": "unkai_seal_body",
+                "checked_when": ["findItem('Unkai Seal: Body')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Smoldering Arm')", "color_mob('Bonfire')"],
+                "id": "bonfire",
+                "checked_when": ["findItem('Smoldering Arm')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Tablilla Mercury')", "color_mob('Tablilla')"],
+                "id": "tablilla",
+                "checked_when": ["findItem('Tablilla Mercury')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Orison Seal: Hands')", "color_mob('Tablilla')"],
+                "id": "orison_seal_hands",
+                "checked_when": ["findItem('Orison Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Ravager's Seal: Hands\")", "color_mob('Tablilla')"],
+                "id": "ravagers_seal_hands",
+                "checked_when": ["findItem(\"Ravager's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Charis Seal: Hands')", "color_mob('Tablilla')"],
+                "id": "charis_seal_hands",
+                "checked_when": ["findItem('Charis Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Navarch's Seal: Hands\")", "color_mob('Tablilla')"],
+                "id": "navarchs_seal_hands",
+                "checked_when": ["findItem(\"Navarch's Seal: Hands\")"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Sandy Shard')", "color_mob('Sand Sweeper')"],
+                "id": "sand_sweeper",
+                "checked_when": ["findItem('Sandy Shard')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Smoldering Arm') and findItem('Tablilla Mercury') and color_green('ready') or color_yellow('not ready')", "color_mob('Ironclad Smiter')", "color_npc('??? at D-12')"],
+                "id": "ironclad_smiter",
+                "checked_when": ["findItem('Smoldering Arm') and findItem('Tablilla Mercury')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

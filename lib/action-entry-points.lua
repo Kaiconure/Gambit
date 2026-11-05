@@ -1,8 +1,8 @@
 local entryPoints = {}
 
--- Locations are ordered most-specific first. Important selectors cap how far
--- exact job lookups may inherit; ordinary selectors remain global fallbacks.
-function entryPoints.find(locations, job, subJob, groups, exists)
+-- Search selectors within a single layer. Namespace layers contain character
+-- and shared directories; important selectors retain their local override cap.
+local function findLayer(locations, job, subJob, groups, exists)
     local limit, override = #locations, nil
     local function path(i, name) return locations[i] .. '/' .. name .. '.json' end
     for i = 1, #locations do
@@ -24,20 +24,30 @@ function entryPoints.find(locations, job, subJob, groups, exists)
         end
     end
     if override then return unpack(override) end
-    for i = 1, #locations do
-        for _, group in ipairs(groups) do
+    for _, group in ipairs(groups) do
+        for i = 1, #locations do
             local name = '(' .. group .. ')'
             if group:sub(1,1) ~= '~' and exists(path(i, name)) then return path(i, name), name end
         end
     end
-    for i = 1, #locations do
-        for _, group in ipairs(groups) do
+    for _, group in ipairs(groups) do
+        for i = 1, #locations do
             local name = '(' .. group .. ')'
             if group:sub(1,1) == '~' and exists(path(i, name)) then return path(i, name), name end
         end
     end
     for i = 1, #locations do
         if exists(path(i, '(all)')) then return path(i, '(all)'), '(all)' end
+    end
+end
+
+-- Closest layer wins before selector specificity is considered elsewhere.
+-- Strings represent standalone fallback layers; arrays group a namespace's
+-- character/shared directories into one selector search.
+function entryPoints.find(layers,job,subJob,groups,exists)
+    for _,layer in ipairs(layers) do
+        local path,name=findLayer(type(layer)=='table' and layer or {layer},job,subJob,groups,exists)
+        if path then return path,name end
     end
 end
 

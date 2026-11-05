@@ -1,0 +1,101 @@
+﻿{
+    "functions":  [
+                      {
+                          "name":  "checklists/abyssea/apademak",
+                          "commands":  [
+                                           "setPanelTracking(vars.checklists.abyssea.apademak)"
+                                       ],
+                          "max_iterations":  1,
+                          "silent":  true
+                      }
+                  ],
+    "vars":  {
+                 "checklists":  {
+                                    "^abyssea":  {
+                                                     "apademak":  [
+                                                                      {
+                                                                          "references":  "compact"
+                                                                      },
+                                                                      {
+                                                                          "id":  "abyssea_apademak",
+                                                                          "name":  "Abyssea Uleguerand: Apademak",
+                                                                          "checklist":  [
+                                                                                            {
+                                                                                                "format":  [
+                                                                                                               "%s←%s (%s)",
+                                                                                                               "color_ki('Torn Khimaira Wing')",
+                                                                                                               "color_mob('Dhorme Khimaira')",
+                                                                                                               "color_npc('??? at F-7')"
+                                                                                                           ],
+                                                                                                "id":  "torn_khimaira_wing",
+                                                                                                "checked_when":  [
+                                                                                                                     "findKeyItem('torn khimaira wing')"
+                                                                                                                 ]
+                                                                                            },
+                                                                                            {
+                                                                                                "format":  [
+                                                                                                               "   • %s←%s (%s)",
+                                                                                                               "color_item('Snow God Core')",
+                                                                                                               "color_mob('Upas-Kamuy')",
+                                                                                                               "color_npc('??? at G-5')"
+                                                                                                           ],
+                                                                                                "id":  "snow_god_core",
+                                                                                                "checked_when":  [
+                                                                                                                     "findItem('Snow God Core')"
+                                                                                                                 ]
+                                                                                            },
+                                                                                            {
+                                                                                                "format":  [
+                                                                                                               "      • %s←%s (%s)",
+                                                                                                               "color_item('Gelid Arm')",
+                                                                                                               "color_mob('Snowflake')",
+                                                                                                               "color_pos('F-5')"
+                                                                                                           ],
+                                                                                                "id":  "gelid_arm",
+                                                                                                "checked_when":  [
+                                                                                                                     "findItem('Gelid Arm')"
+                                                                                                                 ]
+                                                                                            },
+                                                                                            {
+                                                                                                "format":  [
+                                                                                                               "   • %s←%s (%s)",
+                                                                                                               "color_item('Sisyphus Fragment')",
+                                                                                                               "color_mob('Sisyphus')",
+                                                                                                               "color_pos('F-6/G-6')"
+                                                                                                           ],
+                                                                                                "id":  "sisyphus_fragment",
+                                                                                                "checked_when":  [
+                                                                                                                     "findItem('Sisyphus Fragment')"
+                                                                                                                 ]
+                                                                                            },
+                                                                                            {
+                                                                                                "format":  [
+                                                                                                               "   • %s←%s (%s)",
+                                                                                                               "color_item('High-Quality Marid Hide')",
+                                                                                                               "color_mob('Olyphant')",
+                                                                                                               "color_pos('F-6')"
+                                                                                                           ],
+                                                                                                "id":  "high_quality_marid_hide",
+                                                                                                "checked_when":  [
+                                                                                                                     "findItem('High-Quality Marid Hide')"
+                                                                                                                 ]
+                                                                                            },
+                                                                                            {
+                                                                                                "format":  [
+                                                                                                               "You are %s for %s (%s)",
+                                                                                                               "findKeyItem('torn khimaira wing') and color_green('ready') or color_yellow('not ready')",
+                                                                                                               "color_mob('Apademak')",
+                                                                                                               "color_npc('??? at F-6')"
+                                                                                                           ],
+                                                                                                "id":  "apademak",
+                                                                                                "checked_when":  [
+                                                                                                                     "findKeyItem('torn khimaira wing')"
+                                                                                                                 ]
+                                                                                            }
+                                                                                        ]
+                                                                      }
+                                                                  ]
+                                                 }
+                                }
+             }
+}

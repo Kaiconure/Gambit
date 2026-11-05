@@ -1,0 +1,57 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/ika-roa",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.ika_roa)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "ika_roa": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_ika_roa",
+            "name": "Abyssea Grauberg: Ika-Roa",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Raider's Seal: Hands\")", "color_mob('Ika-Roa')"],
+                "id": "raiders_seal_hands",
+                "checked_when": ["findItem(\"Raider's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Ravager's Seal: Hands\")", "color_mob('Ika-Roa')"],
+                "id": "ravagers_seal_hands",
+                "checked_when": ["findItem(\"Ravager's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Charis Seal: Hands')", "color_mob('Ika-Roa')"],
+                "id": "charis_seal_hands",
+                "checked_when": ["findItem('Charis Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Lancer's Seal: Hands\")", "color_mob('Ika-Roa')"],
+                "id": "lancers_seal_hands",
+                "checked_when": ["findItem(\"Lancer's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('High-Quality Pugil Scale')", "color_mob('Peak Pugil')"],
+                "id": "peak_pugil",
+                "checked_when": ["findItem('High-Quality Pugil Scale')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('High-Quality Pugil Scale') and color_green('ready') or color_yellow('not ready')", "color_mob('Ika-Roa')", "color_npc('??? at H-10')"],
+                "id": "ika_roa",
+                "checked_when": ["findItem('High-Quality Pugil Scale')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

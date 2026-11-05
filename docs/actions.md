@@ -6,7 +6,36 @@ Return to the [main documentation page](../readme.md).
 
 Gambit uses an *action cycle* of 2 Hz (twice per second). In each cycle, Gambit will run down the list of actions  in order until it finds one whose `when` condition is satisfied. It will then execute the associated commands and end the current cycle. If no conditions are met, the cycle will end without any commands being executed.
 
+## Equipment during spells and abilities
+
+The stock roll, skillchain, cure, nuke, magic burst, Aspir, elemental mitigation, and Umbril mitigation actions leave equipment changes to [stock events](stock-events.md). Their former casting, battle, and gear inheritance settings are no longer used.
+
+Configure gear in event variables instead: `gear.rolls` for rolls, `gear.weapon_skills.pre` for weapon skills, and `gear.spells` for general, category, magic burst, and named spell sets. Use `gear.idle` and `gear.battle` for restoration sets. These variables belong in event vars files, rather than action vars files.
+
+Actions that equip gear for a specific operation, such as selecting an Abyssea proc weapon, a bard instrument, ammunition, or an enchanted ring, still handle that equipment themselves.
+
 ## The Basics
+
+### Library imports versus in-place actions
+
+Both entry points and imported libraries can define a top-level `imports` array. Its entries can be direct strings or import objects, including a mixture of both:
+
+```json
+{
+  "imports": [
+    "lib/setup",
+    "lib/checklists/all"
+  ]
+}
+```
+
+These imports are resolved in the separate, non-executable imports area. Libraries can recursively import variables, macros, named functions, and explicit loading actions without placing ordinary actions into the caller's battle/idle/etc. list. Explicit `loading` actions still run at load; named `functions` remain callable functions.
+
+A library's top-level `actions` array continues to replace its import at the caller's position. Use `actions` for rules that should execute in that area, and top-level `imports` for dependencies outside it. Scoped variable overrides and preconditions on the importing action are inherited by its library dependencies. A direct string is shorthand for `{"import": "a"}`; use the object form for options such as `with_vars`, `precondition`, or `silent`. Grouped objects such as `{"imports": ["a", "b"]}` remain supported. Direct string entries are supported only in top-level `imports`, not executable action arrays.
+
+Spell, job ability, and weapon skill commands wait on matching packet observations, even when no event handlers are configured. Equipment preparation has a separate bounded wait; action deadlines begin at dispatch. Missing notifications and rejections return control rather than leaving automation waiting indefinitely.
+
+Spells allow up to two seconds for casting to start, then wait for completion or interruption and apply two seconds of recovery padding. Job abilities retain their ability-specific minimum spacing from dispatch. Weapon skills wait for their result plus a one-second safety margin; deliberate skillchain spacing remains separate. Items and pet commands retain their existing timing.
 
 In order to use actions, a very basic understanding of [JSON](https://www.w3schools.com/whatis/whatis_json.asp) and [Lua](https://www.lua.org/about.html) would be helpful but not required. JSON is used to define the overall structure, and *very* simplified Lua expressions are used to drive your conditional triggers (`when`) and corresponding `commands`. 
 

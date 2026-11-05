@@ -1,0 +1,52 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/xibalba",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.xibalba)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "xibalba": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_xibalba",
+            "name": "Abyssea Grauberg: Xibalba",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item(\"Estoqueur's Seal: Hands\")", "color_mob('Xibalba')"],
+                "id": "estoqueurs_seal_hands",
+                "checked_when": ["findItem(\"Estoqueur's Seal: Hands\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Ferine Seal: Hands')", "color_mob('Xibalba')"],
+                "id": "ferine_seal_hands",
+                "checked_when": ["findItem('Ferine Seal: Hands')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Sylvan Seal: Hands')", "color_mob('Xibalba')"],
+                "id": "sylvan_seal_hands",
+                "checked_when": ["findItem('Sylvan Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Decaying Molar')", "color_mob('Sensenmann')"],
+                "id": "sensenmann",
+                "checked_when": ["findItem('Decaying Molar')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem('Decaying Molar') and color_green('ready') or color_yellow('not ready')", "color_mob('Xibalba')", "color_npc('??? near Flux #7')"],
+                "id": "xibalba",
+                "checked_when": ["findItem('Decaying Molar')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

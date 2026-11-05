@@ -1,0 +1,42 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/fuath",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.fuath)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "fuath": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_fuath",
+            "name": "Abyssea Grauberg: Fuath",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Jewel of Ardor')", "color_mob('Fuath')"],
+                "id": "jewel_of_ardor",
+                "checked_when": ["findItem('Jewel of Ardor')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Coin of Ardor')", "color_mob('Fuath')"],
+                "id": "coin_of_ardor",
+                "checked_when": ["findItem('Coin of Ardor')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "color_green('ready')", "color_mob('Fuath')", "color_number('timed spawn')"],
+                "id": "fuath",
+                "checked_when": ["true"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

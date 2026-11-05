@@ -147,6 +147,8 @@ These functions are related to the use of job abilities.
 
 ## Item Functions
 
+`findKeyItem(nameOrId)` returns the key-item resource only if you currently own it, otherwise nil. It also sets `key_item` on success and clears it on failure. For example, `findKeyItem('chipped sandworm tooth')` or `findKeyItem(1477)` checks the same Abyssea key item. Name lookup uses the shared resource cache; ownership is read live on each call, including after acquiring or consuming a key item. This context helper differs from the internal resource-only lookup of the same name.
+
 These functions are related to the use of items.
 
 - `canUseItem(name1, name2, ... , nameN)` - Results in the first usable item from the list of provided items that is ready to be used, or nil if none are usable. Typically used in the `when` condition to determine if an item can be used. The match will be saved to the context symbol `item`, and subsequent calls to `useItem` without an item name will use this instead. 
@@ -307,6 +309,280 @@ when target selection fails, rather than short-circuiting before the helper.
 Callers acquire/resume reservations separately; this helper never acquires or
 extends them, even when the selected target changes. Roll actions use this helper
 after resolving their party anchor on each attempt.
+
+### Abyssea red proc search
+
+For complete custom-action examples and configuration tables, see
+[Abyssea interface for custom actions](abyssea.md).
+
+The shipped red/blue actions share `vars.abyssea.weapon_proc`: exact `"red"`
+selects red, exact `"blue"` selects blue, and every other value selects neither.
+The default is `"none"`; nil and unrecognized values safely disable both without
+an error. Set the mode explicitly for automatic search. Manual `abyssea/red/use`
+and all `abyssea/blue/use*` selectors also choose their corresponding mode.
+Yellow can run alongside either. All colors' observations continue updating
+regardless of the selected weapon search.
+
+Mode selection belongs to the action files. They pass a live `is_active` expression
+in the explicit Lua config, allowing queued WS requests to be cancelled if the
+mode changes before dispatch. Custom action callers can provide their own
+`is_active` expression string or AND array of expression strings without using
+this variable path. Expressions are evaluated in the action context on every
+check, including queued dispatch. Empty arrays are false; callbacks remain
+supported for Lua callers. Already transmitted
+equipment or action packets cannot be recalled.
+
+Import `abyssea/red-proc` in battle actions to run the red search. The action file
+resolves `weapon_set_name`, `weapons.LOW`/`weapons.HIGH`, shared weapon-set
+fallbacks, and target allow/black lists, then explicitly supplies them to the Lua
+interface. Lua does not read action variable paths. It uses the currently equipped
+weapon first, then cycles through owned, job/level-appropriate configured main
+weapons and their usable red WS. Main weapon changes wait for confirmation and
+ability-list refresh. Empty current slots do not prevent selecting a configured
+weapon. A new hint supersedes an obsolete pending rotation swap.
+
+Swap requests appear in normal output; confirmed equipment and available-skill
+checks appear at debug verbosity. The refresh delay begins when equipment is first
+observed as confirmed, not when the request was queued. `refresh_delay` defaults
+to two seconds; `equip_timeout` defaults to ten seconds. Both are explicit config
+fields also forwarded by shipped actions from per-proc settings. Unconfirmed or
+failed swaps produce an incomplete pass and retry; they are not counted as proof
+that a weapon has no usable WS. Available WS waiting on TP, range, or another
+readiness condition produce a deduplicated waiting message.
+Successful swap requests log the
+weapon name; deduplicated rotation diagnostics distinguish an incompatible
+candidate pool, absent rotation weapons, and completion of a search pass.
+Red and blue swap requests are spaced at least five seconds apart. If an entire
+pass finds no usable WS, the search waits ten seconds before trying another pass.
+The rotation retains its exhausted flag and visited weapons during this wait;
+it does not keep starting passes or switching weapons while waiting.
+The explicit config fields `swap_delay` and `empty_pass_delay` override these
+defaults (seconds, 0 disables that delay); shipped actions forward the matching
+per-proc settings. New hints, selected weapon-set changes, or external weapon
+changes release the exhausted-pass wait. Passes that found usable WS retain their
+normal repeat behavior, and waiting for TP does not count as an empty pass.
+Every dispatched attempt advances the rotation, including
+missed, rejected, and uncertain attempts. Attempt history orders one pass; it
+never eliminates candidates. Another pass starts when candidates are exhausted,
+so previously used WS remain eligible until a hint excludes their element or a
+confirmed red stagger applies the configured completion policy.
+
+Proc hit tracking examines all direct WS results for the exact requested monster
+ID, even when that monster is not first in an area-effect result packet. Damage
+and drain messages count as confirmed landing; nearby targets' hits, misses,
+no-effect messages, and unknown results do not establish a hit on that monster.
+Confirmed landing does not prove a proc opportunity or remove that WS from future
+passes. Generic WS lifecycle completion retains its existing meaning.
+
+External main-weapon changes are read from confirmed equipment. A detected
+external swap supersedes the rotation's pending swap wait and allows two seconds
+for equipment/abilities to settle, retaining the current pass's attempt history. Queued proc
+WS recheck the exact main item (including bag/slot identity) and live WS
+availability at dispatch, as well as the current hint/stagger state. With the
+default `"stop"` policy, switching to damage gear after a confirmed red proc
+does not restart the search or request further proc weapon swaps. Before a proc,
+external gear changes do not disable the configured rotation.
+
+`abyssea.runRedProc(config)` requires a configuration object and executes one
+rotation step, gated to Abyssea zones unless `allow_outside_abyssea=true`. For example:
+
+```lua
+abyssea.runRedProc(vars.my_red_search)
+```
+
+The argument's fields are `enabled` (optional boolean, default true), `weapons`
+(the resolved array of equipment sets or main weapons), `all_ws` (optional red WS
+candidate names, default the Abyssea catalog), `on_stagger` (`stop` or
+`full_rotation`), and optional `ws_allow_list`/`ws_black_list` maps. An optional
+`weapon_set_name` labels the supplied list for detecting a change of sets; it
+does not resolve variable paths or named lists. The optional `state` table owns
+the mutable `_rotation` progress; without it, progress lives on `config` itself.
+Keep that owning table persistent between calls. Fresh argument objects can
+share a caller-selected `state`, while different state tables run independently.
+Action files own enabling and resetting the search. A hint narrows both weapon choices and
+WS choices to its element for that monster. A character with no matching candidates
+does not spend TP on unrelated WS. `abyssea.weaknesses` is a fresh copy of the
+current battle target's observations (an empty `red` object when none exist).
+`abyssea.getWeaknesses([target])` returns a copy of
+the observed encounter state, defaulting to the battle target:
+`{zone, id, index, red={element, triggered, actor}, yellow={element, triggered, actor}, blue={weapon_type, triggered, actor}}`. Fields are absent until
+observed; `actor` is a name, when available. State clears on observed death,
+despawn, deaggro, zoning, logout, or addon unload. Switching targets retains the
+other living monster's hint. Action reloads retain observations. Ordinary monsters
+and notorious monsters use the same process; there is no NM-only eligibility check.
+
+Set `vars.abyssea.red_proc.on_stagger` to `"stop"` (default) to end red weapon
+swaps and WS attempts after a confirmed red stagger. Other battle actions remain
+eligible. Set it to `"full_rotation"` to discard the hint restriction after the
+stagger and resume all red candidates. This policy does not restore damage gear;
+configure that separately. `//gbtfn abyssea/red/use` enables/restarts a manual
+search after engagement. When `bypass_auto_init` is true, battle initialization
+disables the search until that command is run on the character.
+
+Observations are collected independently of discovery recording across all nine
+Abyssea zones. Shared `0x02A` decoding recognizes all eight hint elements and red
+confirmation, using the appropriate zone-text offsets for Attohwa/Uleguerand.
+The message definitions are referenced from LandSandBoat's Abyssea `IDs.lua`
+files; Altepa's light/darkness hints and red confirmation also have live capture
+coverage. Exact English hint/red-confirmation text correlated within one second
+to a packet naming the monster remains a fallback. Unknown numeric messages do
+not constrain the rotation. A generic stagger message alone is never treated as
+a red proc. The Abyssea zone gates these observations; Visitant is not required,
+so buff-list availability cannot suppress otherwise valid observations. Other
+content's proc mechanics remain separate.
+
+Gambit shares new observations over IPC with nearby clients in the same zone;
+receivers verify the monster ID/index and never rebroadcast received updates.
+This lets party members narrow their local search even if only one sees a hint.
+Red, yellow and blue have separate hint and confirmation state on the same
+observation interface.
+
+Abyssea methods live on the `abyssea` object. The shipped actions store settings
+in `vars.abyssea`; custom actions can supply any configuration location.
+
+### Abyssea yellow proc search
+
+All three proc runners accept `allow_outside_abyssea = true` for testing
+weapon/weapon-skill and spell cycling elsewhere. It defaults to false. The
+shipped actions pass `vars.abyssea.allow_outside_abyssea` to each runner, so one
+shared setting enables this for red, blue and yellow. Hint and stagger detection
+remain restricted to Abyssea; normal target, readiness and equipment checks
+still apply. Red/blue mode selection and yellow initialization work as usual.
+
+`abyssea.runYellowProc(config)` requires an explicit configuration object and runs
+only in Abyssea zones unless `allow_outside_abyssea=true`. Required `spells` is an array of candidate spell names.
+Optional fields are `enabled` (default true), `on_stagger` (`stop`, the default,
+or `full_rotation`), `state`, `tools`, and `ws_allow_list`/`ws_black_list` target
+maps (the same target filters as red). Without `state`, mutable `_yellow_rotation`
+progress lives on the config itself. Keep the supplied state/config persistent;
+red and yellow progress have separate fields even when sharing an owner table.
+
+```lua
+abyssea.runYellowProc({
+    spells = vars.my_candidates,
+    state = vars.my_search_state,
+    on_stagger = 'stop'
+})
+```
+
+The action file owns day selection and candidate lists; Lua never reads an action
+variable path or invokes a named action function. The shipped `abyssea/yellow-proc`
+actions preserve automatic yesterday/today/tomorrow initialization and the manual
+`abyssea/yellow/show`, `use-today`, `use-yesterday`, and `use-tomorrow` functions.
+`//gbtfn abyssea/yellow/use` initializes the combined yesterday/today/tomorrow pool
+and resets yellow rotation progress. It shares the automatic initialization macro
+and suppresses routine function lifecycle messages. It does not select or change
+the red/blue weapon-proc mode.
+Automatic initialization obeys `bypass_auto_init`; initialize manual pools after
+engaging. Changing the selected spell-pool table or resetting `_yellow_rotation`
+starts a new pass. A day change alone does not replace the pool mid-encounter.
+
+Hints narrow candidates by the spell resource's actual element, including songs
+such as Ice Threnody (fire element). If casting cannot proceed, a deduplicated
+`YELLOW PROC waiting:` notice identifies readiness, range, or dispatch problems.
+Routine active-action waiting appears only at debug verbosity.
+The search skips spells that cannot currently
+be cast, including cooldown, MP, job, learned-spell and assigned Blue Magic checks,
+so an unavailable first candidate does not block ready candidates. Started casts
+advance the pass; completed, interrupted and resisted/no-effect attempts are
+eligible again on later passes. Requests that never start are not counted as
+casts: search waits three seconds before another dispatch attempt and defers that
+candidate for six seconds. Busy casting/ranged state suppresses new attempts.
+Neither execution completion nor
+damage is treated as proof of a yellow stagger. Only yellow confirmation stops
+yellow search; red confirmation does not. With `full_rotation`, confirmation
+removes the hint restriction and continues the supplied pool.
+
+Ninjutsu is cast through the normal spell lifecycle rather than fire-and-forget
+named functions. `tools[spellName] = {items={...}, bags={...}}` describes inventory
+tools and optional toolbags. The search can open a configured usable bag when
+inventory space allows, wait for inventory to update, and recheck tools. Missing
+tools do not block other ready spells. The shipped action supplies the existing
+Ni spell/tool mappings; the imported standalone ninjutsu functions remain
+available for manual use. Configure any desired instruments or other casting
+gear through ordinary spell event rules.
+
+Both preparation and queued spell dispatch recheck the intended monster and
+current yellow hint/stagger state. A new hint can cancel a queued spell outside
+its element; a confirmed yellow stagger cancels queued search casts under `stop`.
+Already dispatched casts cannot be recalled. Yellow hints and confirmation are
+shared over IPC, so a hint received only by its caster can filter other clients'
+searches. New hints and confirmed staggers print immediate `[abyssea]` messages
+with the monster, element or triggering actor when known, and `[IPC]` for remote
+observations. Red and yellow use the same `COLOR PROC search: element (monster).`
+and `COLOR PROC confirmed on monster by actor.` wording. Confirmation is emitted
+once by detection rather than repeated by the search loop. Duplicate
+packet/text/IPC observations do not repeat these notices;
+they are independent of whether a search action is currently running.
+Live fixtures cover the fire hint on Sharabha and Stonega III yellow
+stagger on Ansherekh; tests exercise the common offsets in all nine Abyssea zones.
+
+### Abyssea blue proc search
+
+`abyssea.runBlueProc(config)` requires an explicit configuration object with an
+`all_ws` array containing candidates from one or more time windows. Other fields
+match the red interface: `enabled`, `weapons`, `weapon_set_name`, `state`,
+`on_stagger`, `ws_allow_list`, and `ws_black_list`. The helper is gated to Abyssea
+unless `allow_outside_abyssea=true`;
+it does not read action variable paths or choose time windows. State is stored in
+`_blue_rotation` on `state` or the supplied config, independently of red/yellow.
+
+Import `abyssea/blue-proc` to use the shipped pools. Automatic initialization
+selects the current window at the beginning of battle actions, then freezes it:
+06:00–13:59, 14:00–21:59, or 22:00–05:59. Weapon swaps and advancing the clock do
+not change that selection mid-encounter. This is initialization time, not a
+reconstruction of the monster's original claim/pop time. If initializing late,
+the manual selectors can choose a different window:
+
+```text
+//gbtfn abyssea/blue/use
+//gbtfn abyssea/blue/use-now
+//gbtfn abyssea/blue/use-previous
+//gbtfn abyssea/blue/use-next
+```
+
+`use` combines all three pools. `use-now` selects only the current window;
+previous/next select the window eight hours earlier/later. All selectors enable
+search and reset rotation progress. With `bypass_auto_init`, run a selector after
+engaging. The action resolves configured per-proc/shared weapon sets before
+passing an explicit config, just as the red action does.
+
+Blue hints filter by weapon type (`weapon_type`, such as `great sword` or
+`archery`), using the weapon-skill resource's skill ID. Unknown hint values do not
+narrow the search. Red and blue share equipment confirmation, external-swap
+settling, repeated passes, and intended-target WS result handling. Configured
+sets may use `main`/`sub`, or `range`/`ammo`. Already equipped ranged weapons are
+considered as well as the main weapon. Ranged attempts require ammunition and
+guard both weapon and ammo identity at dispatch. Empty main equipment can expose
+hand-to-hand candidates when the character's live ability list permits them.
+
+Only blue-specific inability-to-use-special-attacks confirmation completes a
+blue search. `on_stagger="stop"` (default) stops further rotation/attempts;
+`full_rotation` removes the weapon-type hint restriction while retaining the
+supplied time pool. Red/yellow confirmations do not stop blue. Detection and IPC
+messages use the same wording and duplicate suppression as the other colors.
+
+Blue packet IDs/type parameters are based on the Abyssea zone message reference
+definitions, including Attohwa/Uleguerand's different offsets. Unit tests exercise
+all types/zones, time boundaries, IPC, ranged ammo guards and completion policies.
+There is no live blue discovery fixture yet; capture a blue hint and successful
+stagger using the existing recorder to verify in-game behavior.
+
+### Weapon-skill execution results
+
+`local completed, result = useWeaponSkill(name)` waits for execution and returns
+the existing completion boolean plus a result object. A completed miss returns
+`true` with `result.completed == true` and `result.missed == true`. Inspect
+`result.landed` when the effect on the requested target matters. Result fields
+include `outcome`, `target_id`, `completed`, `interrupted`, `failed`, `cancelled`,
+`dispatched`, `started`,
+`timed_out`, `effect`, `landed`, `missed`, `no_effect`, and per-target `results`.
+Failure, cancellation, and timeout preserve their execution outcome independently
+of effect classification. Range rejections are failures, not confirmed misses.
+The shared observer classifies target effects once for both waits and post events.
+Abyssea's internal strict landing option affects its success boolean, while the
+returned execution outcome remains separate. Other callers retain completion
+semantics and can optionally consume the second result value.
 
 ### Multi-stage compilation
 

@@ -1,0 +1,47 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/dragua",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.dragua)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "dragua": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_dragua",
+            "name": "Abyssea Altepa: Dragua",
+            "checklist": [
+              {
+                "format": ["%s←%s (%s)", "color_item(\"Dragua's Scale\")", "color_mob('Dragua')", "color_pos('F-9')"],
+                "id": "draguas_scale",
+                "checked_when": ["findItem(\"Dragua's Scale\")"]
+              },
+              {
+                "format": ["%s←%s (%s)", "color_item('Card of Wieldance')", "color_mob('Dragua')", "color_pos('F-9')"],
+                "id": "card_of_wieldance",
+                "checked_when": ["findItem('Card of Wieldance')"]
+              },
+              {
+                "format": ["   • %s←%s (%s)", "color_ki('Bloodied Dragon Ear')", "color_mob('Hazhdiha')", "color_pos('H-10')"],
+                "id": "hazhdiha",
+                "checked_when": ["findKeyItem('bloodied dragon ear')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('bloodied dragon ear') and color_green('ready') or color_yellow('not ready')", "color_mob('Dragua')", "color_npc('??? at F-9')"],
+                "id": "dragua",
+                "checked_when": ["findKeyItem('bloodied dragon ear')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

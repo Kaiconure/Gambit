@@ -1,0 +1,57 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/chione",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.chione)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "chione": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_chione",
+            "name": "Abyssea Uleguerand: Chione",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Goetia Seal: Body')", "color_mob('Chione')"],
+                "id": "goetia_seal_body",
+                "checked_when": ["findItem('Goetia Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Lancer's Seal: Body\")", "color_mob('Chione')"],
+                "id": "lancers_seal_body",
+                "checked_when": ["findItem(\"Lancer's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Navarch's Seal: Body\")", "color_mob('Chione')"],
+                "id": "navarchs_seal_body",
+                "checked_when": ["findItem(\"Navarch's Seal: Body\")"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Unkai Seal: Body')", "color_mob('Chione')"],
+                "id": "unkai_seal_body",
+                "checked_when": ["findItem('Unkai Seal: Body')"]
+              },
+              {
+                "format": ["   • %s→rest to spawn %s", "color_ki('Colorful Demilune Abyssite')", "color_mob('Chione')"],
+                "id": "colorful_demilune_abyssite",
+                "checked_when": ["findKeyItem('colorful demilune abyssite')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findKeyItem('colorful demilune abyssite') and color_green('ready') or color_yellow('not ready')", "color_mob('Chione')", "color_pos('G-8/H-8 or F-8/F-9')"],
+                "id": "chione",
+                "checked_when": ["findKeyItem('colorful demilune abyssite')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

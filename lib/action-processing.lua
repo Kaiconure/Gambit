@@ -1,6 +1,8 @@
+local actionWait=require('./lib/action-wait')
 local actionErrors = require('./lib/action-errors')
 local actionPreconditions = require('./lib/action-preconditions')
 local targetedAction = require('./lib/targeted-action')
+local actionCategories = require('./meta/outgoing-action-categories')
 -------------------------------------------------------------------------------
 -- ACTION SCHEMA
 --
@@ -311,125 +313,41 @@ end
 -- Executes a spell casting action command.This is similar to sendActionCommand, but
 -- it will take into account traits such as Fast Cast as well as spell interruption
 -- to ensure that the operation completes as early as possible.
-function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
-    if 
-        spell == nil or
-        target == nil
-    then
-        return
-    end
-
-    -- EXPERIMENTAL: Do not try to cast a spell if we're already casting something.
-    if 
-        actionStateManager:isActing()
-    then
-        if settings.verbosity >= VERBOSITY_DEBUG then
-            writeDebug('%s: Will not cast due to another action already in progress.':format(
-                text_spell(spell.name, Colors.debug)
-            ))
-        end
-        
-        return false
-    end
-
-    local followJob = smartMove:cancelJob()
-
-    -- Calculate the maximum amount of time we will wait for spell casting to complete. It's
-    -- safer for this to err on the slightly longer side, as we will exit early as soon as we
-    -- detect that casting has completed.
-    local endTime = os.clock() + (math.max(spell.cast_time, 1) * 1.5) + 2
-
-    -- Construct the actual spell casting command
-    local command = 'input %s "%s" %s':format(
-        spell.prefix,
-        spell.name,
-        type(target) == 'number' and tostring(target) or ('<' .. target .. '>')
-    )
-    if type(target) == 'number' then
-        command = function() return targetedAction.send(3, spell, target) end
-    end
-
-    local castingStartedAt = os.clock()
-    local interrupted   = false     -- Set if the spell completes with interruption
-    local missed        = false     -- Set if the spell completed but missed (not yet implemented)
-    local isFirstCycle  = true
-
-    -- Send the casting command. It will wait 1 second before returning (the third parameter)
-    local submitted = sendActionCommand(command, context, 1)
-    if submitted == false then
+-- Shared automation wait; packet observations update its record independently
+-- of whether this action type has configured event handlers.
+function sendObservedAction(category, resource, target, context, policy, pauseFollow, ignoreIncomplete)
+    local targetMob=type(target)=='string' and windower.ffxi.get_mob_by_target(target)
+    local targetId=type(target)=='number' and target or (targetMob and targetMob.id)
+    if not targetId then return false,actionWait.result({outcome='failed'}) end
+    local followJob=pauseFollow and smartMove:cancelJob()
+    if not pauseFollow then smartMove:resetJitter() end
+    local record={validate=policy and policy.validate,require_landed=policy and policy.require_landed}
+    local ok,err=pcall(targetedAction.send,category,resource,targetId,record)
+    if not ok or not err then
+        record.abandoned=true
+        record.outcome=record.outcome or 'failed'
+        actionWait.release(record)
         if followJob then smartMove:reschedule(followJob) end
-        return false
+        if context and context.action then context.action.complete=false; context.action.incomplete=true end
+        if not ok then error(err) end
+        return false,actionWait.result(record)
     end
-
-    -- We will now continue looping until either casting completes, or the max end time has been reached.
-    -- Note that if the spell has not begun casting after the 1 second delay used above, exit early.
-    local continue = true
-    local explicitCompleted = false
-    while continue do
-        local currentSpell = actionStateManager.currentSpell
-
-        if type(target) == 'number' then
-            local matches = currentSpell and (currentSpell.time or 0) >= castingStartedAt
-                and currentSpell.targetId == target and currentSpell.spellId == spell.id
-            if matches and currentSpell.spell == nil then
-                explicitCompleted = true
-                interrupted = currentSpell.interrupted
-                continue = false
-            elseif os.clock() >= endTime then
-                continue = false
-            else
-                coroutine.sleep(0.1)
-            end
-        elseif
-            os.clock() >= endTime or
-            currentSpell.spell ~= spell -- Note: This is a reference compare, which seems to work due to resource table lookup. But should be validated.
-        then
-            continue = false
-            interrupted = currentSpell.interrupted
-        else
-            isFirstCycle = false
-            coroutine.sleep(0.5)
-        end
-    end
-
-    local castingEndedAt = os.clock()
-
-    -- We need to pad the casting time a bit, because spell casting fires its completion event before
-    -- it's actually fully done casting.
-    local paddingTime = 3.0
-
-    coroutine.sleep(paddingTime)
-
-    if followJob then
-        smartMove:reschedule(followJob)
-    end
-
-    local wokeAt = os.clock()
-
-    local castingTime = castingEndedAt - castingStartedAt
-    local totalTime = wokeAt - castingStartedAt
-
-    -- If the spell was interrupted, we'll mark it as incomplete so it can be rescheduled. Refer to
-    -- the executeBattleAction function to see how action.incomplete is handled.
-    local complete = not interrupted or ignoreIncomplete == true
-    if type(target) == 'number' then
-        complete = explicitCompleted and (not interrupted or ignoreIncomplete == true)
-    end
+    local success,result=actionWait.run(record,policy,os.clock,coroutine.sleep)
+    if ignoreIncomplete and record.outcome=='interrupted' then success=true end
+    if followJob then smartMove:reschedule(followJob) else smartMove:resetJitter() end
     if context and context.action then
-        context.action.complete = complete
-        context.action.incomplete = not complete
+        context.action.complete=success
+        context.action.incomplete=not success
     end
+    return success and (not record.require_landed or result.landed),result
+end
 
-    -- In debug mode, let's log that we've finished our work here
-    if settings.verbosity >= VERBOSITY_DEBUG then
-        writeDebug('%s: Cast time %s / Observer time %s':format(
-            text_spell(spell.name, Colors.debug),
-            pluralize('%.1f':format(castingTime), 'second', 'seconds', Colors.debug),
-            pluralize('%.1f':format(totalTime), 'second', 'seconds', Colors.debug)        
-        ))
-    end
-
-    return complete
+function sendSpellCastingCommand(spell, target, context, ignoreIncomplete, validate)
+    if not spell or not target then return false,actionWait.result({outcome='failed'}) end
+    if actionStateManager:isActing() then return false,actionWait.result({outcome='busy'}) end
+    return sendObservedAction(actionCategories.SPELL,spell,target,context,{
+        start=true,result_timeout=math.max(spell.cast_time,1)*1.5+2,padding=2,validate=validate,
+    },true,ignoreIncomplete)
 end
 
 function string_trim(s)

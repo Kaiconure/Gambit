@@ -1,0 +1,95 @@
+﻿{
+  "functions": [
+    {
+      "name": "checklists/abyssea/sobek",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.sobek)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "sobek": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_sobek",
+            "name": "Abyssea Misareaux: Sobek",
+            "checklist": [
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Bloodstained bugard fang')",
+                  "color_mob('Minax Bugard')",
+                  "color_npc('???')",
+                  "color_pos('K-10')"
+                ],
+                "id": "minax_bugard",
+                "checked_when": ["findKeyItem('bloodstained bugard fang')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Bewitching Tusk')",
+                  "color_mob('Abyssobugard')",
+                  "color_pos('K-10/K-11')"
+                ],
+                "id": "abyssobugard",
+                "checked_when": ["findItem('Bewitching Tusk')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s at %s)",
+                  "color_ki('Gnarled lizard nail')",
+                  "color_mob('Sirrush')",
+                  "color_npc('???')",
+                  "color_pos('I-11')"
+                ],
+                "id": "sirrush",
+                "checked_when": ["findKeyItem('gnarled lizard nail')"]
+              },
+              {
+                "format": [
+                  "   • %s←%s (%s)",
+                  "color_item('Molt Scraps')",
+                  "color_mob('Dusk Lizard')",
+                  "color_pos('J-11')"
+                ],
+                "id": "dusk_lizard",
+                "checked_when": ["findItem('Molt Scraps')"]
+              },
+              {
+                "format": [
+                  "%s←%s (%s) (%s)",
+                  "color_ki('Molted peiste skin')",
+                  "color_mob('Gukumatz')",
+                  "color_pos('J-11')",
+                  "color_number('10-15 min.')"
+                ],
+                "id": "gukumatz",
+                "checked_when": ["findKeyItem('molted peiste skin')"]
+              },
+              {
+                "format": [
+                  "You are %s for %s (%s at %s, target at %s, %s)",
+                  "findKeyItem('bloodstained bugard fang') and findKeyItem('gnarled lizard nail') and findKeyItem('molted peiste skin') and color_green('ready') or color_yellow('not ready')",
+                  "color_mob('Sobek')",
+                  "color_npc('???')",
+                  "color_pos('J-11')",
+                  "color_pos('K-10')",
+                  "color_npc('Conflux #07')"
+                ],
+                "id": "sobek",
+                "checked_when": [
+                  "findKeyItem('bloodstained bugard fang') and findKeyItem('gnarled lizard nail') and findKeyItem('molted peiste skin')"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

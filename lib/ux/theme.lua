@@ -53,11 +53,14 @@ function Theme.reload()
 end
 Theme.reload()
 Theme.colors={green={100,235,130},red={255,80,80},yellow={245,215,110},orange={245,160,80},
-    white={255,255,255},turquoise={100,225,215},magenta={235,100,235},
+    white={255,255,255},turquoise={100,225,215},magenta={235,100,235},gold={255,255,95},
+    gray={160,160,160},light_gray={192,192,192},
     target_player={193,251,255},target_idle={241,241,183},target_engaged={255,130,130},
     target_outside_claim={244,122,244},target_other_player={212,212,212},
-    target_npc={177,233,178},target_dead={160,160,160},target_invalid={160,160,160},
+    target_npc={178,255,178},target_dead={160,160,160},target_invalid={160,160,160},
     number={0,255,255},status_pending={245,215,110},
+    item={139,255,59},key_item={163,162,255},checklist={205,205,210},
+    position={241,241,183},
     status_interrupted={255,130,130},status_completed={100,235,130},
     heading={245,245,250},subheading={155,200,245},body={230,230,238},
     version={240,240,24},

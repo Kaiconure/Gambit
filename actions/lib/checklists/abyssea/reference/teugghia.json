@@ -1,0 +1,87 @@
+{
+  "functions": [
+    {
+      "name": "checklists/abyssea/teugghia",
+      "commands": ["setPanelTracking(vars.checklists.abyssea.teugghia)"],
+      "max_iterations": 1,
+      "silent": true
+    }
+  ],
+  "vars": {
+    "checklists": {
+      "^abyssea": {
+        "teugghia": [
+          {
+            "references": "compact"
+          },
+          {
+            "id": "abyssea_teugghia",
+            "name": "Abyssea Grauberg: Teugghia",
+            "checklist": [
+              {
+                "format": ["%s←%s", "color_item('Bale Seal: Body')", "color_mob('Teugghia')"],
+                "id": "bale_seal_body",
+                "checked_when": ["findItem('Bale Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Goetia Seal: Body')", "color_mob('Teugghia')"],
+                "id": "goetia_seal_body",
+                "checked_when": ["findItem('Goetia Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item('Iga Seal: Body')", "color_mob('Teugghia')"],
+                "id": "iga_seal_body",
+                "checked_when": ["findItem('Iga Seal: Body')"]
+              },
+              {
+                "format": ["%s←%s", "color_item(\"Lancer's Seal: Body\")", "color_mob('Teugghia')"],
+                "id": "lancers_seal_body",
+                "checked_when": ["findItem(\"Lancer's Seal: Body\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Creed Seal: Hands')", "color_mob('Lorelei')"],
+                "id": "creed_seal_hands",
+                "checked_when": ["findItem('Creed Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Tantra Seal: Hands')", "color_mob('Lorelei')"],
+                "id": "tantra_seal_hands",
+                "checked_when": ["findItem('Tantra Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Iga Seal: Hands')", "color_mob('Lorelei')"],
+                "id": "iga_seal_hands",
+                "checked_when": ["findItem('Iga Seal: Hands')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Navarch's Seal: Hands\")", "color_mob('Lorelei')"],
+                "id": "navarchs_seal_hands",
+                "checked_when": ["findItem(\"Navarch's Seal: Hands\")"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item(\"Naiad's Lock\")", "color_mob('Lorelei')"],
+                "id": "naiads_lock",
+                "checked_when": ["findItem(\"Naiad's Lock\")"]
+              },
+              {
+                "format": ["      • %s←%s", "color_item('Fay Teardrop')", "color_mob('Seelie')"],
+                "id": "fay_teardrop",
+                "checked_when": ["findItem('Fay Teardrop')"]
+              },
+              {
+                "format": ["   • %s←%s", "color_item('Unseelie Eye')", "color_mob('Unseelie')"],
+                "id": "unseelie_eye",
+                "checked_when": ["findItem('Unseelie Eye')"]
+              },
+              {
+                "format": ["You are %s for %s (%s)", "findItem(\"Naiad's Lock\") and findItem('Unseelie Eye') and color_green('ready') or color_yellow('not ready')", "color_mob('Teugghia')", "color_npc('??? at F/G-5')"],
+                "id": "teugghia",
+                "checked_when": ["findItem(\"Naiad's Lock\") and findItem('Unseelie Eye')"]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

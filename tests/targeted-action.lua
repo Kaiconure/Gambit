@@ -21,48 +21,21 @@ local source=file:read('*all');file:close()
 source=source:gsub("('[^'\r\n]*'):format", '(%1):format'):gsub('("[^"\r\n]*"):format', '(%1):format')
 assert(loadstring(source))
 local body=assert(source:match('(function sendSpellCastingCommand.-)function string_trim'))
-local spell={id=59,name='Silence',prefix='/ma',cast_time=1}
-local function run(mode, target)
-    local now, restored, command = 10, false, nil
-    local state={currentSpell={time=0},isActing=function() return false end}
-    local context={action={}}
-    local function advance(seconds)
-        now=now+seconds
-        if mode~='timeout' then
-            state.currentSpell={time=now,spellId=mode=='wrong-spell' and 60 or 59,
-                targetId=mode=='wrong-target' and 124 or 123,spell=nil,
-                interrupted=mode=='interrupt'}
-        end
-    end
-    local env=setmetatable({os={clock=function() return now end},
-        coroutine={sleep=advance},actionStateManager=state,
-        settings={verbosity=0},VERBOSITY_DEBUG=1,
-        smartMove={cancelJob=function() return 'movement' end,
-            reschedule=function(self,job) assert(job=='movement');restored=true end},
-        targetedAction={send=function(category,resource,id)
-            assert(category==3 and resource==spell and id==123)
-            return mode~='invalid'
-        end},
-        sendActionCommand=function(value,ctx,seconds)
-            command=value
-            if type(value)=='function' and not value() then return false end
-            advance(seconds);return true
-        end}, {__index=_G})
-    local chunk=assert(loadstring(body));setfenv(chunk,env);chunk()
-    local result=env.sendSpellCastingCommand(spell,target,context)
-    assert(restored)
-    if target==123 then assert(type(command)=='function')
-    else assert(command=='input /ma "Silence" <t>') end
-    return result,context
-end
-assert(run('success',123))
-assert(not run('interrupt',123))
-assert(not run('wrong-spell',123))
-assert(not run('wrong-target',123))
-assert(not run('timeout',123))
-assert(not run('invalid',123))
-assert(run('success','t'))
-print('PASS: targeted packet fields, refreshed index, invalid targets, cast correlation, interruption, timeout, movement restoration, semantic command path')
+local passed
+local casting=false
+local env=setmetatable({actionStateManager={isActing=function() return casting end},
+    actionWait=require('./lib/action-wait'),
+    actionCategories=require('./meta/outgoing-action-categories'),
+    sendObservedAction=function(category,spell,target,context,policy,pause,ignore)
+        assert(category==3 and target==123 and policy.start and policy.padding==2 and pause)
+        passed=true; return true
+    end},{__index=_G})
+local chunk=assert(loadstring(body));setfenv(chunk,env);chunk()
+assert(env.sendSpellCastingCommand({id=59,cast_time=1},123,{}) and passed)
+casting=true;passed=false
+local success,result=env.sendSpellCastingCommand({id=59,cast_time=1},123,{})
+assert(not success and not passed and result.outcome=='busy' and not result.started and not result.dispatched)
+print('PASS: targeted packets and spell delegation to shared wait policy')
 for _, path in ipairs({'lib/action-state-manager.lua'}) do
     local f=assert(io.open(path));local text=f:read('*all');f:close()
     text=text:gsub("('[^'\r\n]*'):format", '(%1):format'):gsub('("[^"\r\n]*"):format', '(%1):format')
