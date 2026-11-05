@@ -1,6 +1,8 @@
 -- Small per-submission records fed by the shared self-action packet observations.
 -- No dependency on configured event rules or context construction.
 local Wait={}
+local weaponResult=require('./lib/weapon-skill-result')
+Wait.result=weaponResult.summary
 local pending={}
 function Wait.register(record,kind,id,target,now)
     record.kind,record.id,record.target_id,record.created_at=kind,id,target,now
@@ -19,13 +21,23 @@ end
 function Wait.observe(observation,now)
     for record in pairs(pending) do
         if record.sent_at and not record.outcome and not record.abandoned and now>=record.sent_at then
+            local targetResult
+            if observation.kind=='weapon_skill' then
+                targetResult=weaponResult.find(observation.results,record.target_id)
+            end
             local matches=observation.kind==record.kind and
                 (observation.id==record.id or (observation.id==nil and record.started_at) or
                     (record.kind=='job_ability' and record.id==123 and observation.resource and observation.resource.type=='CorsairRoll')) and
-                (observation.target_id==record.target_id or (observation.id==nil and record.started_at))
+                (targetResult or observation.target_id==record.target_id or (observation.id==nil and record.started_at))
             if matches then
                 if observation.phase=='mid' then record.started_at=record.started_at or now
-                else record.outcome=observation.outcome; record.completed_at=now end
+                else
+                    record.outcome=targetResult and targetResult.outcome or observation.outcome
+                    if observation.kind=='weapon_skill' then
+                        weaponResult.apply(record,observation.results,record.target_id)
+                    end
+                    record.completed_at=now
+                end
             elseif observation.phase=='mid' then
                 record.outcome='superseded'; record.completed_at=now
             end
@@ -70,6 +82,6 @@ function Wait.run(record,policy,clock,sleep)
             (record.sent_at or began)+(policy.minimum or 0))
         if untilTime>clock() then sleep(untilTime-clock()) end
     end
-    return success
+    return success,Wait.result(record)
 end
 return Wait

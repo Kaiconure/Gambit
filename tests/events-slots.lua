@@ -5,7 +5,7 @@ local Runtime=require('./lib/events/runtime')
 Paths.setLoadedNamespace('child',{'child'})
 local paths=Paths.eventFiles('Tester','GEO',selectors.entryPointGroups('GEO',false))
 local root='./events/geo.json'
-local personal='./settings/_ns/child/players/Tester/events/geo.vars.json'
+local personal='./settings/_namespace-settings/child/players/Tester/events/geo.vars.json'
 local shared='./settings/events/common.vars.json'
 local documents={
     [root]={imports={'lib/base'},spells={pre={{commands={"mark('root')"}}}},

@@ -22,7 +22,9 @@ source=source:gsub("('[^'\r\n]*'):format", '(%1):format'):gsub('("[^"\r\n]*"):fo
 assert(loadstring(source))
 local body=assert(source:match('(function sendSpellCastingCommand.-)function string_trim'))
 local passed
-local env=setmetatable({actionStateManager={isActing=function() return false end},
+local casting=false
+local env=setmetatable({actionStateManager={isActing=function() return casting end},
+    actionWait=require('./lib/action-wait'),
     actionCategories=require('./meta/outgoing-action-categories'),
     sendObservedAction=function(category,spell,target,context,policy,pause,ignore)
         assert(category==3 and target==123 and policy.start and policy.padding==2 and pause)
@@ -30,6 +32,9 @@ local env=setmetatable({actionStateManager={isActing=function() return false end
     end},{__index=_G})
 local chunk=assert(loadstring(body));setfenv(chunk,env);chunk()
 assert(env.sendSpellCastingCommand({id=59,cast_time=1},123,{}) and passed)
+casting=true;passed=false
+local success,result=env.sendSpellCastingCommand({id=59,cast_time=1},123,{})
+assert(not success and not passed and result.outcome=='busy' and not result.started and not result.dispatched)
 print('PASS: targeted packets and spell delegation to shared wait policy')
 for _, path in ipairs({'lib/action-state-manager.lua'}) do
     local f=assert(io.open(path));local text=f:read('*all');f:close()

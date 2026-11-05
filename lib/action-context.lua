@@ -1714,14 +1714,6 @@ local function initContextTargetSymbol(context, symbol, debug)
             -- For player party members and allies, we'll use the global state manager driven by party buffs
             symbol.buffs = actionStateManager:getMemberBuffsFor(symbol.mob)
 
-            local jobInfo = globals.ipc_job_info and globals.ipc_job_info[symbol.name]
-            if jobInfo then
-                symbol.main_job = jobInfo.main_job
-                symbol.main_job_level = jobInfo.main_job_level
-                
-                symbol.sub_job = jobInfo.sub_job                
-                symbol.sub_job_level = jobInfo.sub_job_level
-            end
         elseif symbol.mob.spawn_type == SPAWN_TYPE_TRUST then
             -- For trusts, we'll use the much more limited self-initiated trust buff data we're tracking
             symbol.buffs = actionStateManager:getBuffsForMob(symbol.mob.id)
@@ -1730,6 +1722,18 @@ local function initContextTargetSymbol(context, symbol, debug)
         symbol.name = symbol.mob.name
         symbol.hpp = symbol.mob.hpp
         symbol.buffs = actionStateManager:getBuffsForMob(symbol.mob.id)
+    end
+
+    -- Cursor and dynamically resolved players have no party-member wrapper.
+    -- Attach cached job information to every non-self player symbol.
+    if symbol.targets.Player and not symbol.targets.Self then
+        local jobInfo = globals.ipc_job_info and globals.ipc_job_info[symbol.mob.name]
+        if jobInfo then
+            symbol.main_job = jobInfo.main_job
+            symbol.main_job_level = jobInfo.main_job_level
+            symbol.sub_job = jobInfo.sub_job
+            symbol.sub_job_level = jobInfo.sub_job_level
+        end
     end
 
     -- Set the shared properties
@@ -2828,7 +2832,197 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
-    -- Given a list of weapon skills, find the usable subset
+    -- Abyssea monster observations and the red weapon/WS search policy.
+    context.abyssea = {}
+    context.abyssea.getWeaknesses = function(target)
+        local info=windower.ffxi.get_info()
+        return variableValues.copy(require('./lib/abyssea-weakness').get(info and info.zone,target or context.bt))
+    end
+    local function runWeaponProc(config,policy,color)
+        policy.validate(config)
+        local function active()
+            if config.enabled==false then return false end
+            if config.is_active==nil then return true end
+            if type(config.is_active)=='function' then return config.is_active() end
+            return context.evaluateAll(config.is_active)
+        end
+        if not active() then return end
+        local info=windower.ffxi.get_info()
+        if not config.allow_outside_abyssea and not require('./lib/abyssea-weakness').isZone(info and info.zone) then return end
+        local target=context.bt
+        if not target then return end
+        if config.ws_allow_list and not config.ws_allow_list[target.name] then return end
+        if config.ws_black_list and config.ws_black_list[target.name] then return end
+        local function current(slot)
+            slot=slot or 'main'
+            local item=inventory.find_equipment_in_slot(slot,nil,true)
+            if not item and color=='blue' and slot=='main' then return {id=0,skill=1,key='unarmed',slot='main'} end
+            return item and {id=item.id,name=item.name,skill=item.item and item.item.skill,slot=slot,
+                key=table.concat({item.id,item.bagId or '-',item.localId or '-'},':')}
+        end
+        local function resolve(gear,wanted)
+            local slots=wanted and {wanted} or color=='blue' and {'main','range'} or {'main'}
+            local reason='no configured item for the required slot'
+            for _,slot in ipairs(slots) do
+                local reference=gear
+                if type(gear)=='table' and (gear.main or gear.range) then reference=gear[slot] end
+                local item=reference and inventory.find_item(reference,{equippable=true})
+                if item then
+                    local r,player=item.item,context.player
+                    if (not r.jobs or r.jobs[player.main_job_id]) and (not r.level or r.level<=player.main_job_level) then
+                        local observed=context.abyssea.getWeaknesses(target)
+                        local weakness=observed and observed[color] or {}
+                        local hint=not weakness.triggered and weakness[policy.hintField] or nil
+                        if #policy.candidates(config,hint,findWeaponSkill,r.skill)>0 then
+                            return {id=item.id,name=item.name,skill=r.skill,slot=(r.skill==25 or r.skill==26) and 'range' or 'main',
+                                key=table.concat({item.id,item.bagId or '-',item.localId or '-'},':')}
+                        end
+                        reason='weapon type has no WS in the selected pool/hint'
+                    elseif r.level and r.level>player.main_job_level then
+                        reason='level requirement is too high'
+                    else
+                        reason='not usable by current main job '..tostring(player.main_job_id)
+                    end
+                elseif reference then
+                    reason='item not found in equippable bags'
+                end
+            end
+            return nil,reason
+        end
+        return policy.step(config,target,context.abyssea.getWeaknesses(target),{
+            resource=findWeaponSkill,current=current,resolve=resolve,active=active,
+            clock=os.clock,log=context.log,debug=function(message) writeDebug(message) end,
+            usable=function(names)
+                local result={}
+                for _,name in ipairs(context.usableWeaponSkills(names)) do
+                    local ws=findWeaponSkill(name)
+                    if ws and ((ws.skill~=25 and ws.skill~=26) or current('ammo')) then result[#result+1]=name end
+                end
+                return result
+            end,
+            ready=function(name)
+                local ws=findWeaponSkill(name)
+                if ws and (ws.skill==25 or ws.skill==26) and not current('ammo') then return false end
+                return context.canUseWeaponSkill(name)
+            end,
+            waitReason=function(name)
+                local player=windower.ffxi.get_player()
+                if player and player.vitals and player.vitals.tp<1000 then return 'need 1000 TP' end
+                local ws=findWeaponSkill(name)
+                if ws and target.distance and target.distance>math.max(ws.range or 0,6) then
+                    return 'target is out of weapon-skill range'
+                end
+                if ws and (ws.skill==25 or ws.skill==26) and not current('ammo') then return 'ammunition is not equipped' end
+                return 'weapon skill is not ready (status or suppression)'
+            end,
+            use=function(name)
+                local ws=findWeaponSkill(name)
+                local slot=ws and (ws.skill==25 or ws.skill==26) and 'range' or 'main'
+                local selected=current(slot)
+                local ammo=slot=='range' and current('ammo')
+                if not selected then return false end
+                return context.useWeaponSkill(name,function()
+                    local live=windower.ffxi.get_mob_by_id(target.id)
+                    local observed=context.abyssea.getWeaknesses(target)
+                    if not live or live.id~=target.id or live.index~=target.index or live.hpp==0 or not active() then return false end
+                    local equipped=current(slot)
+                    if not equipped or equipped.key~=selected.key then return false end
+                    if slot=='range' then
+                        local liveAmmo=current('ammo')
+                        if not ammo or not liveAmmo or ammo.key~=liveAmmo.key then return false end
+                    end
+                    if observed and observed[color].triggered and config.on_stagger~='full_rotation' then return false end
+                    local element=observed and not observed[color].triggered and observed[color][policy.hintField] or nil
+                    local candidates=policy.candidates(config,element,findWeaponSkill,equipped.skill)
+                    for _,candidate in ipairs(context.usableWeaponSkills(candidates)) do
+                        if candidate==name then return true end
+                    end
+                    return false
+                end,true,target.id)
+            end,
+            allowed=function()
+                local live=windower.ffxi.get_mob_by_id(target.id)
+                local observed=context.abyssea.getWeaknesses(target)
+                return live and live.id==target.id and live.index==target.index and live.hpp>0 and active()
+                    and (not observed or not observed[color].triggered or config.on_stagger=='full_rotation')
+            end,
+            equip=function(gear,slot)
+                if type(gear)=='table' and (gear.main or gear.range) then return context.equipMany(gear) end
+                return context.equipMany({[slot or 'main']=gear})
+            end,
+        })
+    end
+    context.abyssea.runRedProc = function(config)
+        return runWeaponProc(config,require('./lib/abyssea-red'),'red')
+    end
+    context.abyssea.runBlueProc = function(config)
+        return runWeaponProc(config,require('./lib/abyssea-blue'),'blue')
+    end
+    context.abyssea.runYellowProc = function(config)
+        local yellow=require('./lib/abyssea-yellow')
+        yellow.validate(config)
+        local info=windower.ffxi.get_info()
+        if not config.allow_outside_abyssea and not require('./lib/abyssea-weakness').isZone(info and info.zone) then return end
+        local target=context.bt
+        if not target then return end
+        if config.ws_allow_list and not config.ws_allow_list[target.name] then return end
+        if config.ws_black_list and config.ws_black_list[target.name] then return end
+        local function allowed(name)
+            -- Backline casters may have no game battle target. Validate the
+            -- monster selected by Gambit rather than requiring melee engagement.
+            local live=windower.ffxi.get_mob_by_id(target.id)
+            if config.enabled==false or not live or live.id~=target.id or live.index~=target.index or live.hpp==0 then return false end
+            local observed=context.abyssea.getWeaknesses(target)
+            local weakness=observed and observed.yellow or {}
+            if weakness.triggered and config.on_stagger~='full_rotation' then return false end
+            local element=not weakness.triggered and weakness.element or nil
+            return yellow.matches(findSpell(name),element)
+        end
+        return yellow.step(config,target,context.abyssea.getWeaknesses(target),{
+            resource=findSpell,log=context.log,
+            clock=os.clock,busy=function() return actionStateManager:isActing() end,
+            debug=function(message) writeDebug(message) end,
+            ready=function(name)
+                return (not target.distance or target.distance<=20) and context.canUseSpell(name)
+            end,
+            waitReason=function(name)
+                if target.distance and target.distance>20 then return 'target is beyond the 20-yalm search limit' end
+                local spell=findSpell(name)
+                local player=windower.ffxi.get_player and windower.ffxi.get_player()
+                if spell and player and player.vitals and (player.vitals.mp or 0)<(spell.mp_cost or 0) then return 'insufficient MP for candidates' end
+                if context.vars.__suppress_offensive_magic then return 'offensive magic is suppressed' end
+                local learned=windower.ffxi.get_spells and windower.ffxi.get_spells()
+                if spell and learned and not learned[spell.id] then return 'some candidates are not learned' end
+                local timers=windower.ffxi.get_spell_recasts and windower.ffxi.get_spell_recasts()
+                if spell and timers and (timers[spell.recast_id or spell.id] or 0)>0 then return 'candidate spells are on recast' end
+                return 'candidate unavailable: status, job, spell setup, suppression, or tools'
+            end,
+            prepare=function(name)
+                local tools=config.tools and config.tools[name]
+                if not tools then return true end
+                if context.findItemInInventory(tools.items or {}) then return true end
+                for _,bag in ipairs(tools.bags or {}) do
+                    if context.findUsableItem(bag) and context.freeInventorySlots()>1 and context.useItem(context.me) then
+                        context.wait(1)
+                        return not not context.findItemInInventory(tools.items or {})
+                    end
+                end
+                return false
+            end,
+            allowed=allowed,
+            use=function(name)
+                return context.useSpell(target,name,false,function()
+                    return allowed(name) and context.canUseSpell(name)
+                end)
+            end,
+        })
+    end
+    setmetatable(context.abyssea,{
+        __index=function(self,key)
+            if key=='weaknesses' then return self.getWeaknesses() or {red={},yellow={},blue={}} end
+        end,
+    })
+    -- Given a list of weapon skills, find the usable subset.
     context.usableWeaponSkills = function (...)
         local weaponSkills = varargs({...})
         local abilities = windower.ffxi.get_abilities()
@@ -2849,7 +3043,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    context.useWeaponSkill = function (weaponSkill)
+    context.useWeaponSkill = function (weaponSkill, validate, requireLanded, targetId)
         --if weaponSkill == nil then weaponSkill = context.weapon_skill end
         weaponSkill = weaponSkill or context.weapon_skill
         if type(weaponSkill) == 'string' then weaponSkill = findWeaponSkill(weaponSkill) end
@@ -2862,7 +3056,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         then
             
             local target = weaponSkill.targets.Self and context.me or context.bt
-            if type(weaponSkill.range) == 'number' and type(target.model_size) == 'number' then
+            if type(weaponSkill.range) == 'number' and target and type(target.model_size) == 'number' then
                 if target and target.distance > ((2 * weaponSkill.range) + target.model_size) then
                     writeVerbose('WARNING: Target is out of weapon skill range. Continuing, but consider skipping.')
                     -- return
@@ -2871,9 +3065,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             --writeVerbose('Using weapon skill: %s':format(text_weapon_skill(weaponSkill.name)))
 
-            return sendObservedAction(actionCategories.WEAPON_SKILL,weaponSkill,weaponSkill.targets.Self and 'me' or 't',context,
-                {result_timeout=3,padding=1},false)
+            return sendObservedAction(actionCategories.WEAPON_SKILL,weaponSkill,targetId or (weaponSkill.targets.Self and 'me' or 't'),context,
+                {result_timeout=3,padding=1,validate=validate,require_landed=requireLanded},false)
         end
+        return false,require('./lib/action-wait').result({outcome='failed'})
     end
 
     --------------------------------------------------------------------------------------
@@ -3729,7 +3924,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Uses the specified spell on the specified target
-    context.useSpell = function (target, spell, ignoreIncomplete)
+    context.useSpell = function (target, spell, ignoreIncomplete, validate)
         local explicitId = type(target) == 'table' and type(target.id) == 'number'
             and type(target.index) == 'number' and target.id
         local bypass_target_check = false
@@ -3760,7 +3955,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
             -- Bail if we cannot use the spell
             if not canUseSpell(nil, spell) then
-                return
+                return false,require('./lib/action-wait').result({outcome='not_ready'})
             end
 
             target = target or context.member
@@ -3847,7 +4042,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     local current = windower.ffxi.get_mob_by_id(explicitId)
                     if not current or not current.valid_target then return end
                 end
-                local success = sendSpellCastingCommand(spell, explicitId or target.symbol, context, ignoreIncomplete)
+                local success, result = sendSpellCastingCommand(spell, explicitId or target.symbol, context, ignoreIncomplete, validate)
 
                 if success then
                     -- Raise doesn't have a special status, so we'll track it manually
@@ -3859,7 +4054,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     end
                 end
 
-                return success
+                return success, result
             end
         end
     end

@@ -58,7 +58,7 @@ local help=table.concat(output,'\n',helpStart)
 assert(help:find('gbt panel log [show | hide]',1,true))
 assert(help:find('gbt panel height [<height>|auto]',1,true))
 assert(help:find('gbt panel position [<x> <y>]',1,true))
-assert(help:find('gbt panel tracking [-list | -set <name>]',1,true))
+assert(help:find('gbt panel tracking [-list | -set <name> | -save <name> [-force]]',1,true))
 print('PASS: panel commands, tracking selection, errors, reload and position reset')
 env.handlers.panel({'size','640','400'}); assert(options.width==640 and options.height==400)
 env.handlers.panel({'width','700'}); assert(options.width==700 and options.height==400)
@@ -87,3 +87,16 @@ env.handlers.panel({'theme','-list'})
 assert(output[themeListStart]=='Panel themes:')
 assert(output[themeListStart+1]=='  ff7' and output[themeListStart+3]=='  ffxi'
     and output[themeListStart+4]=='  solid')
+
+panel.saveTracking=function(_,name) options.tracking.sets[name]={}; options.tracking.current=name end
+env.handlers.panel({'tracking','-save','variation'})
+assert(options.tracking.current=='variation' and output[#output]=='Saved tracking set: variation')
+env.handlers.panel({'tracking','-save'})
+assert(output[#output]:find('Usage:',1,true))
+env.handlers.panel({'tracking','-save','bad','extra'})
+assert(options.tracking.current=='variation')
+print('PASS: save tracking command dispatch and missing/extra argument handling')
+local forced
+panel.saveTracking=function(_,name,force) forced=force; options.tracking.current=name end
+env.handlers.panel({'tracking','-save','variation','-force'})
+assert(forced==true and options.tracking.current=='variation')

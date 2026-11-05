@@ -318,33 +318,35 @@ end
 function sendObservedAction(category, resource, target, context, policy, pauseFollow, ignoreIncomplete)
     local targetMob=type(target)=='string' and windower.ffxi.get_mob_by_target(target)
     local targetId=type(target)=='number' and target or (targetMob and targetMob.id)
-    if not targetId then return false end
+    if not targetId then return false,actionWait.result({outcome='failed'}) end
     local followJob=pauseFollow and smartMove:cancelJob()
     if not pauseFollow then smartMove:resetJitter() end
-    local record={}
+    local record={validate=policy and policy.validate,require_landed=policy and policy.require_landed}
     local ok,err=pcall(targetedAction.send,category,resource,targetId,record)
     if not ok or not err then
         record.abandoned=true
+        record.outcome=record.outcome or 'failed'
         actionWait.release(record)
         if followJob then smartMove:reschedule(followJob) end
         if context and context.action then context.action.complete=false; context.action.incomplete=true end
         if not ok then error(err) end
-        return false
+        return false,actionWait.result(record)
     end
-    local success=actionWait.run(record,policy,os.clock,coroutine.sleep)
+    local success,result=actionWait.run(record,policy,os.clock,coroutine.sleep)
     if ignoreIncomplete and record.outcome=='interrupted' then success=true end
     if followJob then smartMove:reschedule(followJob) else smartMove:resetJitter() end
     if context and context.action then
         context.action.complete=success
         context.action.incomplete=not success
     end
-    return success
+    return success and (not record.require_landed or result.landed),result
 end
 
-function sendSpellCastingCommand(spell, target, context, ignoreIncomplete)
-    if not spell or not target or actionStateManager:isActing() then return false end
+function sendSpellCastingCommand(spell, target, context, ignoreIncomplete, validate)
+    if not spell or not target then return false,actionWait.result({outcome='failed'}) end
+    if actionStateManager:isActing() then return false,actionWait.result({outcome='busy'}) end
     return sendObservedAction(actionCategories.SPELL,spell,target,context,{
-        start=true,result_timeout=math.max(spell.cast_time,1)*1.5+2,padding=2,
+        start=true,result_timeout=math.max(spell.cast_time,1)*1.5+2,padding=2,validate=validate,
     },true,ignoreIncomplete)
 end
 

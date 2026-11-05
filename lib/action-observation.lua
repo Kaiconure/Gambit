@@ -91,6 +91,7 @@ function Observation.selfResult(action,ffxi,resources,failures)
     local source=kind=='job_ability' and resources.job_abilities or resources.weapon_skills
     local resource=source and source[action.param]
     return {kind=kind,phase='post',id=action.param,resource=resource,detail=detail,message=message,
+        results=kind=='weapon_skill' and require('./lib/weapon-skill-result').targets(action.targets,failures) or nil,
         actor=ffxi.get_mob_by_id and ffxi.get_mob_by_id(action.actor_id),
         target_id=first and first.id,
         target=first and ffxi.get_mob_by_id and ffxi.get_mob_by_id(first.id),

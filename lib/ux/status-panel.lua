@@ -162,6 +162,17 @@ function Status:setTracking(name)
     local options=copy(self.options); options.tracking.current=name
     self:configure(options,false); self:update(); self:persist()
 end
+function Status:saveTracking(name,force)
+    assert(type(name)=='string' and name:find('%S'), 'Tracking set name must not be empty')
+    assert(not Config.defaults.tracking.sets[name], 'Cannot overwrite built-in tracking set: '..name)
+    assert(force or not self.options.tracking.sets[name],
+        'Tracking set already exists: '..name..'. Use -force to overwrite it.')
+    local options=copy(self.options)
+    local current=self.trackingOverride or options.tracking.sets[options.tracking.current]
+    options.tracking.sets[name]=copy(Config.expandTracking(current,options.tracking.sets))
+    options.tracking.current=name
+    self:configure(options,false); self:update(); self:persist()
+end
 function Status:setTemporaryTracking(entries,append)
     -- Keep temporary rows outside options so unrelated preference saves cannot
     -- persist them. Display reconfiguration retains these rows until a reload

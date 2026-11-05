@@ -40,12 +40,13 @@ function slots.priority(source, namespaces, playerName, mainJob)
     local layer, relative = #namespaces * 2 + 2, source
     for index, namespace in ipairs(namespaces) do
         local prefix = settingsPaths.namespacePath(namespace):gsub('^%./', ''):lower() .. '/'
-        if source:sub(1, #prefix) == prefix then
-            layer, relative = (index-1)*2, source:sub(#prefix+1)
-            local personal = 'players/' .. playerName:lower() .. '/'
-            if relative:sub(1, #personal) == personal then
-                relative = relative:sub(#personal+1)
-            else layer = layer + 1 end
+        local personal = settingsPaths.namespacePlayerRoot(namespace):gsub('^%./', ''):lower()
+            .. '/' .. playerName:lower() .. '/'
+        if source:sub(1, #personal) == personal then
+            layer, relative = (index-1)*2, source:sub(#personal+1)
+            break
+        elseif source:sub(1, #prefix) == prefix then
+            layer, relative = (index-1)*2+1, source:sub(#prefix+1)
             break
         end
     end

@@ -43,8 +43,8 @@ also contribute rules at named slots.
 | Shipped rule defaults | `events/geo.json`, or `events/(all).json` |
 
 Namespace equivalents are
-`settings/_ns/<namespace>/events/` and
-`settings/_ns/<namespace>/players/<character>/events/`.
+`settings/_namespaces/<namespace>/events/` and
+`settings/_namespace-settings/<namespace>/players/<character>/events/`.
 
 **Exactly one rule entry point is selected.** The search order is:
 
@@ -448,6 +448,22 @@ does not check MP, recast, range, or predicted landing time.
 
 ### Outcomes in post
 
+Weapon-skill post events separate execution from the effect on the requested
+target. `event.completed` means the WS executed; it can be true when
+`event.missed` is also true. `event.effect` is `landed`, `missed`, `no_effect`, or
+`unknown`; matching flags are `event.landed`, `event.missed`, and `event.no_effect`.
+Cancellation, rejection, and timeout without a result leave the effect unknown.
+`event.results` contains per-target entries with `target_id`, `outcome`, `effect`,
+the three effect flags, and numeric `messages`. The top-level effect comes from
+the requested target's ID, even if that target is not first in an AoE packet.
+Nearby targets' hits do not establish a hit on the requested target. Unknown
+message types are reported as unknown effects, not inferred hits. These fields
+are available for manual and automated WS when a matching event lifecycle exists.
+
+For example, a WS post rule can use `event.completed and event.missed` to report
+a completed miss, or `event.completed and event.landed` for confirmed damage/drain
+on its requested target. Landing does not by itself confirm a proc opportunity.
+
 `event.outcome` can be `completed`, `interrupted`, `failed`, `cancelled`,
 `timeout`, `reloaded`, `zoned`, `logout`, or `unloaded`.
 `event.completed_at` records the terminal time.
@@ -655,7 +671,24 @@ The recorder captures original/modified incoming chat text, decoded combat actio
 
 Recording is off by default, independent of verbosity and configured event handlers, and does not change cycling, facing, movement, chat, or action dispatch. It records activity beyond your battle target so party actions and unattributed hints remain available for comparison. It does not yet emit weakness/proc events or infer that a nearby action caused a proc.
 
+Abyssea red/yellow/blue observations and IPC sharing operate independently of recording.
+Read `abyssea.weaknesses.red`, `.yellow`, or `.blue` for the battle target, or use
+`abyssea.getWeaknesses(target)` for an explicit monster. Yellow hint and
+yellow-specific inability-to-cast confirmation do not set red state, and vice
+versa. Blue's weapon-type hint and inability-to-use-special-attacks confirmation
+update only blue state. The generic stagger announcement alone does not identify
+a proc color.
+
 The in-memory buffer stops collecting at 8192 entries; `stop` still exports it and reports truncation. An existing recording cannot be overwritten by another `start`. A failed export retains the data for another `stop` attempt. Save before unloading/reloading Lua: recordings are not persisted until exported. Event-rule reloads do not stop the capture.
+
+Discovery exports stream JSON through a small buffer to a `.partial` file, then
+rename it after writing and closing successfully. This avoids assembling the
+whole recording into an additional JSON string in memory. A failed export leaves
+the pending recording available for retry; a partial file is not a saved capture.
+For a still-loaded older Gambit instance that failed export with `not enough
+memory`, run `//lua i Gambit require ./lib/events/discovery-recovery`. The recovery module
+installs the streaming writer in that instance and attempts to save its retained
+capture without reloading. If it fails, retry `//gbt events discover stop`.
 
 To investigate weapon skill equipment timing, run `//gbt events trace start`,
 perform one or two weapon skills, then run `//gbt events trace stop`. The JSON

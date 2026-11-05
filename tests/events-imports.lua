@@ -3,9 +3,9 @@ local Paths=require('./lib/settings-paths')
 local Runtime=require('./lib/events/runtime')
 Paths.setLoadedNamespace('child',{'child','parent'})
 local paths=Paths.eventFiles('Tester','GEO',{'mages'})
-local root='./settings/_ns/child/players/Tester/events/geo.json'
-local first='./settings/_ns/child/players/Tester/events/lib/spells.json'
-local second='./settings/_ns/parent/events/lib/ws.json'
+local root='./settings/_namespace-settings/child/players/Tester/events/geo.json'
+local first='./settings/_namespace-settings/child/players/Tester/events/lib/spells.json'
+local second='./settings/_namespaces/parent/events/lib/ws.json'
 local shared='./events/lib/base.json'
 local docs={
     [root]={imports={'lib/spells','lib/ws.json'},vars={choice='root'},

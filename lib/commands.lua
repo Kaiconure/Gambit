@@ -17,7 +17,7 @@ handlers['panel'] = function(args)
         writeMessage('  gbt panel font-size [<size>] - View or set font size (6-30)')
         writeMessage('  gbt panel log [show | hide] - View or change recent output visibility')
         writeMessage('  gbt panel theme [<name> | -list] - View, list, or change background skin')
-        writeMessage('  gbt panel tracking [-list | -set <name>] - View, list, or switch tracking sets')
+        writeMessage('  gbt panel tracking [-list | -set <name> | -save <name> [-force]] - View, list, switch, or save tracking sets')
         writeMessage('  gbt panel reset-position - Restore default position')
         writeMessage('  gbt panel reset - Restore and save all panel defaults')
         writeMessage('  gbt panel reload - Apply panel settings from main.json')
@@ -119,8 +119,11 @@ handlers['panel'] = function(args)
             elseif args[2] == '-set' and args[3] then
                 panel:setTracking(args[3])
                 writeMessage('Tracking set: ' .. panel.options.tracking.current)
+            elseif args[2] == '-save' and args[3] and (#args == 3 or (#args == 4 and args[4] == '-force')) then
+                panel:saveTracking(args[3], args[4] == '-force')
+                writeMessage('Saved tracking set: ' .. panel.options.tracking.current)
             elseif not args[2] then writeMessage('Tracking set: ' .. panel.options.tracking.current)
-            else writeMessage('Usage: gbt panel tracking [-list | -set <name>]') end
+            else writeMessage('Usage: gbt panel tracking [-list | -set <name> | -save <name> [-force]]') end
         else showHelp() end
     end)
     if not ok then writeError('Panel: ' .. tostring(err)) end
@@ -300,16 +303,17 @@ handlers['namespace'] = function(args)
 
     local option = (args[1] or ''):lower()
     if option == '-list' and #args == 1 then
-        local names, abstract = settingsPaths.listNamespaces()
+        local names, abstract, bundled = settingsPaths.listNamespaces()
         if #names == 0 then
             writeMessage('No namespaces with a .nsconfig file found.')
         else
             writeMessage('Available namespaces:')
             for _, name in ipairs(names) do
+                local label = name .. (bundled and bundled[name] and ' (bundled)' or '')
                 if abstract and abstract[name] then
-                    writeMessage('  ' .. text_gray(name .. ' (abstract)', Colors.default))
+                    writeMessage('  ' .. text_gray(label .. ' (abstract)', Colors.default))
                 else
-                    writeMessage('  ' .. text_namespace(name, Colors.default))
+                    writeMessage('  ' .. text_namespace(label, Colors.default))
                 end
             end
         end

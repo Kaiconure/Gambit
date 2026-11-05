@@ -11,16 +11,29 @@ local function directoryExists(path)
         windower.dir_exists((windower.addon_path or '') .. path:gsub('^%./', '')) or false
 end
 
-function paths.namespaceRoot()
-    if directoryExists('./settings/_ns') then return './settings/_ns' end
-    if directoryExists('./settings/.ns') then return './settings/.ns' end
-    return './settings/_ns'
+local function organizationalRoot(parent, name)
+    local preferred = parent .. '/_' .. name
+    local plain = parent .. '/' .. name
+    if directoryExists(preferred) then return preferred end
+    if directoryExists(plain) then return plain end
+    return preferred
 end
 
-function paths.namespacePath(name)
+function paths.namespaceRoot()
+    return organizationalRoot('./settings', 'namespaces')
+end
+
+function paths.bundledNamespaceRoot()
+    return organizationalRoot('.', 'namespaces')
+end
+
+function paths.namespaceSettingsRoot()
+    return organizationalRoot('./settings', 'namespace-settings')
+end
+
+local function resolvePath(root, name)
     local valid, message = paths.validateNamespace(name)
     assert(valid, message)
-    local root = paths.namespaceRoot()
     for segment in (name or ''):gmatch('[^/]+') do
         local exact = root .. '/' .. segment
         if not directoryExists(exact) and segment:sub(1,1) ~= '_' and directoryExists(root .. '/_' .. segment) then
@@ -29,6 +42,22 @@ function paths.namespacePath(name)
         root = exact
     end
     return root
+end
+
+function paths.namespacePath(name)
+    local user = resolvePath(paths.namespaceRoot(), name)
+    if directoryExists(user) then return user end
+    local shipped = resolvePath(paths.bundledNamespaceRoot(), name)
+    if directoryExists(shipped) then return shipped end
+    return user
+end
+
+function paths.namespacePlayerRoot(name)
+    -- Use the resolved spelling so underscore aliases share personal settings.
+    local resolved = paths.namespacePath(name)
+    local relative = resolved:match('^%./settings/_?namespaces/(.*)$')
+        or resolved:match('^%./_?namespaces/(.*)$')
+    return paths.namespaceSettingsRoot() .. '/' .. relative .. '/players'
 end
 
 function paths.namespaceExists(name)
@@ -41,10 +70,12 @@ function paths.namespaceRelativeFile(fileName)
     if not fileName then return end
     local normalized=fileName:gsub('\\','/')
     local relative=normalized:gsub('^%./','')
-    if relative:match('^settings/[_%.]ns/') then
-        return relative:match('^settings/[_%.]ns/.-/(players/.*)$')
-            or relative:match('^settings/[_%.]ns/.-/(actions/.*)$')
-            or relative:match('^settings/[_%.]ns/.-/(events/.*)$') or relative
+    if relative:match('^settings/_?namespace%-settings/') then
+        return relative:match('/(players/.*)$') or relative
+    end
+    if relative:match('^settings/_?namespaces/') or relative:match('^_?namespaces/') then
+        return relative:match('/(actions/.*)$')
+            or relative:match('/(events/.*)$') or relative
     end
     return relative
 end
@@ -52,10 +83,11 @@ end
 function paths.fileNamespace(fileName)
     if not fileName then return end
     local relative=fileName:gsub('\\','/'):gsub('^%./','')
-    if not relative:match('^settings/[_%.]ns/') then return end
-    return relative:match('^settings/[_%.]ns/(.-)/players/')
-        or relative:match('^settings/[_%.]ns/(.-)/events/')
-        or relative:match('^settings/[_%.]ns/(.-)/actions/')
+    return relative:match('^settings/_?namespace%-settings/(.-)/players/')
+        or relative:match('^_?namespaces/(.-)/events/')
+        or relative:match('^_?namespaces/(.-)/actions/')
+        or relative:match('^settings/_?namespaces/(.-)/events/')
+        or relative:match('^settings/_?namespaces/(.-)/actions/')
 end
 
 function paths.isNamespaceInitialized(name)
@@ -69,10 +101,9 @@ end
 -- A .nsconfig marks a listable namespace; unmarked organizational folders
 -- are still traversed. Never descend into reserved namespace content folders.
 function paths.listNamespaces()
-    local result, abstract = {}, {}
-    local root = paths.namespaceRoot()
-    if not directoryExists(root) then return result, abstract end
-    local function visit(directory, parent)
+    local result, abstract, bundled = {}, {}, {}
+    local seen = {}
+    local function visit(directory, parent, sourceRoot)
         local absolute = (windower.addon_path or '') .. directory:gsub('^%./', '') .. '/'
         for _, segment in ipairs(windower.get_dir(absolute) or {}) do
             local physical = directory .. '/' .. segment
@@ -82,24 +113,29 @@ function paths.listNamespaces()
                     local short = segment:sub(2)
                     local alias = parent and (parent .. '/' .. short) or short
                     if short ~= '' and paths.validateNamespace(alias)
-                        and paths.namespacePath(alias):lower() == physical:lower() then name = alias end
+                        and resolvePath(sourceRoot, alias):lower() == physical:lower() then name = alias end
                 end
                 local configFile = files.new(physical .. '/.nsconfig')
-                if configFile:exists() then
+                if configFile:exists() and not seen[name:lower()]
+                    and paths.namespacePath(name):lower() == physical:lower() then
+                    seen[name:lower()] = true
                     result[#result+1] = name
+                    bundled[name] = physical:match('^%./_?namespaces/') ~= nil
                     local ok, config = pcall(function() return json.parse(configFile:read()) end)
                     abstract[name] = ok and type(config) == 'table' and config.abstract == true or false
                 end
-                visit(physical, name)
+                visit(physical, name, sourceRoot)
             end
         end
     end
-    visit(root)
+    for _, root in ipairs({paths.namespaceRoot(), paths.bundledNamespaceRoot()}) do
+        if directoryExists(root) then visit(root, nil, root) end
+    end
     table.sort(result, function(a,b)
         if a:lower() == b:lower() then return a < b end
         return a:lower() < b:lower()
     end)
-    return result, abstract
+    return result, abstract, bundled
 end
 
 function paths.getNamespace()
@@ -234,6 +270,8 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
         end)
         if not ok then return false, tostring(err) end
     end
+    -- Selecting a bundled namespace must never initialize files in its folder.
+    if root:match('^%./_?namespaces/') then return true end
     -- Character folders are created by the file writer only when an override is saved.
     for _, folder in ipairs({'actions', 'actions/lib'}) do
         -- create_path creates missing parents and leaves existing folders intact.
@@ -253,15 +291,17 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
 end
 
 function paths.writePath(playerName, relative)
-    local root = loadedNamespace and (paths.namespacePath(loadedNamespace) .. '/players') or './settings'
+    local root = loadedNamespace and paths.namespacePlayerRoot(loadedNamespace) or './settings'
     return root .. '/' .. playerName .. '/' .. relative
 end
 
 -- Closest scope/location wins; only the first existing event file is loaded.
 function paths.eventFiles(playerName, mainJob, groups)
     local roots={}
-    for _,name in ipairs(loadedPrecedence) do roots[#roots+1]=paths.namespacePath(name) end
-    roots[#roots+1]=SETTINGS_ROOT
+    for _,name in ipairs(loadedPrecedence) do
+        roots[#roots+1]={paths.namespacePath(name), paths.namespacePlayerRoot(name)}
+    end
+    roots[#roots+1]={SETTINGS_ROOT, SETTINGS_ROOT}
     local positives,inverses={},{}
     for _,group in ipairs(targetSelectors.orderEntryPointGroups(groups)) do
         local list=group:sub(1,1)=='~' and inverses or positives
@@ -274,8 +314,8 @@ function paths.eventFiles(playerName, mainJob, groups)
         for _,group in ipairs(inverses) do result[#result+1]=directory..'/('..group..').json' end
         result[#result+1]=directory..'/(all).json'
     end
-    for _,root in ipairs(roots) do
-        local characterRoot=root==SETTINGS_ROOT and root or root..'/players'
+    for _,entry in ipairs(roots) do
+        local root, characterRoot=entry[1], entry[2]
         for _,directory in ipairs({characterRoot..'/'..playerName..'/events',root..'/events'}) do
             addDirectory(directory)
         end
@@ -292,7 +332,7 @@ function paths.entryPointLayers(playerName,relative)
     local result={}
     for _,name in ipairs(loadedPrecedence) do
         local root=paths.namespacePath(name)
-        result[#result+1]={root..'/players/'..playerName..'/'..relative,root..'/'..relative}
+        result[#result+1]={paths.namespacePlayerRoot(name)..'/'..playerName..'/'..relative,root..'/'..relative}
     end
     result[#result+1]=SETTINGS_ROOT..'/'..playerName..'/'..relative
     result[#result+1]=SETTINGS_ROOT..'/'..relative
@@ -301,12 +341,14 @@ end
 
 function paths.candidates(playerName, relative, scope)
     local roots = {}
-    for _, name in ipairs(loadedPrecedence) do roots[#roots + 1] = paths.namespacePath(name) end
-    roots[#roots + 1] = SETTINGS_ROOT
+    for _, name in ipairs(loadedPrecedence) do
+        roots[#roots + 1] = {paths.namespacePath(name), paths.namespacePlayerRoot(name)}
+    end
+    roots[#roots + 1] = {SETTINGS_ROOT, SETTINGS_ROOT}
     local result = {}
-    for _, root in ipairs(roots) do
+    for _, entry in ipairs(roots) do
+        local root, characterRoot = entry[1], entry[2]
         if scope ~= 'common' then
-            local characterRoot = root == SETTINGS_ROOT and root or (root .. '/players')
             result[#result + 1] = characterRoot .. '/' .. playerName .. '/' .. relative
         end
         if scope ~= 'character' then result[#result + 1] = root .. '/' .. relative end
@@ -330,7 +372,7 @@ function paths.commonFiles(playerName, mainJob, groups)
     for i = #loadedPrecedence, 1, -1 do
         local root = paths.namespacePath(loadedPrecedence[i])
         libraries[#libraries + 1] = root .. '/actions/lib'
-        libraries[#libraries + 1] = root .. '/players/' .. playerName .. '/actions/lib'
+        libraries[#libraries + 1] = paths.namespacePlayerRoot(loadedPrecedence[i]) .. '/' .. playerName .. '/actions/lib'
     end
     local result = {}
     for _, library in ipairs(libraries) do

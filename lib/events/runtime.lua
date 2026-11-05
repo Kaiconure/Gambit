@@ -79,6 +79,9 @@ function Runtime:observe(event,phase)
 end
 function Runtime:finish(request,outcome)
     if request.finished then return end
+    if request.event.kind=='weapon_skill' and not request.event.results then
+        require('./lib/weapon-skill-result').apply(request.event,{},request.event.target and request.event.target.id)
+    end
     request.finished=true
     if request.observation and outcome~='completed' and outcome~='interrupted' then
         request.observation.outcome=request.observation.outcome or outcome
@@ -221,11 +224,18 @@ function Runtime:spellStarted(id,targetId)
         end
     end
 end
-function Runtime:complete(kind,id,targetId,outcome)
+function Runtime:complete(kind,id,targetId,outcome,results)
     for _,request in ipairs(self.pending) do
         local event=request.event
         if request.sent_at and event.kind==kind and (id==nil or event.id==id)
-            and (targetId==nil or not event.target or event.target.id==targetId) then
+            and (targetId==nil or not event.target or event.target.id==targetId)
+            and (not results or not event.target or require('./lib/weapon-skill-result').find(results,event.target.id)) then
+            if results then
+                local wsResult=require('./lib/weapon-skill-result')
+                wsResult.apply(event,results,event.target and event.target.id)
+                local selected=wsResult.find(results,event.target and event.target.id)
+                outcome=selected and selected.outcome or outcome
+            end
             self:finish(request,outcome)
             return true
         end

@@ -613,8 +613,8 @@ For variable syntax and merging basics, see [Variables](variables.md).
 | `settings/events/<job>.vars.json` | Shared job configuration |
 | `settings/<character>/events/<job>.vars.json` | Character-specific configuration |
 | `settings/<character>/events/(mages).vars.json` | Character configuration for a matching job group |
-| `settings/_ns/<namespace>/events/` | Namespace-wide settings |
-| `settings/_ns/<namespace>/players/<character>/events/` | Character settings within a namespace |
+| `settings/_namespaces/<namespace>/events/` | Namespace-wide settings |
+| `settings/_namespace-settings/<namespace>/players/<character>/events/` | Character settings within a namespace |
 
 Exactly one rule entry point wins. All applicable vars files are layered, even
 when the selected entry point is a shipped file. More specific settings win at

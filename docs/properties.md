@@ -67,7 +67,7 @@ Entry-point fields can be nil before actions have loaded. For example, a source
 file `./settings/Carbonite/actions/pld.json` gives an `entrypoint_name` of
 `./settings/Carbonite/actions/pld`.
 For a namespace source such as
-`./settings/_ns/xp/players/Carbonite/actions/pld.json`, `entrypoint_relative` is
+`./settings/_namespace-settings/xp/players/Carbonite/actions/pld.json`, `entrypoint_relative` is
 `players/Carbonite/actions/pld.json`. Inherited sources are relative to their own
 namespace rather than the currently selected namespace.
 The event fields describe the selected event entry point, not its imported

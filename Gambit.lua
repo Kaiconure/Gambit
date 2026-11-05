@@ -433,6 +433,10 @@ windower.register_event('load', function()
     globals.event_system = require('./lib/events/init').new({
         windower=windower,packets=packets,resources=resources,
         writeProcessed=writeJsonToFile,
+        writeDiscovery=function(path,result)
+            assert(files.new(path):create_path())
+            require('./lib/events/discovery-export').write(windower.addon_path..path,result)
+        end,
         context=ActionContext.createTemporary,
         externalEnemyActions=true,
         externalSelfSpells=true,
@@ -447,6 +451,7 @@ windower.register_event('load', function()
         afterAction=function(action) return handleActionEffects(action) end,
         schedule=function(fn,delay) return coroutine.schedule(fn,delay) end,
         report=function(message) writeError('[events] '..message) end,
+        notifyWeakness=function(message) writeMessage('[abyssea] '..message) end,
         announce=function(message) writeMessage('[events] '..message) end,
         debug=function(message) writeDebug('[events] '..message) end,
         diagnostic=function(message) printDebug('[events] %s',message) end,

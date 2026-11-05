@@ -1,4 +1,4 @@
-windower={addon_path='',dir_exists=function(path) return path=='settings/.ns' end}
+windower={addon_path='',dir_exists=function(path) return path=='settings/namespaces' end}
 local copy = require('./lib/variable-values').copy
 local scopes = require('./lib/variable-scopes')
 local preconditions = require('./lib/action-preconditions')
@@ -14,7 +14,7 @@ local env = setmetatable({
     variableLoader=require('./lib/variable-loader'),
     settingsPaths={
         getLoadedPrecedence=function() return {'child','base'} end,
-        commonFiles=function() return {'./settings/.ns/base/common.json','./settings/.ns/child/common.json'} end,
+        commonFiles=function() return {'./settings/namespaces/base/common.json','./settings/namespaces/child/common.json'} end,
         importCandidates=function(_, name) return {name} end,
     },
     targetSelectors={entryPointGroups=function() return {} end},
@@ -33,8 +33,8 @@ local chunk = assert(loadstring(internal .. loader .. '\nreturn loadActionImport
 setfenv(chunk, env)
 local load = chunk()
 local player = {name='Tester',main_job='RDM',main_job_level=99}
-documents['./settings/.ns/base/common.json'] = {contributions={emergency={{commands={'base()'}}}}}
-documents['./settings/.ns/child/common.json'] = {contributions={
+documents['./settings/namespaces/base/common.json'] = {contributions={emergency={{commands={'base()'}}}}}
+documents['./settings/namespaces/child/common.json'] = {contributions={
     emergency={{import='reaction', with_vars={targets={'me'}}, precondition='child()'}},
     unused={{commands={'unused()'}}},
 }}
@@ -82,8 +82,8 @@ documents.reaction = {actions={{slot='emergency'}}}
 assert(not pcall(load, 'Tester', {battle={{slot='emergency'}}},player,'entry'))
 documents.reaction = {contributions={other={{commands={'bad()'}}}}}
 assert(not pcall(load, 'Tester', {battle={{slot='emergency'}}},player,'entry'))
-documents['./settings/.ns/child/common.json']=nil
-documents['./settings/.ns/base/common.json']=nil
+documents['./settings/namespaces/child/common.json']=nil
+documents['./settings/namespaces/base/common.json']=nil
 local empty={battle={{slot='empty'},{commands={'ok()'}}}}
 load('Tester',empty,player,'entry')
 assert(#empty.battle==1 and empty.battle[1].commands[1]=='ok()')
@@ -181,8 +181,8 @@ assert(#missing.battle==1 and missing.battle[1].commands[1]=='last()')
 for _, invalid in ipairs({{{'good',false}}, {{' '}}, {{{'too-deep'}}}, {{name='bad'}}}) do
     assert(not pcall(load,'Tester',{battle={{slots=invalid}}},player,'entry'))
 end
-documents['./settings/.ns/base/common.json']={contributions={['geo/burst']={{commands={'parent()'}}}}}
-documents['./settings/.ns/child/common.json']={contributions={['geo/burst']={}}}
+documents['./settings/namespaces/base/common.json']={contributions={['geo/burst']={{commands={'parent()'}}}}}
+documents['./settings/namespaces/child/common.json']={contributions={['geo/burst']={}}}
 selected=fallback(nil)
 assert(#selected==2 and selected[1].commands[1]=='parent()')
 print('PASS: ordered fallback selection, empty declarations, false preconditions, disabled actions, missing alternatives and inherited accumulation')
@@ -197,14 +197,14 @@ local function replacementTest(definitions, expected)
 end
 local function command(text) return {{commands={text}}} end
 replacementTest({
-    {'./settings/.ns/base/actions/lib/common/geo.json',{['!burst']=command('base')}},
-    {'./settings/.ns/child/actions/lib/common/common.json',{['!burst']=command('child')}},
-    {'./settings/.ns/child/actions/lib/common/geo.json',{burst=command('job')}},
+    {'./settings/namespaces/base/actions/lib/common/geo.json',{['!burst']=command('base')}},
+    {'./settings/namespaces/child/actions/lib/common/common.json',{['!burst']=command('child')}},
+    {'./settings/namespaces/child/actions/lib/common/geo.json',{burst=command('job')}},
 },'job,child')
 replacementTest({
-    {'./settings/.ns/base/actions/lib/common/common.json',{burst=command('general')}},
-    {'./settings/.ns/base/actions/lib/common/(mages).json',{burst=command('role')}},
-    {'./settings/.ns/base/actions/lib/common/geo.json',{['!burst, !nuke']={}}},
+    {'./settings/namespaces/base/actions/lib/common/common.json',{burst=command('general')}},
+    {'./settings/namespaces/base/actions/lib/common/(mages).json',{burst=command('role')}},
+    {'./settings/namespaces/base/actions/lib/common/geo.json',{['!burst, !nuke']={}}},
 },'')
 replacementTest({
     {'./actions/lib/common/geo.json',{burst=command('shipped')}},
@@ -225,8 +225,8 @@ registry.collect({contributions={['!geo/burst']={},burst=command('fallback')}},'
 registry.expand({'battle'})
 assert(#blank.battle==0)
 print('PASS: replacements, namespace/file specificity, non-namespace precedence, comma aliases and empty fallback suppression')
-local near='./settings/.ns/child/actions/lib/common/geo.json'
-local far='./settings/.ns/base/actions/lib/common/common.json'
+local near='./settings/namespaces/child/actions/lib/common/geo.json'
+local far='./settings/namespaces/base/actions/lib/common/common.json'
 for _, reverse in ipairs({false,true}) do
     local definitions={{near,{['^burst']=command('near')}},{far,{['^burst']=command('far')}}}
     if reverse then definitions[1],definitions[2]=definitions[2],definitions[1] end

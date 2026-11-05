@@ -19,6 +19,14 @@ Service.__index=Service
 local outgoing={ [3]={'spell','spells'},[7]={'weapon_skill','weapon_skills'},[9]={'job_ability','job_abilities'} }
 -- The high bit is a message flag, not part of the resource message ID.
 local function messageId(value) return (tonumber(value) or 0)%32768 end
+local function dispatchAllowed(observation)
+    if not observation then return true end
+    if observation.abandoned or (observation.validate and not observation.validate()) then
+        observation.outcome='cancelled'
+        return false
+    end
+    return true
+end
 local rejected={ [17]=true,[18]=true,[55]=true,[56]=true,[78]=true,[84]=true,
     [87]=true,[88]=true,[89]=true,[90]=true,[94]=true,[104]=true,[191]=true,
     [308]=true,[313]=true,[325]=true,[428]=true,[429]=true }
@@ -39,10 +47,12 @@ function Service.new(deps)
     listen('action',function(action) self:action(action) end)
     listen('incoming chunk',function(id,original,modified,injected,blocked)
         self:incoming(id,original,modified,injected,blocked)
+        if self.weaknessIncoming then self.weaknessIncoming(id,original,modified,injected) end
         if self.transitionIncoming then self.transitionIncoming(id,original,modified,injected,blocked) end
         if discovery.active() then discovery.packet(id,original,modified,injected,blocked,deps) end
     end)
     listen('incoming text',function(original,modified,mode)
+        if self.weaknessText then self.weaknessText(original) end
         if discovery.active() then
             local data=discovery.context(deps.windower.ffxi)
             data.original=original; data.modified=modified; data.mode=mode
@@ -50,6 +60,7 @@ function Service.new(deps)
         end
     end)
     listen('prerender',function()
+        if self.weaknessTick then self.weaknessTick() end
         if verify.active() then verify.tick() end
         self:loadingTick()
         pets.tick(self)
@@ -58,11 +69,13 @@ function Service.new(deps)
         if self.transitionTick then self.transitionTick() end
     end)
     listen('logout',function()
+        if self.weaknessClear then self.weaknessClear() end
         self:clear('logout'); self.runtime=nil
         if self.transitionLogout then self.transitionLogout() end
     end)
     require('./lib/events/transitions').attach(self,listen)
     require('./lib/events/buffs').attach(self,listen)
+    require('./lib/events/abyssea').attach(self,listen)
     return self
 end
 function Service:verification(command)
@@ -172,11 +185,12 @@ function Service:discovery(command)
     if command~='stop' then return 'Usage: gbt events discover [start|stop]' end
     self.discoveryResult=self.discoveryResult or discovery.stop()
     if not self.discoveryResult then return 'No discovery recording is active.' end
-    assert(deps.writeProcessed,'Discovery file writer is unavailable')
+    local write=deps.writeDiscovery or deps.writeProcessed
+    assert(write,'Discovery file writer is unavailable')
     self.discoverySequence=(self.discoverySequence or 0)+1
     local name=self.discoveryResult.metadata.player.name
     local path=paths.writePath(name,'.output/discovery-'..os.date('%Y%m%d-%H%M%S')..'-'..self.discoverySequence..'.json')
-    deps.writeProcessed(path,self.discoveryResult)
+    write(path,self.discoveryResult)
     local truncated=self.discoveryResult.truncated
     self.discoveryResult=nil
     return 'Discovery recording saved: '..path..(truncated and ' (entry limit reached; capture truncated)' or '')
@@ -269,7 +283,7 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
         if self.deps.equipmentPending and self.deps.equipmentPending() then
             if observation then observation.queued=true end
             self.deps.barrier(function(ready)
-                if observation and observation.abandoned then return end
+                if not dispatchAllowed(observation) then return end
                 if ready then
                     if observation then observation.sent_at=(self.deps.clock or os.clock)() end
                     self:inject(packet)
@@ -320,7 +334,7 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
     end
     event.target=targetMetadata.snapshot(event.target,target,player.id)
     return self.runtime:submit(event,function()
-        if observation and observation.abandoned then return false end
+        if not dispatchAllowed(observation) then return false end
         local current=deps.windower.ffxi.get_player()
         local mob=deps.windower.ffxi.get_mob_by_id(event.target.id)
         if not current or current.id~=player.id or not mob or not mob.valid_target then return false end
@@ -335,6 +349,7 @@ end
 -- Gambit's explicit packet dispatch goes through here too: it does not depend
 -- on whether Windower echoes an addon's own injections to its chunk listener.
 function Service:send(packet,observation)
+    if not dispatchAllowed(observation) then return false end
     local raw=self.deps.packets.build(packet)
     if self:outgoing(0x01A,raw,raw,true,false,observation) then
         if observation and not observation.sent_at and not observation.outcome then
@@ -349,7 +364,7 @@ function Service:send(packet,observation)
     end
     if self.deps.barrier then
         self.deps.barrier(function(ready)
-            if observation and observation.abandoned then observation.outcome='cancelled'; return end
+            if not dispatchAllowed(observation) then return end
             if ready then
                 if observation then observation.sent_at=(self.deps.clock or os.clock)() end
                 self:inject(packet)
@@ -396,7 +411,7 @@ function Service:selfResultAction(action)
     if self.deps.observeSelfResult then self.deps.observeSelfResult(observation) end
     if self.runtime then
         if pets.action(self,action) then return observation end
-        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome)
+        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome,observation.results)
         -- The server reports the roll resource for Double-Up. Exact roll
         -- matching wins; only then try an outstanding dispatched Double-Up.
         local ability=observation.kind=='job_ability' and observation.resource
@@ -477,6 +492,7 @@ function Service:incoming(id,original,modified,injected,blocked)
     self:reject(nil,messageId(packet.Message))
 end
 function Service:destroy()
+    if self.weaknessClear then self.weaknessClear() end
     discovery.stop()
     self:clear('unloaded')
     if verify.active() then verify.stop() end

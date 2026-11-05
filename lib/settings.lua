@@ -1292,11 +1292,7 @@ function saveSettings(settingsToSave, force)
         fileName = getSettingsFileName(player.name)
     end
     if savePerNamespace and settingsPaths.getLoadedNamespace() then
-        fileName = settingsPaths.firstExisting({
-            settingsPaths.writePath(player.name, 'main.json'),
-            settingsPaths.namespacePath(settingsPaths.getLoadedNamespace()) .. '/main.json'
-        }, function(path) return files.new(path):exists() end)
-            or settingsPaths.writePath(player.name, 'main.json')
+        fileName = settingsPaths.writePath(player.name, 'main.json')
     end
 
     settingsToSave = settingsSnapshot(settingsToSave or settings)

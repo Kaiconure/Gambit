@@ -10,6 +10,7 @@ local kinds={
 -- Outgoing 0x01A uses resource IDs for spells, weapon skills, and job abilities.
 -- Resolve the index again at dispatch time: an old context is not authoritative.
 function targeted.send(category, resource, targetId, observation)
+    if observation and observation.validate and not observation.validate() then return false end
     if not kinds[category] or not resource or
         type(resource.id) ~= 'number' or type(targetId) ~= 'number' then return false end
     local mob = windower.ffxi.get_mob_by_id(targetId)

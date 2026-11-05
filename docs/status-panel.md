@@ -17,6 +17,17 @@ use those defaults. Mouse resizing is not implemented yet.
 
 ## Inline colors
 
+The default and compact tracking sets display known target jobs beside the
+target name, for example `WAR3` or `WAR99/SAM59`. Unknown job information is
+omitted. The panel helper `job_string(mob)` formats the known `main_job`,
+`main_job_level`, `sub_job`, and `sub_job_level` fields; it returns nil when the
+main job is unknown and omits levels that are unknown. It does not discover jobs.
+For a separate tracking row, use:
+
+```json
+{"name": "Target job", "expression": "job_string(cursor)"}
+```
+
 Tracking names and values support Windower's `\cs(r,g,b)` color codes and
 `\cr` reset. RGB components range from 0 to 255. For a static JSON value:
 
@@ -81,6 +92,7 @@ sources as global. Folder aliases such as `_base` retain their source spelling.
 | `gbt panel tracking` | Show the current tracking set |
 | `gbt panel tracking -list` | List names alphabetically |
 | `gbt panel tracking -set <name>` | Switch immediately and save selection |
+| `gbt panel tracking -save <name> [-force]` | Copy current tracking into a named custom set, select it, and save |
 | `gbt panel reset-position` | Restore default coordinates and save |
 | `gbt panel reset` | Reset display preferences and select `default`; preserve custom sets and clear temporary tracking |
 | `gbt panel position <x> <y>` | Set both coordinates in pixels and save |
@@ -94,6 +106,11 @@ sources as global. Folder aliases such as `_base` retain their source spelling.
 | `gbt panel reload` | Reread panel JSON and apply without reloading actions or the addon |
 
 Visibility, tracking selection, and completed title drags save automatically.
+`tracking -save` includes temporary tracking rows and copies referenced sets into
+independent rows, preserving expressions rather than their displayed results.
+If the name already exists, saving reports a warning and requires `-force` to overwrite it. Built-in names remain protected, including with `-force`. Successful saves activate the saved set.
+Edit the saved set under `ui.status_panel.tracking.sets` in your character's
+global `main.json`, then use `gbt panel reload` to apply your changes.
 Recent output visibility is stored as `show_log` (default `true`). Hiding the log
 shrinks the panel toward its configured minimum height. History continues collecting
 while hidden, and reappears when shown. Chat output is unaffected.

@@ -27,6 +27,13 @@ service.runtime=nil -- Observation still works without configured runtime.
 service:selfResultAction({category=6,actor_id=100,param=10,targets={{id=200,actions={{message=1}}}}})
 assert(record.outcome=='completed' and record.completed_at==2.5)
 Wait.release(record)
+-- A proc hint/stagger received while waiting on gear can invalidate a queued WS.
+local allowed=true
+record={validate=function() return allowed end}
+injected=nil
+service:send({Category=7,Param=10,Target=200},record)
+allowed=false; barrier(true)
+assert(not injected and record.outcome=='cancelled','recheck search policy at actual dispatch')
 record={sent_at=now}
 Wait.register(record,'weapon_skill',10,200,now)
 service:incoming(0x029,{Actor=100,Message=88},nil,false,false)

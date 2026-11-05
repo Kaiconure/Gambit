@@ -20,11 +20,12 @@
             "checklist": [
               {
                 "format": [
-                  "%s←%s (%s at %s)",
+                  "%s←%s (%s at %s, %s)",
                   "color_ki('Glistening orobon liver')",
                   "color_mob('Cep-Kamuy')",
                   "color_npc('???')",
-                  "color_pos('F-5')"
+                  "color_pos('F-5')",
+                  "color_npc('Conflux #05')"
                 ],
                 "id": "cep_kamuy",
                 "checked_when": ["findKeyItem('glistening orobon liver')"]
@@ -32,19 +33,20 @@
               {
                 "format": [
                   "   • %s←%s (%s)",
-                  "color_item('Orobon Cheekmeat')",
+                  "color_item('Orbn. Cheekmeat')",
                   "color_mob('Ancient Orobon')",
                   "color_pos('F-5')"
                 ],
                 "id": "ancient_orobon",
-                "checked_when": ["findItem('Orobon Cheekmeat')"]
+                "checked_when": ["findItem('Orbn. Cheekmeat')"]
               },
               {
                 "format": [
-                  "%s←%s (%s) (%s)",
+                  "%s←%s (%s, %s) (%s)",
                   "color_ki('Doffed Poroggo hat')",
                   "color_mob('Heqet')",
                   "color_pos('I-6')",
+                  "color_npc('Conflux #00')",
                   "color_number('10-15 min.')"
                 ],
                 "id": "heqet",
@@ -52,13 +54,12 @@
               },
               {
                 "format": [
-                  "You are %s for %s (%s at %s, target at %s, %s)",
+                  "You are %s for %s (%s at %s, %s)",
                   "findKeyItem('glistening orobon liver') and findKeyItem('doffed poroggo hat') and color_green('ready') or color_yellow('not ready')",
                   "color_mob('Cirein-croin')",
                   "color_npc('???')",
                   "color_pos('H-5')",
-                  "color_pos('J-7/K-7')",
-                  "color_npc('Conflux #03')"
+                  "color_npc('Conflux #05')"
                 ],
                 "id": "cirein_croin",
                 "checked_when": [

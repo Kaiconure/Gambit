@@ -29,7 +29,7 @@ assert(#saved.entries==3 and saved.entries[1].fields.Message==123)
 assert(saved.entries[1].hex=='74657374' and saved.entries[1].blocked)
 assert(saved.entries[2].original=='weakness hint' and saved.entries[3].action.param==46)
 assert(not Discovery.active())
-deps.packets.parse=function() error('disabled recorder must not parse') end
+deps.packets.parse=function() return {} end -- Weakness observer remains active without recording.
 listeners['incoming chunk'](0x02A,'test',nil,false,false)
 assert(service:discovery('stop')=='No discovery recording is active.')
 assert(Discovery.start(deps.clock,{}))

@@ -8,10 +8,10 @@ local function copy(v)
 end
 local base='./settings/Player/main.json'
 local disk={[base]={default_namespace='fight', distance=18, nested={keep=true}}}
-disk['./settings/.ns/fight/.nsconfig']={}
+disk['./settings/namespaces/fight/.nsconfig']={}
 local player={name='Player',main_job='PLD'}
 local paths=dofile('lib/settings-paths.lua')
-windower={addon_path='',dir_exists=function(path) return path=='settings/.ns' or path=='settings/.ns/fight' end}
+windower={addon_path='',dir_exists=function(path) return path=='settings/namespaces' or path=='settings/namespaces/fight' end}
 paths.ensureNamespaceFolders=function() error('Normal loads must not initialize namespaces') end
 local messages={}
 local abstractWarnings={}
@@ -24,7 +24,7 @@ local env=setmetatable({
         read=function() return copy(disk[path]) end,
     } end},
     windower={addon_path='',ffxi={get_player=function() return player end},
-        dir_exists=function(path) return path=='settings/.ns/fight' end},
+        dir_exists=function(path) return path=='settings/namespaces/fight' end},
     writeJsonToFile=function(path,value) disk[path]=copy(value) end,
     writeMessage=function(message, color)
         assert(color == nil, 'Settings messages must not pass replacement counts as chat colors')
@@ -45,7 +45,7 @@ env.loadSettings()
 assert(paths.getNamespace()=='fight' and paths.getLoadedNamespace()=='fight')
 env.reportLoadedSettings()
 assert(messages[#messages] == 'Gambit: Settings loaded from namespace: fight')
-local nsconfig='./settings/.ns/fight/.nsconfig'
+local nsconfig='./settings/namespaces/fight/.nsconfig'
 disk[nsconfig]=nil
 local missingLoaded, missingError=pcall(env.loadSettings)
 assert(not missingLoaded and missingError:find('gbt ns -set fight -force',1,true))
@@ -78,11 +78,11 @@ env.reportLoadedSettings()
 assert(messages[#messages]=='Gambit: Settings loaded from namespace: fight')
 local originalDirExists=windower.dir_exists
 windower.dir_exists=function(path)
-    return originalDirExists(path) or path=='settings/.ns/parent' or path=='settings/.ns/root'
+    return originalDirExists(path) or path=='settings/namespaces/parent' or path=='settings/namespaces/root'
 end
 disk[nsconfig]={description='Child advice', inherits_from='parent'}
-disk['./settings/.ns/parent/.nsconfig']={description={'Parent advice'}, inherits_from='root'}
-disk['./settings/.ns/root/.nsconfig']={description='Root advice'}
+disk['./settings/namespaces/parent/.nsconfig']={description={'Parent advice'}, inherits_from='root'}
+disk['./settings/namespaces/root/.nsconfig']={description='Root advice'}
 env.loadSettings()
 env.reportLoadedSettings()
 assert(messages[#messages-5]=='Description from namespace: root' and messages[#messages-4]==' Root advice')
@@ -92,14 +92,14 @@ local replayStart=#messages
 env.reportNamespaceDescriptions()
 assert(#messages==replayStart+6)
 assert(messages[replayStart+1]=='Description from namespace: root' and messages[#messages]==' Child advice')
-disk['./settings/.ns/parent/.nsconfig'].description={}
+disk['./settings/namespaces/parent/.nsconfig'].description={}
 env.loadSettings()
 local beforeReport=#messages
 env.reportLoadedSettings()
 assert(#messages==beforeReport+6) -- Load messages plus child/root blocks; empty parent skipped.
 assert(messages[#messages-3]=='Description from namespace: root' and messages[#messages-2]==' Root advice')
 assert(messages[#messages-1]=='Description from namespace: fight' and messages[#messages]==' Child advice')
-disk['./settings/.ns/parent/.nsconfig']['!description']={'Parent override'}
+disk['./settings/namespaces/parent/.nsconfig']['!description']={'Parent override'}
 env.loadSettings()
 beforeReport=#messages
 env.reportLoadedSettings()

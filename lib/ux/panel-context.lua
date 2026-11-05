@@ -40,6 +40,19 @@ end
 
 function PanelContext.attach(context,canShareClaim)
     local latest
+    context.job_string=function(mob)
+        if type(mob)~='table' then return nil end
+        local function job(name,level)
+            if type(name)~='string' or name=='' or name=='NON' then return nil end
+            local suffix=type(level)=='number' and level>0 and level==math.floor(level)
+                and tostring(level) or ''
+            return name..suffix
+        end
+        local main=job(mob.main_job,mob.main_job_level)
+        if not main then return nil end
+        local sub=job(mob.sub_job,mob.sub_job_level)
+        return main..(sub and ('/'..sub) or '')
+    end
     local function color(text,r,g,b)
         for _,component in ipairs({r,g,b}) do
             assert(type(component)=='number' and component>=0 and component<=255
@@ -118,6 +131,7 @@ function PanelContext.attach(context,canShareClaim)
         if not mob or not mob.valid_target or not name then
             return color('--',unpack(Theme.colors.target_invalid))
         end
+        if mob.is_me then return color(name,unpack(Theme.colors.gold)) end
         if mob.is_dead then return color(name,unpack(Theme.colors.target_dead))
         elseif mob.is_player then
             role=(mob.is_party_member or mob.is_alliance_member) and 'target_player' or 'target_other_player'

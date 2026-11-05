@@ -12,21 +12,21 @@ assert(result.entrypoint=='pld')
 assert(result.entrypoint_path==settings.actionInfo.fileName)
 assert(result.entrypoint_name=='./settings/Carbonite/actions/pld')
 assert(result.entrypoint_relative=='settings/Carbonite/actions/pld.json')
-settings.actionInfo={name='pld',fileName='./settings/_ns/boss/_vagary/players/Carbonite/actions/pld.json'}
+settings.actionInfo={name='pld',fileName='./settings/_namespace-settings/boss/_vagary/players/Carbonite/actions/pld.json'}
 assert(context().entrypoint_relative=='players/Carbonite/actions/pld.json')
-settings.actionInfo.fileName='./settings/.ns/_base/actions/pld.json'
+settings.actionInfo.fileName='./settings/namespaces/_base/actions/pld.json'
 assert(context().entrypoint_relative=='actions/pld.json')
 settings.actionInfo={name='other',fileName='./actions/other.JSON'}
 assert(context().entrypoint_name=='./actions/other')
 assert(context().events==nil and context().events_relative==nil)
-env.eventPath='./settings/_ns/boss/_vagary/events/(mages).json'
+env.eventPath='./settings/namespaces/boss/_vagary/events/(mages).json'
 result=context()
 assert(result.events=='(mages)')
 assert(result.events_path==env.eventPath)
-assert(result.events_name=='./settings/_ns/boss/_vagary/events/(mages)')
+assert(result.events_name=='./settings/namespaces/boss/_vagary/events/(mages)')
 assert(result.events_relative=='events/(mages).json')
 assert(result.event_namespace=='boss/_vagary')
-env.eventPath='.\\settings\\_ns\\xp\\players\\Carbonite\\events\\pld.json'
+env.eventPath='.\\settings\\_namespace-settings\\xp\\players\\Carbonite\\events\\pld.json'
 assert(context().events_relative=='players/Carbonite/events/pld.json')
 assert(context().event_namespace=='xp')
 env.eventPath='./events/(all).json'

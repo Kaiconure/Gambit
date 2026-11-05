@@ -4,7 +4,7 @@ local selectors=require('./lib/target-selectors')
 Paths.setLoadedNamespace('child',{'child','parent'})
 local paths=Paths.eventFiles('Tester','GEO',selectors.entryPointGroups('GEO',false))
 local root='./settings/'
-local child=root..'_ns/child/'
+local child=root..'_namespaces/child/'
 local docs={
     [root..'events/geo.json']={vars={gear={head='default',body='default'},list={'default'},
         ['!locked']='inline lock',ordinary='inline',nested={['!locked']=true}},
@@ -13,15 +13,15 @@ local docs={
     [root..'events/(mages).vars.json']={vars={gear={body='mage'}}},
     [root..'events/geo.vars.json']={vars={gear={head='geo'},['^ordinary']='shared default',list={'geo'}}},
     [root..'Tester/events/geo.vars.json']={vars={gear={head='character'}}},
-    [root..'_ns/parent/events/geo.vars.json']={vars={gear={body='parent'},inherited=true}},
+    [root..'_namespaces/parent/events/geo.vars.json']={vars={gear={body='parent'},inherited=true}},
     [child..'events/common.vars.json']={vars={gear={head='namespace'},['!priority']='namespace priority'}},
-    [child..'players/Tester/events/geo.vars.json']={vars={gear={head='specific'},priority='ordinary',
+    [root..'_namespace-settings/child/players/Tester/events/geo.vars.json']={vars={gear={head='specific'},priority='ordinary',
         locked='attempt',nested={locked=false},['^ordinary']='specific default'}},
 }
 local function load() return Config.load(paths,function(path) return docs[path] end) end
 local config=load()
 assert(config.path==root..'events/geo.json' and #config.files==1 and #config.vars_files==7)
-assert(config.vars_files[1]==child..'players/Tester/events/geo.vars.json')
+assert(config.vars_files[1]==root..'_namespace-settings/child/players/Tester/events/geo.vars.json')
 assert(config.vars.gear.head=='specific' and config.vars.gear.body=='parent')
 assert(config.vars.gear.feet=='shared' and config.vars.base and config.vars.inherited)
 assert(config.vars.ordinary=='shared') -- Ordinary value beats more-specific ^ defaults.
