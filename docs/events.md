@@ -142,6 +142,7 @@ values and combinations are:
 | `spells` | `spell` | `pre`, `mid`, `post` | nil |
 | `job_abilities` | `job_ability` | `pre`, `mid`, `post` | nil |
 | `weapon_skills` | `weapon_skill` | `pre`, `mid`, `post` | nil |
+| `party_weapon_skills` | `party_weapon_skill` | `post` | nil |
 | `pet_abilities` | `pet_ability` | `pre`, `mid`, `post` | nil |
 | `statuses.battle` | `status` | `enter`, `leave` | `battle` |
 | `statuses.idle` | `status` | `enter`, `leave` | `idle` |
@@ -456,6 +457,66 @@ Cancellation, rejection, and timeout without a result leave the effect unknown.
 `event.results` contains per-target entries with `target_id`, `outcome`, `effect`,
 the three effect flags, and numeric `messages`. The top-level effect comes from
 the requested target's ID, even if that target is not first in an AoE packet.
+`event.amount` is the sum of numeric result amounts on recognized landed WS
+messages for the requested target. Each `event.results` entry also has `amount`.
+This is the reported effect amount (such as damage or drain), not a guarantee of
+HP damage. Unknown/missing amounts are nil; a reported zero stays zero. Skillchain
+and additional-effect damage are not included.
+
+Self and party WS share these additional fields:
+
+| Field | Meaning |
+| --- | --- |
+| `actor_id`, `actor` | Caster identity and mob metadata, including `actor.is_me`, `actor.is_party_member`, and `actor.is_alliance_member`. |
+| `damage` | Confirmed direct HP damage; nil for drains, misses, and unknown results. Reported zero remains zero. |
+| `dealt_damage` | True only when confirmed direct HP damage is greater than zero. |
+| `effect_type` | `damage`, `hp_drain`, `mp_drain`, `mixed`, or nil when unclassified. |
+| `skillchain_properties` | Distinct, ordered WS resource properties, such as `{"Fusion", "Compression"}`. |
+| `has_skillchain_properties` | Whether that property list is non-empty. |
+| `triggered_skillchain` | Whether the target result contains a recognized skillchain additional-effect message. |
+| `skillchain` | First observed chain: `name`, `message`, `animation`, `amount`, `damage`, `dealt_damage`, and `absorbed`. Nil when none was observed. |
+| `skillchains` | All observed chain entries for the target, in packet order. |
+
+Damage, effect type, and skillchain results are also present on each
+`event.results` entry. Direct WS damage excludes the separate skillchain damage.
+An absorbed skillchain retains its name and amount, but has no confirmed damage.
+WS properties describe potential chains, never proof that one occurred.
+
+### Party weapon skills
+
+`party_weapon_skills.post` observes player WS results independently of outgoing
+action lifecycles. Self WS raise this event as well as the normal self WS post;
+if the outgoing self lifecycle was missed, a post-only self notification is
+emitted instead. No duplicate self post is emitted for a matched lifecycle.
+Party events cannot cancel actions and have no pre/mid phases or automatic
+equipment-snapshot restoration. Their variable state is isolated per event.
+
+Party membership includes yourself. Trusts, pets, enemies, and unrelated players
+are excluded. To include the other parties in your alliance, configure
+`vars.party_weapon_skills.include_alliance` as true in an event vars file.
+Only actions received by the local client can be observed.
+
+For another player's AoE WS, the top-level result uses the first packet target;
+when your own requested target is known, both self and party notifications use
+that target. Inspect `event.results` to handle all targets explicitly.
+
+```json
+{
+  "vars": {
+    "party_weapon_skills": {"include_alliance": true}
+  },
+  "contributions": {
+    "party_weapon_skills.post.after": [
+      {
+        "when": ["event.completed and event.triggered_skillchain"],
+        "commands": [
+          "logf('%s closed %s for %s', event.actor.name, event.skillchain.name, event.skillchain.amount or '?')"
+        ]
+      }
+    ]
+  }
+}
+```
 Nearby targets' hits do not establish a hit on the requested target. Unknown
 message types are reported as unknown effects, not inferred hits. These fields
 are available for manual and automated WS when a matching event lifecycle exists.

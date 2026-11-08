@@ -8,6 +8,7 @@ function enemies.action(service,action,failures)
     local deps=service.deps
     local observation=Observation.action(action,deps.windower.ffxi,deps.resources,failures,true)
     if not observation then return false end
+    require('./lib/encounter-state').enemy(observation)
     if deps.observeEnemy then
         local ok,err=pcall(deps.observeEnemy,observation)
         if not ok then deps.report('Enemy state observation: '..tostring(err)) end

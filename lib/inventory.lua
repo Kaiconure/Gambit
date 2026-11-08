@@ -259,6 +259,14 @@ local function is_item_excluded(exclusion_list, bagId, localId)
     end
 end
 
+local function meets_equip_requirements(item, player)
+    if item.jobs and (not player or not item.jobs[player.main_job_id]) then return false end
+    if item.level and (not player or not player.main_job_level or player.main_job_level < item.level) then
+        return false
+    end
+    return true
+end
+
 inventory.equip_many = function(pieces, all_items, simulate, changes, session)
     -- Set-level metadata belongs to callers, not slot resolution.
     if pieces.meta~=nil then
@@ -288,6 +296,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
     local flags = { equippable = true, equipped = false }
     local swaps = { }
     local lockRequests={}
+    local player=windower.ffxi.get_player and windower.ffxi.get_player()
 
     -- Resolve in slot order as well as sending in slot order. Candidate copies
     -- reserved by one slot cannot be reused by a later slot in this request.
@@ -315,11 +324,12 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                     -- Equipped/queued copies are eligible, and win over other
                     -- physical copies of this candidate. Unspecified augments
                     -- do not require an unnecessary change to another copy.
-                    if equipped and resource and equipped.id==resource.id
+                    local eligible=resource and meets_equip_requirements(resource,player)
+                    if eligible and equipped and equipped.id==resource.id
                         and not is_item_excluded(exclusion_list,equipped.bagId,equipped.localId)
                         and inventory.has_all_augments(equipped,augments) then
                         selected=equipped
-                    elseif resource then
+                    elseif eligible then
                         local excluded={}
                         for _,item in ipairs(exclusion_list) do excluded[#excluded+1]=item end
                         while true do

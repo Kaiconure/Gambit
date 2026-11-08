@@ -4,18 +4,25 @@
   },
   "vars": {
     "^keep_phalanx": {
-      "spells": ["Phalanx II", "Phalanx"]
+      "spells": ["Phalanx II", "Phalanx"],
+      "targets": ["me"]
     }
   },
   "actions": [
     {
       "comments": [
-        "NOTE: Phalax II can be cast on others, but this gambit doesn't handle that. It's self-only for now."
+        "Use the configured spell preference for self; other party members require Phalanx II."
       ],
       "when": [
-        "hasSpell(vars.keep_phalanx.spells) and not hasEffectOf(spell) and canUse(spell)"
+        "partyByName(vars.keep_phalanx.targets)",
+        "member.is_participant and member.valid_target",
+        "(member.is_me and hasSpell(vars.keep_phalanx.spells)) or (not member.is_me and hasSpell('Phalanx II'))",
+        "not hasEffectOf(member, spell) and canUse(spell)"
       ],
-      "commands": ["use(me)", "postpone((spellRecast(spell.name) or 0) + 10)"],
+      "commands": [
+        "use(member)",
+        "postpone((spellRecast(spell.name) or 0) + 10)"
+      ],
       "frequency": 10
     }
   ]

@@ -24,6 +24,7 @@ function transitions.attach(service,listen)
         if departing then return end
         departing=true
         if service.weaknessClear then service.weaknessClear() end
+        if service.encounterClear then service.encounterClear() end
         service:clear('zoned')
         emit(zoneEvent(destination,old or currentZone),'leave')
     end

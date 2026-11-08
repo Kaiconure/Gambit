@@ -149,5 +149,36 @@ items.wardrobe[11]={id=6,slot=11,count=1,status=0,augments={'STR+20'}}
 ctx.vars.ring={name='Augmented Ring',augments={'STR+20'}}
 assert(ctx.equipMany({ring1={var='vars.ring'}})==1 and sent[1].index==11)
 assert(ctx.vars.ring.slot==nil and ctx.vars.ring.augments[1]=='STR+20')
+-- An owned candidate must also satisfy current main-job and level requirements.
+local player={main_job_id=1,main_job_level=99}
+windower.ffxi.get_player=function()return player end
+resources.items[1].jobs={[7]=true}
+resources.items[1].level=99
+reset(); ctx=context()
+items.wardrobe[1]={id=1,slot=1,count=1,status=0}
+local candidates={back={{name='Better Mantle'},{name='Fallback Mantle'}}}
+assert(ctx.checkEquipMany(candidates)==1 and #sent==0)
+assert(ctx.equipMany(candidates)==1 and sent[1].index==2)
+-- Changing to the eligible main job restores first-candidate priority.
+reset(); ctx=context();player.main_job_id=7
+items.wardrobe[1]={id=1,slot=1,count=1,status=0}
+assert(ctx.equipMany(candidates)==1 and sent[1].index==1)
+-- A sufficient subjob cannot substitute for the main-job restriction.
+reset(); ctx=context();player.main_job_id=1;player.sub_job_id=7
+items.wardrobe[1]={id=1,slot=1,count=1,status=0}
+assert(ctx.equipMany(candidates)==1 and sent[1].index==2)
+reset(); ctx=context();player.main_job_id=7;player.main_job_level=98
+items.wardrobe[1]={id=1,slot=1,count=1,status=0}
+assert(ctx.equipMany(candidates)==1 and sent[1].index==2)
+-- No eligible candidate means no packet, including a single restricted item.
+reset(); ctx=context()
+items.wardrobe[1]={id=1,slot=1,count=1,status=0}
+assert(ctx.equipMany({back={name='Better Mantle'}})==nil and #sent==0)
+-- The already-equipped fast path must not bypass requirements either.
+reset(); ctx=context()
+items.wardrobe[1]={id=1,slot=1,count=1,status=5}
+ack(15,1)
+assert(ctx.equipMany(candidates)==1 and sent[1].index==2)
+print('PASS: job/level requirements, main-job selection, simulation, single candidates and equipped-copy fallback')
 manager:destroy(); inventory.equipment_manager=nil
 print('PASS: ordered candidates, fallback/upgrade, duplicate stability, pending state, paired-slot exclusions, augments and exact push/pop')

@@ -1054,6 +1054,18 @@ local function setPartyEnumerators(context)
     context.partyHasJob = function(...)
         return targetSelectors.partyHasJob(context, varargs({...}))
     end
+    -- Pure selector queries: no member-enumerator or selected-target side effects.
+    context.partyNames = function(targets)
+        return targetSelectors.orderedNames(context, targets)
+    end
+    context.partyMatches = function(targets, member)
+        member=member or context.me
+        if not member or type(member.name)~='string' then return false end
+        for _,name in ipairs(targetSelectors.orderedNames(context, targets)) do
+            if name:lower()==member.name:lower() then return true end
+        end
+        return false
+    end
 
     -----------------------------------------------------------------------------------------
     -- Count the number of party members matching the specified expression
@@ -2832,6 +2844,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Configurable encounter observations and JSON-defined conditions.
+    context.encounters = {
+        configure=function(name,definition,parameters) require('./lib/encounter-state').configure(name,definition,parameters) end,
+        remove=function(name) require('./lib/encounter-state').remove(name) end,
+        state=function(name,target)
+            local state=require('./lib/encounter-state').get(name,target or context.bt)
+            context.encounter_state=state
+            return state
+        end,
+        evaluate=function(name,condition,target) return require('./lib/encounter-state').evaluate(name,condition,target or context.bt,context) end
+    }
+
+    --------------------------------------------------------------------------------------
     -- Abyssea monster observations and the red weapon/WS search policy.
     context.abyssea = {}
     context.abyssea.getWeaknesses = function(target)
@@ -3382,7 +3407,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if player and player.status == STATUS_IDLE then
             local t = context.getMobByTarget('t')
             if t and t.spawn_type == SPAWN_TYPE_MOB then
-                context.sendCommand('input /attack <t>')
+                -- Cursor acquisition may already have sent an engage packet while
+                -- get_player() still reports idle. Never toggle that engagement off.
+                context.sendCommand('input /attack on')
                 context.wait(1)
 
                 return true
@@ -3395,7 +3422,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.disengage = function ()
         local player = windower.ffxi.get_player()
         if player and player.status == STATUS_ENGAGED then
-            context.sendCommand('input /attack')
+            context.sendCommand('input /attack off')
             context.wait(1)
 
             return true
@@ -4198,42 +4225,56 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    local function alignmentPositionMatches(target, spec, distance, position, tolerance)
+    local function alignmentPositionMatches(target, spec, distance, position, tolerance, options)
         if not target or not position then return false end
+        local arrived = options and options.distance_priority and options.arrived
         local bearing = alignment.bearing(target, position)
-        if not alignment.contains(spec, bearing) and not spec.exact then return false end
-        local angle = spec.exact or bearing
-        local desired = smartMove:findMobOffset(target, angle * math.pi / 180, distance)
+        -- Use the nearest allowed position so arrival tolerance also applies at
+        -- arc boundaries. A strict angular check can repeatedly reject a move
+        -- that correctly stopped within its positional tolerance.
+        local angle = arrived and bearing or alignment.closest(spec, bearing)
+        local desired = smartMove:findMobOffset(target, angle * math.pi / 180, distance, options)
         local dx, dy = position.x - desired[1], position.y - desired[2]
         tolerance = tonumber(tolerance) or smartMove.tolerance
-        return dx * dx + dy * dy <= tolerance * tolerance
+        local matches = dx * dx + dy * dy <= tolerance * tolerance
+        return matches
     end
 
-    context.aligned = function(target, angle, distance, tolerance)
-        return alignmentPositionMatches(target, alignment.parse(angle), distance,
-            windower.ffxi.get_mob_by_target('me'), tolerance)
+    local function preferredAlignment(target, angle, distance, options)
+        local spec=alignment.parse(angle)
+        local plan=options and options.distribute~=nil and require('./lib/party-alignment').plan(target,spec,distance,options) or nil
+        return plan and plan.preferred or spec,plan,spec
     end
 
-    context.aligning = function(target, angle, distance, tolerance)
+    context.aligned = function(target, angle, distance, tolerance, options)
+        local spec=preferredAlignment(target,angle,distance,options)
+        return alignmentPositionMatches(target, spec, distance,
+            windower.ffxi.get_mob_by_target('me'), tolerance, options)
+    end
+
+    context.aligning = function(target, angle, distance, tolerance, options)
         local job = smartMove:getJobInfo()
-        return job and job.position and alignmentPositionMatches(target, alignment.parse(angle), distance,
-            {x=job.position[1], y=job.position[2]}, tolerance) or false
+        local spec=preferredAlignment(target,angle,distance,options)
+        return job and job.position and alignmentPositionMatches(target, spec, distance,
+            {x=job.position[1], y=job.position[2]}, tolerance, options) or false
     end
 
-    context.align = function(target, angle, distance, duration, noFace, tolerance)
+    context.align = function(target, angle, distance, duration, noFace, tolerance, options)
         if not context.movementAvailable() then return nil, 'reserved' end
-        local spec = alignment.parse(angle)
-        if context.aligned(target, angle, distance, tolerance) then return true end
+        local preferredSpec,plan,spec = preferredAlignment(target,angle,distance,options)
+        if alignmentPositionMatches(target,preferredSpec,distance,windower.ffxi.get_mob_by_target('me'),tolerance,options) then return true end
         if not target or not target.id then return false end
         local me = windower.ffxi.get_mob_by_target('me')
         if not me then return false end
         local cache = context.action and context.action._alignment
-        local key = tostring(angle) .. ':' .. tostring(distance)
-        if not cache or cache.target ~= target.id or cache.scope ~= context.battleScope or cache.key ~= key then
+        local key = tostring(angle) .. ':' .. tostring(distance) .. ':' .. tostring(options and options.radius_multiplier) .. ':' .. (plan and plan.key or '')
+        if not cache or cache.target ~= target.id or not plan and cache.scope ~= context.battleScope or cache.key ~= key then
             cache = {target=target.id, scope=context.battleScope, key=key}
             if context.action then context.action._alignment = cache end
         end
-        local candidates = cache.pending or alignment.candidates(spec, alignment.bearing(target,me), cache.preferred)
+        local candidates = cache.pending or (plan and not plan.fallback and
+            alignment.distributedCandidates(spec,preferredSpec,alignment.bearing(target,me),plan.count)
+            or alignment.candidates(spec, alignment.bearing(target,me), cache.preferred))
         cache.pending = nil
         cache.preferred = candidates[1]
         local deadline = os.clock() + math.max(tonumber(duration) or (spec.exact and 3 or 6), 1)
@@ -4242,15 +4283,16 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if remaining <= 0 then break end
             local current = windower.ffxi.get_mob_by_id(target.id)
             if not current or not current.valid_target or current.hpp <= 0 then return false end
-            local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance)
+            local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance, options)
             local startX, startY, startHeading = current.x, current.y, current.heading
             local startMe = windower.ffxi.get_mob_by_target('me')
             local startGap = startMe and math.sqrt((startMe.x-position[1])^2 + (startMe.y-position[2])^2)
             local success, reason = context.move({x=position[1], y=position[2],
-                duration=remaining,
+                duration=plan and math.min(remaining,1) or remaining,
                 tolerance=tonumber(tolerance) or (not spec.exact and smartMove.tolerance or nil)})
             local updated = windower.ffxi.get_mob_by_id(target.id)
-            if success and updated and context.aligned(updated,angle,distance,tolerance) then
+            if success and updated and alignmentPositionMatches(updated,spec,distance,windower.ffxi.get_mob_by_target('me'),tolerance,options) then
+                if plan then require('./lib/party-alignment').accept(plan,alignment.bearing(updated,windower.ffxi.get_mob_by_target('me'))) end
                 cache.preferred = candidate
                 cache.pending = nil
                 if not noFace then directionality.faceTarget(updated) end
@@ -4284,6 +4326,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             local current = windower.ffxi.get_mob_by_id(target.id)
             if current then directionality.faceTarget(current) end
         end
+        if plan and cache.pending then return false, 'alternatives' end
         context.postpone(2)
         return false
     end
@@ -4652,7 +4695,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- 
-    context.follow = function (target, distance)
+    context.followDistance = function(target, distance, options)
+        return smartMove:followDistance(target, distance, options)
+    end
+
+    context.follow = function (target, distance, options)
         if not context.movementAvailable() then return nil, 'reserved' end
         target = target or context.member or context.bt
 
@@ -4688,7 +4735,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- follow is already for the current target
         local jobInfo = smartMove:getJobInfo()
         if jobInfo == nil or jobInfo.follow_index ~= target.index then
-            return smartMove:followIndex(target.index, distance)
+            return smartMove:followIndex(target.index, distance, options)
         end
     end
 
@@ -5420,11 +5467,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Forces the next battle target to the specified mob (id or object)
-    context.setBattleTarget = function(mob)
+    context.setBattleTarget = function(mob, engage)
+        assert(engage==nil or type(engage)=='boolean', 'setBattleTarget engage must be boolean')
         if type(mob) == 'table' and mob[1] then mob = mob[1] end
         if type(mob) == 'table' then mob = mob.id end
         if type(mob) == 'number' then
             actionStateManager.user_target_id = mob
+            actionStateManager.user_target_engage = engage~=false
             return true
         end
     end
@@ -5656,6 +5705,39 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
     context.hasEffect = context.hasBuff
+
+    -- Every requested buff must be known on the target. Unlike hasBuff, this
+    -- boolean query does not replace the selected effect/effect_count.
+    context.hasAllBuffs = function(...)
+        local args = {...}
+        local start_index = 1
+        local target = context.me
+        if isEffectTarget(args[1]) then
+            target = args[1]
+            start_index = 2
+        elseif type(args[1]) == 'string' and isEffectTarget(context[args[1]]) then
+            target = context[args[1]]
+            start_index = 2
+        elseif args[1] == nil then
+            start_index = 2
+        end
+
+        local strict = args[start_index] == 'use-strict'
+        if strict or args[start_index] == 'not-strict' then
+            start_index = start_index + 1
+        end
+        local names = args
+        if type(args[start_index]) == 'table' and args[start_index].id == nil then
+            names = args[start_index]
+            start_index = 1
+        end
+        if type(target) ~= 'table' then return false end
+        for i = start_index, #names do
+            if not hasBuffInArray(target.buffs, names[i], strict) then return false end
+        end
+        return true
+    end
+    context.hasAllEffects = context.hasAllBuffs
 
     --------------------------------------------------------------------------------------
     -- Tries to use the specified action to remove an effect on the target

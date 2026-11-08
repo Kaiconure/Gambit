@@ -9,6 +9,7 @@ local cureSpell=require('./lib/cure-spell')
 local targetMetadata=require('./lib/target-metadata')
 local pets=require('./lib/events/pets')
 local enemies=require('./lib/events/enemies')
+local partyWeaponSkills=require('./lib/events/party-weapon-skills')
 local observations=require('./lib/action-observation')
 local actionWait=require('./lib/action-wait')
 local trace=require('./lib/events/weapon-skill-trace')
@@ -44,7 +45,10 @@ function Service.new(deps)
         if discovery.active() then discovery.packet(id,original,modified,injected,blocked or result,deps,'outgoing') end
         return result
     end)
-    listen('action',function(action) self:action(action) end)
+    listen('action',function(action)
+        if self.encounterAction then self.encounterAction(action) end
+        self:action(action)
+    end)
     listen('incoming chunk',function(id,original,modified,injected,blocked)
         self:incoming(id,original,modified,injected,blocked)
         if self.weaknessIncoming then self.weaknessIncoming(id,original,modified,injected) end
@@ -53,6 +57,7 @@ function Service.new(deps)
     end)
     listen('incoming text',function(original,modified,mode)
         if self.weaknessText then self.weaknessText(original) end
+        if self.encounterText then self.encounterText(original) end
         if discovery.active() then
             local data=discovery.context(deps.windower.ffxi)
             data.original=original; data.modified=modified; data.mode=mode
@@ -70,12 +75,14 @@ function Service.new(deps)
     end)
     listen('logout',function()
         if self.weaknessClear then self.weaknessClear() end
+        if self.encounterClear then self.encounterClear() end
         self:clear('logout'); self.runtime=nil
         if self.transitionLogout then self.transitionLogout() end
     end)
     require('./lib/events/transitions').attach(self,listen)
     require('./lib/events/buffs').attach(self,listen)
     require('./lib/events/abyssea').attach(self,listen)
+    require('./lib/encounter-state').attach(self,listen)
     return self
 end
 function Service:verification(command)
@@ -315,6 +322,7 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
         name=resource.en,
         cast_time=mapping[1]=='spell' and resource.cast_time or nil,
         actor_id=player.id,
+        actor=targetMetadata.snapshot({id=player.id,name=player.name},deps.windower.ffxi.get_mob_by_id(player.id),player.id),
         pet=pet and {id=pet.id,index=pet.index,name=pet.name} or nil,
         type=resource.type,
         element=resource.element,
@@ -331,6 +339,11 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
     if event.kind=='spell' then
         for name,id in pairs(magicSkills) do event[name]=resource.skill==id end
         event.curing=cureSpell(resource)
+    end
+    if event.kind=='weapon_skill' then
+        require('./lib/weapon-skill-result').properties(event,resource)
+        event.actor.is_party_member=true
+        event.actor.is_alliance_member=true
     end
     event.target=targetMetadata.snapshot(event.target,target,player.id)
     return self.runtime:submit(event,function()
@@ -411,7 +424,22 @@ function Service:selfResultAction(action)
     if self.deps.observeSelfResult then self.deps.observeSelfResult(observation) end
     if self.runtime then
         if pets.action(self,action) then return observation end
-        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome,observation.results)
+        if observation.kind=='weapon_skill' then
+            self.wsObservedTargets=self.wsObservedTargets or setmetatable({}, {__mode='k'})
+            for _,request in ipairs(self.runtime.pending) do
+                local event=request.event
+                if request.sent_at and event.kind=='weapon_skill' and event.id==observation.id
+                    and event.target and require('./lib/weapon-skill-result').find(observation.results,event.target.id) then
+                    self.wsObservedTargets[action]=event.target.id;break
+                end
+            end
+        end
+        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome,observation.results,observation.resource)
+        if not matched and observation.kind=='weapon_skill' then
+            -- A visible self WS still has a post result if its outgoing request
+            -- was not observed. Do not duplicate an existing lifecycle's post.
+            partyWeaponSkills.action(self,action,rejected,true)
+        end
         -- The server reports the roll resource for Double-Up. Exact roll
         -- matching wins; only then try an outstanding dispatched Double-Up.
         local ability=observation.kind=='job_ability' and observation.resource
@@ -424,6 +452,7 @@ function Service:selfResultAction(action)
 end
 function Service:action(action)
     if not action then return end
+    partyWeaponSkills.action(self,action,rejected)
     if discovery.active() then discovery.action(action,self.deps.windower.ffxi,self.deps.resources) end
     if self.deps.externalSelfResults and (action.category==3 or action.category==6 or action.category==14) then
         local player=self.deps.windower.ffxi.get_player()

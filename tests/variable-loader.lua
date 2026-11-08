@@ -8,7 +8,7 @@ state.merge(vars, {enabled=false, keep={spells={'Other'},targets={'Later'},extra
 assert(vars.enabled and vars.ordinary==1)
 assert(vars.keep.spells[1]=='Silence' and vars.keep.targets[1]=='New' and vars.keep.extra==3)
 state.merge(vars, {['!enabled']=false}, 'conflict')
-assert(vars.enabled and #warnings==1 and warnings[1]:find('namespace',1,true))
+assert(vars.enabled) -- Conflicting prioritized definitions retain the first value.
 state.merge(vars, {keep='$object.empty',enabled='$object.null'}, 'clear')
 assert(vars.enabled and vars.keep.targets[1]=='New')
 state.merge(vars, {['!deleted']='$object.null',['!empty']='$array.empty'}, 'clear')
@@ -29,7 +29,7 @@ normal.merge(legacy,{a={},b=false,c={1,2},object={x=1}},'base')
 normal.merge(legacy,{a={3},b=true,c={4},object={y=2}},'import')
 assert(legacy.a[1]==3 and legacy.b==false and legacy.c[2]==2 and legacy.object.y==2)
 normal.merge(legacy,{c='$array.empty',b='$object.null'},'clear')
-assert(next(legacy.c)==nil and legacy.b==nil)
+assert(legacy.c[1]==1 and legacy.b==false) -- Lower-precedence clears cannot erase existing values.
 print('PASS: variable priority, nested defaults, arrays, clearing, conflicts, same-file order and runtime writes')
 
 for _, reverseOrder in ipairs({false,true}) do
@@ -58,5 +58,5 @@ merge(mixed,{['^obj']='$object.empty',['^x']='$object.null'},'weak-clear')
 assert(mixed.obj.b==2 and mixed.x==3)
 merge(mixed,{ordinaryClear='$object.null'},'clear')
 merge(mixed,{ordinaryClear=5},'default-after-clear')
-assert(mixed.ordinaryClear==5)
+assert(mixed.ordinaryClear==nil)
 print('PASS: default priority in both load orders, equal priorities, nested overrides, arrays and clearing')

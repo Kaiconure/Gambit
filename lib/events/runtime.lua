@@ -63,6 +63,8 @@ function Runtime:observe(event,phase)
         or event.kind=='buff' and 'buffs'
         or event.kind=='enemy_spell' and 'enemy_spells'
         or event.kind=='enemy_ability' and 'enemy_abilities'
+        or event.kind=='party_weapon_skill' and 'party_weapon_skills'
+        or event.kind=='weapon_skill' and 'weapon_skills'
     local rules=self.config.rules[section]
     if not rules or not rules[phase] or #rules[phase]==0 then return end
     if self.running then self.deps.report('Event rules cannot dispatch nested events'); return end
@@ -224,7 +226,7 @@ function Runtime:spellStarted(id,targetId)
         end
     end
 end
-function Runtime:complete(kind,id,targetId,outcome,results)
+function Runtime:complete(kind,id,targetId,outcome,results,resource)
     for _,request in ipairs(self.pending) do
         local event=request.event
         if request.sent_at and event.kind==kind and (id==nil or event.id==id)
@@ -233,6 +235,7 @@ function Runtime:complete(kind,id,targetId,outcome,results)
             if results then
                 local wsResult=require('./lib/weapon-skill-result')
                 wsResult.apply(event,results,event.target and event.target.id)
+                if resource then wsResult.properties(event,resource) end
                 local selected=wsResult.find(results,event.target and event.target.id)
                 outcome=selected and selected.outcome or outcome
             end

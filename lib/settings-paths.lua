@@ -145,20 +145,24 @@ end
 function paths.validateNamespace(name)
     if name ~= nil and (
         type(name) ~= 'string' or
-        not name:match('^[%w_/-]+$') or
+        not name:match('^[%w_/%.-]+$') or
         name:sub(1, 1) == '/' or
         name:sub(-1) == '/' or
         name:find('//', 1, true)
     ) then
-        return false, 'Namespace names must be slash-separated folder names containing only letters, numbers, underscores, and hyphens.'
+        return false, 'Namespace names must be slash-separated folder names containing only letters, numbers, underscores, hyphens, and dots.'
     end
     for segment in (name or ''):gmatch('[^/]+') do
+        if segment:sub(1,1) == '.' or segment:sub(-1) == '.' then
+            return false, 'Namespace folder name "' .. segment .. '" cannot start or end with a dot.'
+        end
         local normalized = segment:lower():gsub('^_+', '')
         if normalized == 'actions' or normalized == 'players' or normalized == 'events' then
             return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
         end
-        if normalized == 'con' or normalized == 'nul' or normalized == 'aux' or normalized == 'prn'
-            or normalized:match('^com[1-9]$') or normalized:match('^lpt[1-9]$') then
+        local device = normalized:match('^[^.]+') or normalized
+        if device == 'con' or device == 'nul' or device == 'aux' or device == 'prn'
+            or device:match('^com[1-9]$') or device:match('^lpt[1-9]$') then
             return false, 'Namespace folder name "' .. segment .. '" is a reserved Windows device name.'
         end
     end

@@ -124,5 +124,30 @@ assert(#trace==7 and trace[7].category=='idle' and trace[7].phase=='leave')
 listeners['status change'](85,5); assert(#trace==7)
 listeners['status change'](0,85)
 assert(#trace==8 and trace[8].category=='idle' and trace[8].phase=='enter')
+-- Shipped idle gear must be reapplied after zoning even with no idle-status event.
+local f=assert(io.open('events/lib/on-idle.json'))
+local stock=require('./lib/jsonlua').parse(f:read('*a'));f:close()
+local stockConfig=Config.load({'stock'},function()return stock end)
+stockConfig.vars.gear.idle={ring1='Idle Ring'}
+player.status=0
+deps.context=function(_,state)
+ return {vars=state.vars,me={is_idle=player.status==0},
+  equipMany=function(gear)state.equipment.planned[#state.equipment.planned+1]=gear.ring1 end}
+end
+service.runtime=Runtime.new(stockConfig,deps)
+local count=#commits
+listeners['zone change'](4,3);info.zone=4;equipmentReady=false
+listeners['status change'](0,4) -- Suppressed during arrival.
+listeners.prerender();assert(#commits==count)
+equipmentReady=true;listeners.prerender()
+assert(#commits==count+1 and commits[#commits][1]=='Idle Ring')
+listeners.prerender();assert(#commits==count+1) -- Dispatch once, not per frame.
+player.status=1;listeners['zone change'](5,4);info.zone=5;listeners.prerender()
+assert(#commits==count+1) -- Idle gear must not replace battle gear.
+player.status=0;stockConfig.vars.gear.idle=nil
+listeners['zone change'](6,5);info.zone=6;listeners.prerender()
+assert(#commits==count+1)
+assert(#errors==1) -- Only the intentional cancellation error from above.
 service:destroy()
+print('PASS: shipped idle gear reapplied once after ready zone arrival without a status transition; battle/missing-set guards')
 print('PASS: status category transitions/order, phase batching, non-cancellation, zone departure/dedup/readiness and metadata')

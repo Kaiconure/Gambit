@@ -6,6 +6,7 @@
     "lib/enemy_spells/all",
     "lib/enemy_abilities/all",
     "lib/weapon_skills/all",
+    "lib/party_weapon_skills/all",
     "lib/spells/all",
     "lib/job_abilities/all",
     "lib/pet_abilities/all",

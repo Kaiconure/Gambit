@@ -157,13 +157,64 @@ We've seen `when`, `commands`, and `frequency` in use so far. Here's the full li
 
 - **disabled** - *Optional* This Boolean (true or false) value allows you to turn off the current action without deleting it.
 
-- **frequency** - *Optional* This is a number that sets the maximum frequency, in seconds, at which this action is allowed to trigger. If omitted, it will be executed as often as the condition is met -- assuming no higher priority actions are triggered first! 
+- **frequency** - *Optional* This is a number that sets the maximum frequency, in seconds, at which this action is allowed to trigger. If omitted, it will be executed as often as the condition is met -- assuming no higher priority actions are triggered first! If `when` is also omitted or blank, frequency defaults to one second to avoid starvation. An explicit frequency is always honored, including `0`.
 
   Note that the special string value `infinity` (or `inf` for short) can be used to specify that an action can only be executed once within the given scope.
 
 - **import** - *Optional* This allows you to pull in externally defined actions. Those actions will be inserted in place of the importing action. An **import** directive causes all other action properties to be ignored, with the exception of **disable** (which will cause the import to be skipped).
 
 - **scope** - *Optional* This allows you to control how the `frequency` value is evaluated. By default, the global scope is used and frequency is applied literally. However, if you specify a scope if `battle`, then frequency tracking is cleared once you become disengaged. For example, if you specify a frequency of 30 without a scope, the action will have no chance of executing until 30 seconds has elapsed; however, with a scope of `battle` the action *could* execute sooner if you acquire a new target. A scope of `battle` with a frequency of `infinite` allows you to specify once-per-battle actions.
+
+- **scope_variable** - Required with `"scope": "variable"`. A variable path or a
+  non-empty array of paths, using `getVar` path syntax (optional `vars.` prefix).
+  The action runs initially, then only when at least one watched value differs
+  from its last successful execution. Paths resolve in the action's effective
+  `with_vars` scope. Nil is a valid value; tables are compared structurally using
+  copied snapshots, so in-place edits count. Failed conditions, failed commands
+  and incomplete actions do not consume the scope. Successful execution of either
+  `commands` or `else` consumes it. Reload/recompilation resets it.
+
+```json
+{
+  "name": "frontline_engagement/recalculate",
+  "when": "true",
+  "scope": "variable",
+  "scope_variable": [
+    "frontline_engagement.distance",
+    "frontline_engagement.distance_offset"
+  ],
+  "frequency": 0,
+  "delay": 0,
+  "commands": [
+    "setVar('frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))"
+  ]
+}
+```
+
+Variable scope retains the watched values from immediately before commands run.
+Changing a watched variable inside those commands therefore allows another run.
+Frequency, delay and preconditions still apply; use a finite frequency rather
+than `"infinity"` if the action should run again when a value changes.
+
+For a derived value, use `"scope": "expression"` with a single Lua expression:
+
+```json
+{
+  "scope": "expression",
+  "scope_expression": "(vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)",
+  "when": "true",
+  "frequency": 0,
+  "commands": ["log('The effective distance changed')"]
+}
+```
+
+The expression is compiled once and evaluated in the action's effective context.
+Use a side-effect-free expression returning exactly one value (including nil).
+Only a change to its result permits another execution; changing an input without
+changing the result does not. Table results use copied structural snapshots, as
+with variable scope. Pre-execution snapshots, timing, retry and reload behavior
+are the same. Invalid expressions or evaluation errors disable/report the action
+through normal action error handling. Multiple return values are rejected.
 
    
 

@@ -5,8 +5,12 @@
   "vars": {
     "^frontline_engagement": {
       "prioritize_melee_engagement": true,
+      "distribute": false,
       "angle": null,
+      "distance_priority": false,
       "distance": null,
+      "distance_offset": 0,
+      "radius_multiplier": 0.25,
       "duration": null,
       "initial_delay": 2,
       "progress_retry_delay": 1,
@@ -27,13 +31,25 @@
   },
   "actions": [
     {
+      "commands": "setVar('frontline_engagement.arrived', false)",
+      "scope": "battle",
+      "frequency": "infinity",
+      "delay": 0,
+      "silent": true
+    },
+    {
       "commands": [
         "setVar('vars.frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))",
         "runningAsFunction() and log('Applied frontline engagement positioning updates!')"
       ],
       "delay": 0,
-      "frequency": "infinity",
-      "scope": "battle",
+      "frequency": 0,
+      "scope": "variable",
+      "scope_variable": [
+        "frontline_engagement.distance",
+        "frontline_engagement.distance_offset",
+        "frontline_engagement.radius_multiplier"
+      ],
       "name": "frontline_engagement/recalculate",
       "silent": true,
       "max_iterations": 1
@@ -95,15 +111,26 @@
       "delay": 0
     },
     {
+      "when": [
+        "actionType == 'battle'",
+        "vars.frontline_engagement.distance_priority and not vars.frontline_engagement.arrived",
+        "bt and aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.tolerance, vars.frontline_engagement)"
+      ],
+      "commands": "setVar('frontline_engagement.arrived', true)",
+      "frequency": 0,
+      "delay": 0,
+      "silent": true
+    },
+    {
       "precondition": "movementAvailable()",
       "when": [
         "actionType == 'battle'",
         "state_time >= (vars.frontline_engagement.initial_delay or 2)",
-        "bt and bt.distance <= vars.frontline_engagement._distance + 2",
-        "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.tolerance)"
+        "bt and (bt.center_distance or bt.distance) <= followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + 2",
+        "not aligned(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement.tolerance, vars.frontline_engagement)"
       ],
       "commands": [
-        "alignWithRetry(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement, false)"
+        "alignWithRetry(bt, canAlign(bt) and vars.frontline_engagement.angle or nil, vars.frontline_engagement._distance, vars.frontline_engagement, false) and setVar('frontline_engagement.arrived', true)"
       ],
       "comment": [
         "Angle supports an exact number, frontside/backside/left/right/side, or a range such as 180+/-30.",
@@ -115,24 +142,24 @@
     },
     {
       "precondition": "movementAvailable()",
-      "when": "bt and bt.distance <= vars.frontline_engagement._distance and following(bt)",
+      "when": "bt and (bt.center_distance or bt.distance) <= followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + (vars.frontline_engagement.distance_priority and (vars.frontline_engagement.tolerance or 0.5) or 0) and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
       "precondition": "movementAvailable()",
-      "when": "bt and bt.distance <= vars.frontline_engagement._distance and not facingEnemy()",
+      "when": "bt and (bt.center_distance or bt.distance) <= followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + (vars.frontline_engagement.distance_priority and (vars.frontline_engagement.tolerance or 0.5) or 0) and not facingEnemy()",
       "commands": ["faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
       "precondition": "movementAvailable()",
-      "when": "bt and bt.distance > vars.frontline_engagement._distance and not following(bt)",
+      "when": "bt and (bt.center_distance or bt.distance) > followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + (vars.frontline_engagement.distance_priority and (vars.frontline_engagement.tolerance or 0.5) or 0) and not following(bt)",
       "commands": [
         "faceEnemy()",
-        "follow(bt, vars.frontline_engagement._distance)",
+        "follow(bt, vars.frontline_engagement._distance, vars.frontline_engagement)",
         "wait(0.5)"
       ],
       "frequency": 1,
@@ -142,11 +169,11 @@
       "precondition": "movementAvailable()",
       "when": [
         "vars.frontline_engagement.prioritize_melee_engagement",
-        "bt and bt.distance > (vars.frontline_engagement._distance + 2)",
+        "bt and (bt.center_distance or bt.distance) > (followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + 2)",
         "not hasEffect('Bind')"
       ],
       "commands": [
-        "not following(bt) and follow(bt, vars.frontline_engagement._distance) and log('Unexpected: Initiated melee range following')",
+        "not following(bt) and follow(bt, vars.frontline_engagement._distance, vars.frontline_engagement) and log('Unexpected: Initiated melee range following')",
         "wait(1)"
       ],
       "comment": "Ensure that we get into melee range without executing later actions."

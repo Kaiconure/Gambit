@@ -32,6 +32,16 @@ The reusable pieces are under `events/lib/`. You normally configure the shipped
 entry points through vars files rather than editing these libraries. Their
 supported gear paths and job examples are described below.
 
+Common entry points also import `lib/party_weapon_skills/all`, which defaults
+`vars.party_weapon_skills.include_alliance` to false. Add
+`party_weapon_skills.post.before`/`.after` contributions to observe party WS,
+including your own. See [party WS events](events.md#party-weapon-skills) for the
+shared damage, actor, skillchain-result and WS-property fields.
+
+The idle gear rule also reapplies `vars.gear.idle` on ready zone arrival when the
+player is idle. This does not depend on a status change and does not rerun the
+configured idle Windower commands.
+
 ## Event command cheat sheet
 
 The command is **`gbt events`** (plural). In game, prefix it with `//`:

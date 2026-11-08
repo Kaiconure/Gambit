@@ -140,8 +140,21 @@ local function coordVector(coord)
     return nil
 end
 
--- Find the point at the given distance and angle offset from the mob
-local function findMobOffset(mob, angleOffset, distance)
+-- Resolve a center distance once. An explicit multiplier replaces the legacy
+-- player/target adjustment, even when the multiplier is zero.
+local function resolveDistance(mob, distance, options, legacyMultiplier)
+    local player = windower.ffxi.get_mob_by_target('me')
+    if options and type(options.radius_multiplier) == 'number' then
+        return distance + math.max(0, mob and mob.model_size or 0) * math.max(0, options.radius_multiplier)
+    end
+    if not current_settings or not current_settings.useRawDistances then
+        return distance + ((player and player.model_size or 0) + (mob and mob.model_size or 0)) * legacyMultiplier
+    end
+    return distance
+end
+
+-- Find the point at the given distance and angle offset from the mob.
+local function findMobOffset(mob, angleOffset, distance, options)
     local player = windower.ffxi.get_mob_by_target('me')
 
     if not player then
@@ -153,19 +166,8 @@ local function findMobOffset(mob, angleOffset, distance)
 
     distance = (type(distance) == 'number') and distance or 2
 
-    if not current_settings or not current_settings.useRawDistances then
-        if not mob.model_size then
-            mob = windower.ffxi.get_mob_by_id(mob.id)
-        end
-
-        if mob then
-            local distance_offset = 
-                (player.model_size or 0) +      -- Player model size
-                (mob and mob.model_size or 0)   -- Mob model size
-            distance = 
-                distance + (distance_offset * 0.5)
-        end
-    end
+    if not mob.model_size then mob = windower.ffxi.get_mob_by_id(mob.id) or mob end
+    distance = resolveDistance(mob, distance, options, 0.5)
 
     if type(angleOffset) == 'number' then
         -- When an angle offset was provided, we'll calculate that from the mob
@@ -198,12 +200,12 @@ local function findMobRear(mob, distance)
 end
 
 -- h_offset > 0: right, h_offset < 0: left (we pass the sign via angle)
-local function findLateralOffset(mob, h_offset)
+local function findLateralOffset(mob, h_offset, options)
     if h_offset == 0 then
         return V({mob.x, mob.y})
     end
     local angle = (h_offset > 0) and (math.pi / 2) or (-math.pi / 2)
-    return findMobOffset(mob, angle, math.abs(h_offset))
+    return findMobOffset(mob, angle, math.abs(h_offset), options)
 end
 
 local teleporter_matches = {
@@ -740,8 +742,8 @@ end
 -- of offsetAngle radians from its forward direction. An offset of 0 will be
 -- directly in front of the mob; an offset of PI will be directly behind the
 -- mob; and so on.
-function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
-    return findMobOffset(mob, offsetAngle, offsetDistance)
+function smartMove:findMobOffset(mob, offsetAngle, offsetDistance, options)
+    return findMobOffset(mob, offsetAngle, offsetDistance, options)
 end
 
 -----------------------------------------------------------------------------------------
@@ -851,11 +853,15 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     return job.jobId
 end
 
-function smartMove:followMob(mob, distance)
-    return self:followIndex(mob and mob.index or 0, distance)
+function smartMove:followMob(mob, distance, options)
+    return self:followIndex(mob and mob.index or 0, distance, options)
 end
 
-function smartMove:followIndex(follow_index, distance)
+function smartMove:followDistance(mob, distance, options)
+    return resolveDistance(mob, math.max(tonumber(distance) or 0, 0), options, 0.75)
+end
+
+function smartMove:followIndex(follow_index, distance, options)
     -- Validate the target
     local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
@@ -887,23 +893,9 @@ function smartMove:followIndex(follow_index, distance)
     job.follow_index = follow_index -- Store the follow index
     job.mob = mob                   -- Store the target mob
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
-    job.follow_distance =           -- How far behind the mob we should follow
-        math.max(tonumber(distance) or 0, 0)
-
-    if not current_settings or not current_settings.useRawDistances then
-        local _p = windower.ffxi.get_mob_by_target('me')
-        local distance_offset = 
-            (_p and _p.model_size or 0) +           -- Player size offset
-            (mob.model_size or 0)                   -- Mob size offset
-        job.follow_distance = 
-            job.follow_distance + (distance_offset * 0.75)
-
-        -- local tick = os.clock()
-        -- if tick - (last_raw_output_tick or 0) > 3 then
-        --     print('base: %.2f, final: %.2f':format(distance, job.follow_distance))
-        --     last_raw_output_tick = tick
-        -- end
-    end
+    job.follow_distance = self:followDistance(mob, distance, options)
+    local requestedDistance = distance
+    local requestedOptions = options and {radius_multiplier=options.radius_multiplier} or nil
 
     --job.autolock = true             -- Automatically lock onto the target on completion
 
@@ -913,7 +905,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:followIndex(follow_index, job.follow_distance)
+        return smartMove:followIndex(follow_index, requestedDistance, requestedOptions)
     end
 
     -- Determine if the job is still valid
@@ -999,6 +991,9 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Positioning is based on the mob and any offsets
     job.pos = function (self)
+        if requestedOptions and type(requestedOptions.radius_multiplier) == 'number' then
+            self.follow_distance = smartMove:followDistance(self.mob, requestedDistance, requestedOptions)
+        end
         if 
             self.lost_mob_pos
         then
@@ -1027,7 +1022,7 @@ function smartMove:followIndex(follow_index, distance)
                 -- For players, we'll apply the horizontal offset if one is configured. This is a left or
                 -- right offset relative to the mob's heading.
                 if self.mob.spawn_type == 13 or self.mob.spawn_type == 1 then
-                    vMob = findLateralOffset(self.mob, h_offset)
+                    vMob = findLateralOffset(self.mob, h_offset, requestedOptions)
                 end
 
                 local toTarget = vMob:subtract(vPlayer)

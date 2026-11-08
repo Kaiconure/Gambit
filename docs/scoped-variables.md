@@ -22,6 +22,28 @@ an empty table. Use ordinary variable names, without `!` or `^` priority prefixe
 scope overrides already take precedence. JSON null is discarded by the JSON
 loader; use `"$object.null"` to explicitly initialize a captured value to nil.
 
+`csv(...)`, `array.append(...)`, and `array.remove(...)` are expanded when the
+scope is built, not on each action execution. For example:
+
+```json
+{
+  "import": "use-dispel",
+  "with_vars": {
+    "use_dispel": {
+      "array.append(buffs)": ["Blaze Spikes", "Howl"],
+      "array.remove(buffs)": ["Protect"]
+    }
+  }
+}
+```
+
+The operations use the parent's original array and produce a private scoped
+copy. Distinct appends, removal of all matches, warnings for non-arrays, and
+remove winning over append at equal priority in one block match ordinary/event
+variable behavior. CSV-generated subtrees are independent too. Top-level scope
+names still cannot use `!` or `^`; nested definitions support their normal
+priority syntax. Explicit empty tables retain their scoped replacement behavior.
+
 All actions beneath this import share its state, including multiple references
 on one import statement. Separate import statements create separate instances.
 Nested `with_vars` blocks create child scopes; their captured subtrees are

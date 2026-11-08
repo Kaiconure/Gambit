@@ -1,4 +1,6 @@
 local values = require('./lib/variable-values')
+local expandKeys = require('./lib/variable-key-expansion')
+local variableLoader = require('./lib/variable-loader')
 local scopes = {}
 
 function scopes.prepare(container, action)
@@ -19,17 +21,24 @@ function scopes.inherit(parent, child)
     child._variableScope = parent._variableScope
 end
 
-local function merge(base, override)
-    if override == '$object.null' then return nil end
-    if override == '$object.empty' or override == '$array.empty' then return {} end
-    if type(override) ~= 'table' then return override end
-    if next(override) == nil or override[1] ~= nil then return values.copy(override) end
-    local result = type(base) == 'table' and values.copy(base) or {}
-    for key, value in pairs(override) do result[key] = merge(result[key], value) end
+local function scopeValue(value)
+    if type(value) ~= 'table' then return value end
+    -- Preserve with_vars' existing explicit-empty replacement behavior.
+    if next(value) == nil then return '$table.empty' end
+    if value[1] ~= nil then return values.copy(value) end
+    local result = {}
+    for key, child in pairs(value) do
+        if type(key) == 'string' and (key:match('^array%.append%(') or key:match('^array%.remove%(')
+            or key:match('^[!^]array%.append%(') or key:match('^[!^]array%.remove%(')) then
+            result[key] = values.copy(child)
+        else
+            result[key] = scopeValue(child)
+        end
+    end
     return result
 end
 
-function scopes.build(global, original, definitions)
+function scopes.build(global, original, definitions, warn)
     local states = {[0]={data=global, original=original}}
     local function owner(id, key)
         local state = states[id or 0]
@@ -39,11 +48,22 @@ function scopes.build(global, original, definitions)
     for id, definition in ipairs(definitions or {}) do
         local state = {parent=states[definition.parent or 0], owns={}, data={}, original={}}
         states[id] = state
-        for key, value in pairs(definition.overrides) do
+        local label = 'with_vars scope ' .. id
+        local overrides = expandKeys(definition.overrides, 0, label)
+        local base = {}
+        for raw in pairs(overrides) do
+            assert(type(raw) == 'string' and not raw:match('^[!^]'), 'with_vars requires ordinary variable names')
+            local key = raw:match('^array%.append%((.*)%)$') or raw:match('^array%.remove%((.*)%)$') or raw
+            key = key:match('^%s*(.-)%s*$')
             state.owns[key] = true
-            state.data[key] = merge(owner(definition.parent, key).original[key], value)
-            state.original[key] = values.copy(state.data[key])
+            base[key] = values.copy(owner(definition.parent, key).original[key])
         end
+        local loader = variableLoader.new(warn)
+        if next(overrides) ~= nil then overrides = scopeValue(overrides) end
+        loader.merge(state.data, overrides, label)
+        -- Captured parent values are fallback data, not competing definitions.
+        loader.merge(state.data, base, label .. ' parent snapshot', -2)
+        state.original = values.copy(state.data)
     end
     local result = {}
     function result.view(getId, originals)

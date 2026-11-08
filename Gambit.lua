@@ -1,4 +1,4 @@
-__version = '1.0.7.0'
+__version = '1.0.7.1'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -44,6 +44,7 @@ skillchain_helper = require('lib/skillchain-helper')
 local selfSpellState = require('./lib/self-spell-state')
 local selfActionState = require('./lib/self-action-state')
 local actionObservation = require('./lib/action-observation')
+local partyAlignment = require('./lib/party-alignment')
 local handleActionEffects
 
 require('ux/core')
@@ -419,6 +420,13 @@ windower.register_event('load', function()
         return
     end
 
+    partyAlignment.attach({
+        ffxi = windower.ffxi,
+        json = json,
+        clock = os.clock,
+        send = function(message) windower.send_ipc_message(message) end
+    })
+
     initTrustData()
 
     globals.equipment_manager = require('./lib/equipment/init').new({
@@ -616,6 +624,7 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    partyAlignment.reset()
     globals.last_ability = nil
     globals.last_spell = nil
     globals.status_panel_ready = false
@@ -779,6 +788,7 @@ windower.register_event('ipc message', function (msg)
 
     --printDebug('IPC message received: [%s]':format(msg))
 
+    if partyAlignment.receive(msg) then return end
     msg = msg or ''--string.lower(msg or '')
 
     local split = msg:split(' ', string.encoding.shift_jis)
@@ -1740,6 +1750,7 @@ function cr_ipcSender()
         local logged_in = globals.logged_in
 
         if zone and zone.id > 0 and logged_in then
+            partyAlignment.tick()
             local me = windower.ffxi.get_mob_by_target('me')
             if me and me.valid_target then
                 sendWeaponSkillInfoIpc(true)

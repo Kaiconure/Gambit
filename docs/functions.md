@@ -103,6 +103,17 @@ partyAny('is_player and not hasBuff("Sneak")', {randomize=true, self_last=true})
 
 `partyByName(targets, options)` and `alliesByName(targets, options)` accept a trailing options table: `{randomize = true, self_first = true}`. Targets may be an array or separate arguments. Both options default to false. Randomization shuffles the resolved matches once per fresh enumeration, after exclusions and deduplication; self-first then moves yourself to the front if included. Neither option changes membership. Continuing the cycle preserves its order. These options are not used by `partyAnchorByName`, which keeps deterministic preference ordering.
 
+`partyNames(targets)` returns a new array of matching party names in deterministic
+selector order (alphabetical within each job/group, deduplicated with exclusions
+applied). `partyMatches(targets, member)` tests membership; `member` defaults to
+`me`. Both accept the existing names, jobs, groups, `me`, `*`, `^`, and `~`
+selector syntax and leave `member`, enumerators, and target selection unchanged.
+Use `partyNames({'PLD', 'RUN'})[1]` for a consistent primary tank, or
+`partyMatches({'melee_dps', 'ranged'})` to test whether the current character is a DD.
+Role resolution depends on known party job information; no match yields an empty
+array or false. Client-relative selectors such as `me` and `^` should not be used
+for a shared cross-client WS order.
+
 ## Member positioning
 
 ### Movement reservations
@@ -199,6 +210,18 @@ In plain English, this says:
   - This is aliased as `hasBuff`, and the two can be used interchangeably. 
 - `hasEffectOf(name1, name2, ... , nameN)` - Similar to `hasEffect`, but allows you to specify the spell or ability that *causes* the effect rather than the effect itself. For example, you can call this with `Dream Flower` and it will detect if you are asleep. If matched, the resulting effect will be stored to the `effect` variable.
 
+`hasAllBuffs([target,] [strictness,] buffs)` returns true only when every requested
+buff is known on the target (yourself by default). Supply an array or separate
+arguments, using buff names, IDs, or resource objects. Targets and the optional
+`'use-strict'` / `'not-strict'` flags work as with `hasBuff`. An empty array returns
+true. This query leaves `effect` and `effect_count` unchanged.
+
+```lua
+hasAllBuffs(bt, vars.required_buffs)
+hasAllBuffs(bt, 'Protect', 'Shell')
+hasAllBuffs({'Haste', 'Protect'})
+```
+
 Here's an example:
 
 ```json
@@ -214,6 +237,12 @@ In plain English, this says:
 # Flexible alignment
 
 `align(target, angle, distance, duration, noFace, tolerance)` supports exact angles and flexible positioning. Optional positional tolerance is in yalms; `aligned` and `aligning` accept it as their fourth argument. Frontline engagement uses `vars.frontline_engagement.tolerance`, defaulting to 0.5, for its alignment check and movement completion. Other callers retain their existing defaults. The same angle values work with `vars.frontline_engagement.angle`.
+
+Frontline engagement caches only `max(0.125, (distance or 0.5) + (distance_offset or 0))` using variable scope. Smart Move applies `radius_multiplier` from the options object when resolving each target-relative destination; frontline defaults it to `0.25`. A numeric multiplier replaces the automatic player/target size adjustment with `max(0, target.model_size or 0) * max(0, radius_multiplier)`. For example, distance `0.5`, offset `0.25`, and target model size `4` produce a final center distance of `1.75` yalms. Zero means no size adjustment; missing or null retains legacy behavior (alignment adds half the combined player/target sizes, following adds three quarters, unless global `useRawDistances` is enabled). An explicit multiplier also applies when global raw distances are enabled.
+
+`align`, `aligned`, `aligning`, and `alignWithRetry` accept this through their existing options argument. `follow(target, distance, options)` now accepts the same optional object. `followDistance(target, distance, options)` returns the resolved center distance for follow range checks without starting movement. Frontline uses it with `center_distance` so range checks and following agree, and forwards the same options to alignment checks and movement. The rear-engagement import inherits this behavior. Smart Move retains its separate mounted-follow and lateral-follow offsets. Follow resumption preserves the original requested distance and multiplier, avoiding repeated size adjustments.
+
+Set `vars.frontline_engagement.distance_priority` to `true` to enforce the assigned angle until successfully aligned once per battle, then hold position whenever the target's resolved center distance is within `tolerance`, regardless of its facing. This defaults to `false`. It also prevents following from restarting inside the outer tolerance boundary. If distance is outside tolerance, alignment still uses the configured angle; initial angular alignment is required before holding position. Failed or interrupted movement does not count as arrival; checking a pending movement destination does not count either. The caller owns `options.arrived`: alignment helpers only read it and never retain arrival state. Frontline clears `frontline_engagement.arrived` with a battle-scoped action, then sets it after successful movement or an actual-position check confirms arrival. It remains set for the rest of that battle; changing targets or configuration within the same battle does not clear it automatically. Facing the target in place remains enabled.
 
 | Angle | Meaning, relative to the target's facing |
 | --- | --- |
@@ -248,6 +277,54 @@ The frontline action still applies its existing `canAlign` checks, model-size di
 Both positioning imports expose `duration` and `retry_delay` under their respective variable objects. `frontline_engagement.duration` defaults to `null`, retaining `align`'s automatic budget (three seconds for exact angles, six for flexible positioning); `member_engagement.duration` defaults to three seconds. Both retry delays default to ten seconds. Durations are clamped to at least one second by `align`; retry delay controls failure postponement, not the action's frequency or a guaranteed retry time.
 
 For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
+
+## Party-distributed alignment
+
+Opt in to distributed frontline positioning with:
+
+```json
+{
+  "vars": {
+    "frontline_engagement": {
+      "distribute": true,
+      "angle": "side"
+    }
+  }
+}
+```
+
+The leader must also be running the updated Gambit, but need not opt into
+distribution. It publishes its party-slot order over IPC. Participating clients
+advertise their current target, parsed arc union, and alignment distance; matching
+profiles divide that allowed angular space into fractional slices in the leader's
+order. Different distances or arc sets form separate groups. Party members with
+no matching advertisement do not occupy a slice. Roster slots are not filtered by
+temporary death or distance. Profiles and the shared roster refresh every ten seconds,
+with immediate updates on changes. Reloading requests fresh profiles from peers.
+Initial synchronization may take a couple of seconds;
+ordinary flexible alignment remains available while no shared assignment exists.
+
+Slices apply to the actual arc union, including custom ranges, gaps, overlaps,
+and wraparound. They do not special-case names such as `side`. Exact angles and
+unrestricted/nil angles bypass distribution. Following distances are unchanged.
+
+The nearest point in the assigned slice is tried first. If blocked, alternatives
+may use the entire configured arc set, including other arcs and slices. Movement
+attempts share the existing duration budget; distributed attempts check progress
+in short steps. Continuing progress or untried alternatives return to the scheduler
+using `progress_retry_delay`; exhausted attempts use `retry_delay`. Cancellation
+does not restart movement via an alternative.
+
+A successful fallback is accepted for that target/profile/roster, including on
+subsequent action ticks, instead of repeatedly reclaiming a blocked slice. Changes
+to target, configuration, group assignment, leader, zone or action reload reset
+the preference. This is destination selection, not pathfinding: walls may still
+force stacking, and the travel path is not constrained to the allowed arcs.
+
+For direct calls, pass the same options object to both
+`aligned(target, angle, distance, tolerance, options)` and
+`align(target, angle, distance, duration, noFace, tolerance, options)`.
+`alignWithRetry` forwards its existing options object automatically.
 
 ## Sending Windower commands
 
@@ -597,3 +674,7 @@ closer checks still compile on demand and refresh plans after roster or
 capability changes. Initial compilation may exclude characters whose capability
 replies have not arrived yet; later evaluation refreshes the plan. Loading actions
 run when automation is enabled and eligible to process them.
+
+### Explicit battle-target selection
+
+setBattleTarget(mob, engage) accepts a mob object or numeric entity ID. The optional engage flag defaults to true for the existing acquisition behavior. Passing false updates only Gambit's tracked battle target when the pending request is processed: it does not change the cursor, issue an attack, broadcast a target, or run the legacy acquisition waits. Invalid/dead targets are rejected. Use explicit phase-gated engagement actions afterward; if switching away from a currently attacked enemy, disengage explicitly before selecting the new one.
