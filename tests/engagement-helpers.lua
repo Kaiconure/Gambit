@@ -9,6 +9,9 @@ assert(args[7]==options)
 reason='timeout'
 context.alignWithRetry('target',180,12,options)
 assert(delay==10)
+reason='immobilized'
+context.alignWithRetry('target',180,12,options,true,3)
+assert(delay==3)
 reason='alternatives';context.alignWithRetry('target',180,12,options);assert(delay==3)
 reached=true;delay=nil
 assert(context.alignWithRetry('target',180,12,options) and delay==nil)

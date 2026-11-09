@@ -32,6 +32,7 @@ local rejected={ [17]=true,[18]=true,[55]=true,[56]=true,[78]=true,[84]=true,
     [87]=true,[88]=true,[89]=true,[90]=true,[94]=true,[104]=true,[191]=true,
     [308]=true,[313]=true,[325]=true,[428]=true,[429]=true }
 function Service.new(deps)
+    if deps.reactions then require('./lib/reactions').attach(deps.reactions) end
     local self=setmetatable({deps=deps,listeners={},injections={}},Service)
     local function listen(name,fn)
         self.listeners[#self.listeners+1]=deps.windower.register_event(name,function(...)
@@ -65,6 +66,7 @@ function Service.new(deps)
         end
     end)
     listen('prerender',function()
+        if deps.reactions then require('./lib/reactions').tick() end
         if self.weaknessTick then self.weaknessTick() end
         if verify.active() then verify.tick() end
         self:loadingTick()
@@ -222,6 +224,7 @@ function Service:loadingTick()
     runtime:loading()
 end
 function Service:clear(outcome)
+    if self.deps.reactions then require('./lib/reactions').clear(outcome) end
     actionWait.clear(outcome,(self.deps.clock or os.clock)())
     if outcome=='reloaded' or outcome=='logout' or outcome=='unloaded' then self.loadingPending=nil end
     if self.runtime then self.runtime:clear(outcome) end
@@ -246,6 +249,9 @@ function Service:consumeInjection(original,modified)
     end
 end
 function Service:inject(packet)
+    local mapping=outgoing[packet.Category]
+    if mapping and require('./lib/reactions').blocksAction(mapping[1],
+        self.deps.resources[mapping[2]] and self.deps.resources[mapping[2]][packet.Param]) then return false end
     if trace.active() and packet.Category==7 then
         trace.record('action_inject',{id=packet.Param,target=packet.Target,
             equipment=self.deps.traceEquipment and self.deps.traceEquipment()})
@@ -281,6 +287,7 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
     local mapping=outgoing[packet.Category]
     if not mapping then return end
     local resource=deps.resources[mapping[2]] and deps.resources[mapping[2]][packet.Param]
+    if require('./lib/reactions').blocksAction(mapping[1],resource) then return true end
     if packet.Category==9 and resource and resource.prefix=='/pet' then mapping={'pet_ability','pet_abilities'} end
     local section=mapping[2]
     local rules=self.runtime.config.rules[section]

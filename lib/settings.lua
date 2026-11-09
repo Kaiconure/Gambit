@@ -445,6 +445,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                         actionPreconditions.inherit(action,entry)
                                         variableScopes.inherit(action,entry)
                                         entry.importedFrom=action_import
+                                        entry._slotSource=fileName
                                         baseActions.imports[#baseActions.imports+1]=entry
                                         baseActions._pendingLibraryImports=true
                                     end
@@ -466,6 +467,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                             actionPreconditions.inherit(action, fn)
                                             variableScopes.inherit(action, fn)
                                             fn.importedFrom = action_import
+                                            fn._slotSource = fileName
                                             table.insert(actions, i, fn)
                                         end
                                     end
@@ -487,6 +489,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                             actionPreconditions.inherit(action, ld)
                                             variableScopes.inherit(action, ld)
                                             ld.importedFrom = action_import
+                                            ld._slotSource = fileName
                                             table.insert(actions, i, ld)
                                         end
                                     end
@@ -504,6 +507,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                         if importedAction then
                                             imported = true
                                             importedAction.importedFrom = action_import
+                                            importedAction._slotSource = fileName
                                             importedAction._slotContribution = action._slotContribution
                                             actionPreconditions.inherit(action, importedAction)
                                             variableScopes.inherit(action, importedAction)
@@ -778,7 +782,7 @@ local function loadActionImports(playerName, actions, player, sourceFile)
             return actionSlots.priority(source, precedence, playerName, player.main_job)
         end, writeWarning, function(selectors)
             return targetSelectors.matchesPlayer(player, selectors, loadingLeader)
-        end)
+        end, sourceFile or '(entry point)')
         actions._slots.collect(actions, sourceFile or '(entry point)')
         actions.contributions = nil
         local initialVars = actions.vars

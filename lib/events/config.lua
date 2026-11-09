@@ -34,14 +34,22 @@ local function expressions(value,label)
     end
     return result
 end
-local function compileRule(rule,label,contributed)
+local function compileRule(rule,label,contributed,sourcePath)
     assert(type(rule)=='table',label..': rule must be an object')
     if rule.slot~=nil or rule.slots~=nil then
         assert(not contributed,label..': contributions cannot contain slots')
         for key in pairs(rule) do
-            assert(key=='slot' or key=='slots' or key=='comment',label..': slots must be standalone placeholders')
+            assert(key=='slot' or key=='slots' or key=='comment' or key=='actions',label..': unsupported slot field')
         end
-        return {slot=copy(rule.slot),slots=copy(rule.slots),source=label}
+        local actions
+        if rule.actions~=nil then
+            actions={}
+            for index,child in ipairs(array(rule.actions,label..'.actions')) do
+                local item=compileRule(child,label..'.actions['..index..']',true,sourcePath)
+                if item then actions[#actions+1]=item end
+            end
+        end
+        return {slot=copy(rule.slot),slots=copy(rule.slots),source=label,actions=actions,_slotSource=sourcePath}
     end
     assert(rule.id==nil or (type(rule.id)=='string' and rule.id:match('%S')),label..': invalid rule id')
     assert(rule.disabled==nil or type(rule.disabled)=='boolean',label..': invalid disabled flag')
@@ -113,7 +121,7 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
                     for _,phase in ipairs(phases(kind)) do
                         for index,rule in ipairs(array(section[phase] or {},path..':'..kind..'.'..phase)) do
                             local list=result.rules[kind][phase]
-                            local item=compileRule(rule,path..':'..kind..'.'..phase..'['..index..']')
+                            local item=compileRule(rule,path..':'..kind..'.'..phase..'['..index..']',nil,path)
                             if item then list[#list+1]=item end
                         end
                     end
@@ -162,6 +170,13 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
         variables.merge(result.vars,entry.vars,entry.path,-1)
     end
     result.available_slots=slots.expand()
+    local reactionDebug=result.vars.reactions and result.vars.reactions.debug
+    assert(reactionDebug==nil or type(reactionDebug)=='boolean','reactions.debug must be boolean')
+    result.faceAwaySource=result.vars.reactions and result.vars.reactions.face_away
+    result.faceAwayStockSource=result.vars.reactions and result.vars.reactions.stock_face_away
+    result.faceAwayStockEnabled=not result.vars.reactions or result.vars.reactions.stock_face_away_enabled~=false
+    result.faceAwayRules=require('./lib/reaction-rules').compile(result.faceAwaySource,
+        result.faceAwayStockEnabled and result.faceAwayStockSource or nil)
     return result
 end
 return Config

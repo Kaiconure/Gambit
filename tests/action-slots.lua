@@ -393,3 +393,14 @@ for _,fn in ipairs(scopedShort.functions) do
 end
 assert(matched)
 print('PASS: direct-string and mixed top-level imports match object ordering and preserve nested dependency scopes')
+
+documents['inline-body']={actions={{commands={'inline_cast()'}}}}
+documents['inline-library']={actions={{slot='inline-hook',actions={{import='inline-body'}}}}}
+local inline={battle={{import='inline-library',precondition='inline_gate()',with_vars={inline_scope={enabled=true}}}}}
+load('Tester',inline,player,'entry')
+assert(#inline.battle==1 and inline.battle[1].commands[1]=='inline_cast()')
+assert(inline.battle[1]._variableScope and preconditions.collect(inline.battle[1])[1].expression=='inline_gate()')
+local repeatedInline={battle={{import='inline-library'},{import='inline-library'}}}
+load('Tester',repeatedInline,player,'entry')
+assert(#repeatedInline.battle==2) -- Same source contribution is not registered twice.
+print('PASS: inline slot imports, inherited preconditions/scopes and repeated-library contribution deduplication')

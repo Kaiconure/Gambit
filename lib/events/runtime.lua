@@ -24,8 +24,27 @@ function Runtime:diagnostic(request,message,lostLifecycle)
     end
 end
 function Runtime.new(config,deps)
-    return setmetatable({config=config,deps=deps,pending={},sequence=0,
+    local self=setmetatable({config=config,deps=deps,pending={},sequence=0,
         runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession,deps.targetSnapshot)},Runtime)
+    self:compileReactions()
+    return self
+end
+function Runtime:compileReactions()
+    self.faceAwaySource=self.config.vars.reactions and self.config.vars.reactions.face_away
+    self.faceAwayStockSource=self.config.vars.reactions and self.config.vars.reactions.stock_face_away
+    self.faceAwayStockEnabled=not self.config.vars.reactions or self.config.vars.reactions.stock_face_away_enabled~=false
+    self.faceAwayRules=self.config.faceAwaySource==self.faceAwaySource
+        and self.config.faceAwayStockSource==self.faceAwayStockSource
+        and self.config.faceAwayStockEnabled==self.faceAwayStockEnabled and self.config.faceAwayRules
+        or require('./lib/reaction-rules').compile(self.faceAwaySource,
+            self.faceAwayStockEnabled and self.faceAwayStockSource or nil)
+    require('./lib/reactions').setDebug(self.config.vars.reactions and self.config.vars.reactions.debug==true)
+end
+function Runtime:eventVariables()
+    local seen={}
+    if self.faceAwaySource then seen[self.faceAwaySource]=self.faceAwayRules end
+    if self.faceAwayStockSource then seen[self.faceAwayStockSource]=self.faceAwayRules end
+    return copy(self.config.vars,seen)
 end
 function Runtime:run(request,phase)
     local verifying=verify.active()
@@ -53,6 +72,7 @@ function Runtime:loading()
     if self:run(request,'actions') then
         vars._=nil
         self.config.vars=vars
+        self:compileReactions()
     end
 end
 -- Observed transitions are independent notifications, not cancellable actions.
@@ -73,7 +93,7 @@ function Runtime:observe(event,phase)
     event.request_id=self.sequence
     event.time=self.deps.clock()
     event.cancelled=false
-    local vars=copy(self.config.vars)
+    local vars=self:eventVariables()
     vars._={eq_stack={}}
     local request={section=section,event=event,observational=true,variables={vars=vars,original=copy(vars)}}
     self:run(request,phase)
@@ -160,7 +180,7 @@ function Runtime:submit(event,dispatch,observation)
     event.request_id=self.sequence
     event.time=self.deps.clock()
     event.cancelled=false
-    local vars=copy(self.config.vars)
+    local vars=self:eventVariables()
     vars._={eq_stack={}}
     local request={section=section,event=event,variables={vars=vars,original=copy(vars)},observation=observation}
     if verify.active() then verify.begin(request) end

@@ -14,6 +14,12 @@ local env=setmetatable({
 }, {__index=_G})
 local chunk=assert(loadstring(source)); setfenv(chunk,env)
 local movement=chunk()
+movement.queue={{jobId=1},{jobId=2}}
+movement:cancelJob(1,true)
+assert(#movement.queue==1 and movement.queue[1].jobId==2)
+movement:cancelJob(nil,true)
+assert(#movement.queue==0)
+commands={}
 movement.queue={{is_valid=function() error('queued job resumed') end}}
 movement.current={jobId=1}
 movement.previousJob={reschedule=function() error('old job resumed') end}

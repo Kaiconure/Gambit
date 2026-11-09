@@ -31,7 +31,7 @@ local function run(config,section,phase,event,buffs,magicBurst,bt,playerState)
     local worn={}
     local context=function(_,state)
         local ctx
-        ctx={vars=state.vars,ipairs=ipairs,bt=bt,
+        ctx={vars=state.vars,ipairs=ipairs,bt=bt,reactions=require('./lib/reactions'),
         me=playerState or {is_idle=false,is_engaged=false},
         equipRestore=function() error('Loading must not restore a snapshot') end,
         caseInsensitiveKeys=require('./lib/variable-values').caseInsensitiveKeys,
@@ -133,6 +133,11 @@ for _,job in ipairs({'WAR','MNK','WHM','BLM','RDM','THF','PLD','DRK','BST','BRD'
     'SMN','BLU','COR','PUP','DNC','SCH','GEO','RUN'}) do
     local config=load(job)
     assert(config.path)
+    local reactions=0
+    for _,rule in ipairs(config.rules.enemy_abilities.pre) do
+        if rule.id=='reaction-face-away-ability' then reactions=reactions+1 end
+    end
+    assert(reactions==1,job..': common reaction rules must load exactly once')
     local count=0
     for _,rule in ipairs(config.rules.spells.pre) do if rule.id=='general-spell-pre' then count=count+1 end end
     assert(count==1 and config.rules.spells.pre[1].id=='general-spell-pre',job)

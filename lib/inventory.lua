@@ -259,12 +259,26 @@ local function is_item_excluded(exclusion_list, bagId, localId)
     end
 end
 
-local function meets_equip_requirements(item, player)
-    if item.jobs and (not player or not item.jobs[player.main_job_id]) then return false end
-    if item.level and (not player or not player.main_job_level or player.main_job_level < item.level) then
-        return false
+local function equipment_requirements()
+    local player=windower.ffxi.get_player and windower.ffxi.get_player()
+    local dualWield
+    return function(item,slotId)
+        if item.jobs and (not player or not item.jobs[player.main_job_id]) then return false end
+        if item.level and (not player or not player.main_job_level or player.main_job_level < item.level) then
+            return false
+        end
+        if slotId==1 and (item.category=='Weapon' or item.type==4) then
+            if dualWield==nil then
+                dualWield=false
+                local abilities=windower.ffxi.get_abilities and windower.ffxi.get_abilities()
+                for _,id in ipairs(abilities and abilities.job_traits or {}) do
+                    if id==18 then dualWield=true;break end -- Dual Wield trait.
+                end
+            end
+            return dualWield
+        end
+        return true
     end
-    return true
 end
 
 inventory.equip_many = function(pieces, all_items, simulate, changes, session)
@@ -296,7 +310,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
     local flags = { equippable = true, equipped = false }
     local swaps = { }
     local lockRequests={}
-    local player=windower.ffxi.get_player and windower.ffxi.get_player()
+    local meetsRequirements=equipment_requirements()
 
     -- Resolve in slot order as well as sending in slot order. Candidate copies
     -- reserved by one slot cannot be reused by a later slot in this request.
@@ -324,7 +338,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                     -- Equipped/queued copies are eligible, and win over other
                     -- physical copies of this candidate. Unspecified augments
                     -- do not require an unnecessary change to another copy.
-                    local eligible=resource and meets_equip_requirements(resource,player)
+                    local eligible=resource and meetsRequirements(resource,info.id)
                     if eligible and equipped and equipped.id==resource.id
                         and not is_item_excluded(exclusion_list,equipped.bagId,equipped.localId)
                         and inventory.has_all_augments(equipped,augments) then
@@ -457,6 +471,7 @@ inventory.restore_equipment = function(removed,session)
     local count=0
     local operations={}
     local legacy={}
+    local meetsRequirements=equipment_requirements()
     for slot,saved in pairs(removed or {}) do
         local slotId=inventory.get_slot_id_by_name(slot)
         if slotId~=nil then
@@ -466,7 +481,7 @@ inventory.restore_equipment = function(removed,session)
             elseif type(saved.localId)=='number' and type(saved.bagId)=='number' then
                 local item=inventory.get_item_from_bag(items,saved.bagId,saved.localId)
                 -- Never equip an unrelated item if a bag slot has been reused.
-                if item and item.id==saved.id then
+                if item and item.id==saved.id and meetsRequirements(item,slotId) then
                     operations[#operations+1]={slot=slotId,item={localId=saved.localId,bagId=saved.bagId,id=saved.id},
                         after=slotId==1 and 0 or slotId==3 and 2 or nil}
                     count=count+1

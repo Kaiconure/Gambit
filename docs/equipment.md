@@ -100,6 +100,12 @@ slot, including copies already used by another slot, are skipped. If none are
 available the slot is left unchanged. Paired slots resolve in deterministic slot
 order and cannot select the same physical copy twice.
 
+Candidates must meet the current main-job and level requirements. Weapons requested
+for `sub` also require the currently available Dual Wield trait; shields do not.
+This is checked on each equipment request, so changing from COR/DNC to COR/WAR
+skips an unusable off-hand weapon without blocking the other slots. A later shield
+candidate can still be selected. Snapshot restoration applies the same checks.
+
 `equipPop()` does not select candidates: it restores the exact saved physical
 item instance or empty slot, as before. Helper return conventions are unchanged.
 Candidate lists share one normalization/resolution pass and inventory input

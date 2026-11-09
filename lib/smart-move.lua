@@ -309,6 +309,13 @@ local function sm_movement_exp(self, job)
         -- Update the 'me' mob
         me = windower.ffxi.get_mob_by_target('me')
         if not me or not me.x or not me.y then return end
+        if require('./lib/movement-afflictions').current(windower.ffxi) then
+            job.immobilized=true
+            speeds={};nextSpeed=1;iterationTime=0
+            jittering=false;shouldJitter=false;jitterUntil=0
+            windower.ffxi.run(false)
+            return 0.15
+        end
         
         -- Get the new vectors
         local vme2 = coordVector(me)
@@ -657,6 +664,11 @@ end
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.
 function smartMove:cancelJob(jobId, immediate)
     if self.shutting_down then return end
+    -- Pending jobs have not become current yet, but must not start after the
+    -- reaction or reservation that requested them has been cancelled.
+    for i=#self.queue,1,-1 do
+        if jobId==nil or self.queue[i].jobId==jobId then table.remove(self.queue,i) end
+    end
     local job = self.current
     local canCancel = job and (
         (jobId == nil) or
@@ -1126,6 +1138,7 @@ function smartMove:getJobInfo(jobId)
             return {
                 jobId = current.jobId,
                 mode = current.mode,
+                immobilized = current.immobilized,
                 time = current.time,
                 follow_index = current.follow_index,
                 position = current:pos()

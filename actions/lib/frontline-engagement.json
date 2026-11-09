@@ -12,6 +12,8 @@
       "distance_offset": 0,
       "radius_multiplier": 0.25,
       "duration": null,
+      "movement_slice_min": 1,
+      "movement_slice_max": 5,
       "initial_delay": 2,
       "progress_retry_delay": 1,
       "tolerance": 0.5,

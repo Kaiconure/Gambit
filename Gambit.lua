@@ -439,6 +439,22 @@ windower.register_event('load', function()
     })
     inventory.equipment_manager=globals.equipment_manager
     globals.event_system = require('./lib/events/init').new({
+        reactions={
+            log=function(message) print(message) end,
+            clock=os.clock,
+            enabled=function() return globals.enabled and globals.logged_in end,
+            player=windower.ffxi.get_player,
+            mob=windower.ffxi.get_mob_by_id,
+            zone=function() local info=windower.ffxi.get_info();return info and info.zone end,
+            cancelMovement=function() smartMove:cancelJob(nil,true) end,
+            cancelReactionMovement=function(jobId) smartMove:cancelJob(jobId,true) end,
+            unlock=function() windower.send_command('input /lockon') end,
+            faceAway=function(target) directionality.faceAwayFromTarget(target) end,
+            restore=function(id)
+                local target=windower.ffxi.get_mob_by_target('bt')
+                if target and target.id==id then directionality.faceTarget(target) end
+            end,
+        },
         windower=windower,packets=packets,resources=resources,
         writeProcessed=writeJsonToFile,
         writeDiscovery=function(path,result)

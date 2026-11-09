@@ -822,6 +822,10 @@ function processNextAction(context)
     -- Don't proceed if automation was disabled
     if not globals.enabled then return end
 
+    if globals.actionsEnabled~=false and context.reactions and context.reactions.respond and context.reactions.respond() then
+        return {name='reaction-distance'}
+    end
+
     local action = getNextBattleAction(context)
     
     -- Don't proceed if automation was disabled    

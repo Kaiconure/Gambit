@@ -110,6 +110,11 @@ applied). `partyMatches(targets, member)` tests membership; `member` defaults to
 selector syntax and leave `member`, enumerators, and target selection unchanged.
 Use `partyNames({'PLD', 'RUN'})[1]` for a consistent primary tank, or
 `partyMatches({'melee_dps', 'ranged'})` to test whether the current character is a DD.
+`selfMatches` checks yourself with the same selectors, accepting either an array
+(`selfMatches({'melee', 'ranged'})`) or separate strings
+(`selfMatches('melee', 'ranged')`). Exclusions work in either form, such as
+`selfMatches('mages', '~WHM')`. Use one array or separate selector strings;
+mixing an array with additional arguments is not supported. Empty input matches nobody.
 Role resolution depends on known party job information; no match yields an empty
 array or false. Client-relative selectors such as `me` and `^` should not be used
 for a shared cross-client WS order.
@@ -275,6 +280,22 @@ On a movement timeout, alignment tries other allowed destinations, including arc
 
 The frontline action still applies its existing `canAlign` checks, model-size distance handling, and failure postponement. Movement paths themselves are not constrained to remain inside the permitted arc; the arcs describe destinations. With `align2`, flexible string angles use the same retry behavior without final facing.
 Both positioning imports expose `duration` and `retry_delay` under their respective variable objects. `frontline_engagement.duration` defaults to `null`, retaining `align`'s automatic budget (three seconds for exact angles, six for flexible positioning); `member_engagement.duration` defaults to three seconds. Both retry delays default to ten seconds. Durations are clamped to at least one second by `align`; retry delay controls failure postponement, not the action's frequency or a guaranteed retry time.
+
+Frontline engagement exposes `movement_slice_min` (default 1 second) and `movement_slice_max` (default 5 seconds). Each movement slice estimates travel time as remaining straight-line distance to the destination divided by four yalms/second, clamps that estimate to these bounds, then caps it at the remaining `duration` budget. Short corrections yield sooner; longer runs continue longer before pausing to reconsider other actions. This scheduling estimate does not change Smart Move's obstruction detection or cancellation. A slice ending while progress is being made retains the route and uses `progress_retry_delay` (default 1 second) before retrying.
+
+Sleep (both status variants), Stun, Terror, Bind, and Petrification are treated as immobilization rather than obstacles. Smart Move pauses and clears its stall/jitter history while these effects are present. If the movement budget expires after an effect interrupted the attempt, alignment retains its route and returns `immobilized`; frontline uses `progress_retry_delay` to retry. The overall time budget still applies. Ordinary walls and obstacles retain their existing handling.
+
+For longer runs in one encounter, for example:
+
+```json
+"frontline_engagement": {
+  "duration": 6,
+  "movement_slice_min": 1,
+  "movement_slice_max": 5
+}
+```
+
+`duration` still limits the whole attempt, so an exact-angle default budget of three seconds cannot permit a five-second slice. Set both slice bounds to 1 to restore fixed one-second slices. Bounds are clamped to at least 0.1 seconds, and the maximum cannot be below the minimum. Distributed alignment uses these bounds automatically; other alignment callers use them only when supplied in their options object.
 
 For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
 

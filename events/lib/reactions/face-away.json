@@ -1,0 +1,144 @@
+{
+  "vars": {
+    "reactions": {
+      "debug": false,
+      "face_away": [],
+      "stock_face_away_enabled": true,
+      "stock_face_away": [
+        {
+          "key": "stock-amphitrite-bracket",
+          "actor": "Amphitrite",
+          "start": { "abilities": "Palsynyxis" },
+          "release": { "abilities": "Painful Whip" },
+          "options": { "wait": 2 }
+        },
+        {
+          "key": "stock-assailer-discoid",
+          "actor": "Assailer Chariot",
+          "kind": "enemy_ability",
+          "names": "Discoid",
+          "options": { "distance": 12, "wait": 2 }
+        },
+        {
+          "key": "stock-cloud-of-darkness-bracket",
+          "actor": "Cloud of Darkness",
+          "start": { "abilities": "Primordial Surge" },
+          "release": { "abilities": ["Waning Vigor", "Expunge"] },
+          "options": { "wait": 2 }
+        },
+        [
+          {
+            "key": "stock-glavoid-abilities",
+            "actor": "Glavoid",
+            "kind": "enemy_ability",
+            "names": "*",
+            "options": { "wait": 4, "allow_offensive_magic": true }
+          },
+          {
+            "key": "stock-glavoid-spells",
+            "actor": "Glavoid",
+            "kind": "enemy_spell",
+            "names": "*",
+            "options": { "no_turn": true, "wait": 4 }
+          }
+        ],
+        {
+          "key": "stock-raja-royal-decree",
+          "actor": "Raja",
+          "kind": "enemy_ability",
+          "names": "Royal Decree",
+          "options": { "distance": 20, "wait": 2 }
+        },
+        {
+          "key": "stock-rani-abilities",
+          "actor": "Rani",
+          "kind": "enemy_ability",
+          "names": "*",
+          "options": { "wait": 2 }
+        },
+        [
+          {
+            "key": "stock-urmahlullu-abilities",
+            "actor": "NO NO Urmahlullu",
+            "kind": "enemy_ability",
+            "names": "*",
+            "options": { "no_turn": true, "wait": 2 }
+          },
+          {
+            "key": "stock-urmahlullu-spells",
+            "actor": "NO NO Urmahlullu",
+            "kind": "enemy_spell",
+            "names": "*",
+            "options": { "no_turn": true, "wait": 2 }
+          }
+        ],
+        {
+          "key": "stock-gaze-abilities",
+          "kind": "enemy_ability",
+          "names": [
+            "Afflicting Gaze",
+            "Baleful Gaze",
+            "Blaster",
+            "Grim Glower",
+            "Mortal Blast",
+            "Mortal Ray",
+            "Oppressive Glare"
+          ],
+          "options": { "wait": 2 }
+        },
+        {
+          "key": "stock-deathly-glare",
+          "kind": "enemy_ability",
+          "names": "Deathly Glare",
+          "options": { "wait": 4 }
+        },
+        {
+          "key": "stock-shah-mat",
+          "kind": "enemy_ability",
+          "names": "Shah Mat",
+          "options": { "wait": 6, "allow_offensive_magic": true }
+        }
+      ]
+    }
+  },
+  "enemy_abilities": {
+    "pre": [
+      {
+        "id": "reaction-face-away-ability",
+        "when": ["event.actor"],
+        "commands": [
+          "reactions.handle(event, vars.reactions.face_away, (bt and event.actor.id == bt.id) or (not bt and party_leader_bt and event.actor.id == party_leader_bt.id) or false)"
+        ]
+      }
+    ],
+    "post": [
+      {
+        "id": "reaction-face-away-ability-post",
+        "when": ["event.actor"],
+        "commands": [
+          "reactions.handle(event, vars.reactions.face_away, (bt and event.actor.id == bt.id) or (not bt and party_leader_bt and event.actor.id == party_leader_bt.id) or false)"
+        ]
+      }
+    ]
+  },
+  "enemy_spells": {
+    "pre": [
+      {
+        "id": "reaction-face-away-spell",
+        "when": ["event.actor"],
+        "commands": [
+          "reactions.handle(event, vars.reactions.face_away, (bt and event.actor.id == bt.id) or (not bt and party_leader_bt and event.actor.id == party_leader_bt.id) or false)"
+        ]
+      }
+    ],
+    "post": [
+      {
+        "id": "reaction-face-away-spell-post",
+        "when": ["event.actor"],
+        "commands": [
+          "reactions.handle(event, vars.reactions.face_away, (bt and event.actor.id == bt.id) or (not bt and party_leader_bt and event.actor.id == party_leader_bt.id) or false)"
+        ]
+      }
+    ]
+  }
+}

@@ -616,6 +616,8 @@ Before contributions → composed rules → after contributions is execution ord
 An earlier stop can prevent after contributions from running. Both rule files
 and matching `.vars.json` files can declare contributions.
 
+Event slots can include inline `actions`, for example `{"slot": "my-spell-hook", "actions": [{"commands": "equipMany(vars.gear.spells.pre)"}]}`. These are normal contributions from that file, not fallback-only defaults. Additional contributions append under the existing ordering rules; `!` and `^` prefixes on the inline slot name apply replacement and fallback semantics. See [inline contributions](action-slots.md#inline-contributions). The inline event rules use the usual event-rule schema and are compiled when event settings load.
+
 Custom placeholders such as `{"slot": "my-spell-hook"}` can appear inside a
 phase. Names must be unique. Built-in names cannot be redeclared or moved.
 Normal `slot`/`slots` arrays and ordered alternatives are supported.

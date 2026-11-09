@@ -4,6 +4,7 @@
   },
   "vars": {
     "^keep_phalanx": {
+      "disabled": null,
       "spells": ["Phalanx II", "Phalanx"],
       "targets": ["me"]
     }
@@ -14,6 +15,7 @@
         "Use the configured spell preference for self; other party members require Phalanx II."
       ],
       "when": [
+        "not vars.keep_phalanx.disabled",
         "partyByName(vars.keep_phalanx.targets)",
         "member.is_participant and member.valid_target",
         "(member.is_me and hasSpell(vars.keep_phalanx.spells)) or (not member.is_me and hasSpell('Phalanx II'))",

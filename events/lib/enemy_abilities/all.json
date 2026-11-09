@@ -1,4 +1,5 @@
 {
+  "imports": ["lib/reactions/face-away"],
   "loading": {
     "actions": [
       {

@@ -6,7 +6,7 @@ function helpers.attach(context)
         if reached then
             if successDelay then context.postpone(successDelay) end
         else
-            context.postpone((reason == 'progress' or reason == 'alternatives') and (options.progress_retry_delay or 1) or (options.retry_delay or 10))
+            context.postpone((reason == 'progress' or reason == 'alternatives' or reason=='immobilized') and (options.progress_retry_delay or 1) or (options.retry_delay or 10))
         end
         return reached, reason
     end
@@ -23,7 +23,7 @@ function helpers.attach(context)
                 target.distance <= options.range then return true end
             local reached, reason = context.align(target, angle, distance, options.duration, noFace, options.tolerance, options)
             if reached then return true end
-            if reason == 'progress' and context.hasMovementReservation() then
+            if (reason == 'progress' or reason=='immobilized') and context.hasMovementReservation() then
                 context.postpone(options.progress_retry_delay or 1)
                 return false
             end

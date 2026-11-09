@@ -1,5 +1,27 @@
 # Action slots
 
+## Inline contributions
+
+Define a slot and its normal contribution together with `actions`:
+
+```json
+{
+  "slot": "priority-buffs",
+  "actions": [
+    {
+      "when": "not hasBuff('Defender') and canUse('Defender')",
+      "commands": "use(me)"
+    }
+  ]
+}
+```
+
+This is shorthand for placing `priority-buffs` here and contributing the enclosed actions to it from the same file. It is not a fallback: ordinary contributions append under the existing namespace/file precedence and per-action `priority` rules. At equal source precedence, previously collected contributions precede inline ones. Actions inside the inline array retain their relative order unless their own `priority` changes it. Imports inside `actions` are supported.
+
+Use `"slot": "!priority-buffs"` to give the inline contribution replacement semantics, or `"slot": "^priority-buffs"` for fallback semantics. Prefixes apply to the contribution; the placed hook is still named `priority-buffs`. An empty inline array has the same meaning as an empty contribution, including replacement/fallback behavior. Inline contributions inherit the slot's preconditions and variable scope.
+
+Inline contributions require one string `slot` name, rather than `slots`, comma-separated names, or fallback-selector arrays. Nested slot declarations inside contributed actions remain unsupported. A separately declared slot can still use the existing multi-slot and alternative-slot forms. Expansion happens entirely while settings load; no wrapper action remains at runtime.
+
 ## Automatic section slots
 
 Every executable action section has three native insertion points, even when the

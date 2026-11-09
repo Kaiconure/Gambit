@@ -81,6 +81,13 @@ local function validateName(name)
 end
 
 function slots.names(action)
+    if action.actions~=nil and (action.slot~=nil or action.slots~=nil) then
+        assert(type(action.slot)=='string' and action.slots==nil,'Inline contributions require one string slot')
+        local name=action.slot:gsub('^[!^]',''):match('^%s*(.-)%s*$')
+        validateName(name)
+        assert(not name:match('^[!^]') and not name:find(',',1,true),'Inline contributions require one slot name')
+        return {name}
+    end
     local result = {}
     for _, key in ipairs({'slot', 'slots'}) do
         local names = action[key]
@@ -101,15 +108,15 @@ function slots.names(action)
     return result
 end
 
-function slots.new(container, priority, warn, matchesRequired)
+function slots.new(container, priority, warn, matchesRequired, defaultSource)
     local groups, seen, used = {}, {}, {}
     local serial = 0
     local result = {}
-    function result.collect(document, source, parent)
+    function result.collect(document, source, parent, occurrence)
         if document.contributions == nil then return end
         assert(not (parent and parent._slotContribution), 'Contributed imports cannot define contributions')
         assert(type(document.contributions) == 'table', 'contributions must be an object')
-        local key = source .. ':' .. tostring(parent and parent._variableScope or 0)
+        local key = source .. ':' .. tostring(parent and parent._variableScope or 0)..':'..tostring(occurrence or '')
         if seen[key] then return end
         seen[key] = true
         local declared = {}
@@ -166,6 +173,17 @@ function slots.new(container, priority, warn, matchesRequired)
         end
     end
     function result.expand(types)
+        for _,kind in ipairs(types) do
+            for index,placeholder in ipairs(container[kind] or {}) do
+                if placeholder.actions~=nil and (placeholder.slot~=nil or placeholder.slots~=nil) then
+                    slots.names(placeholder)
+                    local source=placeholder._slotSource or defaultSource or placeholder.importedFrom or '(inline slot)'
+                    local identity=placeholder.id or placeholder.source or (kind..':'..index)
+                    local occurrence='inline-'..identity..':'..tostring(placeholder._variableScope or 0)
+                    result.collect({contributions={[placeholder.slot]=placeholder.actions}},source,nil,occurrence)
+                end
+            end
+        end
         -- Keep discoverable hooks after placeholder expansion, including empty
         -- hooks and unselected fallback alternatives.
         container._availableSlots = {}

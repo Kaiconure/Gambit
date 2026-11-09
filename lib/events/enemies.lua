@@ -42,6 +42,8 @@ function enemies.action(service,action,failures)
         for name,skillId in pairs(magicSkills) do event[name]=resource.skill==skillId end
         event.curing=cureSpell(resource)
     end
+    event.phase=phase
+    require('./lib/reactions').observe(event)
     service.runtime:observe(event,phase)
     if deps.afterEnemy then deps.afterEnemy(observation) end
     return true
