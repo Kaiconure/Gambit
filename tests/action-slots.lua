@@ -10,6 +10,7 @@ local internal = source:match('(local function _loadActionImportsInternal.-)loca
 local loader = source:match('(local function loadActionImports.-)local function _expandVariable')
 local documents, warnings = {}, {}
 local env = setmetatable({
+    profiling=require('./lib/load-profile'),
     variableScopes=scopes, actionPreconditions=preconditions, actionSlots=slots,
     variableLoader=require('./lib/variable-loader'),
     settingsPaths={

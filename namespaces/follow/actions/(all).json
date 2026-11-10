@@ -1,0 +1,12 @@
+{
+  "idle": [
+    {
+      "imports": ["follow-leader"]
+    }
+  ],
+  "mounted": [
+    {
+      "imports": ["follow-leader"]
+    }
+  ]
+}

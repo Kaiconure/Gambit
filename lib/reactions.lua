@@ -87,6 +87,8 @@ function M.faceAway(event,options)
     if not deps or not deps.enabled() then return false end
     assert(event and event.actor and event.actor.id and event.kind and event.id,'Face-away requires an enemy event')
     options=copy(options or {})
+    assert(options.movement_priority==nil or type(options.movement_priority)=='boolean',
+        'movement_priority must be a boolean')
     local id=key(event,options)
     local now=deps.clock()
     local timeout=require('./lib/reaction-options').timeout(options.timeout)
@@ -187,7 +189,20 @@ function M.suppresses(kind)
     return false
 end
 function M.state() return copy(holds) end
+function M.blocksActionsWhileMoving()
+    if not deps or not deps.enabled() then return false end
+    for _,hold in pairs(holds) do
+        if hold.options.movement_priority~=false and hold.options.distance~=nil
+            and (not hold.expires or deps.clock()<hold.expires)
+            and (not hold.release_at or deps.clock()<hold.release_at)
+            and require('./lib/reaction-movement').needsMovement(hold,deps.movement or deps) then
+            return true
+        end
+    end
+    return false
+end
 function M.blocksAction(kind,resource)
+    if M.blocksActionsWhileMoving() then return true end
     if kind=='weapon_skill' then return M.suppresses('weapon_skills') end
     local targets=resource and resource.targets
     return kind=='spell' and M.suppresses('offensive_magic') and targets and targets.Enemy

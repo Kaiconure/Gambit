@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 local actionWait=require('./lib/action-wait')
 local actionErrors = require('./lib/action-errors')
 local actionPreconditions = require('./lib/action-preconditions')
@@ -188,6 +189,7 @@ function sendActionCommand(
     pauseFollow,        -- Whether follows should be paused during execution
     durationType        -- Set how to handle the specified duration
 )
+    if require('./lib/reactions').blocksActionsWhileMoving() then return false end
     if durationType then
         writeDebug("Warning: Duration type value provided: " .. tostring(durationType))
     end
@@ -372,10 +374,13 @@ end
  --------------------------------------------------------------------------------------
 -- Recompiles the specified action type
 local function compileActions(actionType, parent, rawActions)
+    profiling.start('compile category '..actionType)
     --writeMessage(string.format('Recompiling [%s] actions...', actionType))
 
     if isArray(rawActions) then
-        local actions = json.parse(json.stringify(rawActions)) -- force deep copy
+        profiling.start('action category deep copy')
+        local actions = require('./lib/settings-snapshot')(rawActions)
+        profiling.stop('action category deep copy')
         local _temp = {}
         for i, action in ipairs(actions) do
             local shouldAdd = false
@@ -572,6 +577,8 @@ local function compileActions(actionType, parent, rawActions)
     end
 
     local actionCount = #actionStateManager.actions[actionType]
+    profiling.stop('compile category '..actionType)
+    profiling.start('compilation message output')
     if actionCount > 0 then
         writeMessage('Compilation of %s has completed.':format(
             pluralize(actionCount,
@@ -583,13 +590,18 @@ local function compileActions(actionType, parent, rawActions)
             text_action(actionType .. ' actions')
         ))
     end
+    profiling.stop('compilation message output')
 end
 
 --------------------------------------------------------------------------------------
 -- Recompiles all action types
 local variableScopes = require('./lib/variable-scopes')
 local function compileAllActions()
-    local settingsCopy = json.parse(json.stringify(settings))
+    profiling.begin('action compilation')
+    profiling.start('settings snapshot')
+    local settingsCopy = require('./lib/settings-snapshot')(settings)
+    profiling.stop('settings snapshot')
+    profiling.start('compile rules')
 
     actionStateManager:reset()
     require('./lib/encounter-state').reset()
@@ -609,6 +621,8 @@ local function compileAllActions()
     compileActions('imports',       actions, actions and actions.imports or {})
     compileActions('functions',     actions, actions and actions.functions or {})
 
+    profiling.stop('compile rules')
+    profiling.start('variables/scopes')
     actionStateManager:initializeVars(actions and actions.vars or {})
     actionStateManager.variableScopes = variableScopes.build(
         actionStateManager.vars, actionStateManager.originalVars, actions and actions._variableScopes, writeWarning)
@@ -619,6 +633,8 @@ local function compileAllActions()
 
     actionStateManager:keybindFunctions()
 
+    profiling.stop('variables/scopes')
+    profiling.finish(profiling.report)
     actionStateManager.needsRecompile = false
     reportLoadedSettings()
 end

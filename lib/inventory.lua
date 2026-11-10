@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 local inventory = {}
 local function equipment_view(items,confirmed,session)
     local manager=session or inventory.equipment_manager
@@ -173,7 +174,10 @@ inventory.get_item_from_bag = function (items, bagId, localId)
     end
 
     -- Find the actual item info
-    return resources.items[bagItem.id]    
+    profiling.start('equipment current-slot resource access')
+    local result=resources.items[bagItem.id]
+    profiling.stop('equipment current-slot resource access')
+    return result
 end
 
 -- flags:
@@ -292,7 +296,8 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
         end
         pieces=equipment
     end
-    all_items = equipment_view(all_items or windower.ffxi.get_items(),false,session)
+    all_items = profiling.measure('equipment snapshot/view',equipment_view,
+        all_items or profiling.measure('equipment get_items',windower.ffxi.get_items),false,session)
     
     if type(changes) == 'table' then
         changes.removed = {}
@@ -336,7 +341,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                 local name=choice.equipment or choice.item or choice.gear or choice.name
                 local augments=choice.augments or choice.aug or {}
                 if type(name)=='string' then
-                    local resource=findItem(name)
+                    local resource=profiling.measure('equipment candidate resource',findItem,name)
                     -- Equipped/queued copies are eligible, and win over other
                     -- physical copies of this candidate. Unspecified augments
                     -- do not require an unnecessary change to another copy.
@@ -349,7 +354,8 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                         local excluded={}
                         for _,item in ipairs(exclusion_list) do excluded[#excluded+1]=item end
                         while true do
-                            local candidate=inventory.find_item({id=resource.id,name=name,augments=augments,slot=slot},flags,all_items,excluded,session)
+                            local candidate=profiling.measure('equipment inventory search',inventory.find_item,
+                                {id=resource.id,name=name,augments=augments,slot=slot},flags,all_items,excluded,session)
                             if not candidate then break end
                             excluded[#excluded+1]=candidate
                             if candidate.raw_slots[info.id] then selected=candidate; break end
@@ -438,7 +444,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
             for _,info in ipairs(GEAR_SLOT_INFO) do
                 if lockRequests[info.id] then operations[#operations+1]=lockRequests[info.id] end
             end
-            manager:submit(operations)
+            profiling.measure('equipment submission/phase plan',manager.submit,manager,operations)
         else
             for _,op in ipairs(operations) do windower.ffxi.set_equip(op.item.localId,op.slot,op.item.bagId) end
         end
@@ -590,7 +596,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
         }
     end
 
-    items = items or windower.ffxi.get_items()
+    items = items or profiling.measure('equipment search get_items',windower.ffxi.get_items)
     if not flags.usable then items=equipment_view(items,flags.confirmed,session) end
     -- Inventory can be absent or partially populated while zoning.
     if type(items)~='table' then return end
@@ -617,7 +623,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
                     bagItems = empty
                 end
             else
-                bagItems = tableAll(bag, function (_i)
+                bagItems = profiling.measure('equipment bag filter',tableAll,bag, function (_i)
                     return type(_i) == 'table' and _i.id == item.id 
                 end)
             end
@@ -642,7 +648,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
                     item and
                     not is_item_excluded(exclusion_list, bagId, bagItem.slot)
                 then
-                    local ext = extdata.decode(bagItem)
+                    local ext = profiling.measure('equipment extdata decode',extdata.decode,bagItem)
 
                     local chargesRemaining = 1
                     local secondsUntilReuse = nil

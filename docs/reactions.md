@@ -94,6 +94,7 @@ Use these options to change the behavior:
 | `allow_offensive_magic` | `false` | Allow offensive spells during this reaction. |
 | `distance` | Not set | Retreat to at least this horizontal center distance from the triggering enemy, in yalms. Does not move you closer if already farther away. |
 | `angle` | Not set | Optional target-relative angle or region. Without `distance`, captures the initial horizontal center distance as the minimum radius. Omitted or `null` preserves outward-only retreat. |
+| `movement_priority` | `true` | Give repositioning priority over new spells (including cures/buffs), job/pet abilities, weapon skills, items, and ranged attacks. Applies only when `distance` or `angle` requires movement. Actions resume once safely positioned; moving/turning enemies can reapply the block. Set `false` to opt out. Turn-only face-aways do not block actions through this option. |
 
 Without a timeout, simple reactions remain active until completion/interruption is observed, and brackets until their release trigger is observed, followed by the configured `wait`. Enemy defeat and the cleanup conditions below still clear them. If an end event is missed, the hold stays active until it is explicitly released or cleaned up. Set a finite `timeout` when you want an automatic fallback. `"inf"` and `"infinity"` are case-insensitive. Zero expires immediately; it does not disable expiry. The release `wait` must still be a finite nonnegative number.
 
@@ -135,6 +136,15 @@ You can also specify `angle` without `distance`. The reaction captures your hori
 An omitted or `null` angle keeps the original behavior: retreat straight outward, with no angular correction. `angle` controls position around the enemy, not which way your character faces after moving; `no_turn` still controls the face-away behavior. If overlapping distance requests select one movement rule, that rule supplies its angle as well.
 
 The face-away, suppression, and movement request start immediately from the enemy event, without needing an import at a particular position. Movement is updated from frame ticks independently of the normal action loop: it does not wait for casts, other actions, or movement reservations, and running can interrupt a cast. It does not start while you are resting, mounted, dead, or affected by Bind, Sleep, Stun, Petrification, or Terror. Movement runs in short steps with fresh checks if the enemy moves. No path to a safe point is guaranteed.
+
+Movement reactions default to `movement_priority = true` to avoid starting
+actions that could lock the character during an escape, including Thar She Blows.
+The block checks live
+position at dispatch, including actions queued behind equipment changes, and
+remains active between movement slices while repositioning is still needed.
+It does not cancel an action already accepted by the game. Existing weapon-skill
+and offensive-magic suppression still applies after reaching safety until the
+face-away hold ends. Manual action requests are subject to the same packet guard.
 
 Facing away is reasserted after each movement step. With `no_turn: true`, Gambit still retreats but does not force facing away. Other automated movement and facing are held back while a distance reaction is active, including after you reach the minimum, so normal positioning cannot pull you back into danger. Healing/support actions remain eligible between steps.
 

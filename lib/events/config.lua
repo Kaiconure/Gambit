@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Select one event file and compile it independently of normal action imports.
 local copy=require('./lib/variable-values').copy
 local factory=require('./lib/execution-factory')
@@ -77,7 +78,10 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
         end
     end
     local slots=eventSlots.new(result.rules,layouts,paths,warn,matchesRequired,compileRule)
+    profiling.start('event import discovery/read')
     local documents,selectedPath=importDocuments(paths,read,entryName)
+    profiling.stop('event import discovery/read')
+    profiling.start('event rule validation/compile')
     result.path=selectedPath
     for _,entry in ipairs(documents) do
         local path,document=entry.path,entry.document
@@ -131,7 +135,9 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
     end
     -- Preserve discovery order within a namespace; namespace proximity breaks
     -- equal-priority ties independently of when imported vars are discovered.
+    profiling.stop('event rule validation/compile')
     local variables=variableLoader.new(warn,sourceRank)
+    profiling.start('event variable files/merges')
     local variablePaths,seenVariables={},{}
     local function addVariables(path)
         if not seenVariables[path] then
@@ -169,14 +175,19 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
         local entry=inlineVars[index]
         variables.merge(result.vars,entry.vars,entry.path,-1)
     end
+    profiling.stop('event variable files/merges')
+    profiling.start('event slot expansion')
     result.available_slots=slots.expand()
+    profiling.stop('event slot expansion')
     local reactionDebug=result.vars.reactions and result.vars.reactions.debug
     assert(reactionDebug==nil or type(reactionDebug)=='boolean','reactions.debug must be boolean')
     result.faceAwaySource=result.vars.reactions and result.vars.reactions.face_away
     result.faceAwayStockSource=result.vars.reactions and result.vars.reactions.stock_face_away
     result.faceAwayStockEnabled=not result.vars.reactions or result.vars.reactions.stock_face_away_enabled~=false
+    profiling.start('reaction rule compile')
     result.faceAwayRules=require('./lib/reaction-rules').compile(result.faceAwaySource,
         result.faceAwayStockEnabled and result.faceAwayStockSource or nil)
+    profiling.stop('reaction rule compile')
     return result
 end
 return Config

@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Event rules must finish synchronously; the normal yielding scheduler is unused.
 local copy=require('./lib/variable-values').copy
 local Matches=require('./lib/events/matches')
@@ -17,9 +18,12 @@ local function evaluate(expression,context)
     return value
 end
 function Runner:run(request,phase)
+    local loading=request.section=='loading'
     local rules=self.config.rules[request.section][phase]
     if #rules==0 then return true end
+    if loading then profiling.start('loading equipment session') end
     local session=self.equipmentSession and self.equipmentSession()
+    if loading then profiling.stop('loading equipment session') end
     local previous=request.variables.equipment
     local stack=copy(request.variables.vars._.eq_stack)
     request.variables.equipment=session
@@ -30,7 +34,9 @@ function Runner:run(request,phase)
         end
         request.variables.equipment=previous
     end
+    if loading then profiling.start('loading context creation') end
     local ok,context=pcall(self.context,'event '..phase,request.variables)
+    if loading then profiling.stop('loading context creation') end
     if not ok or not context then
         discard()
         self.report('Event context unavailable: '..tostring(context))
@@ -69,6 +75,7 @@ function Runner:run(request,phase)
         context.event.source=rule.source
         context.event.rule_id=rule.id
         if not rule.failed then
+            if loading then profiling.start('loading rule '..tostring(rule.id or rule.source)) end
             local matched=false
             local success,message=pcall(function()
                 for _,condition in ipairs(rule.conditions) do
@@ -77,6 +84,7 @@ function Runner:run(request,phase)
                 matched=true
                 for _,command in ipairs(rule.commands) do evaluate(command,context) end
             end)
+            if loading then profiling.stop('loading rule '..tostring(rule.id or rule.source)) end
             if not success then
                 phaseFailed=true
                 rule.failed=true
@@ -100,7 +108,9 @@ function Runner:run(request,phase)
     if phaseFailed or (phase=='pre' and request.event.cancelled) then
         discard()
     elseif session then
+        if loading then profiling.start('loading equipment commit') end
         local committed,message=pcall(session.commit,session)
+        if loading then profiling.stop('loading equipment commit') end
         if not committed then
             discard()
             self.report('Event equipment commit: '..tostring(message))

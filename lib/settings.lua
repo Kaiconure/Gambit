@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 local settings_counter = 0
 local settingsPaths = require('./lib/settings-paths')
 local variableLoader = require('./lib/variable-loader')
@@ -86,11 +87,15 @@ function savePanelSettings(config)
 end
 
 local function settingsSnapshot(value)
-    local snapshot = json.parse(json.stringify(value))
-    snapshot.actions = nil
-    snapshot.default_namespace = nil
-    snapshot.ui = nil -- Personal UI state is loaded/saved independently.
-    return snapshot
+    -- Exclude runtime actions and independently saved preferences before copying.
+    -- Copying actions only to discard them serialized the whole import tree.
+    local preferences={}
+    for key,child in pairs(value) do
+        if key~='actions' and key~='default_namespace' and key~='ui' then
+            preferences[key]=child
+        end
+    end
+    return require('./lib/settings-snapshot')(preferences)
 end
 
 local function sameSettings(a, b)
@@ -410,11 +415,13 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
 
                         -- Automatic common imports pin a physical file so namespace
                         -- variants supplement base files instead of hiding them.
+                        profiling.start('action import resolution')
                         fileName = action._commonFile or firstSettingsPath(settingsPaths.importCandidates(playerName, action_import))
                         if fileName then file = files.new(fileName) end
+                        profiling.stop('action import resolution')
 
                         if file and file:exists() then
-                            import = json.parse(file:read())
+                            import = profiling.parse(json.parse,profiling.read(file,fileName))
 
                             if import then
                                 baseActions._slots.collect(import, fileName, action)
@@ -773,6 +780,7 @@ local function _expandActionMacrosToArray(macros, array)
 ----------------------------------------------------------------------------------------
 --
 local function loadActionImports(playerName, actions, player, sourceFile)
+    profiling.start('import expansion (inside settings)')
     -- Keep importing actions until there are no more to pull in. This is to ensure that
     -- imports which have their own imports will work.
     if actions then
@@ -856,7 +864,9 @@ local function loadActionImports(playerName, actions, player, sourceFile)
         end
         drainLibraryImports()
         actionSlots.addAutomatic(actions, types)
+        profiling.start('action slot expansion')
         actions._slots.expand(types)
+        profiling.stop('action slot expansion')
         -- Resolve contributed imports through the same loader as ordinary imports.
         for _, actionType in ipairs(types) do
             local passes = 0
@@ -878,7 +888,10 @@ local function loadActionImports(playerName, actions, player, sourceFile)
                 end
             end
         end
+        profiling.stop('import expansion (inside settings)')
+        profiling.start('macros')
         _processMacros(actions)
+        profiling.stop('macros')
 
         actions._processed = nil
     end
@@ -903,8 +916,8 @@ local function _expandVariable(name, value)
     return result
 end
 
-local function _loadActionsWithPreprocessing(file)
-    local text = file:read()
+local function _loadActionsWithPreprocessing(file,path)
+    local text = profiling.read(file,path)
 
     -- local temp = json.parse(json)
     -- if temp and type(temp.vars) == 'table' then
@@ -913,7 +926,7 @@ local function _loadActionsWithPreprocessing(file)
     --     end
     -- end
 
-    return json.parse(text)
+    return profiling.parse(json.parse,text)
 end
 
 ----------------------------------------------------------------------------------------
@@ -923,7 +936,7 @@ local function loadActionsFromFile(playerName, fileName)
         return nil
     end
 
-    local actions = _loadActionsWithPreprocessing(file)
+    local actions = _loadActionsWithPreprocessing(file,fileName)
     if actions then
         loadActionImports(playerName, actions, windower.ffxi.get_player(), fileName)
     end
@@ -1011,6 +1024,7 @@ end
 ----------------------------------------------------------------------------------------
 -- Load settings
 local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
+    profiling.start('settings preferences and validation')
     loadingLeader = currentLeaderStatus(true)
     local player = windower.ffxi.get_player()
     if not player then
@@ -1115,6 +1129,8 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     end
 
     tempSettings.actions = {}
+    profiling.stop('settings preferences and validation')
+    profiling.start('action loading including imports')
 
     if actionsName then
         writeMessage('Attempting to load actions for %s from: [%s]':format(
@@ -1135,9 +1151,11 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     if actions == nil then
         local locations = settingsPaths.entryPointLayers(player.name, 'actions')
         locations[#locations + 1] = './actions/standard'
+        profiling.start('action entry point selection')
         actionsFileName, actionsName = actionEntryPoints.find(
             locations, mainJob, subJob, targetSelectors.entryPointGroups(mainJob, loadingLeader),
             function(path) return files.new(path):exists() end)
+        profiling.stop('action entry point selection')
         jobActionsName = mainJob:lower()
         if actionsFileName then
             actions = loadActionsFromFile(player.name, actionsFileName)
@@ -1160,6 +1178,8 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
         end
     end
 
+    profiling.stop('action loading including imports')
+    profiling.start('settings finalization (inclusive)')
     if actions then
         tempSettings.actions = actions
         tempSettings.actionInfo = tempSettings.actionInfo or {}
@@ -1185,8 +1205,11 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     tempSettings.settings_counter = settings_counter
 
     if not settingsOnly then
+        profiling.start('leader file discovery')
         loadedLeaderState = leaderLoadState.new(leaderFilesPresent(player), loadingLeader == true)
+        profiling.stop('leader file discovery')
     end
+    profiling.stop('settings finalization (inclusive)')
 
     return tempSettings
 end
@@ -1195,6 +1218,7 @@ end
 -- Save settings
 -- nil selects the session namespace; false explicitly selects global settings.
 function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProcessed)
+    return settingsPaths.withDirectoryCache(function()
     local player = windower.ffxi.get_player()
     if player and namespacePlayer ~= player.name then
         namespacePlayer = player.name
@@ -1219,6 +1243,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
         end
     end
     local previous = settingsPaths.getLoadedNamespace()
+    profiling.start('namespace inheritance and configuration')
     local previousPrecedence = settingsPaths.getLoadedPrecedence()
     local name = namespaceOverride
     if name == nil then
@@ -1249,15 +1274,19 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
         return settingsPaths.namespaceExists(ns)
     end)
     settingsPaths.setLoadedNamespace(name, precedence)
+    profiling.stop('namespace inheritance and configuration')
     local success, result = pcall(loadSettingsInternal, actionsName, settingsOnly, outputProcessed)
     if not success then
         settingsPaths.setLoadedNamespace(previous, previousPrecedence)
         error(result)
     end
+    profiling.start('saved preferences snapshot')
     lastSavedSettings = settingsSnapshot(result)
+    profiling.stop('saved preferences snapshot')
     loadedNamespaceDescriptions = descriptions
     loadedNamespaceAbstract = abstract
     return result
+    end)
 end
 
 function reportLoadedSettings()

@@ -2219,11 +2219,21 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local globalVars = variableState and variableState.vars or actionStateManager.vars
     local originalVars = variableState and variableState.original or actionStateManager.originalVars
     local scopeState = not variableState and actionStateManager.variableScopes
-    local function scopeId() return context.action and context.action._variableScope end
+    local scopedAction
+    local scopedStates
+    local function scopeId()
+        local action=context.action
+        if scopeState and action~=scopedAction then
+            scopedStates=scopeState.activate(action and action._variableScope)
+            scopedAction=action
+        end
+        return action and action._variableScope
+    end
     context._originalVars = originalVars
     if scopeState then
-        local scopedVars = scopeState.view(scopeId)
-        local scopedOriginal = scopeState.view(scopeId, true)
+        local function capturedScopes() return scopedStates end
+        local scopedVars = scopeState.view(scopeId,false,capturedScopes)
+        local scopedOriginal = scopeState.view(scopeId,true,capturedScopes)
         local globalOriginal = actionStateManager.originalVars
         context.vars = nil
         context._originalVars = nil
@@ -2233,7 +2243,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end})
         -- Lua 5.1 does not honor __pairs. Expressions can still iterate vars.
         context.pairs = function(value)
-            if value == scopedVars then return pairs(scopeState.snapshot(scopeId)) end
+            if value == scopedVars then return pairs(scopeState.snapshot(scopeId,capturedScopes)) end
             return pairs(value)
         end
     end
@@ -2536,11 +2546,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Attempt to change multiple equipment items at once. Returns the number of equipment
     -- changes if any changes occurred, or nil if no changes occurred.
     context.equipMany = function(...)
+        local profile=require('./lib/load-profile')
         context.equipment_set = nil
-        local entries = context.sanitizeEquipmentList(false, ...)        
+        local entries = profile.measure('equipment input sanitize',context.sanitizeEquipmentList,false,...)
         local input = ...
         context.equipment_set = type(input)=='table' and input or entries
-        local count = inventory.equip_many(entries)
+        local count = profile.measure('equipment equip_many',inventory.equip_many,entries)
         if count > 0 then
             return count
         end

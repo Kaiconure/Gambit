@@ -1,14 +1,38 @@
+local profiling=require('./lib/load-profile')
 -- Session state: this module survives settings reloads, but not addon reloads.
 local paths = {}
 local targetSelectors=require('./lib/target-selectors')
 local namespace = nil
 local loadedNamespace = nil
 local loadedPrecedence = {}
+local directoryCache
+
+-- Nested loads share the active snapshot; even failed loads restore the prior
+-- scope. No cached result survives the outermost load.
+function paths.withDirectoryCache(fn)
+    local previous=directoryCache
+    directoryCache=previous or {}
+    local function pack(...)return {n=select('#',...),...}end
+    local result=pack(pcall(fn))
+    directoryCache=previous
+    if not result[1] then error(result[2],0) end
+    return unpack(result,2,result.n)
+end
 
 local SETTINGS_ROOT = './settings'
 local function directoryExists(path)
-    return windower and windower.dir_exists and
-        windower.dir_exists((windower.addon_path or '') .. path:gsub('^%./', '')) or false
+    local started=profiling.now()
+    local resolved=(windower and windower.addon_path or '')..path:gsub('^%./',''):gsub('\\','/')
+    local key=resolved:lower()
+    if directoryCache and directoryCache[key]~=nil then
+        profiling.sample('directory cache hits',started)
+        return directoryCache[key]
+    end
+    local result=windower and windower.dir_exists and
+        windower.dir_exists(resolved) or false
+    if directoryCache then directoryCache[key]=result end
+    profiling.sample('directory probes',started)
+    return result
 end
 
 local function organizationalRoot(parent, name)

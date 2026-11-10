@@ -180,6 +180,8 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 | `touch -t` | Interact with the selected entity. Also accepts `-name <name>` (`-n`) or `-id <id>`. |
 | `tap -t` | Interact, then press Escape twice to leave dialog/clear selection. Also accepts `-name <name>` or `-id <id>`. |
 | `sendkey [<count>x] <key> ...` | Send a sequence of Windower key names. An explicit multiplier applies only to the next key; bare numbers remain key names. Alias: `sk`. |
+| `regen-item-index` | Regenerate `meta/generated-item-name-index.lua` from installed item resources. English short and long names use validated ID hints; missing or stale hints fall back to resource searches and cache results in memory. Ambiguous names retain resource-search behavior. |
+| `profile on\|off` | Enable or disable load timings in chat and `.data/load-profile-<character>.log`. Disabled by default. The local choice survives addon reloads, allowing startup measurements. Use `profile on` before reloading the addon or actions, then `profile off` when finished. |
 
 `touch` and `tap` operate at close range (the helpers default to 6 yalms); they do not automatically approach distant targets. Both accept `-all` to forward the interaction through the external Send addon to all characters. Without a target option, they do nothing.
 

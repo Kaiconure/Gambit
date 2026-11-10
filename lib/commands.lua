@@ -4,6 +4,20 @@ local actionErrors = require('./lib/action-errors')
 local settingsPaths = require('./lib/settings-paths')
 local valueOutput = require('./lib/value-output')
 local gearExport = require('./lib/equipment/export')
+handlers['profile'] = function(args)
+    local option=args[1]
+    if option~='on' and option~='off' then
+        writeMessage('Usage: //gbt profile on|off (persists across addon reloads)')
+        return
+    end
+    require('./lib/load-profile').configure(option=='on')
+    writeMessage('Load profiling '..(option=='on' and 'enabled' or 'disabled')..'.')
+end
+handlers['regen-item-index'] = function()
+    local path=windower.addon_path..'meta/generated-item-name-index.lua'
+    local count=require('./lib/item-name-index').write(resources.items,path)
+    writeMessage(string.format('Generated item-name index: %d names saved to %s',count,path))
+end
 handlers['panel'] = function(args)
     local function showHelp()
         writeMessage('Panel commands:')

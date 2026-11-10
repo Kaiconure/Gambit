@@ -63,6 +63,8 @@ function M.compile(rules,stock)
             options.key=rule.key or options.key
             require('./lib/reaction-options').timeout(options.timeout)
             require('./lib/reaction-options').angle(options)
+            assert(options.movement_priority==nil or type(options.movement_priority)=='boolean',
+                'movement_priority must be a boolean')
             if options.distance~=nil then
                 assert(type(options.distance)=='number' and options.distance>=0 and options.distance<math.huge,
                     'Reaction distance must be a finite nonnegative center distance')

@@ -1,3 +1,5 @@
+local profiling=require('./lib/load-profile')
+profiling.begin('startup modules')
 __version = '1.0.7.1'
 __name = 'Gambit'
 __shortName = 'gbt'
@@ -299,12 +301,15 @@ function syncWeaponSkillInfoIpc()
 end
 
 function reloadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
+    profiling.begin('settings reload')
+    profiling.start('settings/imports')
     executionFactory.clear()
     inventory.printDebug = nil
 
     bypassActions = bypassActions and settings.actions ~= nil
 
     settings = loadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
+    profiling.stop('settings/imports')
     logging_settings.verbosity = settings.verbosity
 
     -- We will not recompile actions or reset the current mob if this is a settings-only reload
@@ -320,13 +325,17 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         globals.cloud_panel:configure(settings.cloudPanel)
     end
     if globals.status_panel then
+        profiling.start('panel')
         local ok, err = pcall(function() globals.status_panel:configure(loadPanelSettings(),false) end)
         if ok then globals.status_panel_ready = true end
         if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
+        profiling.stop('panel')
     end
     if globals.event_system then
+        profiling.start('events')
         local ok,err=pcall(function() globals.event_system:reload(outputProcessed) end)
         if not ok then writeError('Could not load event rules: '..tostring(err)) end
+        profiling.stop('events')
     end
 
     if settings.debugging then
@@ -336,6 +345,7 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
     if not actionStateManager.needsRecompile then
         reportLoadedSettings()
     end
+    profiling.finish(profiling.report)
 end
 
 -- Player status change
@@ -416,6 +426,8 @@ end)
 ---------------------------------------------------------------------
 -- Addon loaded
 windower.register_event('load', function()
+    profiling.finish()
+    profiling.begin('startup handler')
     if 
         not windower or
         not windower.ffxi
@@ -429,10 +441,14 @@ windower.register_event('load', function()
         clock = os.clock,
         send = function(message) windower.send_ipc_message(message) end
     })
+    profiling.checkpoint('party alignment attach')
 
     initTrustData()
+    profiling.checkpoint('trust data initialization')
 
-    globals.equipment_manager = require('./lib/equipment/init').new({
+    local equipmentService=require('./lib/equipment/init')
+    profiling.checkpoint('equipment module loading')
+    globals.equipment_manager = equipmentService.new({
         windower=windower,inventory=inventory,packets=packets,resources=resources,
         restoreGear=function()
             local runtime=globals.event_system and globals.event_system.runtime
@@ -450,6 +466,7 @@ windower.register_event('load', function()
         formatCount=function(count) return text_number(count, Colors.debug) end,
     })
     inventory.equipment_manager=globals.equipment_manager
+    profiling.checkpoint('equipment service initialization')
     local reactionMovementOwner={}
     globals.event_system = require('./lib/events/init').new({
         reactions={
@@ -542,6 +559,7 @@ windower.register_event('load', function()
         end,
     })
     -- Legacy cloud-panel code/assets/settings are retained, but no display is
+    profiling.checkpoint('event service initialization')
     -- created. The status panel is the supported UI, regardless of saved flags.
     globals.status_panel_ready = false
     globals.status_panel = require('./lib/ux/status-panel').new({
@@ -559,6 +577,7 @@ windower.register_event('load', function()
         subscribe=subscribeGambitLog,
         save=savePanelSettings,
     })
+    profiling.checkpoint('status panel initialization')
 
     smartMove:setLogger(writeDebug, writeTrace)
 
@@ -584,6 +603,7 @@ windower.register_event('load', function()
 
     windower.send_command('alias varget gbt varget')
     windower.send_command('alias varset gbt varset')
+    profiling.checkpoint('movement logger, key bindings and aliases')
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
@@ -598,6 +618,7 @@ windower.register_event('load', function()
 
         globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
         globals.language = info.language
+        profiling.checkpoint('login state, welcome and zone resources')
 
         -- Store self info
         local me = windower.ffxi.get_mob_by_target('me')
@@ -606,9 +627,12 @@ windower.register_event('load', function()
 
         -- Reload all settings
         resetCurrentMob(nil, true)
+        profiling.checkpoint('self state and target reset')
         reloadSettings()
+        profiling.checkpoint('settings reload (inclusive)')
 
         requestCurrencies()
+        profiling.checkpoint('currency requests')
 
         -- Request everyone's job info via IPC. Wait a moment to handle the case where
         -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
@@ -616,16 +640,20 @@ windower.register_event('load', function()
             syncJobInfoIpc()
             syncWeaponSkillInfoIpc()
         end, 3.0)
+        profiling.checkpoint('IPC sync scheduling')
     else
         globals.suppress_logging = true
 
         -- The loadSettings function properly handles stubbed out defaults when no user is logged in
         settings = loadSettings()
+        profiling.checkpoint('logged-out settings load')
     end
 
     -- Kick off background threads
     coroutine.schedule(cr_actionProcessor, 0)
     coroutine.schedule(cr_ipcSender, 0)
+    profiling.checkpoint('background thread scheduling')
+    profiling.finish()
 end)
 
 ---------------------------------------------------------------------

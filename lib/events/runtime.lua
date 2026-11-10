@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Request lifecycle. No dependency on Windower packets or the Gambit scheduler.
 local copy=require('./lib/variable-values').copy
 local Runner=require('./lib/events/runner')
@@ -65,14 +66,18 @@ function Runtime:loading()
     if self.loaded then return end
     self.loaded=true
     if not self.config.path then return end
+    profiling.start('loading variable snapshots')
     local vars=copy(self.config.vars)
     vars._={eq_stack={}}
     local request={section='loading',event={kind='loading',cancelled=false,time=self.deps.clock()},
         variables={vars=vars,original=copy(vars)}}
+    profiling.stop('loading variable snapshots')
     if self:run(request,'actions') then
         vars._=nil
         self.config.vars=vars
+        profiling.start('loading reaction refresh')
         self:compileReactions()
+        profiling.stop('loading reaction refresh')
     end
 end
 -- Observed transitions are independent notifications, not cancellable actions.

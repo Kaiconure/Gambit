@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Own equipment state/listeners for normal actions and event handlers alike.
 local Queue=require('./lib/equipment/queue')
 local Locks=require('./lib/equipment/locks')
@@ -7,19 +8,25 @@ Service.__index=Service
 local fields={'main','sub','range','ammo','head','body','hands','legs','feet','neck','waist',
     'left_ear','right_ear','left_ring','right_ring','back'}
 function Service.new(deps)
+    profiling.start('equipment readiness checks')
     local self=setmetatable({deps=deps,listeners={}},Service)
     local ffxi=deps.windower.ffxi
     if ffxi.get_player and ffxi.get_mob_by_target then
         local player=ffxi.get_player()
         local mob=ffxi.get_mob_by_target('me')
         local info=ffxi.get_info and ffxi.get_info()
+        profiling.start('equipment initial get_items')
         local items=ffxi.get_items()
+        profiling.stop('equipment initial get_items')
         if not player or not mob or mob.id~=player.id or not mob.valid_target
             or (info and info.logged_in==false) or not items or not items.equipment then
             self.zoneLoading=true; self.zoneArrived=true
         end
     end
+    profiling.stop('equipment readiness checks')
+    profiling.start('equipment lock initialization')
     self.locks=Locks.new({context=deps.context or function() end,report=deps.report})
+    profiling.stop('equipment lock initialization')
     local function identity(slot,bag,index,items)
         if index==0 then return {localId=0,bagId=0,id=0} end
         local item=items and deps.inventory.get_item_from_bag(items,bag,index)
@@ -27,6 +34,8 @@ function Service.new(deps)
         -- not arrived yet. Inventory supplies identity, not the equipped slot.
         return {localId=index,bagId=bag,id=item and item.id}
     end
+    profiling.start('equipment queue creation and bootstrap (inclusive)')
+    local initializing=true
     self.queue=Queue.new({clock=deps.clock or os.clock,report=deps.report,
         ready=function() return self:canEquip() and not self.zoneLoading end,
         ackTimeout=function()
@@ -46,7 +55,10 @@ function Service.new(deps)
         observed=function(slot,item) self.locks:observe(slot,item) end,
         failed=function(slot,item) self.locks:failed(slot,item) end,
         read=function()
+            if initializing then profiling.start('equipment baseline get_items') end
             local items=deps.windower.ffxi.get_items()
+            if initializing then profiling.stop('equipment baseline get_items') end
+            if initializing then profiling.start('equipment baseline slot identities') end
             local result={}
             if items and items.equipment then
                 for slot=0,15 do
@@ -57,6 +69,7 @@ function Service.new(deps)
                     end
                 end
             end
+            if initializing then profiling.stop('equipment baseline slot identities') end
             return result
         end,
         valid=function(item)
@@ -71,6 +84,9 @@ function Service.new(deps)
                     ['Item Index']=item.localId,['Equip Slot']=slot,['Bag']=item.bagId}))
             else deps.windower.ffxi.set_equip(item.localId,slot,item.bagId) end
         end})
+    initializing=false
+    profiling.stop('equipment queue creation and bootstrap (inclusive)')
+    profiling.start('equipment listener registration')
     local function listen(name,fn) self.listeners[#self.listeners+1]=deps.windower.register_event(name,fn) end
     listen('gain buff',function(id)
         if self:isEncumbrance(id) then self:setEncumbered(true) end
@@ -168,6 +184,7 @@ function Service.new(deps)
         self.zoneArrived=true; self.zoneReadySince=nil
     end)
     listen('job change',function() self:resync() end)
+    profiling.stop('equipment listener registration')
     return self
 end
 function Service:snapshot(items,confirmed)

@@ -15,6 +15,16 @@ local function satisfied(actor,me,minimum,spec,tolerance)
     local x,y=positionAt(actor,angle,distance)
     return (me.x-x)^2+(me.y-y)^2<=tolerance^2,distance
 end
+-- Use the same live geometry for dispatch guards and movement planning. This
+-- also covers pauses between slices and a target turning after we arrived.
+function M.needsMovement(request,deps)
+    local actor=deps.mob(request.actor.id)
+    local me=deps.me and deps.me()
+    if not actor or actor.valid_target==false or actor.hpp==0 then return false end
+    if not me or actor.x==nil or actor.y==nil or me.x==nil or me.y==nil then return true end
+    return not satisfied(actor,me,request.options.distance,
+        require('./lib/reaction-options').angle(request.options),deps.tolerance or 0.33)
+end
 function M.run(deps)
     reactions.tick(true)
     local request=reactions.distanceRequest()

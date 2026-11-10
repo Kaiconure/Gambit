@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Priority exists only while loading. Runtime vars contain ordinary values.
 local loader = {}
 local expandKeys=require('./lib/variable-key-expansion')
@@ -189,6 +190,7 @@ function loader.new(warn, sourceRank)
     end
     return {
         merge = function(original, incoming, source, priority)
+            profiling.start('variable merges')
             if original and incoming then
                 rank=sourceRank and sourceRank(source) or 0
                 local expanded = expandKeys(incoming,priority or 0,tostring(source or 'vars'))
@@ -197,6 +199,7 @@ function loader.new(warn, sourceRank)
                 merge(original, expanded, root, source, priority or 0, '')
                 render(original, root, '')
             end
+            profiling.stop('variable merges')
         end,
     }
 end

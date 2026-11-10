@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 local NumberToRoman = {
     'I',
     'II',
@@ -99,7 +100,7 @@ end
 -- include misses, so unavailable abilities do not repeatedly scan item names.
 local resourceNameCaches=setmetatable({}, {__mode='k'})
 local RESOURCE_NAME_CACHE_LIMIT=1024
-function findResourceByName(res, name, language)
+function findResourceByName(res, name, language, index)
     if type(res) ~= 'table' then return end
     --if type(name) == 'table' and name.name then name = name.name end
 
@@ -138,7 +139,12 @@ function findResourceByName(res, name, language)
     local cached=cache.names[name]
     if cached~=nil then return cached or nil end
 
-    local result=tableFirst(res, function (res) return matchFn(res, name) end)
+    local result=index and index.lookup(res,name,mode,matchFn)
+    if not result then
+        local started=profiling.now()
+        result=tableFirst(res, function (res) return matchFn(res, name) end)
+        if index then profiling.sample('equipment resource fallback scan',started) end
+    end
     local evicted=cache.order[cache.next]
     if evicted~=nil then cache.names[evicted]=nil end
     cache.order[cache.next]=name
@@ -176,7 +182,10 @@ end
 --------------------------------------------------------------------------------------
 --
 function findItem(name)
-    return findResourceByName(resources.items, name)
+    profiling.start('equipment item resource access')
+    local items=resources.items
+    profiling.stop('equipment item resource access')
+    return profiling.measure('equipment item name/id lookup',findResourceByName,items,name,nil,require('./lib/item-name-index'))
 end
 
 --------------------------------------------------------------------------------------
