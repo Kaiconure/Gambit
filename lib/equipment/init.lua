@@ -28,7 +28,7 @@ function Service.new(deps)
         return {localId=index,bagId=bag,id=item and item.id}
     end
     self.queue=Queue.new({clock=deps.clock or os.clock,report=deps.report,
-        ready=function() return not self.zoneLoading end,
+        ready=function() return self:canEquip() and not self.zoneLoading end,
         ackTimeout=function()
             local now=(deps.clock or os.clock)()
             return self.zoneAckGraceUntil and now<=self.zoneAckGraceUntil and 6 or 2.25
@@ -72,6 +72,12 @@ function Service.new(deps)
             else deps.windower.ffxi.set_equip(item.localId,slot,item.bagId) end
         end})
     local function listen(name,fn) self.listeners[#self.listeners+1]=deps.windower.register_event(name,fn) end
+    listen('gain buff',function(id)
+        if self:isEncumbrance(id) then self:setEncumbered(true) end
+    end)
+    listen('lose buff',function(id)
+        if self:isEncumbrance(id) then self:setEncumbered(false) end
+    end)
     listen('outgoing chunk',function(id,original,modified,injected,blocked)
         if not trace.active() or (id~=0x050 and id~=0x051) then return end
         local data=modified or original
@@ -89,6 +95,8 @@ function Service.new(deps)
             injected=not not injected,blocked_on_entry=not not blocked,items=entries})
     end)
     listen('prerender',function()
+        local live=self:liveEncumbered()
+        if live~=nil then self:setEncumbered(live) end
         if self.zoneLoading and self.zoneArrived then
             local ffxi=deps.windower.ffxi
             local player=ffxi.get_player and ffxi.get_player()
@@ -111,6 +119,11 @@ function Service.new(deps)
             else
                 self.zoneReadySince=nil
             end
+        end
+        if self.restorePending and self:isReady() and self:canEquip() then
+            self.restorePending=nil
+            self:resync()
+            if deps.restoreGear then deps.restoreGear() end
         end
         self.queue:tick()
     end)
@@ -141,6 +154,7 @@ function Service.new(deps)
         end
     end)
     listen('logout',function()
+        self.encumbered=nil; self.restorePending=nil
         self.zoneLoading=true; self.zoneArrived=true; self.zoneReadySince=nil
         self.locks:clear(); self.queue:clear()
     end)
@@ -168,12 +182,38 @@ function Service:snapshot(items,confirmed)
     return result
 end
 function Service:slotField(slot) return fields[slot+1] end
+function Service:isEncumbrance(id)
+    local resource=self.deps.resources and self.deps.resources.buffs and self.deps.resources.buffs[id]
+    local name=resource and (resource.en or resource.name)
+    return name and name:lower()=='encumbrance' or false
+end
+function Service:liveEncumbered()
+    local player=self.deps.windower.ffxi.get_player and self.deps.windower.ffxi.get_player()
+    if not player or not player.buffs then return nil end
+    for _,id in ipairs(player.buffs) do if self:isEncumbrance(id) then return true end end
+    return false
+end
+function Service:setEncumbered(value)
+    if value==self.encumbered then return end
+    local previous=self.encumbered
+    self.encumbered=value
+    if value then
+        self.equipmentEpoch=(self.equipmentEpoch or 0)+1
+        self.restorePending=nil
+        self.locks:clear()
+        self.queue:resync()
+    elseif previous then self.restorePending=true end
+end
+function Service:canEquip()
+    if self:liveEncumbered() then self:setEncumbered(true) end
+    return not self.encumbered
+end
 function Service:isReady() return not self.zoneLoading and not self.queue.clearing end
 function Service:resync() self.locks:clear(); return self.queue:resync() end
 function Service:clearLocks() self.locks:clear() end
 function Service:session() return require('./lib/equipment/session').new(self,self.deps.inventory) end
 function Service:submit(ops)
-    if self.queue.clearing then return 0 end
+    if self.queue.clearing or not self:canEquip() then return 0 end
     ops=self.locks:filter(ops)
     for slot,item in pairs(self.queue:view(true)) do self.locks:observe(slot,item) end
     local current=self.queue:view()

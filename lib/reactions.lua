@@ -19,6 +19,8 @@ end
 function M.clear(reason)
     for _,hold in pairs(holds or {}) do trace('end',hold,'reason='..(reason or 'cleared')) end
     if movement and deps and deps.cancelReactionMovement then deps.cancelReactionMovement(movement.jobId) end
+    if deps and deps.movement then require('./lib/reaction-movement').reset() end
+    if deps and deps.releaseMovement then deps.releaseMovement() end
     movement=nil
     holds={};sequence=sequence or 0;lastTick=nil;lastUnlock=nil;lastFacing=nil
 end
@@ -59,6 +61,8 @@ function M.tick(force)
         end
     end
     local request=M.distanceRequest()
+    -- Own the entire hold, including safe positions and gaps between slices.
+    if M.blocksMovement() and deps.acquireMovement and not deps.acquireMovement() then return end
     if movement and (not request or request.sequence~=movement.sequence) then
         if deps.cancelReactionMovement then deps.cancelReactionMovement(movement.jobId) end
         movement=nil
@@ -75,7 +79,10 @@ function M.tick(force)
         deps.restore(lastFacing)
         lastFacing=nil
     end
+    if deps.movement then require('./lib/reaction-movement').pulse(deps.movement) end
+    if not M.blocksMovement() and deps.releaseMovement then deps.releaseMovement() end
 end
+function M.immediateMovement() return deps and deps.movement~=nil end
 function M.faceAway(event,options)
     if not deps or not deps.enabled() then return false end
     assert(event and event.actor and event.actor.id and event.kind and event.id,'Face-away requires an enemy event')
@@ -91,6 +98,12 @@ function M.faceAway(event,options)
     end
     -- Repeated readying packets must not extend a live request indefinitely.
     if holds[id] and not holds[id].release_at then return true end
+    if options.angle~=nil and options.distance==nil then
+        local actor=deps.mob(event.actor.id)
+        local me=deps.me and deps.me()
+        if not actor or not me or actor.x==nil or actor.y==nil or me.x==nil or me.y==nil then return false end
+        options.distance=math.sqrt((me.x-actor.x)^2+(me.y-actor.y)^2)
+    end
     sequence=sequence+1
     holds[id]={actor=copy(event.actor),kind=event.kind,id=event.id,name=event.name,options=options,
         zone=deps.zone(),expires=timeout and now+timeout or nil,wait=wait,sequence=sequence}

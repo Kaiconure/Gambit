@@ -1142,7 +1142,7 @@ function cr_actionProcessor()
                     if not globals.enabled then
                         local existingJobId = smartMove:getJobId()
                         if existingJobId then
-                            smartMove:cancelJob()
+                            smartMove:stop()
                         end
                     end
                 end

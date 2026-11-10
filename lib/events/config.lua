@@ -65,7 +65,7 @@ local function compileRule(rule,label,contributed,sourcePath)
         conditions=not rule.disabled and expressions(rule.when,label..'.when') or {},
         commands=not rule.disabled and expressions(rule.commands,label..'.commands') or {}}
 end
-function Config.load(paths,read,warn,matchesRequired,entryName)
+function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
     local result={vars={},rules={},files={},vars_files={}}
     local inlineVars={}
     local layouts={}
@@ -129,9 +129,9 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
             end
         end
     end
-    -- Highest specificity first: the shared loader preserves earlier values at
-    -- equal priority, while ! and ^ explicitly override ordinary precedence.
-    local variables=variableLoader.new(warn)
+    -- Preserve discovery order within a namespace; namespace proximity breaks
+    -- equal-priority ties independently of when imported vars are discovered.
+    local variables=variableLoader.new(warn,sourceRank)
     local variablePaths,seenVariables={},{}
     local function addVariables(path)
         if not seenVariables[path] then

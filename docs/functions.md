@@ -257,9 +257,15 @@ Set `vars.frontline_engagement.distance_priority` to `true` to enforce the assig
 | `"face"`, `"front"`, `"facing"` | Aliases for numeric `0`, using the normal positional tolerance and exact-angle timeout. |
 | `"frontside"` | 0° ± 30°. |
 | `"backside"` | 180° ± 30°. This is a positioning region, not a guarantee that positional ability requirements are met. |
-| `"left"` | 90° ± 30°, relative to the target. |
-| `"right"` | -90° ± 30°, relative to the target. |
+| `"left"` | -90 degrees +/- 30 degrees, relative to the target. |
+| `"right"` | 90 degrees +/- 30 degrees, relative to the target. |
 | `"side"` | Either the left or right region. |
+| `"lefter"` | -90 degrees +/- 5 degrees: a tighter left region. |
+| `"righter"` | 90 degrees +/- 5 degrees: a tighter right region. |
+| `"sider"` | Either tight side region: -90 or 90 degrees +/- 5 degrees. |
+| `"fore"` | 0 degrees +/- 10 degrees: a tighter front region. |
+| `"aft"` | 180 degrees +/- 15 degrees: a tighter rear region. |
+| `"aside"` | 180 degrees +/- 100 degrees: angles 80 through 280 degrees, excluding the front 160-degree sector. |
 | `"180+/-30"` | A center and half-width, from 0 through 180 degrees of half-width. |
 | `"150-210"` | An arc from the first angle to the second in increasing angle order. Wraparound works: `"330-30"` crosses zero. A span of 360° permits the full circle. |
 
@@ -298,6 +304,59 @@ For longer runs in one encounter, for example:
 `duration` still limits the whole attempt, so an exact-angle default budget of three seconds cannot permit a five-second slice. Set both slice bounds to 1 to restore fixed one-second slices. Bounds are clamped to at least 0.1 seconds, and the maximum cannot be below the minimum. Distributed alignment uses these bounds automatically; other alignment callers use them only when supplied in their options object.
 
 For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
+
+## Immediate frontline positioning
+
+`applyEngagement(options, model)` aligns using an object
+with the same positioning fields as `vars.frontline_engagement`: distance, offset, angle, radius multiplier, tolerance,
+and movement options, then faces the enemy. It runs in the calling action's
+coroutine before subsequent actions; it does not wait for the frontline import's
+initial delay or require you to be within melee distance first. It respects
+movement reservations, reaction ownership, and effects that prevent movement.
+It applies positioning rather than the import's camp or trust-engagement rules.
+It does not asynchronously preempt an action already executing.
+
+Pass `vars.frontline_engagement`, `vars.member_engagement`, or a separate configuration such as
+`vars.secondary_engagement`. The supplied object is copied and is not modified;
+existing `arrived` flags do not skip the requested positioning. Omitting the
+arguments uses `vars.dynamic_engagement.model` (falling back to `"frontline"`)
+and that model's corresponding configuration. An explicit model selects its
+configuration when options are omitted. Unknown models are rejected.
+`"member"` selects a living party member using `targets` and `max_distance`,
+excludes yourself, accepts already being closer than distance plus tolerance,
+and never forces facing or requires a battle target. `"frontline"` positions
+relative to the battle target. The stock `dynamic-engagement` import supplies
+both libraries and their defaults; namespace overrides still take precedence.
+`frontlineEngage()` remains a wrapper
+that also updates the ordinary frontline `_distance` and `arrived` state.
+
+For one successful initial alignment per battle:
+
+```json
+"contributions": {
+  "battle-priority": [
+    {
+      "when": ["bt and bt.valid_target"],
+      "commands": ["applyEngagement()"],
+      "scope": "battle",
+      "frequency": "infinity",
+      "delay": 0
+    }
+  ]
+}
+```
+
+The helper returns true on successful alignment, or false and a reason on
+failure. It makes one bounded attempt without marking the caller incomplete or
+automatically scheduling retries. The caller owns retry policy. Ordinary frontline
+rules can continue maintaining positioning afterward.
+
+The root `boss` namespace contributes a high-priority initial attempt to both
+`pull-priority` and `battle-priority`, once per phase per battle scope. It uses
+action-local `with_vars` overrides to set both models' duration to five seconds.
+Set `vars.setup.force_initial_positioning` to false to opt out. Normal engagement
+durations remain unchanged; failure allows later actions, including healing,
+to proceed instead of automatically retrying this setup action.
 
 ## Party-distributed alignment
 
@@ -404,6 +463,17 @@ and retains the reservation. Partial progress returns false, retains the lease,
 and postpones briefly. Missing/invalid targets, movement-blocking statuses, and
 other failures release the reservation and back off. The caller must pass nil
 when target selection fails, rather than short-circuiting before the helper.
+
+Rolls use `approachWithReservation(target, distance, options)` instead. It makes
+a direct, bounded approach to the selected recipient and stops as soon as the
+live raw center distance is within `options.range`. It refreshes the destination
+when the recipient moves, never requests an angle, and never moves away when
+already in range. `distance` is the near-side destination radius, with a small
+margin inside `range` for movement arrival tolerance; model-size adjustments do
+not inflate it. `duration` bounds the approach attempt. Successful approaches
+retain the roll reservation for Double-Up; timeout/cancellation releases it
+recoverably and uses `retry_delay`. Immobilization uses `progress_retry_delay`.
+Reaction movement ownership can preempt the approach.
 Callers acquire/resume reservations separately; this helper never acquires or
 extends them, even when the selected target changes. Roll actions use this helper
 after resolving their party anchor on each attempt.

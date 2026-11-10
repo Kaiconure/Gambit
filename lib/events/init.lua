@@ -118,7 +118,10 @@ function Service:reload(outputProcessed,entryName)
     local groups=selectors.entryPointGroups(player.main_job,party.party1_leader==player.id)
     local config=Config.load(paths.eventFiles(player.name,player.main_job,groups),read,deps.report,function(required)
         return selectors.matchesPlayer(player,required,party.party1_leader==player.id)
-    end,entryName)
+    end,entryName,function(source)
+        return math.floor(require('./lib/action-slots').priority(source or '',
+            paths.getLoadedPrecedence(),player.name,player.main_job)/10)
+    end)
     if outputProcessed and config.path and deps.writeProcessed then
         local name=config.path:match('([^/]+)%.json$') or player.main_job:lower()
         local outputPath=paths.writePath(player.name,'.output/'..name..'.events.processed.json')

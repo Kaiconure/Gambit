@@ -179,7 +179,7 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 | `align -cancel` | Cancel smart movement. Alias: `-c`. |
 | `touch -t` | Interact with the selected entity. Also accepts `-name <name>` (`-n`) or `-id <id>`. |
 | `tap -t` | Interact, then press Escape twice to leave dialog/clear selection. Also accepts `-name <name>` or `-id <id>`. |
-| `sendkey <key> [key ...]` | Send a sequence of Windower key names. Alias: `sk`. |
+| `sendkey [<count>x] <key> ...` | Send a sequence of Windower key names. An explicit multiplier applies only to the next key; bare numbers remain key names. Alias: `sk`. |
 
 `touch` and `tap` operate at close range (the helpers default to 6 yalms); they do not automatically approach distant targets. Both accept `-all` to forward the interaction through the external Send addon to all characters. Without a target option, they do nothing.
 
@@ -191,6 +191,8 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 //gbt move -x 12.5 -y -40
 //gbt touch -name "Home Point"
 //gbt sendkey escape escape
+//gbt sendkey 3x down enter
+//gbt sendkey 3 enter
 ```
 
 ## Named functions

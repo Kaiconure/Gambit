@@ -404,3 +404,17 @@ local repeatedInline={battle={{import='inline-library'},{import='inline-library'
 load('Tester',repeatedInline,player,'entry')
 assert(#repeatedInline.battle==2) -- Same source contribution is not registered twice.
 print('PASS: inline slot imports, inherited preconditions/scopes and repeated-library contribution deduplication')
+
+-- Reproduce a role-common file's nested setup import arriving after ancestor
+-- job-common vars. Proximity must win without moving the vars or using !.
+env.settingsPaths.commonFiles=function()return {
+ './settings/namespaces/base/actions/lib/common/whm.json',
+ './settings/namespaces/child/actions/lib/common/(mages).json'}end
+documents['./settings/namespaces/base/actions/lib/common/whm.json']={vars={frontline_engagement={distance=12}}}
+documents['./settings/namespaces/child/actions/lib/common/(mages).json']={imports={
+ './settings/namespaces/child/actions/lib/setup/use-spacing.json'}}
+documents['./settings/namespaces/child/actions/lib/setup/use-spacing.json']={vars={frontline_engagement={distance=17}}}
+local nestedPrecedence={}
+load('Tester',nestedPrecedence,player,'./settings/namespaces/child/actions/whm.json')
+assert(nestedPrecedence.vars.frontline_engagement.distance==17)
+print('PASS: real import loader gives late child setup vars precedence over ancestor common vars')

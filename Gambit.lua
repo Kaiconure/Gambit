@@ -386,6 +386,9 @@ windower.register_event('zone change', function(zone_id)
         return
     end
 
+    require('./lib/reactions').clear('zone changed')
+    smartMove:stop()
+
     -- Store the new zone
     globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil
     globals.zoneEntryTime = os.clock()
@@ -430,7 +433,16 @@ windower.register_event('load', function()
     initTrustData()
 
     globals.equipment_manager = require('./lib/equipment/init').new({
-        windower=windower,inventory=inventory,packets=packets,
+        windower=windower,inventory=inventory,packets=packets,resources=resources,
+        restoreGear=function()
+            local runtime=globals.event_system and globals.event_system.runtime
+            local player=windower.ffxi.get_player()
+            local category=player and (player.status==1 and 'battle' or player.status==0 and 'idle')
+            if not runtime or not category then return end
+            local vars=runtime:eventVariables()
+            local context=ActionContext.createTemporary('encumbrance removed',{vars=vars,original=runtime.config.vars})
+            if context and vars.gear and vars.gear[category] then context.equipMany(vars.gear[category]) end
+        end,
         context=ActionContext.createTemporary,
         report=function(message) writeError('[equipment] '..message) end,
         debug=function(message) writeDebug(message) end,
@@ -438,16 +450,39 @@ windower.register_event('load', function()
         formatCount=function(count) return text_number(count, Colors.debug) end,
     })
     inventory.equipment_manager=globals.equipment_manager
+    local reactionMovementOwner={}
     globals.event_system = require('./lib/events/init').new({
         reactions={
+            acquireMovement=function() return smartMove:acquireMovement(reactionMovementOwner) end,
+            releaseMovement=function() smartMove:releaseMovement(reactionMovementOwner) end,
+            movement={
+                available=function()
+                    local player=windower.ffxi.get_player()
+                    if not globals.enabled or not globals.logged_in or globals.actionsEnabled==false
+                        or not player or (player.status~=0 and player.status~=1) then return false end
+                    local blocked={Bind=true,Sleep=true,Stun=true,Petrification=true,Terror=true}
+                    for _,id in ipairs(player.buffs or {}) do
+                        local buff=resources.buffs[id]
+                        if buff and blocked[buff.en or buff.name] then return false end
+                    end
+                    return true
+                end,
+                mob=windower.ffxi.get_mob_by_id,
+                me=function() return windower.ffxi.get_mob_by_target('me') end,
+                start=function(x,y) return smartMove:moveTo(x,y,true,reactionMovementOwner) end,
+                cancel=function(id) smartMove:cancelJob(id,true,reactionMovementOwner) end,
+                job=function(id) return smartMove:getJobInfo(id,true) end,
+                clock=os.clock,tolerance=smartMove.tolerance,
+            },
             log=function(message) print(message) end,
             clock=os.clock,
             enabled=function() return globals.enabled and globals.logged_in end,
             player=windower.ffxi.get_player,
+            me=function() return windower.ffxi.get_mob_by_target('me') end,
             mob=windower.ffxi.get_mob_by_id,
             zone=function() local info=windower.ffxi.get_info();return info and info.zone end,
-            cancelMovement=function() smartMove:cancelJob(nil,true) end,
-            cancelReactionMovement=function(jobId) smartMove:cancelJob(jobId,true) end,
+            cancelMovement=function() smartMove:cancelJob(nil,true,reactionMovementOwner) end,
+            cancelReactionMovement=function(jobId) smartMove:cancelJob(jobId,true,reactionMovementOwner) end,
             unlock=function() windower.send_command('input /lockon') end,
             faceAway=function(target) directionality.faceAwayFromTarget(target) end,
             restore=function(id)

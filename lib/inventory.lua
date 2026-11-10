@@ -282,6 +282,8 @@ local function equipment_requirements()
 end
 
 inventory.equip_many = function(pieces, all_items, simulate, changes, session)
+    local manager=session or inventory.equipment_manager
+    if manager and manager.canEquip and not manager:canEquip() then return 0 end
     -- Set-level metadata belongs to callers, not slot resolution.
     if pieces.meta~=nil then
         local equipment={}
@@ -466,6 +468,8 @@ inventory.snapshot_equipment = function(session)
 end
 
 inventory.restore_equipment = function(removed,session)
+    local manager=session or inventory.equipment_manager
+    if manager and manager.canEquip and not manager:canEquip() then return 0 end
     local items=windower.ffxi.get_items()
     if not items then return 0 end
     local count=0

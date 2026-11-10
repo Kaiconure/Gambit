@@ -31,10 +31,12 @@
     "close_skillchain": [
       "logf('Preparing to close SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
       "waitSkillchainWithAbility() and useAbility(me)",
+      "facingEnemy() or (faceEnemy() and wait(0.5))",
       "useWeaponSkill()"
     ],
     "open_skillchain": [
       "logf('Preparing to open SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
+      "facingEnemy() or (faceEnemy() and wait(0.5))",
       "recastReady(ability_recast) and useAbility() and wait(0.5)",
       "useWeaponSkill()"
     ],

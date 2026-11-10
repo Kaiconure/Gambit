@@ -2,10 +2,11 @@
 local loader = {}
 local expandKeys=require('./lib/variable-key-expansion')
 
-local function protected(node, priority)
-    if node.priority ~= nil and node.priority >= priority then return true end
+local function protected(node, priority, rank)
+    if node.priority ~= nil and (node.priority > priority or
+        node.priority == priority and (node.rank or 0) <= rank) then return true end
     for _, child in pairs(node.children or {}) do
-        if protected(child, priority) then return true end
+        if protected(child, priority, rank) then return true end
     end
     return false
 end
@@ -42,9 +43,10 @@ local function isArray(value)
     return count == #value
 end
 
-function loader.new(warn)
+function loader.new(warn, sourceRank)
     local root = {children = {}}
     local order = 0
+    local rank = 0
     -- Array operations are overlays, not replacement values. Restore the base
     -- before each layer so child operations do not hide an inherited base.
     local function restore(original, node)
@@ -63,14 +65,15 @@ function loader.new(warn)
                 -- At equal priority in one layer, removal wins over append.
                 table.sort(child.operations, function(a,b)
                     if a.priority ~= b.priority then return a.priority < b.priority end
+                    if a.rank ~= b.rank then return a.rank > b.rank end
                     if a.order ~= b.order then return a.order > b.order end
                     return a.kind < b.kind
                 end)
                 for _, operation in ipairs(child.operations) do
                     local priority = child.priority
                     local allowed = priority == nil or operation.priority > priority
-                        or operation.priority == priority and
-                            (not child.cleared or operation.order < child.order)
+                        or operation.priority == priority and operation.rank <= (child.rank or 0) and
+                            (not child.cleared or operation.rank < (child.rank or 0) or operation.order < child.order)
                     if allowed then
                         if original[key] ~= nil and not isArray(original[key]) then
                             if warn and not operation.warned then
@@ -136,7 +139,7 @@ function loader.new(warn)
                     if warn then warn('array.' .. operation .. '(' .. target .. ') requires an array in ' .. tostring(source)) end
                 else
                     child.operations = child.operations or {}
-                    child.operations[#child.operations+1] = {kind=operation,values=copy(value),priority=priority,source=source,order=order}
+                    child.operations[#child.operations+1] = {kind=operation,values=copy(value),priority=priority,source=source,order=order,rank=rank}
                 end
             else
                 local child = node.children[key] or {}
@@ -153,17 +156,20 @@ function loader.new(warn)
                 else
                     local replacement = value
                     if empty then replacement = {} elseif null then replacement = nil end
-                    local blocked = protected(child, priority)
+                    local blocked = protected(child, priority, rank)
                     if priority == 1 and blocked then
                         if not equal(original[key], replacement) and warn then
                             -- DON'T PRINT A WARNING FOR NOW
                             -- warn('Conflicting prioritized variable ' .. name .. ' in ' .. tostring(source) ..
                             --     '; keeping earlier prioritized definition (' .. tostring(child.source or 'nested definition') .. ').')
                         end
-                    elseif not blocked and (priority > (child.priority or -math.huge) or empty or null or original[key] == nil) then
+                    elseif not blocked and (priority > (child.priority or -math.huge)
+                        or priority == child.priority and rank < (child.rank or 0)
+                        or empty or null or original[key] == nil) then
                         original[key] = copy(replacement)
                         child.priority = priority
                         child.source = source
+                        child.rank = rank
                         child.order = order
                         child.children = nil
                         child.cleared = (empty or null) or nil
@@ -184,6 +190,7 @@ function loader.new(warn)
     return {
         merge = function(original, incoming, source, priority)
             if original and incoming then
+                rank=sourceRank and sourceRank(source) or 0
                 local expanded = expandKeys(incoming,priority or 0,tostring(source or 'vars'))
                 order = order + 1
                 restore(original, root)

@@ -24,6 +24,12 @@ Gambit's normal actions and event rules share one equipment manager under
 `equipPop` calls keep their input formats. A successful call means changes were
 requested, not that the server has confirmed them.
 
+While Encumbrance is active, the shared manager rejects gear changes, including
+event-phase plans and equipment restoration. Queued swaps are discarded rather
+than retried or replayed after the effect ends. On removal, Gambit refreshes its
+equipment snapshot and requests the configured battle or idle set for the
+character's current status, without rerunning battle/idle entry commands.
+
 ## Equipment views
 
 ### Conditional slot locks

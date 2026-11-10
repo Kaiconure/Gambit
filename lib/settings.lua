@@ -419,7 +419,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                             if import then
                                 baseActions._slots.collect(import, fileName, action)
                                 --
-                                -- Pull in any variables defined in this import. Existing values are not overwritten.
+                                -- Merge by explicit priority, then defining namespace.
                                 if import.vars then
                                     variables.merge(baseActions.vars, import.vars, fileName)
                                 end
@@ -776,8 +776,12 @@ local function loadActionImports(playerName, actions, player, sourceFile)
     -- Keep importing actions until there are no more to pull in. This is to ensure that
     -- imports which have their own imports will work.
     if actions then
-        local variables = variableLoader.new(writeWarning)
         local precedence = settingsPaths.getLoadedPrecedence()
+        local variables = variableLoader.new(writeWarning,function(source)
+            -- Ignore file specificity here: preserve discovery order within a
+            -- namespace, but never let late imports lose to ancestor defaults.
+            return math.floor(actionSlots.priority(source or '',precedence,playerName,player.main_job)/10)
+        end)
         actions._slots = actionSlots.new(actions, function(source)
             return actionSlots.priority(source, precedence, playerName, player.main_job)
         end, writeWarning, function(selectors)

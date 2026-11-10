@@ -17,6 +17,7 @@ local named = {
     right={{90, 30}},
     lefter={{-90, 5}},      -- Lefter/righter: Left and right, but with tighter constraints
     righter={{90, 5}},
+    sider={{-90,5},{90,5}},
     aside={{180, 100}},     -- Anywhere except near the mob's front
     side={                  -- Side: Either left or right is acceptable
         {90, 30},

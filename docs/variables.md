@@ -4,6 +4,17 @@ Variables hold configuration and runtime state for Lua conditions and commands.
 Define them in JSON under `vars`, then read them through the context's `vars`
 object. Normal actions and events have separate variable stores.
 
+When assignments conflict, explicit variable priority is compared first:
+`!name` overrides ordinary `name`, which overrides fallback `^name`. At equal
+priority, a definition in the closest loaded namespace wins over its ancestors,
+regardless of import discovery order. This also applies to nested objects,
+array replacements/operations, and explicit clears. Within the same namespace
+layer, existing file/discovery ordering remains unchanged.
+
+The defining file determines namespace precedence. Importing a stock library
+from a derived namespace does not promote its defaults into that namespace.
+Action-local `with_vars` remains a separate override scope.
+
 ## Define and reference values
 
 An action file can define configuration alongside its actions:

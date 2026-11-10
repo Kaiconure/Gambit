@@ -506,6 +506,10 @@ local function sm_movement_exp(self, job)
 
     -- If there's a completion function, call it
     if self.shutting_down then return end
+    if self.cancel or not self:canMove(job.owner) then
+        windower.ffxi.run(false)
+        return
+    end
     if type(job.oncomplete) == 'function' then
         job:oncomplete()
     else
@@ -527,7 +531,7 @@ function sm_coroutine(self)
             self.queue = {}
         end
 
-        if job ~= nil and job:is_valid() then
+        if job ~= nil and self:canMove(job.owner) and job:is_valid() then
             self.current = job
 
             --if job.mode == Modes.position or job.mode == Modes.follow then
@@ -550,16 +554,17 @@ end
 
 -------------------------------------------------------------------------------
 -- Create the basic job entry
-local function sm_createBaseJob(self, mode, skipcancel)
-    if self.shutting_down then return end
+local function sm_createBaseJob(self, mode, skipcancel, owner)
+    if self.shutting_down or not self:canMove(owner) then return end
     local info = windower.ffxi.get_info()
     if type(info.zone) ~= 'number' or info.zone < 1 or resources.zones[info.zone] == nil then
         return nil
     end
 
     if not skipcancel then
-        self:cancelJob(nil, false)
+        self:cancelJob(nil, false, owner)
     end
+    if not self:canMove(owner) then return end
 
     local jobId = self.latestJobId + 1
     
@@ -574,6 +579,7 @@ local function sm_createBaseJob(self, mode, skipcancel)
         zone = info.zone,
         canJitter = true
     }
+    job.owner = owner
 
     -- By default, jobs will remain valid forever. This can be overridden by 
     -- the specific job type implementations.
@@ -584,7 +590,7 @@ local function sm_createBaseJob(self, mode, skipcancel)
         windower.ffxi.run(false)
         coroutine.sleep(0.125)
 
-        if smartMove.shutting_down then return end
+        if smartMove.shutting_down or smartMove.cancel or not smartMove:canMove(self.owner) then return end
 
         if self:is_valid() then
             local player = windower.ffxi.get_player()
@@ -618,6 +624,7 @@ local function sm_createBaseJob(self, mode, skipcancel)
                         
                         -- All of this is necessary because of some weirdness in the game actually honoring the
                         -- heading change request. TODO: Investigate why.
+                        if smartMove.cancel or not smartMove:canMove(self.owner) then return end
                         windower.ffxi.turn(heading)
                         coroutine.sleep(0.125)
 
@@ -638,6 +645,36 @@ end
 -- Exposed interface
 -- ======================================================================================
 
+-- A token grants exclusive movement access until explicitly released. Immediate
+-- execution controls yielding only; it never grants ownership privileges.
+function smartMove:canMove(owner)
+    return self.movementOwner==nil or self.movementOwner==owner
+end
+function smartMove:acquireMovement(owner)
+    assert(type(owner)=='table','Movement ownership requires a token')
+    if self.shutting_down or not self:canMove(owner) then return false end
+    if self.movementOwner==owner then return true end
+    self:cancelJob(nil,true)
+    self.previousJob=nil
+    self.movementOwner=owner
+    return true
+end
+function smartMove:releaseMovement(owner)
+    if self.movementOwner==nil or self.movementOwner~=owner then return false end
+    self:cancelJob(nil,true,owner)
+    self.previousJob=nil
+    self.movementOwner=nil
+    return true
+end
+-- Lifecycle cleanup always wins over ownership, without resuming saved jobs.
+function smartMove:stop()
+    self:cancelJob(nil,true,self.movementOwner)
+    self.movementOwner=nil
+    self.previousJob=nil
+    windower.ffxi.follow(-1)
+    windower.ffxi.run(false)
+end
+
 -------------------------------------------------------------------------------
 -- If there's a job running, this will cause its jitter tracker to reset.
 -- The result will be termination of any in-progress jitter, or a reset
@@ -651,6 +688,7 @@ end
 
 -- Terminal, non-yielding cleanup: movement state outlives Lua coroutines.
 function smartMove:shutdown()
+    self.movementOwner = nil
     self.shutting_down = true
     self.cancel = true
     self.queue = {}
@@ -662,8 +700,8 @@ end
 
 -------------------------------------------------------------------------------
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.
-function smartMove:cancelJob(jobId, immediate)
-    if self.shutting_down then return end
+function smartMove:cancelJob(jobId, immediate, owner)
+    if self.shutting_down or not self:canMove(owner) then return end
     -- Pending jobs have not become current yet, but must not start after the
     -- reaction or reservation that requested them has been cancelled.
     for i=#self.queue,1,-1 do
@@ -678,6 +716,7 @@ function smartMove:cancelJob(jobId, immediate)
     if canCancel then
         self.verbose('Cancelling: %s':format(job.description))
         self.cancel = true
+        if immediate then windower.ffxi.run(false) end
 
         if not immediate then
             -- If we weren't asked for an immediate exit, we'll wait for the job
@@ -709,18 +748,19 @@ end
 
 -------------------------------------------------------------------------------
 -- Returns the job id of the new item on success, or 0 on failure
-function smartMove:moveTo(x, y)
-    local job = sm_createBaseJob(self, Modes.position)
+function smartMove:moveTo(x, y, immediate, owner)
+    local job = sm_createBaseJob(self, Modes.position, immediate, owner)
     if not job then
         return
     end
 
     -- Cancel the current job
-    self:cancelJob()
+    self:cancelJob(nil, immediate, owner)
+    if not self:canMove(owner) then return end
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:moveTo(x, y)
+        return smartMove:moveTo(x, y, immediate, owner)
     end
 
     -- Fill in the new job details
@@ -739,12 +779,13 @@ function smartMove:moveTo(x, y)
     job.description = job.description .. ' (%.1f, %.1f)':format(x, y)
     
     -- Enqueue the new job. For now we only allow one item.
+    if not self:canMove(job.owner) then return end
     self.queue = { job }
 
     self.verbose('Requested: %s':format(job.description))
 
     -- Add a bit of sleep time to give the job a chance to pick up
-    coroutine.sleep(0.25)
+    if not immediate then coroutine.sleep(0.25) end
 
     return job.jobId
 end
@@ -791,14 +832,15 @@ end
 -----------------------------------------------------------------------------------------
 -- Move behind the mob, taking at most a given number of seconds. Use atMobRear to
 -- determine if the movement completed successfully.
-function smartMove:moveBehindMob(mob, maxDuration)
-    return self:moveBehindIndex(mob and mob.index or 0, maxDuration)
+function smartMove:moveBehindMob(mob, maxDuration, owner)
+    return self:moveBehindIndex(mob and mob.index or 0, maxDuration, owner)
 end
 
 -----------------------------------------------------------------------------------------
 -- Move behind the mob with the given index, taking at most a given number of seconds.
 -- Use atMobRear to determine if the movement completed successfully.
-function smartMove:moveBehindIndex(follow_index, maxDuration)
+function smartMove:moveBehindIndex(follow_index, maxDuration, owner)
+    if not self:canMove(owner) then return end
     -- Validate the target
     local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
@@ -806,7 +848,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     end
 
     -- Create and validate the basic job parameters
-    local job = sm_createBaseJob(self, Modes.backstab)
+    local job = sm_createBaseJob(self, Modes.backstab, false, owner)
     if not job then
         return
     end
@@ -822,7 +864,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:moveBehindIndex(follow_index)
+        return smartMove:moveBehindIndex(follow_index, maxDuration, owner)
     end
 
     -- Determine if the job is still valid
@@ -855,6 +897,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     job.description = job.description .. ' %d (%03X)':format(follow_index, follow_index)
     
     -- Enqueue the new job. For now we only allow one item.
+    if not self:canMove(job.owner) then return end
     self.queue = { job }
 
     self.verbose('Requested: %s':format(job.description))
@@ -865,15 +908,16 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     return job.jobId
 end
 
-function smartMove:followMob(mob, distance, options)
-    return self:followIndex(mob and mob.index or 0, distance, options)
+function smartMove:followMob(mob, distance, options, owner)
+    return self:followIndex(mob and mob.index or 0, distance, options, owner)
 end
 
 function smartMove:followDistance(mob, distance, options)
     return resolveDistance(mob, math.max(tonumber(distance) or 0, 0), options, 0.75)
 end
 
-function smartMove:followIndex(follow_index, distance, options)
+function smartMove:followIndex(follow_index, distance, options, owner)
+    if not self:canMove(owner) then return end
     -- Validate the target
     local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
@@ -892,13 +936,13 @@ function smartMove:followIndex(follow_index, distance, options)
     end
 
     -- Create and validate the basic job parameters
-    local job = sm_createBaseJob(self, Modes.follow)
+    local job = sm_createBaseJob(self, Modes.follow, false, owner)
     if not job then
         return
     end
 
     -- Cancel the current job
-    self:cancelJob()
+    self:cancelJob(nil, false, owner)
 
     -- Fill in the new job details
     
@@ -917,7 +961,7 @@ function smartMove:followIndex(follow_index, distance, options)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:followIndex(follow_index, requestedDistance, requestedOptions)
+        return smartMove:followIndex(follow_index, requestedDistance, requestedOptions, owner)
     end
 
     -- Determine if the job is still valid
@@ -1068,6 +1112,7 @@ function smartMove:followIndex(follow_index, distance, options)
     job.description = job.description .. ' %d (%03X)':format(follow_index, follow_index)
     
     -- Enqueue the new job. For now we only allow one item.
+    if not self:canMove(job.owner) then return end
     self.queue = { job }
 
     self.verbose('Requested: %s':format(job.description))
@@ -1087,10 +1132,10 @@ end
 ---------------------------------------------------------------------------------
 -- Reschedules the specified jobId. If no joIb is provided, the most recent
 -- job is scheduled automatically. Returns the new job id, or nil if none.
-function smartMove:reschedule(jobId)
-    if self.shutting_down then return end
+function smartMove:reschedule(jobId, owner)
+    if self.shutting_down or not self:canMove(owner) then return end
     local previousJob = self.previousJob
-    if previousJob then
+    if previousJob and previousJob.owner==owner then
         if jobId == nil or jobId == previousJob.jobId then
             if type(previousJob.reschedule) == 'function' then
                 return previousJob.reschedule()
@@ -1131,7 +1176,12 @@ function smartMove:setMobLookupFunctions(byId, byIndex)
     smartMove.getMobByIndex = byIndex or windower.ffxi.get_mob_by_index
 end
 
-function smartMove:getJobInfo(jobId)
+function smartMove:getJobInfo(jobId, includeQueued)
+    if includeQueued and jobId then
+        for _,job in ipairs(self.queue) do
+            if job.jobId==jobId then return {jobId=job.jobId,mode=job.mode,position=job:pos(),queued=true} end
+        end
+    end
     local current = self.current
     if current and (jobId == nil or jobId == current.jobId) then
         if current:is_valid() then

@@ -49,7 +49,7 @@ assert(#query(event('Bubble Shower',12,'Other'))==4)
 for _,invalid in ipairs({{{kind='invalid',names='Fire'}},{{start={},release={phase='mid'}}},{{names={true}}}})do
  assert(not pcall(Compiler.compile,invalid))
 end
-assert(not pcall(Compiler.compile,{{names='Ability',options={angle='rear'}}}))
+assert(Compiler.compile({{names='Ability',options={angle='rear'}}}))
 assert(not pcall(Compiler.compile,{{names='Ability',options={distance=20,angle='invalid'}}}))
 assert(Compiler.compile({{names='Ability',options={distance=20,angle='side'}}}))
 

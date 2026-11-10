@@ -18,10 +18,12 @@ local function compiled(code) return assert(loadstring('return '..code)) end
 local action={when='bad()',_whenFn=compiled('bad()'),importedFrom='heals/example',_errorLabel='battle[2]'}
 assert(not guard.when(action,context))
 assert(action._runtimeError.stage=='when' and #messages==1)
+assert(action._runtimeError.traceback:find('stack traceback:',1,true))
 assert(messages[1]:find('heals/example',1,true))
 assert(not guard.when(action,context) and #messages==1)
 assert(#entries==1 and entries[1]:find('Source: heals/example',1,true))
 assert(entries[1]:find('Expression:\nbad()',1,true))
+assert(entries[1]:find('stack traceback:',1,true))
 assert(action.disabled==nil)
 local normal={when='false',_whenFn=compiled('false')}
 assert(not guard.when(normal,context) and normal._runtimeError==nil)

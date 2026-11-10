@@ -8,7 +8,15 @@ for name, angle in pairs({rear=180,face=0,front=0,facing=0}) do
 end
 assert(contains('backside',180) and not contains('backside',0))
 assert(contains('frontside',350) and contains('330-30',0))
-assert(contains('left',90) and contains('right',-90))
+assert(contains('left',-90) and contains('right',90))
+for name,center in pairs({lefter=-90,righter=90}) do
+ assert(contains(name,center-5) and contains(name,center+5))
+ assert(not contains(name,center-6) and not contains(name,center+6))
+end
+assert(contains('sider',-95) and contains('sider',95) and not contains('sider',0))
+assert(contains('fore',350) and contains('fore',10) and not contains('fore',11))
+assert(contains('aft',165) and contains('aft',195) and not contains('aft',196))
+assert(contains('aside',80) and contains('aside',280) and not contains('aside',79) and not contains('aside',281))
 assert(contains('side',90) and contains('side',270) and not contains('side',180))
 assert(contains('180+/-30',150) and contains('150-210',210))
 assert(contains(nil,234) and contains(180,180) and not contains(180,181))

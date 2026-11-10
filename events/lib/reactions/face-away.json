@@ -56,22 +56,6 @@
           "names": "*",
           "options": { "wait": 2 }
         },
-        [
-          {
-            "key": "stock-urmahlullu-abilities",
-            "actor": "NO NO Urmahlullu",
-            "kind": "enemy_ability",
-            "names": "*",
-            "options": { "no_turn": true, "wait": 2 }
-          },
-          {
-            "key": "stock-urmahlullu-spells",
-            "actor": "NO NO Urmahlullu",
-            "kind": "enemy_spell",
-            "names": "*",
-            "options": { "no_turn": true, "wait": 2 }
-          }
-        ],
         {
           "key": "stock-gaze-abilities",
           "kind": "enemy_ability",
@@ -97,6 +81,13 @@
           "kind": "enemy_ability",
           "names": "Shah Mat",
           "options": { "wait": 6, "allow_offensive_magic": true }
+        },
+        {
+          "key": "stock-thar-she-blows",
+          "actor": "Shockmaw",
+          "kind": "enemy_ability",
+          "names": "Thar She Blows",
+          "options": { "wait": 3, "angle": "sider" }
         }
       ]
     }

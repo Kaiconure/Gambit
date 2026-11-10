@@ -1847,7 +1847,7 @@ local function initContextTargetSymbol(context, symbol, debug)
 
     symbol.in_spell_range   = symbol.center_distance <= 20
     symbol.in_ra_range      = symbol.center_distance <= 25
-    symbol.is_participant   = not symbol.is_dead and symbol.in_spell_range
+    symbol.is_participant   = not not symbol.valid_target and not symbol.is_dead and symbol.in_spell_range
     
     -- symbol.checkAbilityRange = function(ability)
     --     if type(ability) ~= 'table' then
@@ -2184,6 +2184,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return reactions.blocksAction('spell',resources.spells[id])
     end
     context.reactions.respond=function()
+        if reactions.immediateMovement() then return false end
         if not context_any(context.actionType,'idle','idle_battle','battle','pull') then return false end
         return require('./lib/reaction-movement').run({
             available=function()
@@ -2201,6 +2202,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         })
     end
     engagementHelpers.attach(context)
+    context.approachWithinRange = function(target,distance,options)
+        return require('./lib/approach-range').run(target,distance,options,{
+            available=function() return context.movementAvailable() and context.hasMovementReservation() end,
+            immobilized=function() return require('./lib/movement-afflictions').current(windower.ffxi) end,
+            mob=windower.ffxi.get_mob_by_id,
+            me=function() return windower.ffxi.get_mob_by_target('me') end,
+            start=function(x,y) return smartMove:moveTo(x,y,true) end,
+            cancel=function(id) smartMove:cancelJob(id,true) end,
+            job=function(id) return smartMove:getJobInfo(id,true) end,
+            clock=os.clock,sleep=coroutine.sleep,tolerance=smartMove.tolerance,
+        })
+    end
     context.settings = context.gambit
 
     local globalVars = variableState and variableState.vars or actionStateManager.vars

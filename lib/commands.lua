@@ -450,7 +450,8 @@ handlers['disable'] = function (args)
         end
     end
 
-    smartMove:cancelJob()
+    require('./lib/reactions').clear('automation disabled')
+    smartMove:stop()
 end
 
 -------------------------------------------------------------------------------
@@ -733,6 +734,25 @@ handlers['verbosity'] = function (args)
 end
 
 handlers['sendkey'] = function(args)
+    -- Explicit count tokens keep numeric key names unambiguous: "3" is a
+    -- key, whereas "3x down" repeats down three times.
+    local sequence = {}
+    local index = 1
+    while index <= #args do
+        local key = args[index]
+        local count = key:match('^(%d+)[xX]$')
+        if count then
+            count = tonumber(count)
+            index = index + 1
+            key = args[index]
+            if count < 1 or count == math.huge or not key or key:match('^%d+[xX]$') then
+                writeMessage('Invalid sendkey multiplier: use a positive count followed by a key, such as 3x down.')
+                return
+            end
+        end
+        sequence[#sequence + 1] = {key=key, count=count or 1}
+        index = index + 1
+    end
     -- This short sleep before the first key press ensures that we can use this command on ourselves, 
     -- even when manually typing out the command.
     coroutine.sleep(0.5)
@@ -740,10 +760,12 @@ handlers['sendkey'] = function(args)
     if #args > 0 then
         local all_keys = table.concat(args, ' ')
         writeMessage('Preparing to send key sequence: %s':format(text_yellow(all_keys)))
-        for i, key in ipairs(args) do
-            local command = 'setkey %s down; wait 0.1; setkey %s up; wait 0.1;':format(key, key)
-            windower.send_command(command)
-            coroutine.sleep(0.25)
+        for _, entry in ipairs(sequence) do
+            for repetition = 1, entry.count do
+                local command = 'setkey %s down; wait 0.1; setkey %s up; wait 0.1;':format(entry.key, entry.key)
+                windower.send_command(command)
+                coroutine.sleep(0.25)
+            end
         end
     end
 end

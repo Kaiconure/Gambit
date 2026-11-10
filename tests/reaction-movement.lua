@@ -1,6 +1,6 @@
 local reactions=require('./lib/reactions')
 local driver=require('./lib/reaction-movement')
-local now,me,actors,current,started,allowed,onSleep,onStart,turns,cancelled
+local now,me,actors,current,started,allowed,onSleep,onStart,turns,cancelled,reactionDeps
 local function reset()
  now=0;me={x=1,y=0,model_size=100};actors={
  [2]={id=2,index=2,x=0,y=0,heading=0,hpp=100,valid_target=true,model_size=100},
@@ -10,10 +10,11 @@ local function reset()
   cancelled[#cancelled+1]=id or 'all'
   if current and (not id or current.jobId==id)then current=nil end
  end
- reactions.attach({clock=function()return now end,player=function()return {vitals={hp=100}}end,
- enabled=function()return true end,zone=function()return 1 end,mob=function(id)return actors[id]end,
+ reactionDeps={clock=function()return now end,player=function()return {vitals={hp=100}}end,
+ enabled=function()return true end,zone=function()return 1 end,mob=function(id)return actors[id]end,me=function()return me end,
  cancelMovement=function()cancel(nil)end,cancelReactionMovement=cancel,
- unlock=function()end,faceAway=function()turns=turns+1 end,restore=function()end})
+ unlock=function()end,faceAway=function()turns=turns+1 end,restore=function()end}
+ reactions.attach(reactionDeps)
  return {available=function()return allowed end,me=function()return me end,mob=function(id)return actors[id]end,
  clock=function()return now end,cancel=cancel,job=function()return current end,
  start=function(x,y)
@@ -98,7 +99,40 @@ deps=reset();start(20,{angle='rear'})
 onSleep=function()me.x=25 end -- At safe distance, but on the wrong side.
 assert(driver.run(deps) and now>=0.5)
 assert(not pcall(start,20,{angle='invalid'}))
-assert(not pcall(reactions.faceAway,{actor={id=2,index=2},id=10,kind='enemy_ability'},{angle='rear'}))
+-- Angle-only holds capture raw horizontal radius at the trigger, before movement is available.
+deps=reset();me.x=12;me.y=5;allowed=false
+start(nil,{angle='rear',no_turn=true})
+assert(reactions.distanceRequest().options.distance==13 and reactions.blocksMovement())
+assert(not driver.run(deps))
+me.x=20;me.y=0
+start(nil,{angle='rear',no_turn=true}) -- Duplicate readying must not recapture.
+assert(reactions.distanceRequest().options.distance==13)
+allowed=true
+assert(driver.run(deps) and math.abs(started[1].x+20)<0.00001)
+assert(math.abs(started[1].y)<0.00001)
+deps=reset();me.x=-13;start(nil,{angle='rear'})
+assert(not driver.run(deps) and #started==0)
+deps=reset();me.x=0;me.y=0;start(nil,{angle='rear'})
+assert(reactions.distanceRequest().options.distance==0)
+assert(not driver.run(deps)) -- At zero radius every bearing is within positional tolerance.
+deps=reset();me.x=nil
+assert(not reactions.faceAway({actor={id=2,index=2},id=10,kind='enemy_ability'},{angle='rear'}))
+assert(not reactions.active())
+-- Production event/frame path starts without the action loop or any yielding.
+deps=reset();reactionDeps.movement=deps
+deps.sleep=function()error('Immediate reactions must not yield')end
+start(20,{angle='rear'})
+assert(#started==1 and current and reactions.immediateMovement())
+now=0.1;reactions.tick(true);assert(#started==1)
+me.x=-21;reactions.tick(true);assert(not current)
+actors[2].heading=math.pi;now=0.4;reactions.tick(true)
+assert(#started==2 and current) -- Repositions from frame ticks while actions are busy.
+allowed=false;reactions.tick(true);assert(not current)
+allowed=true;now=0.8;reactions.tick(true);assert(current)
+release();assert(not current and not reactions.active())
+deps=reset();reactionDeps.movement=deps
+start(20,{no_turn=true});assert(current)
+actors[2].hpp=0;reactions.tick(true);assert(not current and not reactions.active())
 reactions.clear()
 local f=assert(io.open('lib/action-processing.lua'));local source=f:read('*a');f:close()
 local scheduler=assert(source:match('(function processNextAction.-)\nlocal function doNextActionCycle'))

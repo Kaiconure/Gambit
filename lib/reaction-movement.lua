@@ -1,5 +1,5 @@
--- Run only from the normal action coroutine. Enemy event handlers just publish
--- a request. Work in bounded slices so healing and new observations can run.
+-- Movement can be driven synchronously from event/frame ticks, independently
+-- of an action coroutine waiting for a spell or another action to complete.
 local reactions=require('./lib/reactions')
 local alignment=require('./lib/alignment')
 local M={}
@@ -44,6 +44,7 @@ function M.run(deps)
     local jobId=deps.start(x,y)
     if not jobId then reactions.finishMovement(nil);return false end
     if not reactions.claimMovement(request,jobId) then deps.cancel(jobId);return true end
+    if deps.immediate then return true,jobId end
     local deadline=deps.clock()+0.5
     while deps.clock()<deadline do
         deps.sleep(0.05)
@@ -59,5 +60,42 @@ function M.run(deps)
     end
     reactions.finishMovement(jobId)
     return true
+end
+-- No sleeps or yields: smart-move owns the actual running job. Release each
+-- slice before planning again so moving/turning enemies get fresh coordinates.
+local active,pulsing
+function M.reset() active=nil end
+local function pulse(deps)
+    local request=reactions.distanceRequest()
+    if active then
+        local job=deps.job(active.jobId)
+        local actor=deps.mob(active.request.actor.id)
+        local me=deps.me()
+        local arrived=actor and me and actor.x~=nil and actor.y~=nil and me.x~=nil and me.y~=nil
+            and satisfied(actor,me,active.request.options.distance,
+            require('./lib/reaction-options').angle(active.request.options),deps.tolerance or 0.33)
+        if not request or request.sequence~=active.request.sequence or not deps.available()
+            or not job or job.jobId~=active.jobId or deps.clock()>=active.deadline or arrived then
+            local previous=active;active=nil
+            reactions.finishMovement(previous.jobId)
+            deps.cancel(previous.jobId)
+        end
+    end
+    if not active and request and deps.available() then
+        local immediate={}
+        for key,value in pairs(deps) do immediate[key]=value end
+        immediate.immediate=true
+        local started,jobId=M.run(immediate)
+        if started then
+            active={request=request,jobId=jobId,deadline=deps.clock()+0.5}
+        end
+    end
+end
+function M.pulse(deps)
+    if pulsing then return end
+    pulsing=true
+    local ok,err=pcall(pulse,deps)
+    pulsing=false
+    if not ok then error(err,0) end
 end
 return M

@@ -1,7 +1,6 @@
 local M={}
 function M.angle(options)
     if options.angle==nil then return nil end
-    assert(options.distance~=nil,'Reaction angle requires a distance')
     return require('./lib/alignment').parse(options.angle)
 end
 -- nil represents no deadline; never store infinity in state/JSON snapshots.
