@@ -1,5 +1,27 @@
 # Action slots
 
+## Inline contributions
+
+Define a slot and its normal contribution together with `actions`:
+
+```json
+{
+  "slot": "priority-buffs",
+  "actions": [
+    {
+      "when": "not hasBuff('Defender') and canUse('Defender')",
+      "commands": "use(me)"
+    }
+  ]
+}
+```
+
+This is shorthand for placing `priority-buffs` here and contributing the enclosed actions to it from the same file. It is not a fallback: ordinary contributions append under the existing namespace/file precedence and per-action `priority` rules. At equal source precedence, previously collected contributions precede inline ones. Actions inside the inline array retain their relative order unless their own `priority` changes it. Imports inside `actions` are supported.
+
+Use `"slot": "!priority-buffs"` to give the inline contribution replacement semantics, or `"slot": "^priority-buffs"` for fallback semantics. Prefixes apply to the contribution; the placed hook is still named `priority-buffs`. An empty inline array has the same meaning as an empty contribution, including replacement/fallback behavior. Inline contributions inherit the slot's preconditions and variable scope.
+
+Inline contributions require one string `slot` name, rather than `slots`, comma-separated names, or fallback-selector arrays. Contributions may contain nested slots or import libraries containing slots. A separately declared slot can still use the existing multi-slot and alternative-slot forms. Expansion happens entirely while settings load; no wrapper action remains at runtime.
+
 ## Automatic section slots
 
 Every executable action section has three native insertion points, even when the
@@ -18,15 +40,18 @@ not receive automatic slots. For example, a namespace common file can supply:
 
 ```json
 {
-  "contributions": {
-    "battle-setup": [
-      {
-        "commands": ["vars.user.hold_ws = false"],
-        "scope": "battle",
-        "frequency": "infinity"
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "battle-setup",
+      "actions": [
+        {
+          "commands": ["vars.user.hold_ws = false"],
+          "scope": "battle",
+          "frequency": "infinity"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -41,7 +66,7 @@ suppresses its automatic insertion and retains the explicit position and guards.
 This includes references in slot lists and alternatives. Explicit repeated
 references still create repeated occurrences. Remove an old explicit
 `idle-priority`, for example, to adopt the automatic top-of-section position.
-Other slots such as `ws-priority` and `finisher` retain their explicit placement.
+Other slots such as `ws-main` retain their explicit placement.
 
 These names control evaluation order, not lifecycle. A setup action does not
 automatically execute once or block the rest of the section. Use appropriate
@@ -51,72 +76,109 @@ checks in commands so an initially false condition does not defer the reset unti
 after another action changes state. A fallback action follows normal actions but
 is not guaranteed to run if higher-priority actions keep consuming opportunities.
 
-## Contribution replacements and shorthand
+## Ordered contributions and load-time filters
 
-Contributions may use the existing action array or an object with `actions` and
-an optional boolean `optional`:
+`contributions` is an ordered array of objects. Every entry requires `slot` and
+an `actions` array, including empty replacements. Repeated entries for the same
+slot are allowed and retain declaration order at equal source/action priority.
+The legacy name-keyed object form remains readable for external configurations;
+the examples and repository configurations use the ordered form.
+
+Entries may include `comment` or `note` documentation fields; these are removed
+during compilation. Other unknown entry fields produce source-qualified warnings
+and are ignored rather than preventing the namespace from loading. Known fields
+and their values remain strictly validated.
+
+An optional `for` selector array filters entries for the character loading the
+configuration. It supports the same jobs, groups, names, `leader`, and exclusions
+as other target selectors. Nonmatching entries have no effect: their imports,
+variables, nested definitions, missing-slot warnings, and replacement/fallback
+rules are skipped. An empty `for` list matches nobody; omitting it matches all.
+Use runtime `precondition` for conditions that can change during a fight.
+Unless `required_for` is explicitly supplied, `for` also defines the audience
+for missing-slot warnings.
 
 ```json
 {
-  "contributions": {
-    "geo/black-magic-nuke, blm/black-magic-nuke": {
+  "contributions": [
+    { "slot": "battle-priority", "for": ["RDM"], "actions": [{ "import": "rdm-support" }] },
+    { "slot": "battle-priority", "for": ["fighter"], "actions": [{ "import": "fighter-actions" }] }
+  ]
+}
+```
+
+Entries may also specify `optional` and `required_for` for warning control:
+
+```json
+{
+  "contributions": [
+    {
+      "slot": "black-magic-nuke",
+      "for": ["GEO", "BLM"],
       "optional": true,
       "actions": [{ "import": "nukes/elemental-mitigation" }]
     }
-  }
+  ]
 }
 ```
 
 `optional: true` suppresses missing-slot warnings for that contribution. It does
 not change execution, precedence, or validation. The flag applies to every
 comma-separated name and works with `!` and `^` prefixes and empty action arrays.
-Arrays and objects omitting `optional` continue to warn by default. If a missing
+Entries omitting `optional` continue to warn by default. A selected entry with
+`for` is implicitly required for the same audience, overriding `optional` just
+as an explicit `required_for` would. If a missing
 slot has multiple selected contributions, it warns when any is non-optional;
 discarded fallback/replaced definitions do not affect this decision. The object
 requires an `actions` array; unknown fields are rejected.
 
-Use `required_for` instead of `optional` for shared, job-dependent requirements:
+Use an explicit `required_for` to narrow or otherwise override the warning
+audience selected by `for`:
 
 ```json
-"geo/black-magic-nuke, blm/black-magic-nuke": {
+{
+  "slot": "black-magic-nuke",
+  "for": ["BLM", "GEO", "RDM"],
   "required_for": ["BLM", "GEO"],
   "actions": [{ "import": "nukes/elemental-mitigation" }]
 }
 ```
 
 Missing-slot warnings are enabled only when the character loading the actions
-matches the selector array. Matching uses current main job and supports existing
+matches both `for` and the explicit `required_for`; requirements outside the
+filtered `for` audience therefore have no effect. Matching uses current main job and supports existing
 job/group selectors (such as `mages`), character names, `me`, `*`, `leader`, and
 `~` exclusions. This is not a test of other party members' jobs. An empty array
 requires nothing. `required_for` overrides `optional` when both are present.
-For a comma-separated declaration, any listed slot satisfies the requirement;
-this lets GEO and BLM share one declaration without requiring both job slots on
-each character. Without `required_for`, comma-separated warnings retain their
-existing independent behavior. Requirements affect warnings only, not execution.
+For a comma-separated declaration, any listed slot satisfies the requirement.
+Without `required_for`, comma-separated warnings retain their existing independent
+behavior. Requirements affect warnings only, not execution; use `for` to select jobs.
 
 Prefix a contribution name with `^` to supply a fallback definition. If any
 ordinary or `!` definition exists for that name, all `^` definitions are ignored,
 even if they are more specific. Explicit empty arrays also suppress defaults.
-Otherwise only the closest `^` definition is selected using the precedence below;
-equal priorities use first discovery. Fallback definitions do not merge together.
+Otherwise the closest fallback source is selected using the precedence below;
+equal priorities use first discovery. Repeated fallback entries in that source's
+ordered array combine in declaration order; fallbacks from other files do not.
 Selection is at load time: disabled actions or failing preconditions do not revive
 discarded defaults. An empty selected fallback still counts as present for slot
 alternative selection.
 
-For example, `"^geo/black-magic-burst": [{"import": "nukes/black-magic-burst"}]`
+For example, `{"slot": "^black-magic-burst", "for": ["BLM"], "actions": [{"import": "nukes/black-magic-burst"}]}`
 provides default actions which an ordinary definition can replace. Comma-separated
-keys support `^` independently on each name. References omit prefixes. Duplicate
-normalized names across ordinary, `!`, and `^` definitions are rejected within a
-file, as are combined prefixes such as `!^name`.
+slot names support `^` independently on each name. References omit prefixes.
+Repeated entries are allowed; duplicate names inside a single entry and combined
+prefixes such as `!^name` are rejected.
 
 Prefix a contribution name with `!` to replace contributions below it in
-precedence. For example, `"!black-magic-burst": []` suppresses less-specific
+precedence. For example, `{"slot": "!black-magic-burst", "actions": []}` suppresses less-specific
 defaults. Higher-priority additions remain; when multiple replacements exist,
 the highest-priority replacement is the boundary. Empty replacements count as
-present for fallback selection. An ordinary empty array remains additive.
+present for fallback selection. Sibling entries in the same ordered source are
+retained on either side of the replacement entry. An ordinary empty array remains additive.
 
-Contribution keys may contain comma-separated names, each with its own optional
-`!`: `"!rdm/black-magic-burst, !geo/black-magic-burst": []`. Whitespace around
+Contribution `slot` fields may contain comma-separated names, each with its own optional
+`!`, such as `"slot": "!priority-buffs, !normal-buffs"`. Whitespace around
 each name is trimmed. This registers separate definitions, not alternatives.
 Empty names and duplicate normalized names within a file are rejected, including
 both ordinary and `!` forms of the same name. Slot references omit the `!`.
@@ -147,7 +209,7 @@ An entry point chooses placement:
 }
 ```
 
-A common file or another imported file supplies a top-level `contributions` object:
+A common file or another imported file supplies a top-level `contributions` array:
 
 `slot` and `slots` both accept a string or an ordered array. For example,
 `{ "slots": ["black-magic-burst", "black-magic-nuke"] }` expands all burst
@@ -159,7 +221,7 @@ apply to every name in the chain.
 An entry may itself be an ordered fallback array:
 
 ```json
-{ "slots": [["geo/black-magic-burst", "black-magic-burst"], "black-magic-nuke"] }
+{ "slots": [["encounter-emergency", "battle-priority"], "normal-buffs"] }
 ```
 
 The outer list expands sequentially. Each inner list selects the first name with
@@ -175,15 +237,18 @@ of fallback arrays is supported; deeper arrays are invalid. Both `slot` and
 
 ```json
 {
-  "contributions": {
-    "encounter-emergency": [
-      {
-        "import": "reactions/encounter-response",
-        "precondition": "not evaluateAllConditions(vars.primary_tank_precondition)",
-        "with_vars": { "response": { "distance": 12 } }
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "encounter-emergency",
+      "actions": [
+        {
+          "import": "reactions/encounter-response",
+          "precondition": "not evaluateAllConditions(vars.primary_tank_precondition)",
+          "with_vars": { "response": { "distance": 12 } }
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -217,10 +282,37 @@ a matching enabled slot generates a warning. No existing job automatically gains
 a slot: add placeholders at the desired priorities.
 
 Slots may have `precondition`, `with_vars`, `filter`, or `disabled`, but cannot also
-be commands or imports. Contributions cannot contain slots, import libraries that
-contain slots, or import further contribution definitions. Such configurations
-fail validation rather than recursively expanding. Imported `loading` actions and
-functions retain their ordinary destination semantics.
+be commands or imports. Put an import inside an inline slot's `actions` array.
+Contributions may contain slots and import libraries that declare slots. Nested
+hooks expand in place using the same global contribution names and precedence.
+Clearing an outer contribution removes its entire branch, including inner hooks
+and imports. Inner contributions still apply at any other surviving occurrences.
+Imported `loading` actions and functions retain their ordinary destinations.
+
+For example, this lets a child clear the complete default weapon-skill branch
+with `"!ws-main": []`, or replace its inner slots individually:
+
+```json
+{
+  "slot": "ws-main",
+  "actions": [{ "import": "melee-ws" }]
+}
+```
+
+Contributed imports may define additional contributions to existing slots. A
+metadata discovery pass follows selected contribution imports before slot
+expansion, including library-level imports. This allows a library imported at
+`normal-engagement` to register `battle-setup` actions even though setup appears
+earlier. Discovered definitions use ordinary namespace precedence, conditions,
+variable scopes, deduplication, and replacement rules. Discovery does not execute
+actions or merge variables; normal import loading still handles those.
+
+Self-contribution and indirect dependency cycles are errors: for example, slot
+`a` importing a file that contributes to `a`, or `a -> b -> a`. Shared providers
+cannot bypass the cycle check. Recursive file imports also fail, and both file
+discovery depth and contribution discovery rounds are limited to ten. Disabled
+or job-filtered imports are skipped. Runtime `precondition` expressions are
+inherited by discovered contributions, not evaluated during discovery.
 
 ## Contribution action priorities
 
@@ -239,9 +331,12 @@ the imported library. An omitted priority always means normal; it does not
 inherit the preceding entry's priority. Slot listings retain their original names.
 
 ```json
-"contributions": {
-  "battle-priority": [
-    { "priority": "high", "import": "priority-battle-actions" }
-  ]
-}
+"contributions": [
+  {
+    "slot": "battle-priority",
+    "actions": [
+      { "priority": "high", "import": "priority-battle-actions" }
+    ]
+  }
+]
 ```

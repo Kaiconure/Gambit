@@ -1,0 +1,17 @@
+{
+  "vars": {
+    "^dynamic_engagement": {
+      "model": null
+    }
+  },
+  "actions": [
+    {
+      "import": "frontline-engagement",
+      "precondition": ["vars.dynamic_engagement.model ~= 'member'"]
+    },
+    {
+      "import": "member-engagement",
+      "precondition": ["vars.dynamic_engagement.model == 'member'"]
+    }
+  ]
+}

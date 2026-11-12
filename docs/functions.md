@@ -4,6 +4,130 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Relative positioning and following
+
+`alignRelative(target, partner, angle, distance)` positions you around `target`
+relative to the ray from target to partner, independent of either heading.
+`0` is the partner's side, `180` is opposite, and positive angles follow `align`'s
+convention. Distance defaults to 5 yalms from the target's center, without mob-size
+adjustment. Targets and partners may be context symbols, raw mobs, or `{x,y,z}`
+positions. Mob positions are refreshed; missing/invalid or coincident reference
+positions return false. Success means arrival within normal movement tolerance;
+each call allows up to three seconds of movement and respects movement reservations
+and immobilizing effects.
+
+Both `alignRelative` and `follow_leader.align_relative.angle` accept the usual
+alignment names (`aft`, `backside`, `lefter`, `side`, etc.) and angular ranges
+such as `180+/-30`. Here the reference is the target-to-partner ray, not the
+target's heading. `aft` allows 180 +/- 15 degrees; `backside` allows 180 +/- 30.
+Within an allowed arc, followers retain their current bearing and only correct
+their distance as needed. Valid in-flight follow destinations are retained.
+Numeric angles remain exact. Arcs do not assign separate party-member positions.
+
+```lua
+findByName('???') and alignRelative(find_result, party_leader, 180)
+```
+
+The stock `follow-leader` import supports an optional mode:
+
+```json
+{
+  "vars": {
+    "follow_leader": {
+      "align_relative": {
+        "target": "???",
+        "target_expression": "any(zone_search, 'EschaZiTah') and findByName('???')",
+        "activate_distance": 5,
+        "release_distance": 7,
+        "angle": 180,
+        "distance": 5
+      }
+    }
+  }
+}
+```
+
+`target` accepts a name or mob/position object. When supplied, `target_expression`
+is evaluated instead; false/nil does not fall back to `target`.
+Activation uses leader-to-target horizontal distance, not the alt's distance.
+The defaults are activation 5, release activation + 2, angle 180, and distance 5.
+Release distance must be at least activation distance. Set `disabled: true` inside
+`align_relative` to disable the mode. Existing follow eligibility and engagement
+suppression settings still apply.
+
+While active, following yields to positioning and stays suspended after arrival.
+An unchanged route continues without restarting on each check. If the target
+disappears, the expression stops matching, or the leader leaves the release
+radius, normal following resumes. `followLeader(partner, config)` performs this
+mode selection; omitted arguments use `party_leader` and `vars.follow_leader`.
+Set `align_relative.hold_on_target_loss: true` to retain an already active
+target's last position when it disappears or its expression stops matching.
+This option defaults to false. Holding ends when the leader leaves the release
+radius, the zone or follow partner changes, or relative alignment is disabled.
+It bridges spawn-trigger disappearance before a battle target becomes available.
+With a configured alternate follow target, that partner is the reference leader.
+
+## Continuous waypoint routes
+
+`waypointRoute(config)` starts or refreshes one smart-move job for an entire
+point sequence. Omit `config` to use `vars.waypoints_ex._current`, falling back
+to the route selected by `vars.waypoints_ex.active`. Repeated calls with the
+same object refresh the job without restarting it.
+
+```json
+{
+  "mode": "bounce",
+  "corner_radius": 1.5,
+  "tolerance": 0.5,
+  "turn_pause": 0.35,
+  "points": [
+    { "x": 10, "y": 20 },
+    { "x": 20, "y": 30, "corner_radius": 2 },
+    { "x": 30, "y": 20, "corner_radius": 0, "pause": 0.5 }
+  ]
+}
+```
+
+The route begins at the nearest point, or advances immediately to the following
+point when already within the nearest point's arrival tolerance. `mode` defaults
+to `bounce`; `cycle` wraps from the final point to the first. Intermediate points change the active
+destination without ending movement. Bounce endpoints stop, turn around, wait
+for `turn_pause` (default 0.35 seconds), and then explicitly resume toward the
+next point.
+
+`corner_radius` controls how close the character gets before selecting the next
+point. It defaults to zero, which uses `tolerance` or smart-move's normal
+tolerance and preserves precise waypoint travel. Larger radii cut the corner
+and produce smoother paths. Each point can override `corner_radius` and
+`tolerance`; `pause` forces a stop before continuing, and `duration` limits time
+on that segment. Routes continue until replaced or cancelled. An optional
+route-level `heartbeat` controls how long the route may advance without its
+action being refreshed; when configured, an expired route finishes its current
+segment and waits at that waypoint until refreshing returns. Set `jitter: false`
+to disable obstacle escape behavior for that route. Automatic rescheduling after an interrupted action is refused while
+engaged by default, preventing a pre-battle route from reclaiming movement from
+engagement behavior. Set `allow_engaged: true` on a route to permit that automatic
+reschedule; ordinary calls to `waypointRoute` remain governed by their action's
+own conditions.
+The reference character skips following and alignment when the resolved partner
+is themselves, including when `follow_leader.target` explicitly names them.
+
+## Equipment slot information
+
+`slotInfo(slot)` inspects confirmed equipped gear in a named slot such as `main`,
+`sub`, `range`, or `ammo`. It returns an object and assigns it to `slot_info`.
+Empty or invalid slots return `nil` and clear `slot_info`. It does not change `item`.
+
+The object includes `slot`, `id`, `name`, `item` (the resource record), `skill`,
+and boolean flags `one_handed`, `two_handed`, `shield`, `h2h`, `archery`,
+`marksmanship`, and `throwing`. Flags describe the equipped item's category;
+hand-to-hand and ranged equipment are not classified as one- or two-handed.
+Unrelated armor has all flags false. Ranged ammunition follows its resource skill.
+
+```lua
+canUse('Hasso') and not hasEffect('Hasso') and slotInfo('main') and slot_info.two_handed
+```
+
 ## Case-insensitive table keys
 
 `caseInsensitiveKeys(table)` returns a new table with its immediate string keys
@@ -103,6 +227,22 @@ partyAny('is_player and not hasBuff("Sneak")', {randomize=true, self_last=true})
 
 `partyByName(targets, options)` and `alliesByName(targets, options)` accept a trailing options table: `{randomize = true, self_first = true}`. Targets may be an array or separate arguments. Both options default to false. Randomization shuffles the resolved matches once per fresh enumeration, after exclusions and deduplication; self-first then moves yourself to the front if included. Neither option changes membership. Continuing the cycle preserves its order. These options are not used by `partyAnchorByName`, which keeps deterministic preference ordering.
 
+`partyNames(targets)` returns a new array of matching party names in deterministic
+selector order (alphabetical within each job/group, deduplicated with exclusions
+applied). `partyMatches(targets, member)` tests membership; `member` defaults to
+`me`. Both accept the existing names, jobs, groups, `me`, `*`, `^`, and `~`
+selector syntax and leave `member`, enumerators, and target selection unchanged.
+Use `partyNames({'PLD', 'RUN'})[1]` for a consistent primary tank, or
+`partyMatches({'melee_dps', 'ranged'})` to test whether the current character is a DD.
+`selfMatches` checks yourself with the same selectors, accepting either an array
+(`selfMatches({'melee', 'ranged'})`) or separate strings
+(`selfMatches('melee', 'ranged')`). Exclusions work in either form, such as
+`selfMatches('mages', '~WHM')`. Use one array or separate selector strings;
+mixing an array with additional arguments is not supported. Empty input matches nobody.
+Role resolution depends on known party job information; no match yields an empty
+array or false. Client-relative selectors such as `me` and `^` should not be used
+for a shared cross-client WS order.
+
 ## Member positioning
 
 ### Movement reservations
@@ -199,6 +339,18 @@ In plain English, this says:
   - This is aliased as `hasBuff`, and the two can be used interchangeably. 
 - `hasEffectOf(name1, name2, ... , nameN)` - Similar to `hasEffect`, but allows you to specify the spell or ability that *causes* the effect rather than the effect itself. For example, you can call this with `Dream Flower` and it will detect if you are asleep. If matched, the resulting effect will be stored to the `effect` variable.
 
+`hasAllBuffs([target,] [strictness,] buffs)` returns true only when every requested
+buff is known on the target (yourself by default). Supply an array or separate
+arguments, using buff names, IDs, or resource objects. Targets and the optional
+`'use-strict'` / `'not-strict'` flags work as with `hasBuff`. An empty array returns
+true. This query leaves `effect` and `effect_count` unchanged.
+
+```lua
+hasAllBuffs(bt, vars.required_buffs)
+hasAllBuffs(bt, 'Protect', 'Shell')
+hasAllBuffs({'Haste', 'Protect'})
+```
+
 Here's an example:
 
 ```json
@@ -215,6 +367,12 @@ In plain English, this says:
 
 `align(target, angle, distance, duration, noFace, tolerance)` supports exact angles and flexible positioning. Optional positional tolerance is in yalms; `aligned` and `aligning` accept it as their fourth argument. Frontline engagement uses `vars.frontline_engagement.tolerance`, defaulting to 0.5, for its alignment check and movement completion. Other callers retain their existing defaults. The same angle values work with `vars.frontline_engagement.angle`.
 
+Frontline engagement caches only `max(0.125, (distance or 0.5) + (distance_offset or 0))` using variable scope. Smart Move applies `radius_multiplier` from the options object when resolving each target-relative destination; frontline defaults it to `0.25`. A numeric multiplier replaces the automatic player/target size adjustment with `max(0, target.model_size or 0) * max(0, radius_multiplier)`. For example, distance `0.5`, offset `0.25`, and target model size `4` produce a final center distance of `1.75` yalms. Zero means no size adjustment; missing or null retains legacy behavior (alignment adds half the combined player/target sizes, following adds three quarters, unless global `useRawDistances` is enabled). An explicit multiplier also applies when global raw distances are enabled.
+
+`align`, `aligned`, `aligning`, and `alignWithRetry` accept this through their existing options argument. `follow(target, distance, options)` now accepts the same optional object. `followDistance(target, distance, options)` returns the resolved center distance for follow range checks without starting movement. Frontline uses it with `center_distance` so range checks and following agree, and forwards the same options to alignment checks and movement. The rear-engagement import inherits this behavior. Smart Move retains its separate mounted-follow and lateral-follow offsets. Follow resumption preserves the original requested distance and multiplier, avoiding repeated size adjustments.
+
+Set `vars.frontline_engagement.distance_priority` to `true` to enforce the assigned angle until successfully aligned once per battle, then hold position whenever the target's resolved center distance is within `tolerance`, regardless of its facing. This defaults to `false`. It also prevents following from restarting inside the outer tolerance boundary. If distance is outside tolerance, alignment still uses the configured angle; initial angular alignment is required before holding position. Failed or interrupted movement does not count as arrival; checking a pending movement destination does not count either. The caller owns `options.arrived`: alignment helpers only read it and never retain arrival state. Frontline clears `frontline_engagement.arrived` with a battle-scoped action, then sets it after successful movement or an actual-position check confirms arrival. It remains set for the rest of that battle; changing targets or configuration within the same battle does not clear it automatically. Facing the target in place remains enabled.
+
 | Angle | Meaning, relative to the target's facing |
 | --- | --- |
 | `nil` / JSON `null` | Try your current direction from the target, then +45° and -45° if movement times out. Any direction at the requested distance counts as aligned. |
@@ -223,13 +381,22 @@ In plain English, this says:
 | `"face"`, `"front"`, `"facing"` | Aliases for numeric `0`, using the normal positional tolerance and exact-angle timeout. |
 | `"frontside"` | 0° ± 30°. |
 | `"backside"` | 180° ± 30°. This is a positioning region, not a guarantee that positional ability requirements are met. |
-| `"left"` | 90° ± 30°, relative to the target. |
-| `"right"` | -90° ± 30°, relative to the target. |
+| `"left"` | -90 degrees +/- 30 degrees, relative to the target. |
+| `"right"` | 90 degrees +/- 30 degrees, relative to the target. |
 | `"side"` | Either the left or right region. |
+| `"lefter"` | -90 degrees +/- 5 degrees: a tighter left region. |
+| `"righter"` | 90 degrees +/- 5 degrees: a tighter right region. |
+| `"sider"` | Either tight side region: -90 or 90 degrees +/- 5 degrees. |
+| `"fore"` | 0 degrees +/- 10 degrees: a tighter front region. |
+| `"aft"` | 180 degrees +/- 15 degrees: a tighter rear region. |
+| `"aside"` | 180 degrees +/- 100 degrees: angles 80 through 280 degrees, excluding the front 160-degree sector. |
 | `"180+/-30"` | A center and half-width, from 0 through 180 degrees of half-width. |
 | `"150-210"` | An arc from the first angle to the second in increasing angle order. Wraparound works: `"330-30"` crosses zero. A span of 360° permits the full circle. |
 
 Semantic names are case-insensitive. Invalid specifications raise an error rather than silently becoming unrestricted alignment.
+Negative angles rotate toward the target's left and positive angles toward its
+right: `-90` is left and `90` is right. Viewed from above, those are
+counter-clockwise and clockwise respectively.
 
 For flexible ranges, a character already inside an allowed arc keeps its current bearing when correcting distance. Otherwise, a preferred angle is randomized and remembered on the executing action for the current battle scope, target, and angle specification. A later successful fallback becomes the preference. If already at the requested distance anywhere in an allowed arc, no repositioning is needed. Target movement or turning during an unsuccessful attempt defers correction to a later evaluation instead of trying arc extremes. This reduces clustering but does not coordinate character positions or guarantee separation.
 
@@ -247,7 +414,282 @@ On a movement timeout, alignment tries other allowed destinations, including arc
 The frontline action still applies its existing `canAlign` checks, model-size distance handling, and failure postponement. Movement paths themselves are not constrained to remain inside the permitted arc; the arcs describe destinations. With `align2`, flexible string angles use the same retry behavior without final facing.
 Both positioning imports expose `duration` and `retry_delay` under their respective variable objects. `frontline_engagement.duration` defaults to `null`, retaining `align`'s automatic budget (three seconds for exact angles, six for flexible positioning); `member_engagement.duration` defaults to three seconds. Both retry delays default to ten seconds. Durations are clamped to at least one second by `align`; retry delay controls failure postponement, not the action's frequency or a guaranteed retry time.
 
+Frontline engagement exposes `movement_slice_min` (default 1 second) and `movement_slice_max` (default 5 seconds). Each movement slice estimates travel time as remaining straight-line distance to the destination divided by four yalms/second, clamps that estimate to these bounds, then caps it at the remaining `duration` budget. Short corrections yield sooner; longer runs continue longer before pausing to reconsider other actions. This scheduling estimate does not change Smart Move's obstruction detection or cancellation. A slice ending while progress is being made retains the route and uses `progress_retry_delay` (default 1 second) before retrying.
+
+Sleep (both status variants), Stun, Terror, Bind, and Petrification are treated as immobilization rather than obstacles. Smart Move pauses and clears its stall/jitter history while these effects are present. If the movement budget expires after an effect interrupted the attempt, alignment retains its route and returns `immobilized`; frontline uses `progress_retry_delay` to retry. The overall time budget still applies. Ordinary walls and obstacles retain their existing handling.
+
+For longer runs in one encounter, for example:
+
+```json
+"frontline_engagement": {
+  "duration": 6,
+  "movement_slice_min": 1,
+  "movement_slice_max": 5
+}
+```
+
+`duration` still limits the whole attempt, so an exact-angle default budget of three seconds cannot permit a five-second slice. Set both slice bounds to 1 to restore fixed one-second slices. Bounds are clamped to at least 0.1 seconds, and the maximum cannot be below the minimum. Distributed alignment uses these bounds automatically; other alignment callers use them only when supplied in their options object.
+
 For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
+
+## General facing checks
+
+`facing(looker, target, degreesThreshold)` returns a boolean indicating whether
+the looker's heading is within the specified angle of the direction to the
+target. The default threshold is 10 degrees, inclusive, matching the default
+used by `facingEnemy`. Headings are Windower radians; the threshold is degrees.
+The check uses horizontal X/Y coordinates and handles heading wraparound.
+
+```lua
+facing(bt, me)       -- Is the enemy facing the player, within 10 degrees?
+facing(bt, me, 20)   -- Allow a wider facing angle.
+facing(me, bt)       -- Is the player facing the enemy?
+facing(bt, vars.frontline_engagement.anchor.position)
+```
+
+Inputs can be raw mob tables, context symbols such as `bt` and `me`, or plain
+tables. The looker needs `x`, `y`, and `heading`; the target needs only `x` and
+`y`. Missing/invalid geometry and coincident positions return false. Neither
+entity needs an ID or must be the player. This helper only reads geometry and
+does not turn or move anyone. Enemy facing can inform tank decisions but does
+not establish who currently holds enmity, especially while an action fixes the
+enemy's facing.
+
+## Fixed frontline tanking position
+
+Anchoring applies only to `battle` actions. The same frontline-engagement import
+can be used in both `pull` and `battle`: pull retains normal frontline behavior
+and does not capture or return to an anchor. `frontlineAnchored()` is false
+outside battle, including idle and manual function contexts.
+
+Enable a battle-start anchor for a job that should hold its starting position:
+
+```json
+{
+  "frontline_engagement": {
+    "anchor": {
+      "capture": "battle_start",
+      "return_distance": 2,
+      "tolerance": 0.5
+    }
+  }
+}
+```
+
+Place this under `vars` in that job's configuration. Shockmaw uses `battle_start`
+and Urma uses the delayed mode below, each in its own `actions/lib/common/pld.json`.
+
+Gambit captures your horizontal world coordinates when it creates the first
+battle context, before executing actions. This is Gambit's transition into
+battle, not necessarily your first attack. The point remains fixed for that
+battle scope and zone; the next battle captures a new point. Reloading settings
+can also clear the saved runtime point.
+
+To allow normal frontline positioning first, use:
+
+```json
+"anchor": {
+  "capture": "when_established",
+  "capture_delay": 10,
+  "return_distance": 2,
+  "tolerance": 0.5
+}
+```
+
+`when_established` captures the current position on the first battle-context
+update at or after `capture_delay` seconds in battle (default 10; zero captures
+immediately). It is a time threshold, not a check that alignment succeeded or
+movement stopped. Normal frontline rules and explicit engagement calls apply
+until capture, then anchoring takes over for the remainder of that battle.
+An action already running can delay the context update. If a face-away happens
+at capture time, the current position is still captured. The next battle starts
+the delay again; if settings reload clears the point after the delay has already
+elapsed, the next battle-context update captures the current position.
+
+With the example above, displacement greater than 2 yalms triggers a return to
+within 0.5 yalms. Returns can happen repeatedly in the same fight. An interrupted
+return continues to use the arrival tolerance, even if already inside the
+2-yalm trigger radius. `anchor.duration` optionally limits each return attempt
+(default 10 seconds). Returns run through the ordinary action loop.
+
+Anchoring replaces frontline camp returns, enemy-relative alignment, trust
+approach, and following; facing the enemy remains enabled. Explicit
+`frontlineEngage()` and frontline `applyEngagement()` also honor the anchor.
+Face-away reactions and movement reservations take priority: return movement
+waits until `movementAvailable()` permits it. No destination is recaptured
+because of a knockback, reaction, or target rotation. Omit `anchor` or set it
+to `null` to retain normal frontline positioning.
+
+Set `anchor.cancel_when` to release an established anchor and resume normal
+frontline positioning for the rest of the battle. It accepts one condition
+expression or an array combined with AND, like `evaluateAll`. Missing or empty
+conditions do not cancel. For example:
+
+```json
+"anchor": {
+  "capture": "when_established",
+  "capture_delay": 10,
+  "return_distance": 2,
+  "tolerance": 0.5,
+  "cancel_when": [
+    "bt and bt.valid_target",
+    "bt.target_index and bt.target_index > 0 and bt.target_index ~= me.index",
+    "(bt.center_distance or bt.distance) > 8"
+  ]
+}
+```
+
+This example requires both the enemy targeting someone else and being more
+than 8 yalms from the player. The threshold is illustrative; enemy target index
+is an observable targeting signal, not an enmity measurement. Use `or` inside
+one expression for independent cancellation scenarios. Conditions are evaluated
+when the anchor helpers run in the ordinary action loop, not on every frame;
+an already-running return can finish or time out before conditions are checked
+again. Cancellation clears the frontline arrival flag so normal alignment can
+establish itself again. The released anchor cannot recapture within that battle,
+even if the condition becomes false. The next battle or cleared runtime state
+allows capture again. Explicit configuration objects may also supply
+`cancel_when`; they release the same shared saved anchor.
+
+The system publishes the captured coordinates as
+`vars.frontline_engagement.anchor.position = {x=..., y=..., zone=...}`.
+Treat this as a read-only runtime output, not a configured destination.
+It is `nil` before capture and is cleared when the default context leaves
+battle or starts a new battle awaiting capture. Cancellation retains the last
+captured position for inspection during that battle; use `frontlineAnchored()`
+to check whether it is still active. Editing the published snapshot does not
+change the internal return destination.
+
+For example, `distanceTo(vars.frontline_engagement.anchor.position)` measures
+your distance from the saved point. To compare the enemy's position instead,
+an anchor cancellation expression can use squared horizontal distance:
+
+```lua
+bt and vars.frontline_engagement.anchor.position and
+  (bt.x - vars.frontline_engagement.anchor.position.x)^2 +
+  (bt.y - vars.frontline_engagement.anchor.position.y)^2 > 8^2
+```
+
+Explicit configuration objects receive their own `anchor.position` snapshot
+when an anchor helper evaluates them, before `cancel_when` is evaluated. For
+example, `frontlineAnchored(vars.custom_tank_position)` updates
+`vars.custom_tank_position.anchor.position` from the shared saved point (or
+clears it if no point exists for the current battle). Custom objects are
+refreshed when passed to a helper, rather than tracked independently each tick.
+
+`frontlineAnchored(config)`, `frontlineAnchorNeedsReturn(config)`,
+`returnToFrontlineAnchor(config)`, and `frontlineEngage(config)` accept an optional
+full engagement configuration (containing `anchor`, not just its inner fields).
+Omitting it defaults to `vars.frontline_engagement`. For example,
+`returnToFrontlineAnchor(vars.custom_tank_position)` uses that configuration's
+return threshold, tolerance, and duration. Overrides use the same saved
+anchor point; they do not capture a new point. Enable the desired capture mode
+in `vars.frontline_engagement` as usual. `applyEngagement(config, 'frontline')`
+also passes the supplied anchor configuration through.
+
+## Immediate frontline positioning
+
+`applyEngagement(options, model)` aligns using an object
+with the same positioning fields as `vars.frontline_engagement`: distance, offset, angle, radius multiplier, tolerance,
+and movement options, then faces the enemy. It runs in the calling action's
+coroutine before subsequent actions; it does not wait for the frontline import's
+initial delay or require you to be within melee distance first. It respects
+movement reservations, reaction ownership, and effects that prevent movement.
+It applies positioning rather than the import's camp or trust-engagement rules.
+It does not asynchronously preempt an action already executing.
+
+Pass `vars.frontline_engagement`, `vars.member_engagement`, or a separate configuration such as
+`vars.secondary_engagement`. The supplied object is copied and is not modified;
+existing `arrived` flags do not skip the requested positioning. Omitting the
+arguments uses `vars.dynamic_engagement.model` (falling back to `"frontline"`)
+and that model's corresponding configuration. An explicit model selects its
+configuration when options are omitted. Unknown models are rejected.
+`"member"` selects a living party member using `targets` and `max_distance`,
+excludes yourself, accepts already being closer than distance plus tolerance,
+and never forces facing or requires a battle target. `"frontline"` positions
+relative to the battle target. The stock `dynamic-engagement` import supplies
+both libraries and their defaults; namespace overrides still take precedence.
+`frontlineEngage()` remains a wrapper
+that also updates the ordinary frontline `_distance` and `arrived` state.
+
+For one successful initial alignment per battle:
+
+```json
+"contributions": [
+  {
+    "slot": "battle-priority",
+    "actions": [
+      {
+        "when": ["bt and bt.valid_target"],
+        "commands": ["applyEngagement()"],
+        "scope": "battle",
+        "frequency": "infinity",
+        "delay": 0
+      }
+    ]
+  }
+]
+```
+
+The helper returns true on successful alignment, or false and a reason on
+failure. It makes one bounded attempt without marking the caller incomplete or
+automatically scheduling retries. The caller owns retry policy. Ordinary frontline
+rules can continue maintaining positioning afterward.
+
+The root `boss` namespace contributes a high-priority initial attempt to both
+`pull-priority` and `battle-priority`, once per phase per battle scope. It uses
+action-local `with_vars` overrides to set both models' duration to five seconds.
+Set `vars.setup.force_initial_positioning` to false to opt out. Normal engagement
+durations remain unchanged; failure allows later actions, including healing,
+to proceed instead of automatically retrying this setup action.
+
+## Party-distributed alignment
+
+Opt in to distributed frontline positioning with:
+
+```json
+{
+  "vars": {
+    "frontline_engagement": {
+      "distribute": true,
+      "angle": "side"
+    }
+  }
+}
+```
+
+The leader must also be running the updated Gambit, but need not opt into
+distribution. It publishes its party-slot order over IPC. Participating clients
+advertise their current target, parsed arc union, and alignment distance; matching
+profiles divide that allowed angular space into fractional slices in the leader's
+order. Different distances or arc sets form separate groups. Party members with
+no matching advertisement do not occupy a slice. Roster slots are not filtered by
+temporary death or distance. Profiles and the shared roster refresh every ten seconds,
+with immediate updates on changes. Reloading requests fresh profiles from peers.
+Initial synchronization may take a couple of seconds;
+ordinary flexible alignment remains available while no shared assignment exists.
+
+Slices apply to the actual arc union, including custom ranges, gaps, overlaps,
+and wraparound. They do not special-case names such as `side`. Exact angles and
+unrestricted/nil angles bypass distribution. Following distances are unchanged.
+
+The nearest point in the assigned slice is tried first. If blocked, alternatives
+may use the entire configured arc set, including other arcs and slices. Movement
+attempts share the existing duration budget; distributed attempts check progress
+in short steps. Continuing progress or untried alternatives return to the scheduler
+using `progress_retry_delay`; exhausted attempts use `retry_delay`. Cancellation
+does not restart movement via an alternative.
+
+A successful fallback is accepted for that target/profile/roster, including on
+subsequent action ticks, instead of repeatedly reclaiming a blocked slice. Changes
+to target, configuration, group assignment, leader, zone or action reload reset
+the preference. This is destination selection, not pathfinding: walls may still
+force stacking, and the travel path is not constrained to the allowed arcs.
+
+For direct calls, pass the same options object to both
+`aligned(target, angle, distance, tolerance, options)` and
+`align(target, angle, distance, duration, noFace, tolerance, options)`.
+`alignWithRetry` forwards its existing options object automatically.
 
 ## Sending Windower commands
 
@@ -306,6 +748,17 @@ and retains the reservation. Partial progress returns false, retains the lease,
 and postpones briefly. Missing/invalid targets, movement-blocking statuses, and
 other failures release the reservation and back off. The caller must pass nil
 when target selection fails, rather than short-circuiting before the helper.
+
+Rolls use `approachWithReservation(target, distance, options)` instead. It makes
+a direct, bounded approach to the selected recipient and stops as soon as the
+live raw center distance is within `options.range`. It refreshes the destination
+when the recipient moves, never requests an angle, and never moves away when
+already in range. `distance` is the near-side destination radius, with a small
+margin inside `range` for movement arrival tolerance; model-size adjustments do
+not inflate it. `duration` bounds the approach attempt. Successful approaches
+retain the roll reservation for Double-Up; timeout/cancellation releases it
+recoverably and uses `retry_delay`. Immobilization uses `progress_retry_delay`.
+Reaction movement ownership can preempt the approach.
 Callers acquire/resume reservations separately; this helper never acquires or
 extends them, even when the selected target changes. Roll actions use this helper
 after resolving their party anchor on each attempt.
@@ -597,3 +1050,7 @@ closer checks still compile on demand and refresh plans after roster or
 capability changes. Initial compilation may exclude characters whose capability
 replies have not arrived yet; later evaluation refreshes the plan. Loading actions
 run when automation is enabled and eligible to process them.
+
+### Explicit battle-target selection
+
+setBattleTarget(mob, engage) accepts a mob object or numeric entity ID. The optional engage flag defaults to true for the existing acquisition behavior. Passing false updates only Gambit's tracked battle target when the pending request is processed: it does not change the cursor, issue an attack, broadcast a target, or run the legacy acquisition waits. Invalid/dead targets are rejected. Use explicit phase-gated engagement actions afterward; if switching away from a currently attacked enemy, disengage explicitly before selecting the new one.

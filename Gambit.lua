@@ -1,4 +1,6 @@
-__version = '1.0.7.0'
+local profiling=require('./lib/load-profile')
+profiling.begin('startup modules')
+__version = '1.0.7.1'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -44,6 +46,7 @@ skillchain_helper = require('lib/skillchain-helper')
 local selfSpellState = require('./lib/self-spell-state')
 local selfActionState = require('./lib/self-action-state')
 local actionObservation = require('./lib/action-observation')
+local partyAlignment = require('./lib/party-alignment')
 local handleActionEffects
 
 require('ux/core')
@@ -298,12 +301,15 @@ function syncWeaponSkillInfoIpc()
 end
 
 function reloadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
+    profiling.begin('settings reload')
+    profiling.start('settings/imports')
     executionFactory.clear()
     inventory.printDebug = nil
 
     bypassActions = bypassActions and settings.actions ~= nil
 
     settings = loadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
+    profiling.stop('settings/imports')
     logging_settings.verbosity = settings.verbosity
 
     -- We will not recompile actions or reset the current mob if this is a settings-only reload
@@ -319,13 +325,17 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         globals.cloud_panel:configure(settings.cloudPanel)
     end
     if globals.status_panel then
+        profiling.start('panel')
         local ok, err = pcall(function() globals.status_panel:configure(loadPanelSettings(),false) end)
         if ok then globals.status_panel_ready = true end
         if not ok then writeError('Could not load panel settings: ' .. tostring(err)) end
+        profiling.stop('panel')
     end
     if globals.event_system then
+        profiling.start('events')
         local ok,err=pcall(function() globals.event_system:reload(outputProcessed) end)
         if not ok then writeError('Could not load event rules: '..tostring(err)) end
+        profiling.stop('events')
     end
 
     if settings.debugging then
@@ -335,6 +345,7 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
     if not actionStateManager.needsRecompile then
         reportLoadedSettings()
     end
+    profiling.finish(profiling.report)
 end
 
 -- Player status change
@@ -385,6 +396,9 @@ windower.register_event('zone change', function(zone_id)
         return
     end
 
+    require('./lib/reactions').clear('zone changed')
+    smartMove:stop()
+
     -- Store the new zone
     globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil
     globals.zoneEntryTime = os.clock()
@@ -412,6 +426,8 @@ end)
 ---------------------------------------------------------------------
 -- Addon loaded
 windower.register_event('load', function()
+    profiling.finish()
+    profiling.begin('startup handler')
     if 
         not windower or
         not windower.ffxi
@@ -419,10 +435,30 @@ windower.register_event('load', function()
         return
     end
 
-    initTrustData()
+    partyAlignment.attach({
+        ffxi = windower.ffxi,
+        json = json,
+        clock = os.clock,
+        send = function(message) windower.send_ipc_message(message) end
+    })
+    profiling.checkpoint('party alignment attach')
 
-    globals.equipment_manager = require('./lib/equipment/init').new({
-        windower=windower,inventory=inventory,packets=packets,
+    initTrustData()
+    profiling.checkpoint('trust data initialization')
+
+    local equipmentService=require('./lib/equipment/init')
+    profiling.checkpoint('equipment module loading')
+    globals.equipment_manager = equipmentService.new({
+        windower=windower,inventory=inventory,packets=packets,resources=resources,
+        restoreGear=function()
+            local runtime=globals.event_system and globals.event_system.runtime
+            local player=windower.ffxi.get_player()
+            local category=player and (player.status==1 and 'battle' or player.status==0 and 'idle')
+            if not runtime or not category then return end
+            local vars=runtime:eventVariables()
+            local context=ActionContext.createTemporary('encumbrance removed',{vars=vars,original=runtime.config.vars})
+            if context and vars.gear and vars.gear[category] then context.equipMany(vars.gear[category]) end
+        end,
         context=ActionContext.createTemporary,
         report=function(message) writeError('[equipment] '..message) end,
         debug=function(message) writeDebug(message) end,
@@ -430,7 +466,47 @@ windower.register_event('load', function()
         formatCount=function(count) return text_number(count, Colors.debug) end,
     })
     inventory.equipment_manager=globals.equipment_manager
+    profiling.checkpoint('equipment service initialization')
+    local reactionMovementOwner={}
     globals.event_system = require('./lib/events/init').new({
+        reactions={
+            acquireMovement=function() return smartMove:acquireMovement(reactionMovementOwner) end,
+            releaseMovement=function() smartMove:releaseMovement(reactionMovementOwner) end,
+            movement={
+                available=function()
+                    local player=windower.ffxi.get_player()
+                    if not globals.enabled or not globals.logged_in or globals.actionsEnabled==false
+                        or not player or (player.status~=0 and player.status~=1) then return false end
+                    local blocked={Bind=true,Sleep=true,Stun=true,Petrification=true,Terror=true}
+                    for _,id in ipairs(player.buffs or {}) do
+                        local buff=resources.buffs[id]
+                        if buff and blocked[buff.en or buff.name] then return false end
+                    end
+                    return true
+                end,
+                mob=windower.ffxi.get_mob_by_id,
+                me=function() return windower.ffxi.get_mob_by_target('me') end,
+                start=function(x,y) return smartMove:moveTo(x,y,true,reactionMovementOwner) end,
+                cancel=function(id) smartMove:cancelJob(id,true,reactionMovementOwner) end,
+                job=function(id) return smartMove:getJobInfo(id,true) end,
+                clock=os.clock,tolerance=smartMove.tolerance,
+            },
+            log=function(message) print(message) end,
+            clock=os.clock,
+            enabled=function() return globals.enabled and globals.logged_in end,
+            player=windower.ffxi.get_player,
+            me=function() return windower.ffxi.get_mob_by_target('me') end,
+            mob=windower.ffxi.get_mob_by_id,
+            zone=function() local info=windower.ffxi.get_info();return info and info.zone end,
+            cancelMovement=function() smartMove:cancelJob(nil,true,reactionMovementOwner) end,
+            cancelReactionMovement=function(jobId) smartMove:cancelJob(jobId,true,reactionMovementOwner) end,
+            unlock=function() windower.send_command('input /lockon') end,
+            faceAway=function(target) directionality.faceAwayFromTarget(target) end,
+            restore=function(id)
+                local target=windower.ffxi.get_mob_by_target('bt')
+                if target and target.id==id then directionality.faceTarget(target) end
+            end,
+        },
         windower=windower,packets=packets,resources=resources,
         writeProcessed=writeJsonToFile,
         writeDiscovery=function(path,result)
@@ -483,12 +559,14 @@ windower.register_event('load', function()
         end,
     })
     -- Legacy cloud-panel code/assets/settings are retained, but no display is
+    profiling.checkpoint('event service initialization')
     -- created. The status panel is the supported UI, regardless of saved flags.
     globals.status_panel_ready = false
     globals.status_panel = require('./lib/ux/status-panel').new({
         windower=windower, texts=texts, images=images,
         enabled=function() return globals.enabled end,
         strategy=function() return settings.strategy end,
+        maxDistance=function() return settings.maxDistance end,
         canShareClaim=function(mob) return partyInfo:canShareClaimOnMob(mob) end,
         loggedIn=function() return globals.logged_in end,
         ready=function()
@@ -500,6 +578,7 @@ windower.register_event('load', function()
         subscribe=subscribeGambitLog,
         save=savePanelSettings,
     })
+    profiling.checkpoint('status panel initialization')
 
     smartMove:setLogger(writeDebug, writeTrace)
 
@@ -525,6 +604,7 @@ windower.register_event('load', function()
 
     windower.send_command('alias varget gbt varget')
     windower.send_command('alias varset gbt varset')
+    profiling.checkpoint('movement logger, key bindings and aliases')
 
     -- Store the current zone
     local info = windower.ffxi.get_info()
@@ -539,6 +619,7 @@ windower.register_event('load', function()
 
         globals.currentZone = info and info.zone > 0 and resources.zones[info.zone] or nil
         globals.language = info.language
+        profiling.checkpoint('login state, welcome and zone resources')
 
         -- Store self info
         local me = windower.ffxi.get_mob_by_target('me')
@@ -547,9 +628,12 @@ windower.register_event('load', function()
 
         -- Reload all settings
         resetCurrentMob(nil, true)
+        profiling.checkpoint('self state and target reset')
         reloadSettings()
+        profiling.checkpoint('settings reload (inclusive)')
 
         requestCurrencies()
+        profiling.checkpoint('currency requests')
 
         -- Request everyone's job info via IPC. Wait a moment to handle the case where
         -- we're doing a global reload (and thus other alts may not yet be ready to receive the message).
@@ -557,16 +641,20 @@ windower.register_event('load', function()
             syncJobInfoIpc()
             syncWeaponSkillInfoIpc()
         end, 3.0)
+        profiling.checkpoint('IPC sync scheduling')
     else
         globals.suppress_logging = true
 
         -- The loadSettings function properly handles stubbed out defaults when no user is logged in
         settings = loadSettings()
+        profiling.checkpoint('logged-out settings load')
     end
 
     -- Kick off background threads
     coroutine.schedule(cr_actionProcessor, 0)
     coroutine.schedule(cr_ipcSender, 0)
+    profiling.checkpoint('background thread scheduling')
+    profiling.finish()
 end)
 
 ---------------------------------------------------------------------
@@ -616,6 +704,7 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    partyAlignment.reset()
     globals.last_ability = nil
     globals.last_spell = nil
     globals.status_panel_ready = false
@@ -779,6 +868,7 @@ windower.register_event('ipc message', function (msg)
 
     --printDebug('IPC message received: [%s]':format(msg))
 
+    if partyAlignment.receive(msg) then return end
     msg = msg or ''--string.lower(msg or '')
 
     local split = msg:split(' ', string.encoding.shift_jis)
@@ -1740,6 +1830,7 @@ function cr_ipcSender()
         local logged_in = globals.logged_in
 
         if zone and zone.id > 0 and logged_in then
+            partyAlignment.tick()
             local me = windower.ffxi.get_mob_by_target('me')
             if me and me.valid_target then
                 sendWeaponSkillInfoIpc(true)

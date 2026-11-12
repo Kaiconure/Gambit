@@ -13,6 +13,7 @@ function Matches.attach(event)
     if event.kind=='buff' then event.name_lower=lower or nil end
     local useAliases=event.kind=='spell' or event.kind=='enemy_spell' or event.kind=='enemy_ability'
         or event.kind=='pet_ability' or event.kind=='job_ability' or event.kind=='weapon_skill'
+        or event.kind=='party_weapon_skill'
     local canonical=useAliases and Aliases.key(name)
     event.matches=function(value)
         if type(value)=='number' then return id~=nil and value==id end

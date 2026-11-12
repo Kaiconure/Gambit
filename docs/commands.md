@@ -179,9 +179,18 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 | `align -cancel` | Cancel smart movement. Alias: `-c`. |
 | `touch -t` | Interact with the selected entity. Also accepts `-name <name>` (`-n`) or `-id <id>`. |
 | `tap -t` | Interact, then press Escape twice to leave dialog/clear selection. Also accepts `-name <name>` or `-id <id>`. |
-| `sendkey <key> [key ...]` | Send a sequence of Windower key names. Alias: `sk`. |
+| `sendkey [<count>x] <key> ...` | Send a sequence of Windower key names. An explicit multiplier applies only to the next key; bare numbers remain key names. Alias: `sk`. |
+| `regen-item-index` | Regenerate `meta/generated-item-name-index.lua` from installed item resources. English short and long names use validated ID hints; missing or stale hints fall back to resource searches and cache results in memory. Ambiguous names retain resource-search behavior. |
+| `profile on\|off` | Enable or disable load timings in chat and `.data/load-profile-<character>.log`. Disabled by default. The local choice survives addon reloads, allowing startup measurements. Use `profile on` before reloading the addon or actions, then `profile off` when finished. |
 
 `touch` and `tap` operate at close range (the helpers default to 6 yalms); they do not automatically approach distant targets. Both accept `-all` to forward the interaction through the external Send addon to all characters. Without a target option, they do nothing.
+
+Following players while disengaged adds stable per-character spacing (0.15–0.75
+yalms beyond the configured distance) and slightly different restart thresholds.
+Lateral offsets stay within the configured follow-offset range. Followers keep
+their travel heading when stopping, avoid small steering corrections while far
+away, and drop lateral offsets when falling behind. Engaged follows, monster
+follows, combat alignment, and reaction movement retain their usual behavior.
 
 `align -angle` also accepts `frontside`, `backside`, `left`, `right`, `side`, or a range such as `"180+/-30"` / `"150-210"`. Flexible ranges permit alternate destinations after movement timeouts. See [flexible alignment](functions.md#flexible-alignment). The command's default `-wait` remains 10 seconds, shared across attempts.
 
@@ -191,6 +200,8 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 //gbt move -x 12.5 -y -40
 //gbt touch -name "Home Point"
 //gbt sendkey escape escape
+//gbt sendkey 3x down enter
+//gbt sendkey 3 enter
 ```
 
 ## Named functions

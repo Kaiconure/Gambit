@@ -4,6 +4,17 @@ Variables hold configuration and runtime state for Lua conditions and commands.
 Define them in JSON under `vars`, then read them through the context's `vars`
 object. Normal actions and events have separate variable stores.
 
+When assignments conflict, explicit variable priority is compared first:
+`!name` overrides ordinary `name`, which overrides fallback `^name`. At equal
+priority, a definition in the closest loaded namespace wins over its ancestors,
+regardless of import discovery order. This also applies to nested objects,
+array replacements/operations, and explicit clears. Within the same namespace
+layer, existing file/discovery ordering remains unchanged.
+
+The defining file determines namespace precedence. Importing a stock library
+from a derived namespace does not promote its defaults into that namespace.
+Action-local `with_vars` remains a separate override scope.
+
 ## Define and reference values
 
 An action file can define configuration alongside its actions:
@@ -140,9 +151,79 @@ Use explicit marker strings when that is your intent:
 }
 ```
 
-Ordinary clearing markers can clear earlier ordinary/default definitions, while
-prioritized definitions remain protected. Empty `{}` is not a general-purpose
-way to erase an inherited object; use an explicit clearing marker.
+Clearing markers follow the same precedence as concrete values. A clear in a
+child namespace remains nil/empty when parent defaults are loaded afterward.
+At equal priority the earlier definition wins; `!` can override ordinary/default
+values, while `^` remains a fallback. Empty `{}` is not a general-purpose way to
+erase an inherited object; use an explicit clearing marker.
+
+## Append distinct array entries with `array.append(...)`
+
+Use an append key to extend an inherited array without copying its full contents:
+
+```json
+{
+  "vars": {
+    "use_dispel": {
+      "array.append(buffs)": ["Blaze Spikes", "Howl"]
+    }
+  }
+}
+```
+
+This produces `vars.use_dispel.buffs`. Existing entries retain their order,
+followed by distinct additions in declaration order. Multiple layers can append;
+child additions are retained even when the inherited base is loaded later.
+Across layers, parent operations run before child operations; priority prefixes
+are applied first, from fallback to ordinary to prioritized operations.
+Duplicates use exact value equality (case-sensitive strings and structural
+equality for tables). Values are copied, so generated arrays do not share tables.
+
+A missing value initializes an array. An existing scalar, object, or sparse table
+is left unchanged and produces a warning; the append value must also be an array.
+Empty Lua tables are accepted as empty arrays. Explicit higher-precedence clears
+block lower-precedence additions. Prefixes such as `!array.append(buffs)` control
+the append's priority relative to the base; they do not replace the base array.
+
+The syntax works recursively in action and event variables and `with_vars`, and can be nested
+inside a `csv(...)` expansion. It is load-time syntax, not a runtime function.
+
+### Prepend distinct array entries
+
+`array.prepend(...)` adds entries at the beginning using the same priority,
+validation, copy isolation, nesting, and `with_vars` rules as append:
+
+```json
+{
+  "vars": {
+    "ws": {
+      "multi_stage": {
+        "array.prepend(preferred_weapon_skills)": ["Savage Blade", "Requiescat"]
+      }
+    }
+  }
+}
+```
+
+The supplied entries retain their order, followed by distinct existing entries.
+An entry already in the array moves to the front instead of being duplicated.
+For example, prepending `["B", "A"]` to `["A", "C"]` produces `["B", "A", "C"]`.
+Parent operations run before child operations, so child prepends appear before
+parent prepends. At equal priority within one layer, operations run in the order
+append, prepend, remove, independent of JSON key order. Missing arrays are
+initialized; explicit clears and priority prefixes work as they do for append.
+
+### Remove array entries
+
+`"array.remove(buffs)": ["Blaze Spikes", "Howl"]` removes every matching
+entry from `buffs`, preserving the remaining order. It uses the same equality,
+copy isolation, priority and nesting rules as append. A missing value stays nil;
+a non-array is unchanged with a warning. Removal also filters inherited entries
+that the loader encounters later.
+
+At equal priority in the same layer, append and prepend run before remove, so remove wins
+regardless of JSON key order. Across layers the child has the last word: it can
+remove a parent's additions or explicitly append a value removed by a parent.
 
 ## Expand multiple keys with `csv(...)`
 

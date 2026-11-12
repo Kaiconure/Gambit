@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Windower adapter: listeners owned here, independent of action selection.
 local Config=require('./lib/events/config')
 local Runtime=require('./lib/events/runtime')
@@ -9,6 +10,7 @@ local cureSpell=require('./lib/cure-spell')
 local targetMetadata=require('./lib/target-metadata')
 local pets=require('./lib/events/pets')
 local enemies=require('./lib/events/enemies')
+local partyWeaponSkills=require('./lib/events/party-weapon-skills')
 local observations=require('./lib/action-observation')
 local actionWait=require('./lib/action-wait')
 local trace=require('./lib/events/weapon-skill-trace')
@@ -31,6 +33,7 @@ local rejected={ [17]=true,[18]=true,[55]=true,[56]=true,[78]=true,[84]=true,
     [87]=true,[88]=true,[89]=true,[90]=true,[94]=true,[104]=true,[191]=true,
     [308]=true,[313]=true,[325]=true,[428]=true,[429]=true }
 function Service.new(deps)
+    if deps.reactions then require('./lib/reactions').attach(deps.reactions) end
     local self=setmetatable({deps=deps,listeners={},injections={}},Service)
     local function listen(name,fn)
         self.listeners[#self.listeners+1]=deps.windower.register_event(name,function(...)
@@ -44,7 +47,10 @@ function Service.new(deps)
         if discovery.active() then discovery.packet(id,original,modified,injected,blocked or result,deps,'outgoing') end
         return result
     end)
-    listen('action',function(action) self:action(action) end)
+    listen('action',function(action)
+        if self.encounterAction then self.encounterAction(action) end
+        self:action(action)
+    end)
     listen('incoming chunk',function(id,original,modified,injected,blocked)
         self:incoming(id,original,modified,injected,blocked)
         if self.weaknessIncoming then self.weaknessIncoming(id,original,modified,injected) end
@@ -53,6 +59,7 @@ function Service.new(deps)
     end)
     listen('incoming text',function(original,modified,mode)
         if self.weaknessText then self.weaknessText(original) end
+        if self.encounterText then self.encounterText(original) end
         if discovery.active() then
             local data=discovery.context(deps.windower.ffxi)
             data.original=original; data.modified=modified; data.mode=mode
@@ -60,6 +67,7 @@ function Service.new(deps)
         end
     end)
     listen('prerender',function()
+        if deps.reactions then require('./lib/reactions').tick() end
         if self.weaknessTick then self.weaknessTick() end
         if verify.active() then verify.tick() end
         self:loadingTick()
@@ -70,12 +78,14 @@ function Service.new(deps)
     end)
     listen('logout',function()
         if self.weaknessClear then self.weaknessClear() end
+        if self.encounterClear then self.encounterClear() end
         self:clear('logout'); self.runtime=nil
         if self.transitionLogout then self.transitionLogout() end
     end)
     require('./lib/events/transitions').attach(self,listen)
     require('./lib/events/buffs').attach(self,listen)
     require('./lib/events/abyssea').attach(self,listen)
+    require('./lib/encounter-state').attach(self,listen)
     return self
 end
 function Service:verification(command)
@@ -90,6 +100,7 @@ function Service:verification(command)
     return 'Usage: gbt events verify [start|stop]'
 end
 function Service:reload(outputProcessed,entryName)
+    return paths.withDirectoryCache(function()
     local deps=self.deps
     local player=deps.windower.ffxi.get_player()
     if not player then
@@ -98,30 +109,41 @@ function Service:reload(outputProcessed,entryName)
         self.runtime=nil; self.selectedFile=nil; return
     end
     local read=deps.read or function(path)
+        local started=profiling.now()
         local file=io.open((deps.windower.addon_path or '')..path,'r')
         if not file then return nil end
         local source=file:read('*a'); file:close()
-        local ok,value=pcall(json.parse,source)
+        profiling.eventRead(started,path)
+        local ok,value=pcall(profiling.parse,json.parse,source)
         assert(ok,path..': '..tostring(value))
         return value
     end
     local party=deps.windower.ffxi.get_party and deps.windower.ffxi.get_party() or {}
     local groups=selectors.entryPointGroups(player.main_job,party.party1_leader==player.id)
-    local config=Config.load(paths.eventFiles(player.name,player.main_job,groups),read,deps.report,function(required)
+    profiling.start('event candidate paths')
+    local eventPaths=paths.eventFiles(player.name,player.main_job,groups)
+    profiling.stop('event candidate paths')
+    local config=Config.load(eventPaths,read,deps.report,function(required)
         return selectors.matchesPlayer(player,required,party.party1_leader==player.id)
-    end,entryName)
+    end,entryName,function(source)
+        return math.floor(require('./lib/action-slots').priority(source or '',
+            paths.getLoadedPrecedence(),player.name,player.main_job)/10)
+    end)
     if outputProcessed and config.path and deps.writeProcessed then
+        profiling.start('event output generation/write')
         local name=config.path:match('([^/]+)%.json$') or player.main_job:lower()
         local outputPath=paths.writePath(player.name,'.output/'..name..'.events.processed.json')
         local ok,err=pcall(function()
             deps.writeProcessed(outputPath,require('./lib/events/processed')(config))
         end)
         if not ok then deps.report('Could not write processed events: '..tostring(err)) end
+        profiling.stop('event output generation/write')
     end
     -- Load/compile completely before replacing the active configuration.
     self:clear('reloaded')
     if deps.clearEquipmentLocks then deps.clearEquipmentLocks() end
     self.selectedFile=entryName
+    profiling.start('event runtime initialization')
     self.runtime=Runtime.new(config,{context=deps.context,report=deps.report,
         debug=function(message,lostLifecycle)
             if deps.debug then deps.debug(message) end
@@ -138,8 +160,11 @@ function Service:reload(outputProcessed,entryName)
         clock=deps.clock or os.clock,schedule=deps.schedule,barrier=deps.barrier,equipmentSession=deps.equipmentSession,
         traceEquipment=deps.traceEquipment,
         targetSnapshot=function(target) return targetMetadata.refresh(target,deps.windower.ffxi) end})
+    profiling.stop('event runtime initialization')
     self.loadingPending=self.runtime
+    profiling.start('event loading rules')
     self:loadingTick()
+    profiling.stop('event loading rules')
     if deps.announce then
         local path=config.path and (deps.formatPath and deps.formatPath(config.path) or config.path)
         deps.announce(path and ('Active event file: '..path) or 'No active event file (no matching file found).')
@@ -155,6 +180,7 @@ function Service:reload(outputProcessed,entryName)
         end
     end
     return config
+    end)
 end
 function Service:weaponSkillTrace(command)
     if command=='start' then
@@ -215,6 +241,7 @@ function Service:loadingTick()
     runtime:loading()
 end
 function Service:clear(outcome)
+    if self.deps.reactions then require('./lib/reactions').clear(outcome) end
     actionWait.clear(outcome,(self.deps.clock or os.clock)())
     if outcome=='reloaded' or outcome=='logout' or outcome=='unloaded' then self.loadingPending=nil end
     if self.runtime then self.runtime:clear(outcome) end
@@ -239,6 +266,11 @@ function Service:consumeInjection(original,modified)
     end
 end
 function Service:inject(packet)
+    if (packet.Category==2 or packet.Category==5)
+        and require('./lib/reactions').blocksActionsWhileMoving() then return false end
+    local mapping=outgoing[packet.Category]
+    if mapping and require('./lib/reactions').blocksAction(mapping[1],
+        self.deps.resources[mapping[2]] and self.deps.resources[mapping[2]][packet.Param]) then return false end
     if trace.active() and packet.Category==7 then
         trace.record('action_inject',{id=packet.Param,target=packet.Target,
             equipment=self.deps.traceEquipment and self.deps.traceEquipment()})
@@ -267,13 +299,19 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
                 sequence=type(data)=='string' and #data>=4 and (data:byte(3)+data:byte(4)*256) or nil})
         end
     end
-    if injected and self:consumeInjection(original,modified) then return end
     if blocked or not self.runtime then return end
     local deps=self.deps
     local packet=deps.packets.parse('outgoing',modified or original)
+    if (packet.Category==2 or packet.Category==3 or packet.Category==5 or packet.Category==7 or packet.Category==9)
+        and require('./lib/reactions').blocksActionsWhileMoving() then
+        if injected then self:consumeInjection(original,modified) end
+        return true
+    end
+    if injected and self:consumeInjection(original,modified) then return end
     local mapping=outgoing[packet.Category]
     if not mapping then return end
     local resource=deps.resources[mapping[2]] and deps.resources[mapping[2]][packet.Param]
+    if require('./lib/reactions').blocksAction(mapping[1],resource) then return true end
     if packet.Category==9 and resource and resource.prefix=='/pet' then mapping={'pet_ability','pet_abilities'} end
     local section=mapping[2]
     local rules=self.runtime.config.rules[section]
@@ -286,7 +324,9 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
                 if not dispatchAllowed(observation) then return end
                 if ready then
                     if observation then observation.sent_at=(self.deps.clock or os.clock)() end
-                    self:inject(packet)
+                    if not self:inject(packet) and observation then
+                        observation.sent_at=nil;observation.outcome='cancelled'
+                    end
                 elseif observation then observation.outcome='failed' end
             end)
             return true
@@ -315,6 +355,7 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
         name=resource.en,
         cast_time=mapping[1]=='spell' and resource.cast_time or nil,
         actor_id=player.id,
+        actor=targetMetadata.snapshot({id=player.id,name=player.name},deps.windower.ffxi.get_mob_by_id(player.id),player.id),
         pet=pet and {id=pet.id,index=pet.index,name=pet.name} or nil,
         type=resource.type,
         element=resource.element,
@@ -331,6 +372,11 @@ function Service:outgoing(id,original,modified,injected,blocked,observation)
     if event.kind=='spell' then
         for name,id in pairs(magicSkills) do event[name]=resource.skill==id end
         event.curing=cureSpell(resource)
+    end
+    if event.kind=='weapon_skill' then
+        require('./lib/weapon-skill-result').properties(event,resource)
+        event.actor.is_party_member=true
+        event.actor.is_alliance_member=true
     end
     event.target=targetMetadata.snapshot(event.target,target,player.id)
     return self.runtime:submit(event,function()
@@ -367,7 +413,9 @@ function Service:send(packet,observation)
             if not dispatchAllowed(observation) then return end
             if ready then
                 if observation then observation.sent_at=(self.deps.clock or os.clock)() end
-                self:inject(packet)
+                if not self:inject(packet) and observation then
+                    observation.sent_at=nil;observation.outcome='cancelled'
+                end
             else
                 if observation then observation.outcome='failed' end
                 self.deps.report('Action withheld after equipment failure')
@@ -376,7 +424,9 @@ function Service:send(packet,observation)
         return true
     end
     if observation then observation.sent_at=(self.deps.clock or os.clock)() end
-    return self:inject(packet)
+    local sent=self:inject(packet)
+    if not sent and observation then observation.sent_at=nil;observation.outcome='cancelled' end
+    return sent
 end
 function Service:enemyAction(action)
     return enemies.action(self,action,rejected)
@@ -411,7 +461,22 @@ function Service:selfResultAction(action)
     if self.deps.observeSelfResult then self.deps.observeSelfResult(observation) end
     if self.runtime then
         if pets.action(self,action) then return observation end
-        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome,observation.results)
+        if observation.kind=='weapon_skill' then
+            self.wsObservedTargets=self.wsObservedTargets or setmetatable({}, {__mode='k'})
+            for _,request in ipairs(self.runtime.pending) do
+                local event=request.event
+                if request.sent_at and event.kind=='weapon_skill' and event.id==observation.id
+                    and event.target and require('./lib/weapon-skill-result').find(observation.results,event.target.id) then
+                    self.wsObservedTargets[action]=event.target.id;break
+                end
+            end
+        end
+        local matched=self.runtime:complete(observation.kind,observation.id,nil,observation.outcome,observation.results,observation.resource)
+        if not matched and observation.kind=='weapon_skill' then
+            -- A visible self WS still has a post result if its outgoing request
+            -- was not observed. Do not duplicate an existing lifecycle's post.
+            partyWeaponSkills.action(self,action,rejected,true)
+        end
         -- The server reports the roll resource for Double-Up. Exact roll
         -- matching wins; only then try an outstanding dispatched Double-Up.
         local ability=observation.kind=='job_ability' and observation.resource
@@ -424,6 +489,7 @@ function Service:selfResultAction(action)
 end
 function Service:action(action)
     if not action then return end
+    partyWeaponSkills.action(self,action,rejected)
     if discovery.active() then discovery.action(action,self.deps.windower.ffxi,self.deps.resources) end
     if self.deps.externalSelfResults and (action.category==3 or action.category==6 or action.category==14) then
         local player=self.deps.windower.ffxi.get_player()

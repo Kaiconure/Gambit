@@ -1,0 +1,7 @@
+{
+  "vars": {
+    "party_weapon_skills": {
+      "include_alliance": false
+    }
+  }
+}

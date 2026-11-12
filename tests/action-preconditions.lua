@@ -50,6 +50,24 @@ assert(ok and value == 'wait')
 ok, value = coroutine.resume(thread)
 assert(ok and value == true and coroutine.status(thread) == 'dead')
 print('PASS: nested inheritance, branch isolation, empty values, order, short-circuit, errors, yields')
+-- Exercise the compiler's actual unconditional-action defaults.
+local compilerFile = assert(io.open('lib/action-processing.lua'))
+local compilerSource = compilerFile:read('*all');compilerFile:close()
+local defaults = assert(compilerSource:match('(if action%.when == nil or trimString.-)\n%s*if action%.when and action%.commands'))
+local applyDefaults = assert(loadstring('return function(action, trimString) '..defaults..' return action end'))()
+local function trim(value) return value:match('^%s*(.-)%s*$') end
+for _, missingWhen in ipairs({false, '', '  '}) do
+    for _, frequency in ipairs({false, 0, 0.25, 2, 'infinity'}) do
+        local action = {when=missingWhen or nil, frequency=frequency or nil}
+        applyDefaults(action, trim)
+        assert(action.when == 'true')
+        assert(action.frequency == (frequency or 1), 'explicit frequency must be preserved')
+    end
+end
+local conditional = {when='ready()'}
+applyDefaults(conditional, trim)
+assert(conditional.when == 'ready()' and conditional.frequency == nil)
+print('PASS: unconditional defaults preserve explicit frequencies, including zero')
 -- Windower permits string-literal method syntax that stock Lua does not.
 for _, path in ipairs({'lib/settings.lua', 'lib/action-processing.lua'}) do
     local file = assert(io.open(path))

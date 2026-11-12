@@ -5,20 +5,54 @@
   "vars": {
     "^keep_protectra_shellra": {
       "align_leader": true,
+      "range": 9,
       "check_members": null
     }
   },
   "actions": [
     {
+      "movement_owner": "protectra-shellra",
+      "when": [
+        "vars.keep_protectra_shellra.align_leader",
+        "not me.is_party_leader and party_leader and party_leader.is_participant",
+        "not hasBuff(party_leader, 'Protect')",
+        "hasSpell('Protectra V', 'Protectra IV', 'Protectra III', 'Protectra II', 'Protectra')",
+        "canUseSpell(spell.name)"
+      ],
+      "commands": [
+        "log('Preparing to apply', spell.name, 'for the leader')",
+        "(party_leader.center_distance <= vars.keep_protectra_shellra.range or (reserveMovement(6) and approachWithinRange(party_leader, 0.5, {range=vars.keep_protectra_shellra.range, duration=5}))) and useSpell(me)",
+        "releaseMovement()"
+      ],
+      "delay": 0,
+      "frequency": 10
+    },
+    {
+      "movement_owner": "protectra-shellra",
+      "when": [
+        "vars.keep_protectra_shellra.align_leader",
+        "not me.is_party_leader and party_leader and party_leader.is_participant",
+        "not hasBuff(party_leader, 'Shell')",
+        "hasSpell('Shellra V', 'Shellra IV', 'Shellra III', 'Shellra II', 'Shellra')",
+        "canUseSpell(spell.name)"
+      ],
+      "commands": [
+        "log('Preparing to apply', spell.name, 'for the leader')",
+        "(party_leader.center_distance <= vars.keep_protectra_shellra.range or (reserveMovement(6) and approachWithinRange(party_leader, 0.5, {range=vars.keep_protectra_shellra.range, duration=5}))) and useSpell(me)",
+        "releaseMovement()"
+      ],
+      "delay": 0,
+      "frequency": 10
+    },
+    {
       "when": [
         "not hasBuff('Protect') or \\",
-        "  (arrayCount(vars.keep_protectra_shellra.check_members) > 0 and partyByName(vars.keep_protectra_shellra.check_members) and not hasBuff(member, 'Protect'))",
+        "  (arrayCount(vars.keep_protectra_shellra.check_members) > 0 and partyByName(vars.keep_protectra_shellra.check_members) and member.is_participant and member.center_distance <= vars.keep_protectra_shellra.range and not hasBuff(member, 'Protect'))",
         "hasSpell('Protectra V', 'Protectra IV', 'Protectra III', 'Protectra II', 'Protectra')",
         "canUseSpell(spell.name)"
       ],
       "commands": [
         "log('Preparing to apply', spell.name)",
-        "not vars.keep_protectra_shellra.align_leader or me.is_party_leader or not party_leader or party_leader.distance < 5 or align(party_leader, nil, 2, 5)",
         "useSpell(me)"
       ],
       "delay": 0,
@@ -27,15 +61,38 @@
     {
       "when": [
         "not hasBuff('Shell') or \\",
-        "  (arrayCount(vars.keep_protectra_shellra.check_members) > 0 and partyByName(vars.keep_protectra_shellra.check_members) and not hasBuff(member, 'Shell'))",
+        "  (arrayCount(vars.keep_protectra_shellra.check_members) > 0 and partyByName(vars.keep_protectra_shellra.check_members) and member.is_participant and member.center_distance <= vars.keep_protectra_shellra.range and not hasBuff(member, 'Shell'))",
         "hasSpell('Shellra V', 'Shellra IV', 'Shellra III', 'Shellra II', 'Shellra')",
         "canUseSpell(spell.name)"
       ],
       "commands": [
         "log('Preparing to apply', spell.name)",
-        "not vars.keep_protectra_shellra.align_leader or me.is_party_leader or not party_leader or party_leader.distance < 5 or align(party_leader, nil, 2, 5)",
         "useSpell(me)"
       ],
+      "delay": 0,
+      "frequency": 10
+    },
+    {
+      "when": [
+        "arrayCount(vars.keep_protectra_shellra.check_members) > 0",
+        "partyByName(vars.keep_protectra_shellra.check_members)",
+        "member.is_participant and member.center_distance > vars.keep_protectra_shellra.range",
+        "not hasBuff(member, 'Protect')",
+        "canUseSpell('Protect V', 'Protect IV', 'Protect III', 'Protect II', 'Protect')"
+      ],
+      "commands": ["useSpell(member)"],
+      "delay": 0,
+      "frequency": 10
+    },
+    {
+      "when": [
+        "arrayCount(vars.keep_protectra_shellra.check_members) > 0",
+        "partyByName(vars.keep_protectra_shellra.check_members)",
+        "member.is_participant and member.center_distance > vars.keep_protectra_shellra.range",
+        "not hasBuff(member, 'Shell')",
+        "canUseSpell('Shell V', 'Shell IV', 'Shell III', 'Shell II', 'Shell')"
+      ],
+      "commands": ["useSpell(member)"],
       "delay": 0,
       "frequency": 10
     }

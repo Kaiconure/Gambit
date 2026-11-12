@@ -2,19 +2,9 @@
   "about": {
     "author": "@Kaiconure",
     "notes": [
-      "Place this at the very top of your battle section, or at least above any gambit that will turn or move toward the mob.",
-      "This will pull in all of the face away gambits, to ensure you turn away from mobs at the right time."
+      "Face-away rules now run through stock enemy events; action-list placement is no longer required.",
+      "This compatibility import retains the legacy gear-removal command hook only. See docs/reactions.md."
     ]
   },
-  "actions": [
-    {
-      "import": "reactions/face-away-on-ability"
-    },
-    {
-      "import": "reactions/face-away-bracketed"
-    },
-    {
-      "import": "reactions/face-away-on-spell"
-    }
-  ]
+  "actions": [{ "import": "reactions/face-away-on-ability" }]
 }

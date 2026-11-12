@@ -1,6 +1,8 @@
+local profiling=require('./lib/load-profile')
 local actionWait=require('./lib/action-wait')
 local actionErrors = require('./lib/action-errors')
 local actionPreconditions = require('./lib/action-preconditions')
+local variableActionScope = require('./lib/action-variable-scope')
 local targetedAction = require('./lib/targeted-action')
 local actionCategories = require('./meta/outgoing-action-categories')
 -------------------------------------------------------------------------------
@@ -187,6 +189,7 @@ function sendActionCommand(
     pauseFollow,        -- Whether follows should be paused during execution
     durationType        -- Set how to handle the specified duration
 )
+    if require('./lib/reactions').blocksActionsWhileMoving() then return false end
     if durationType then
         writeDebug("Warning: Duration type value provided: " .. tostring(durationType))
     end
@@ -371,10 +374,13 @@ end
  --------------------------------------------------------------------------------------
 -- Recompiles the specified action type
 local function compileActions(actionType, parent, rawActions)
+    profiling.start('compile category '..actionType)
     --writeMessage(string.format('Recompiling [%s] actions...', actionType))
 
     if isArray(rawActions) then
-        local actions = json.parse(json.stringify(rawActions)) -- force deep copy
+        profiling.start('action category deep copy')
+        local actions = require('./lib/settings-snapshot')(rawActions)
+        profiling.stop('action category deep copy')
         local _temp = {}
         for i, action in ipairs(actions) do
             local shouldAdd = false
@@ -432,11 +438,11 @@ local function compileActions(actionType, parent, rawActions)
                 action.when = combined
             end
 
-            -- If no when was provided, we'll always evaluate to true but will force a frequency of at least 1 second.
-            -- Otherwise, this action (which always evaluates to true) would prevent anything further down from ever running.
+            -- Unconditional actions default to a one-second frequency to avoid starvation.
+            -- Honor an explicit frequency, including zero.
             if action.when == nil or trimString(action.when) == '' then 
                 action.when = 'true' 
-                action.frequency = math.max(tonumber(action.frequency) or 0, 1)
+                if action.frequency == nil then action.frequency = 1 end
             end
 
             if action.when and action.commands and not action.disabled then
@@ -513,6 +519,14 @@ local function compileActions(actionType, parent, rawActions)
                     
                     local hasErrors = type(action._whenFn) ~= 'function' or not elseValid
                     if not hasErrors then
+                        local ok,message=pcall(variableActionScope.compile,action)
+                        if not ok then
+                            local field=action.scope=='expression' and 'scope_expression' or 'scope_variable'
+                            actionErrors.fail(action,'compile '..field,action[field],message)
+                            hasErrors=true
+                        end
+                    end
+                    if not hasErrors then
                         hasErrors = not actionPreconditions.compile(action, actionErrors)
                     end
                     if not hasErrors then
@@ -563,6 +577,8 @@ local function compileActions(actionType, parent, rawActions)
     end
 
     local actionCount = #actionStateManager.actions[actionType]
+    profiling.stop('compile category '..actionType)
+    profiling.start('compilation message output')
     if actionCount > 0 then
         writeMessage('Compilation of %s has completed.':format(
             pluralize(actionCount,
@@ -574,15 +590,22 @@ local function compileActions(actionType, parent, rawActions)
             text_action(actionType .. ' actions')
         ))
     end
+    profiling.stop('compilation message output')
 end
 
 --------------------------------------------------------------------------------------
 -- Recompiles all action types
 local variableScopes = require('./lib/variable-scopes')
 local function compileAllActions()
-    local settingsCopy = json.parse(json.stringify(settings))
+    profiling.begin('action compilation')
+    profiling.start('settings snapshot')
+    local settingsCopy = require('./lib/settings-snapshot')(settings)
+    profiling.stop('settings snapshot')
+    profiling.start('compile rules')
 
     actionStateManager:reset()
+    require('./lib/encounter-state').reset()
+    require('./lib/party-alignment').reset()
 
     local actions = settingsCopy.actions
 
@@ -598,9 +621,11 @@ local function compileAllActions()
     compileActions('imports',       actions, actions and actions.imports or {})
     compileActions('functions',     actions, actions and actions.functions or {})
 
+    profiling.stop('compile rules')
+    profiling.start('variables/scopes')
     actionStateManager:initializeVars(actions and actions.vars or {})
     actionStateManager.variableScopes = variableScopes.build(
-        actionStateManager.vars, actionStateManager.originalVars, actions and actions._variableScopes)
+        actionStateManager.vars, actionStateManager.originalVars, actions and actions._variableScopes, writeWarning)
 
     -- Internal variables are stored here
     actionStateManager.vars._ = {}
@@ -608,6 +633,8 @@ local function compileAllActions()
 
     actionStateManager:keybindFunctions()
 
+    profiling.stop('variables/scopes')
+    profiling.finish(profiling.report)
     actionStateManager.needsRecompile = false
     reportLoadedSettings()
 end
@@ -643,6 +670,10 @@ local function getNextBattleAction(context)
     if actions then
         for i, action in ipairs(actions) do
             if not action.as_function and not action._runtimeError then
+                -- Bind before reading watched paths so with_vars resolves for
+                -- this action rather than the previously inspected action.
+                context.action = action
+                local variableReady = variableActionScope.ready(action,variableActionScope.capture(action,context))
                 if action.scope == 'battle' or action.scope == 'zone' then
                     --
                     -- Handle execution scoping. This is updated only when the action conditions are met.
@@ -663,7 +694,7 @@ local function getNextBattleAction(context)
                 end
 
                 if 
-                    context.time >= action.availableAt and
+                    variableReady and context.time >= action.availableAt and
                     delayReference >= action.delay
                 then 
                     -- When we evaluate a new action, we need to clear the state left behind by any previous actions
@@ -773,7 +804,12 @@ local function executeBattleAction(context, action)
         context.action = action
 
         local branch = context._actionBranch or 'commands'
+        local variableSnapshot = variableActionScope.capture(action,context)
+        if action._runtimeError then return nil end
         if not actionErrors.commands(action, context, branch) then return nil end
+        if variableActionScope.active(action) and not action.incomplete then
+            action.scopes.execution[action.scope] = variableSnapshot
+        end
 
         -- At this point, we'll set the next schedule time based on the later of either its
         -- configured frequency or its own current schedulable time.
@@ -801,6 +837,10 @@ end
 function processNextAction(context)
     -- Don't proceed if automation was disabled
     if not globals.enabled then return end
+
+    if globals.actionsEnabled~=false and context.reactions and context.reactions.respond and context.reactions.respond() then
+        return {name='reaction-distance'}
+    end
 
     local action = getNextBattleAction(context)
     
@@ -952,27 +992,24 @@ local function doNextActionCycle(time, player, party)
                     local commandDelay = 0
                     local hasCommand = false
 
-                    -- Lock on if necessary
-                    local target = windower.ffxi.get_mob_by_target('t')
-                    --if player.target_index ~= mob.index then
-                    if target == nil or target.id ~= mob.id then
-                        
-                        --printDebug('Pull targeting start')
-                        lockTarget(player, mob, true)
-                        --printDebug('Pull targeting completed')
+                    -- Manual strategy leaves cursor acquisition and engagement to
+                    -- actions. A tracked target alone must not bypass their gates.
+                    if settings.strategy ~= 'manual' then
+                        -- Lock on if necessary
+                        local target = windower.ffxi.get_mob_by_target('t')
+                        if target == nil or target.id ~= mob.id then
+                            lockTarget(player, mob, true)
+                        end
 
-                        --command = command .. makeSelfCommand(string.format('target -index %d; wait 0.5', mob.index))
-                        --hasCommand = true
-                    end
+                        -- Engage if necessary
+                        if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
+                            command = command .. string.format('input /attack <t>; ')
+                            hasCommand = true
+                        end
 
-                    -- Engage if necessary
-                    if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
-                        command = command .. string.format('input /attack <t>; ')
-                        hasCommand = true
-                    end
-
-                    if hasCommand then
-                        sendActionCommand(command, nil, 0.25)
+                        if hasCommand then
+                            sendActionCommand(command, nil, 0.25)
+                        end
                     end
 
                     -- Give some time for us to establish and engage with a new target before jumping straight to the pull
@@ -1121,7 +1158,7 @@ function cr_actionProcessor()
                     if not globals.enabled then
                         local existingJobId = smartMove:getJobId()
                         if existingJobId then
-                            smartMove:cancelJob()
+                            smartMove:stop()
                         end
                     end
                 end

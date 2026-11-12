@@ -93,3 +93,17 @@ local success, message = pcall(function()
 end)
 assert(not success and message:find('reserved for namespace contents', 1, true))
 print('PASS: reserved segments, device names, valid alternatives and inherited-name validation')
+for _,name in ipairs({'s.behemoth','boss/_s.behemoth','boss.v2/s.behemoth'})do
+ assert(paths.validateNamespace(name),name)
+end
+for _,name in ipairs({'.','..','.hidden','boss/../other','boss/./other','boss.','boss/name./child','con.txt','boss/_COM1.rules'})do
+ assert(not paths.validateNamespace(name),name)
+end
+configs['boss/s.behemoth']={inherits_from='base.v2'}
+configs['base.v2']={}
+assert(table.concat(resolve('boss/s.behemoth'),',')=='boss/s.behemoth,base.v2')
+configs['base.v2'].inherits_from='../outside'
+assert(not pcall(resolve,'boss/s.behemoth'))
+assert(paths.setNamespace('boss/s.behemoth'))
+assert(paths.namespacePath('boss/s.behemoth')=='./settings/namespaces/boss/s.behemoth')
+print('PASS: dotted namespace folders and inheritance references; traversal, trailing dots and device extensions rejected')

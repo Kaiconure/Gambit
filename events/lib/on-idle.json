@@ -5,6 +5,18 @@
       "windower_commands": []
     }
   },
+  "zones": {
+    "enter": [
+      {
+        "when": ["me.is_idle and vars.gear.idle"],
+        "commands": [
+          "equipMany(vars.gear.idle)",
+          "equipment_set and equipment_set.meta and equipment_set.meta.stop and stopEvent()"
+        ],
+        "id": "on-zone-enter-idle-gear"
+      }
+    ]
+  },
   "statuses": {
     "idle": {
       "enter": [

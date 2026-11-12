@@ -24,6 +24,12 @@ Gambit's normal actions and event rules share one equipment manager under
 `equipPop` calls keep their input formats. A successful call means changes were
 requested, not that the server has confirmed them.
 
+While Encumbrance is active, the shared manager rejects gear changes, including
+event-phase plans and equipment restoration. Queued swaps are discarded rather
+than retried or replayed after the effect ends. On removal, Gambit refreshes its
+equipment snapshot and requests the configured battle or idle set for the
+character's current status, without rerunning battle/idle entry commands.
+
 ## Equipment views
 
 ### Conditional slot locks
@@ -99,6 +105,12 @@ available can upgrade the slot on a later call. Candidates unavailable for the
 slot, including copies already used by another slot, are skipped. If none are
 available the slot is left unchanged. Paired slots resolve in deterministic slot
 order and cannot select the same physical copy twice.
+
+Candidates must meet the current main-job and level requirements. Weapons requested
+for `sub` also require the currently available Dual Wield trait; shields do not.
+This is checked on each equipment request, so changing from COR/DNC to COR/WAR
+skips an unusable off-hand weapon without blocking the other slots. A later shield
+candidate can still be selected. Snapshot restoration applies the same checks.
 
 `equipPop()` does not select candidates: it restores the exact saved physical
 item instance or empty slot, as before. Helper return conventions are unchanged.

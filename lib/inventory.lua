@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 local inventory = {}
 local function equipment_view(items,confirmed,session)
     local manager=session or inventory.equipment_manager
@@ -173,7 +174,10 @@ inventory.get_item_from_bag = function (items, bagId, localId)
     end
 
     -- Find the actual item info
-    return resources.items[bagItem.id]    
+    profiling.start('equipment current-slot resource access')
+    local result=resources.items[bagItem.id]
+    profiling.stop('equipment current-slot resource access')
+    return result
 end
 
 -- flags:
@@ -259,7 +263,31 @@ local function is_item_excluded(exclusion_list, bagId, localId)
     end
 end
 
+local function equipment_requirements()
+    local player=windower.ffxi.get_player and windower.ffxi.get_player()
+    local dualWield
+    return function(item,slotId)
+        if item.jobs and (not player or not item.jobs[player.main_job_id]) then return false end
+        if item.level and (not player or not player.main_job_level or player.main_job_level < item.level) then
+            return false
+        end
+        if slotId==1 and (item.category=='Weapon' or item.type==4) then
+            if dualWield==nil then
+                dualWield=false
+                local abilities=windower.ffxi.get_abilities and windower.ffxi.get_abilities()
+                for _,id in ipairs(abilities and abilities.job_traits or {}) do
+                    if id==18 then dualWield=true;break end -- Dual Wield trait.
+                end
+            end
+            return dualWield
+        end
+        return true
+    end
+end
+
 inventory.equip_many = function(pieces, all_items, simulate, changes, session)
+    local manager=session or inventory.equipment_manager
+    if manager and manager.canEquip and not manager:canEquip() then return 0 end
     -- Set-level metadata belongs to callers, not slot resolution.
     if pieces.meta~=nil then
         local equipment={}
@@ -268,7 +296,8 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
         end
         pieces=equipment
     end
-    all_items = equipment_view(all_items or windower.ffxi.get_items(),false,session)
+    all_items = profiling.measure('equipment snapshot/view',equipment_view,
+        all_items or profiling.measure('equipment get_items',windower.ffxi.get_items),false,session)
     
     if type(changes) == 'table' then
         changes.removed = {}
@@ -288,6 +317,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
     local flags = { equippable = true, equipped = false }
     local swaps = { }
     local lockRequests={}
+    local meetsRequirements=equipment_requirements()
 
     -- Resolve in slot order as well as sending in slot order. Candidate copies
     -- reserved by one slot cannot be reused by a later slot in this request.
@@ -311,19 +341,21 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                 local name=choice.equipment or choice.item or choice.gear or choice.name
                 local augments=choice.augments or choice.aug or {}
                 if type(name)=='string' then
-                    local resource=findItem(name)
+                    local resource=profiling.measure('equipment candidate resource',findItem,name)
                     -- Equipped/queued copies are eligible, and win over other
                     -- physical copies of this candidate. Unspecified augments
                     -- do not require an unnecessary change to another copy.
-                    if equipped and resource and equipped.id==resource.id
+                    local eligible=resource and meetsRequirements(resource,info.id)
+                    if eligible and equipped and equipped.id==resource.id
                         and not is_item_excluded(exclusion_list,equipped.bagId,equipped.localId)
                         and inventory.has_all_augments(equipped,augments) then
                         selected=equipped
-                    elseif resource then
+                    elseif eligible then
                         local excluded={}
                         for _,item in ipairs(exclusion_list) do excluded[#excluded+1]=item end
                         while true do
-                            local candidate=inventory.find_item({id=resource.id,name=name,augments=augments,slot=slot},flags,all_items,excluded,session)
+                            local candidate=profiling.measure('equipment inventory search',inventory.find_item,
+                                {id=resource.id,name=name,augments=augments,slot=slot},flags,all_items,excluded,session)
                             if not candidate then break end
                             excluded[#excluded+1]=candidate
                             if candidate.raw_slots[info.id] then selected=candidate; break end
@@ -412,7 +444,7 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
             for _,info in ipairs(GEAR_SLOT_INFO) do
                 if lockRequests[info.id] then operations[#operations+1]=lockRequests[info.id] end
             end
-            manager:submit(operations)
+            profiling.measure('equipment submission/phase plan',manager.submit,manager,operations)
         else
             for _,op in ipairs(operations) do windower.ffxi.set_equip(op.item.localId,op.slot,op.item.bagId) end
         end
@@ -442,11 +474,14 @@ inventory.snapshot_equipment = function(session)
 end
 
 inventory.restore_equipment = function(removed,session)
+    local manager=session or inventory.equipment_manager
+    if manager and manager.canEquip and not manager:canEquip() then return 0 end
     local items=windower.ffxi.get_items()
     if not items then return 0 end
     local count=0
     local operations={}
     local legacy={}
+    local meetsRequirements=equipment_requirements()
     for slot,saved in pairs(removed or {}) do
         local slotId=inventory.get_slot_id_by_name(slot)
         if slotId~=nil then
@@ -456,7 +491,7 @@ inventory.restore_equipment = function(removed,session)
             elseif type(saved.localId)=='number' and type(saved.bagId)=='number' then
                 local item=inventory.get_item_from_bag(items,saved.bagId,saved.localId)
                 -- Never equip an unrelated item if a bag slot has been reused.
-                if item and item.id==saved.id then
+                if item and item.id==saved.id and meetsRequirements(item,slotId) then
                     operations[#operations+1]={slot=slotId,item={localId=saved.localId,bagId=saved.bagId,id=saved.id},
                         after=slotId==1 and 0 or slotId==3 and 2 or nil}
                     count=count+1
@@ -561,7 +596,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
         }
     end
 
-    items = items or windower.ffxi.get_items()
+    items = items or profiling.measure('equipment search get_items',windower.ffxi.get_items)
     if not flags.usable then items=equipment_view(items,flags.confirmed,session) end
     -- Inventory can be absent or partially populated while zoning.
     if type(items)~='table' then return end
@@ -588,7 +623,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
                     bagItems = empty
                 end
             else
-                bagItems = tableAll(bag, function (_i)
+                bagItems = profiling.measure('equipment bag filter',tableAll,bag, function (_i)
                     return type(_i) == 'table' and _i.id == item.id 
                 end)
             end
@@ -613,7 +648,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
                     item and
                     not is_item_excluded(exclusion_list, bagId, bagItem.slot)
                 then
-                    local ext = extdata.decode(bagItem)
+                    local ext = profiling.measure('equipment extdata decode',extdata.decode,bagItem)
 
                     local chargesRemaining = 1
                     local secondsUntilReuse = nil

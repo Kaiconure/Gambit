@@ -13,6 +13,7 @@ function targeted.send(category, resource, targetId, observation)
     if observation and observation.validate and not observation.validate() then return false end
     if not kinds[category] or not resource or
         type(resource.id) ~= 'number' or type(targetId) ~= 'number' then return false end
+    if require('./lib/reactions').blocksAction(kinds[category],resource) then return false end
     local mob = windower.ffxi.get_mob_by_id(targetId)
     if not mob or not mob.valid_target or type(mob.index) ~= 'number' then return false end
     local packet = packets.new('outgoing', 0x01A, {

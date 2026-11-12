@@ -1,36 +1,7 @@
-local skillchain_ids = T{
-    288,
-    289,
-    290,
-    291,
-    292,
-    293,
-    294,
-    295,
-    296,
-    297,
-    298,
-    299,
-    300,
-    301,
-    385,
-    386,
-    387,
-    388,
-    389,
-    390,
-    391,
-    392,
-    393,
-    394,
-    395,
-    396,
-    397,
-    767,
-    768,
-    769,
-    770
-}
+local skillchain_ids = T{}
+for id in pairs(require('./meta/weapon-skill-results').skillchains) do
+    skillchain_ids[#skillchain_ids + 1] = id
+end
 
 local sc_categories = S{
     'weaponskill_finish',

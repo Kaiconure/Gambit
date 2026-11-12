@@ -77,3 +77,12 @@ assert(retry.reserveMovement(20))
 assert(retry.releaseMovement())
 assert(not retry.resumeMovement(20)) -- Completion still closes continuation.
 print('PASS: recoverable release retries across contexts and contention without extending deadline')
+
+-- Creating an observational event context must not end the normal action lease.
+local idleRoll=context('corsair-rolls','idle',20)
+assert(idleRoll.reserveMovement(90))
+context(nil,'function',-1) -- A roll's own result event creates this temporary context.
+assert(context('corsair-rolls','idle',20).hasMovementReservation(),
+    'Temporary event context discarded the idle roll reservation')
+assert(context('corsair-rolls','idle',20).resumeMovement(90))
+print('PASS: temporary event context construction preserves the active roll reservation')

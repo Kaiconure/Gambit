@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Select one event file and compile it independently of normal action imports.
 local copy=require('./lib/variable-values').copy
 local factory=require('./lib/execution-factory')
@@ -6,9 +7,10 @@ local importDocuments=require('./lib/events/imports')
 local eventSlots=require('./lib/events/slots')
 local Config={kinds={'spells','job_abilities','weapon_skills','pet_abilities'},phases={'pre','mid','post'}}
 local statusCategories=require('./lib/events/statuses').categories
-local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading','buffs','enemy_spells','enemy_abilities'}
+local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading','buffs','enemy_spells','enemy_abilities','party_weapon_skills'}
 for _,category in ipairs(statusCategories) do sections[#sections+1]='statuses.'..category end
 local function phases(kind)
+    if kind=='party_weapon_skills' then return {'post'} end
     if kind=='loading' then return {'actions'} end
     if kind=='buffs' then return {'added','removed'} end
     if kind=='enemy_spells' or kind=='enemy_abilities' then return {'pre','post'} end
@@ -33,14 +35,22 @@ local function expressions(value,label)
     end
     return result
 end
-local function compileRule(rule,label,contributed)
+local function compileRule(rule,label,contributed,sourcePath)
     assert(type(rule)=='table',label..': rule must be an object')
     if rule.slot~=nil or rule.slots~=nil then
         assert(not contributed,label..': contributions cannot contain slots')
         for key in pairs(rule) do
-            assert(key=='slot' or key=='slots' or key=='comment',label..': slots must be standalone placeholders')
+            assert(key=='slot' or key=='slots' or key=='comment' or key=='actions',label..': unsupported slot field')
         end
-        return {slot=copy(rule.slot),slots=copy(rule.slots),source=label}
+        local actions
+        if rule.actions~=nil then
+            actions={}
+            for index,child in ipairs(array(rule.actions,label..'.actions')) do
+                local item=compileRule(child,label..'.actions['..index..']',true,sourcePath)
+                if item then actions[#actions+1]=item end
+            end
+        end
+        return {slot=copy(rule.slot),slots=copy(rule.slots),source=label,actions=actions,_slotSource=sourcePath}
     end
     assert(rule.id==nil or (type(rule.id)=='string' and rule.id:match('%S')),label..': invalid rule id')
     assert(rule.disabled==nil or type(rule.disabled)=='boolean',label..': invalid disabled flag')
@@ -56,7 +66,7 @@ local function compileRule(rule,label,contributed)
         conditions=not rule.disabled and expressions(rule.when,label..'.when') or {},
         commands=not rule.disabled and expressions(rule.commands,label..'.commands') or {}}
 end
-function Config.load(paths,read,warn,matchesRequired,entryName)
+function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
     local result={vars={},rules={},files={},vars_files={}}
     local inlineVars={}
     local layouts={}
@@ -68,7 +78,10 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
         end
     end
     local slots=eventSlots.new(result.rules,layouts,paths,warn,matchesRequired,compileRule)
+    profiling.start('event import discovery/read')
     local documents,selectedPath=importDocuments(paths,read,entryName)
+    profiling.stop('event import discovery/read')
+    profiling.start('event rule validation/compile')
     result.path=selectedPath
     for _,entry in ipairs(documents) do
         local path,document=entry.path,entry.document
@@ -98,7 +111,7 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
                 if section then
                     assert(type(section)=='table',path..': '..kind..' must be an object')
                     local observational=kind=='zones' or kind=='loading' or kind=='buffs'
-                        or kind=='enemy_spells' or kind=='enemy_abilities' or category~=nil
+                        or kind=='enemy_spells' or kind=='enemy_abilities' or kind=='party_weapon_skills' or category~=nil
                     assert(not observational or section.use_equipment_snapshot==nil,
                         path..': '..kind..' does not support use_equipment_snapshot')
                     assert(section.use_equipment_snapshot==nil or type(section.use_equipment_snapshot)=='boolean',
@@ -112,7 +125,7 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
                     for _,phase in ipairs(phases(kind)) do
                         for index,rule in ipairs(array(section[phase] or {},path..':'..kind..'.'..phase)) do
                             local list=result.rules[kind][phase]
-                            local item=compileRule(rule,path..':'..kind..'.'..phase..'['..index..']')
+                            local item=compileRule(rule,path..':'..kind..'.'..phase..'['..index..']',nil,path)
                             if item then list[#list+1]=item end
                         end
                     end
@@ -120,9 +133,11 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
             end
         end
     end
-    -- Highest specificity first: the shared loader preserves earlier values at
-    -- equal priority, while ! and ^ explicitly override ordinary precedence.
-    local variables=variableLoader.new(warn)
+    -- Preserve discovery order within a namespace; namespace proximity breaks
+    -- equal-priority ties independently of when imported vars are discovered.
+    profiling.stop('event rule validation/compile')
+    local variables=variableLoader.new(warn,sourceRank)
+    profiling.start('event variable files/merges')
     local variablePaths,seenVariables={},{}
     local function addVariables(path)
         if not seenVariables[path] then
@@ -160,7 +175,19 @@ function Config.load(paths,read,warn,matchesRequired,entryName)
         local entry=inlineVars[index]
         variables.merge(result.vars,entry.vars,entry.path,-1)
     end
+    profiling.stop('event variable files/merges')
+    profiling.start('event slot expansion')
     result.available_slots=slots.expand()
+    profiling.stop('event slot expansion')
+    local reactionDebug=result.vars.reactions and result.vars.reactions.debug
+    assert(reactionDebug==nil or type(reactionDebug)=='boolean','reactions.debug must be boolean')
+    result.faceAwaySource=result.vars.reactions and result.vars.reactions.face_away
+    result.faceAwayStockSource=result.vars.reactions and result.vars.reactions.stock_face_away
+    result.faceAwayStockEnabled=not result.vars.reactions or result.vars.reactions.stock_face_away_enabled~=false
+    profiling.start('reaction rule compile')
+    result.faceAwayRules=require('./lib/reaction-rules').compile(result.faceAwaySource,
+        result.faceAwayStockEnabled and result.faceAwayStockSource or nil)
+    profiling.stop('reaction rule compile')
     return result
 end
 return Config

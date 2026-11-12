@@ -406,7 +406,7 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
 
                 if not skip_packet_targeting then
                     local num_attempted = 0
-                    local max_attempts = 10
+                    local max_attempts = 15
 
                     -- We'll try a few times to establish our target directly
                     for i = 1, max_attempts do
@@ -655,7 +655,6 @@ end
 
 --------------------------------------------------------------------------------------
 -- Targets and engages a battle target by mob ID.
--- Stub: returns false until targeting and engagement are implemented.
 function targetAndEngage(mobId)
     local mob = windower.ffxi.get_mob_by_id(mobId)
 
@@ -786,7 +785,9 @@ function processTargeting(player, party)
 
     if actionStateManager.user_target_id then
         local id = actionStateManager.user_target_id
+        local engage = actionStateManager.user_target_engage~=false
         actionStateManager.user_target_id = nil
+        actionStateManager.user_target_engage = nil
 
         local mob = windower.ffxi.get_mob_by_id(id)
         if
@@ -795,6 +796,12 @@ function processTargeting(player, party)
             mob.hpp > 0 and
             mob.spawn_type == SPAWN_TYPE_MOB
         then
+            if not engage then
+                -- Track the requested enemy without cursor changes, IPC target
+                -- broadcasts, attack packets or the legacy acquisition waits.
+                resetCurrentMob(mob)
+                return
+            end
             smartMove:cancelJob()
             windower.send_command('input /attack off')
             coroutine.sleep(1)

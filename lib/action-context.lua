@@ -12,8 +12,12 @@ local magicBurst = require('./lib/magic-burst')
 local magicSkills = require('./meta/magic-skills')
 local cureSpell = require('./lib/cure-spell')
 local targetMetadata = require('./lib/target-metadata')
-local restoreEquipment = require('./lib/equipment/restore')
-local equipmentReferences = require('./lib/equipment/references')
+-- Keep related dependencies together to stay below Lua 5.1's 60-upvalue limit.
+local equipmentHelpers = {
+    restore = require('./lib/equipment/restore'),
+    references = require('./lib/equipment/references'),
+    slotInfo = require('./lib/equipment/slot-info'),
+}
 local checklist = require('./lib/checklist')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
@@ -1054,6 +1058,23 @@ local function setPartyEnumerators(context)
     context.partyHasJob = function(...)
         return targetSelectors.partyHasJob(context, varargs({...}))
     end
+    -- Pure selector queries: no member-enumerator or selected-target side effects.
+    context.partyNames = function(targets)
+        return targetSelectors.orderedNames(context, targets)
+    end
+    context.partyMatches = function(targets, member)
+        member=member or context.me
+        if not member or type(member.name)~='string' then return false end
+        for _,name in ipairs(targetSelectors.orderedNames(context, targets)) do
+            if name:lower()==member.name:lower() then return true end
+        end
+        return false
+    end
+    context.selfMatches = function(...)
+        -- A simplification wrapper for checking yourself against a match
+        local targets = varargs({...})
+        return context.partyMatches(targets)
+    end
 
     -----------------------------------------------------------------------------------------
     -- Count the number of party members matching the specified expression
@@ -1830,7 +1851,7 @@ local function initContextTargetSymbol(context, symbol, debug)
 
     symbol.in_spell_range   = symbol.center_distance <= 20
     symbol.in_ra_range      = symbol.center_distance <= 25
-    symbol.is_participant   = not symbol.is_dead and symbol.in_spell_range
+    symbol.is_participant   = not not symbol.valid_target and not symbol.is_dead and symbol.in_spell_range
     
     -- symbol.checkAbilityRange = function(ability)
     --     if type(ability) ~= 'table' then
@@ -2156,17 +2177,76 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
     movementReservations.attach(context, function() smartMove:cancelJob() end)
+    local reactions=require('./lib/reactions')
+    local movementAvailable=context.movementAvailable
+    context.movementAvailable=function()
+        return not reactions.blocksMovement() and movementAvailable()
+    end
+    context.reactions={faceAway=reactions.faceAway,release=reactions.release,
+        active=reactions.active,state=reactions.state,suppresses=reactions.suppresses,handle=reactions.handle}
+    context.reactions.blocksSpell=function(id)
+        return reactions.blocksAction('spell',resources.spells[id])
+    end
+    context.reactions.respond=function()
+        if reactions.immediateMovement() then return false end
+        if not context_any(context.actionType,'idle','idle_battle','battle','pull') then return false end
+        return require('./lib/reaction-movement').run({
+            available=function()
+                local player=windower.ffxi.get_player()
+                return globals.enabled and globals.actionsEnabled~=false and not globals.isSpellCasting and player
+                    and (player.status==0 or player.status==1) and movementAvailable()
+                    and not context.hasBuff('Bind','Sleep','Stun','Petrification','Terror')
+            end,
+            mob=windower.ffxi.get_mob_by_id,
+            me=function() return windower.ffxi.get_mob_by_target('me') end,
+            start=function(x,y) return smartMove:moveTo(x,y) end,
+            cancel=function(id) smartMove:cancelJob(id,true) end,
+            job=function() return smartMove:getJobInfo() end,
+            clock=os.clock,sleep=coroutine.sleep,tolerance=smartMove.tolerance,
+        })
+    end
     engagementHelpers.attach(context)
+    require('./lib/relative-alignment').attach(context,{
+        mob=windower.ffxi.get_mob_by_id,
+        me=function() return windower.ffxi.get_mob_by_target('me') end,
+        immobilized=function() return require('./lib/movement-afflictions').current(windower.ffxi) end,
+        start=function(x,y) return smartMove:moveTo(x,y,true) end,
+        cancel=function(id) return smartMove:cancelJob(id,true) end,
+        job=function(id) return smartMove:getJobInfo(id,true) end,
+        tolerance=smartMove.tolerance or 0.33,
+    })
+    context.approachWithinRange = function(target,distance,options)
+        return require('./lib/approach-range').run(target,distance,options,{
+            available=function() return context.movementAvailable() and context.hasMovementReservation() end,
+            immobilized=function() return require('./lib/movement-afflictions').current(windower.ffxi) end,
+            mob=windower.ffxi.get_mob_by_id,
+            me=function() return windower.ffxi.get_mob_by_target('me') end,
+            start=function(x,y) return smartMove:moveTo(x,y,true) end,
+            cancel=function(id) smartMove:cancelJob(id,true) end,
+            job=function(id) return smartMove:getJobInfo(id,true) end,
+            clock=os.clock,sleep=coroutine.sleep,tolerance=smartMove.tolerance,
+        })
+    end
     context.settings = context.gambit
 
     local globalVars = variableState and variableState.vars or actionStateManager.vars
     local originalVars = variableState and variableState.original or actionStateManager.originalVars
     local scopeState = not variableState and actionStateManager.variableScopes
-    local function scopeId() return context.action and context.action._variableScope end
+    local scopedAction
+    local scopedStates
+    local function scopeId()
+        local action=context.action
+        if scopeState and action~=scopedAction then
+            scopedStates=scopeState.activate(action and action._variableScope)
+            scopedAction=action
+        end
+        return action and action._variableScope
+    end
     context._originalVars = originalVars
     if scopeState then
-        local scopedVars = scopeState.view(scopeId)
-        local scopedOriginal = scopeState.view(scopeId, true)
+        local function capturedScopes() return scopedStates end
+        local scopedVars = scopeState.view(scopeId,false,capturedScopes)
+        local scopedOriginal = scopeState.view(scopeId,true,capturedScopes)
         local globalOriginal = actionStateManager.originalVars
         context.vars = nil
         context._originalVars = nil
@@ -2176,7 +2256,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end})
         -- Lua 5.1 does not honor __pairs. Expressions can still iterate vars.
         context.pairs = function(value)
-            if value == scopedVars then return pairs(scopeState.snapshot(scopeId)) end
+            if value == scopedVars then return pairs(scopeState.snapshot(scopeId,capturedScopes)) end
             return pairs(value)
         end
     end
@@ -2445,7 +2525,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     local equipmentEntries = {}
                     for slot, entry in pairs(entries) do
                         if slot ~= 'meta' then
-                            entry=equipmentReferences.resolve(entry,context.getVar)
+                            entry=equipmentHelpers.references.resolve(entry,context.getVar)
                             if entry~=nil then
                                 if type(entry)=='string' then
                                     equipmentEntries[slot]={name=entry,slot=slot}
@@ -2479,11 +2559,12 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     -- Attempt to change multiple equipment items at once. Returns the number of equipment
     -- changes if any changes occurred, or nil if no changes occurred.
     context.equipMany = function(...)
+        local profile=require('./lib/load-profile')
         context.equipment_set = nil
-        local entries = context.sanitizeEquipmentList(false, ...)        
+        local entries = profile.measure('equipment input sanitize',context.sanitizeEquipmentList,false,...)
         local input = ...
         context.equipment_set = type(input)=='table' and input or entries
-        local count = inventory.equip_many(entries)
+        local count = profile.measure('equipment equip_many',inventory.equip_many,entries)
         if count > 0 then
             return count
         end
@@ -2512,7 +2593,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -- Restore the original lifecycle snapshot in one request, discarding pushes.
     context.equipRestore = function()
-        return restoreEquipment(context.vars._.eq_stack, inventory)
+        return equipmentHelpers.restore(context.vars._.eq_stack, inventory)
     end
 
     context.equipPop = function()
@@ -2551,6 +2632,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.canUseWeaponSkill = function (...)
+        -- Match the lower-level readiness check before resolving candidates.
+        if context.player.vitals.tp < 1000 then return end
+        
         local weaponSkills = varargs({...})
         local abilities = windower.ffxi.get_abilities()
 
@@ -2558,7 +2642,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             weaponSkill = findWeaponSkill(_weaponSkill)
             if weaponSkill then
                 local target    = weaponSkill.targets.Self and context.me or context.bt
-                local suppress  = context.vars.__suppress_weapon_skills and target == context.bt and not context.runningAsFunction()
+                local suppress  = reactions.suppresses('weapon_skills') or
+                    (context.vars.__suppress_weapon_skills and target == context.bt and not context.runningAsFunction())
 
                 if not suppress then
                     local targetOutOfRange = target and
@@ -2832,6 +2917,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     --------------------------------------------------------------------------------------
+    -- Configurable encounter observations and JSON-defined conditions.
+    context.encounters = {
+        configure=function(name,definition,parameters) require('./lib/encounter-state').configure(name,definition,parameters) end,
+        remove=function(name) require('./lib/encounter-state').remove(name) end,
+        state=function(name,target)
+            local state=require('./lib/encounter-state').get(name,target or context.bt)
+            context.encounter_state=state
+            return state
+        end,
+        evaluate=function(name,condition,target) return require('./lib/encounter-state').evaluate(name,condition,target or context.bt,context) end
+    }
+
+    --------------------------------------------------------------------------------------
     -- Abyssea monster observations and the red weapon/WS search policy.
     context.abyssea = {}
     context.abyssea.getWeaknesses = function(target)
@@ -2990,7 +3088,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 local spell=findSpell(name)
                 local player=windower.ffxi.get_player and windower.ffxi.get_player()
                 if spell and player and player.vitals and (player.vitals.mp or 0)<(spell.mp_cost or 0) then return 'insufficient MP for candidates' end
-                if context.vars.__suppress_offensive_magic then return 'offensive magic is suppressed' end
+                if context.vars.__suppress_offensive_magic or reactions.suppresses('offensive_magic') then return 'offensive magic is suppressed' end
                 local learned=windower.ffxi.get_spells and windower.ffxi.get_spells()
                 if spell and learned and not learned[spell.id] then return 'some candidates are not learned' end
                 local timers=windower.ffxi.get_spell_recasts and windower.ffxi.get_spell_recasts()
@@ -3103,6 +3201,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.findEquipmentInSlot = function(slot, confirmed)
         context.item = inventory.find_equipment_in_slot(slot,nil,confirmed)
         return context.item
+    end
+
+    -- Inspect confirmed equipment, keeping the current action's item selection intact.
+    context.slotInfo = function(slot)
+        context.slot_info = nil
+        if type(slot) ~= 'string' then return nil end
+        context.slot_info = equipmentHelpers.slotInfo(inventory.find_equipment_in_slot(slot,nil,true), slot)
+        return context.slot_info
     end
 
     --------------------------------------------------------------------------------------
@@ -3378,11 +3484,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Engage with your current target, if idle
     context.engage = function ()
+        if reactions.blocksMovement() then return false end
         local player = windower.ffxi.get_player()
         if player and player.status == STATUS_IDLE then
             local t = context.getMobByTarget('t')
             if t and t.spawn_type == SPAWN_TYPE_MOB then
-                context.sendCommand('input /attack <t>')
+                -- Cursor acquisition may already have sent an engage packet while
+                -- get_player() still reports idle. Never toggle that engagement off.
+                context.sendCommand('input /attack on')
                 context.wait(1)
 
                 return true
@@ -3395,7 +3504,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.disengage = function ()
         local player = windower.ffxi.get_player()
         if player and player.status == STATUS_ENGAGED then
-            context.sendCommand('input /attack')
+            context.sendCommand('input /attack off')
             context.wait(1)
 
             return true
@@ -3899,7 +4008,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         -- We will identify offensive spells as those that can target an enemy but not a player.
                         -- There's a bit of a gray area here, mainly around curative spells cast on undead, but
                         -- this logic should be correct in 99% of cases or more.
-                        local suppress = context.vars.__suppress_offensive_magic and
+                        local suppress = (context.vars.__suppress_offensive_magic or reactions.suppresses('offensive_magic')) and
                             not offensiveMagicExceptions[spell.id] and
                             spell.targets.Enemy and 
                             not spell.targets.Self and
@@ -4134,6 +4243,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- 
+    context.facing = function(looker, target, degreesThreshold)
+        return directionality.facing(looker,target,degreesThreshold)
+    end
+
     context.facingEnemy = function (degreesThreshold)
         if degreesThreshold == nil then degreesThreshold = 10 end
         if type(degreesThreshold) ~= 'number' then return end
@@ -4155,6 +4268,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -- Face toward a target
     context.faceTarget = function(target)
+        if reactions.blocksMovement() then return false end
         target = target or context.bt
         if type(target) == 'string' then target = context[target] end
         if type(target) ~= 'table' or target.id == nil then return end
@@ -4171,6 +4285,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.faceAway = function (target)
+        if reactions.blocksMovement() then return false end
         target = target or context.bt
         if type(target) == 'string' then target = context[target] end
         if type(target) ~= 'table' or target.id == nil then return end
@@ -4198,42 +4313,57 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     --
-    local function alignmentPositionMatches(target, spec, distance, position, tolerance)
+    local function alignmentPositionMatches(target, spec, distance, position, tolerance, options)
         if not target or not position then return false end
+        local arrived = options and options.distance_priority and options.arrived
         local bearing = alignment.bearing(target, position)
-        if not alignment.contains(spec, bearing) and not spec.exact then return false end
-        local angle = spec.exact or bearing
-        local desired = smartMove:findMobOffset(target, angle * math.pi / 180, distance)
+        -- Use the nearest allowed position so arrival tolerance also applies at
+        -- arc boundaries. A strict angular check can repeatedly reject a move
+        -- that correctly stopped within its positional tolerance.
+        local angle = arrived and bearing or alignment.closest(spec, bearing)
+        local desired = smartMove:findMobOffset(target, angle * math.pi / 180, distance, options)
         local dx, dy = position.x - desired[1], position.y - desired[2]
         tolerance = tonumber(tolerance) or smartMove.tolerance
-        return dx * dx + dy * dy <= tolerance * tolerance
+        local matches = dx * dx + dy * dy <= tolerance * tolerance
+        return matches
     end
 
-    context.aligned = function(target, angle, distance, tolerance)
-        return alignmentPositionMatches(target, alignment.parse(angle), distance,
-            windower.ffxi.get_mob_by_target('me'), tolerance)
+    local function preferredAlignment(target, angle, distance, options)
+        local spec=alignment.parse(angle)
+        local plan=options and options.distribute~=nil and require('./lib/party-alignment').plan(target,spec,distance,options) or nil
+        return plan and plan.preferred or spec,plan,spec
     end
 
-    context.aligning = function(target, angle, distance, tolerance)
+    context.aligned = function(target, angle, distance, tolerance, options)
+        local spec=preferredAlignment(target,angle,distance,options)
+        return alignmentPositionMatches(target, spec, distance,
+            windower.ffxi.get_mob_by_target('me'), tolerance, options)
+    end
+
+    context.aligning = function(target, angle, distance, tolerance, options)
         local job = smartMove:getJobInfo()
-        return job and job.position and alignmentPositionMatches(target, alignment.parse(angle), distance,
-            {x=job.position[1], y=job.position[2]}, tolerance) or false
+        local spec=preferredAlignment(target,angle,distance,options)
+        return job and job.position and alignmentPositionMatches(target, spec, distance,
+            {x=job.position[1], y=job.position[2]}, tolerance, options) or false
     end
 
-    context.align = function(target, angle, distance, duration, noFace, tolerance)
+    context.align = function(target, angle, distance, duration, noFace, tolerance, options)
         if not context.movementAvailable() then return nil, 'reserved' end
-        local spec = alignment.parse(angle)
-        if context.aligned(target, angle, distance, tolerance) then return true end
+        if require('./lib/movement-afflictions').current(windower.ffxi) then return false,'immobilized' end
+        local preferredSpec,plan,spec = preferredAlignment(target,angle,distance,options)
+        if alignmentPositionMatches(target,preferredSpec,distance,windower.ffxi.get_mob_by_target('me'),tolerance,options) then return true end
         if not target or not target.id then return false end
         local me = windower.ffxi.get_mob_by_target('me')
         if not me then return false end
         local cache = context.action and context.action._alignment
-        local key = tostring(angle) .. ':' .. tostring(distance)
-        if not cache or cache.target ~= target.id or cache.scope ~= context.battleScope or cache.key ~= key then
+        local key = tostring(angle) .. ':' .. tostring(distance) .. ':' .. tostring(options and options.radius_multiplier) .. ':' .. (plan and plan.key or '')
+        if not cache or cache.target ~= target.id or not plan and cache.scope ~= context.battleScope or cache.key ~= key then
             cache = {target=target.id, scope=context.battleScope, key=key}
             if context.action then context.action._alignment = cache end
         end
-        local candidates = cache.pending or alignment.candidates(spec, alignment.bearing(target,me), cache.preferred)
+        local candidates = cache.pending or (plan and not plan.fallback and
+            alignment.distributedCandidates(spec,preferredSpec,alignment.bearing(target,me),plan.count)
+            or alignment.candidates(spec, alignment.bearing(target,me), cache.preferred))
         cache.pending = nil
         cache.preferred = candidates[1]
         local deadline = os.clock() + math.max(tonumber(duration) or (spec.exact and 3 or 6), 1)
@@ -4242,19 +4372,38 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if remaining <= 0 then break end
             local current = windower.ffxi.get_mob_by_id(target.id)
             if not current or not current.valid_target or current.hpp <= 0 then return false end
-            local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance)
+            local position = smartMove:findMobOffset(current, candidate * math.pi / 180, distance, options)
             local startX, startY, startHeading = current.x, current.y, current.heading
             local startMe = windower.ffxi.get_mob_by_target('me')
             local startGap = startMe and math.sqrt((startMe.x-position[1])^2 + (startMe.y-position[2])^2)
+            local moveDuration=remaining
+            if plan or (options and (options.movement_slice_min~=nil or options.movement_slice_max~=nil)) then
+                local function bound(value,default)
+                    local number=tonumber(value)
+                    if not number or number~=number or math.abs(number)==math.huge then return default end
+                    return math.max(0.1,number)
+                end
+                local minimum=bound(options and options.movement_slice_min,1)
+                local maximum=math.max(minimum,bound(options and options.movement_slice_max,5))
+                -- Approximate travel time at four yalms/second. This is a
+                -- scheduling estimate; Smart Move still detects obstruction.
+                moveDuration=math.min(remaining,math.max(minimum,math.min(maximum,(startGap or 0)/4)))
+            end
             local success, reason = context.move({x=position[1], y=position[2],
-                duration=remaining,
+                duration=moveDuration,
                 tolerance=tonumber(tolerance) or (not spec.exact and smartMove.tolerance or nil)})
             local updated = windower.ffxi.get_mob_by_id(target.id)
-            if success and updated and context.aligned(updated,angle,distance,tolerance) then
+            if success and updated and alignmentPositionMatches(updated,spec,distance,windower.ffxi.get_mob_by_target('me'),tolerance,options) then
+                if plan then require('./lib/party-alignment').accept(plan,alignment.bearing(updated,windower.ffxi.get_mob_by_target('me'))) end
                 cache.preferred = candidate
                 cache.pending = nil
-                if not noFace then directionality.faceTarget(updated) end
+                if not noFace and context.movementAvailable() then directionality.faceTarget(updated) end
                 return true
+            end
+            if reason=='immobilized' then
+                cache.pending={}
+                for nextIndex=i,#candidates do cache.pending[#cache.pending+1]=candidates[nextIndex] end
+                return false,'immobilized'
             end
             -- A cancelled/replaced job must never be restarted by a fallback.
             if not success and reason ~= 'timeout' then return false end
@@ -4280,10 +4429,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 for nextIndex = i+1, #candidates do cache.pending[#cache.pending+1] = candidates[nextIndex] end
             end
         end
-        if not noFace then
+        if not noFace and context.movementAvailable() then
             local current = windower.ffxi.get_mob_by_id(target.id)
             if current then directionality.faceTarget(current) end
         end
+        if plan and cache.pending then return false, 'alternatives' end
         context.postpone(2)
         return false
     end
@@ -4652,7 +4802,11 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- 
-    context.follow = function (target, distance)
+    context.followDistance = function(target, distance, options)
+        return smartMove:followDistance(target, distance, options)
+    end
+
+    context.follow = function (target, distance, options)
         if not context.movementAvailable() then return nil, 'reserved' end
         target = target or context.member or context.bt
 
@@ -4688,7 +4842,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- follow is already for the current target
         local jobInfo = smartMove:getJobInfo()
         if jobInfo == nil or jobInfo.follow_index ~= target.index then
-            return smartMove:followIndex(target.index, distance)
+            return smartMove:followIndex(target.index, distance, options)
         end
     end
 
@@ -4830,6 +4984,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     ---------------------------------------------------------------------------
+    -- Refresh or start a continuous waypoint route. The explicit configuration
+    -- wins; otherwise use the route selected by waypoints-ex.
+    context.waypointRoute = function(config)
+        if not context.movementAvailable() then return nil,'reserved' end
+        local options=context.vars.waypoints_ex
+        config=config or (options and options._current)
+            or (options and options.data and options.data[options.active])
+        if type(config)~='table' then return nil,'route unavailable' end
+        local jobId=smartMove:waypointRoute(config)
+        return jobId~=nil,jobId
+    end
+
+    ---------------------------------------------------------------------------
     --
     context.move = function(...)
         if not context.movementAvailable() then return nil, 'reserved' end
@@ -4879,6 +5046,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             end
 
             local start = os.clock()
+            local sawImmobilized=require('./lib/movement-afflictions').current(windower.ffxi)
             duration = math.max(duration, 0.01)
 
             coroutine.sleep(0.5)
@@ -4887,6 +5055,8 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 if not context.movementAvailable() then return nil, 'reserved' end
                 local now = os.clock()
                 local job = smartMove:getJobInfo()
+                sawImmobilized=sawImmobilized or (job and job.immobilized)
+                    or require('./lib/movement-afflictions').current(windower.ffxi)
                 local timedOut = false
 
                 -- If the job is still running and our duration has ellapsed, cancel it
@@ -4924,7 +5094,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     job.jobId ~= jobId
                 then
                     --context.log('The movement operation was not completed.')
-                    return nil, timedOut and 'timeout' or 'cancelled'
+                    return nil, timedOut and (sawImmobilized and 'immobilized' or 'timeout') or 'cancelled'
                 end
 
                 coroutine.sleep(0.25)
@@ -5420,11 +5590,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- Forces the next battle target to the specified mob (id or object)
-    context.setBattleTarget = function(mob)
+    context.setBattleTarget = function(mob, engage)
+        assert(engage==nil or type(engage)=='boolean', 'setBattleTarget engage must be boolean')
         if type(mob) == 'table' and mob[1] then mob = mob[1] end
         if type(mob) == 'table' then mob = mob.id end
         if type(mob) == 'number' then
             actionStateManager.user_target_id = mob
+            actionStateManager.user_target_engage = engage~=false
             return true
         end
     end
@@ -5656,6 +5828,39 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         end
     end
     context.hasEffect = context.hasBuff
+
+    -- Every requested buff must be known on the target. Unlike hasBuff, this
+    -- boolean query does not replace the selected effect/effect_count.
+    context.hasAllBuffs = function(...)
+        local args = {...}
+        local start_index = 1
+        local target = context.me
+        if isEffectTarget(args[1]) then
+            target = args[1]
+            start_index = 2
+        elseif type(args[1]) == 'string' and isEffectTarget(context[args[1]]) then
+            target = context[args[1]]
+            start_index = 2
+        elseif args[1] == nil then
+            start_index = 2
+        end
+
+        local strict = args[start_index] == 'use-strict'
+        if strict or args[start_index] == 'not-strict' then
+            start_index = start_index + 1
+        end
+        local names = args
+        if type(args[start_index]) == 'table' and args[start_index].id == nil then
+            names = args[start_index]
+            start_index = 1
+        end
+        if type(target) ~= 'table' then return false end
+        for i = start_index, #names do
+            if not hasBuffInArray(target.buffs, names[i], strict) then return false end
+        end
+        return true
+    end
+    context.hasAllEffects = context.hasAllBuffs
 
     --------------------------------------------------------------------------------------
     -- Tries to use the specified action to remove an effect on the target
@@ -7095,6 +7300,7 @@ return {
     end,
     create = function(actionType, time, target, mobEngagedTime, battleScope, party)
         local context = makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+        require('./lib/frontline-anchor').capture(context)
 
         -- if not dumped then
         --     context_dump(context)

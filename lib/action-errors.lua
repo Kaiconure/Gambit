@@ -28,16 +28,17 @@ local function appendLog(action, stage, expression, message, location, label)
     assert(closed, closeError)
 end
 
-function guard.fail(action, stage, expression, message)
+function guard.fail(action, stage, expression, message, traceback)
     if action._runtimeError then return end
-    action._runtimeError = {stage=stage, expression=expression, message=tostring(message)}
+    action._runtimeError = {stage=stage, expression=expression, message=tostring(message),traceback=traceback}
     local location = action.importedFrom or action.id or '(main action file)'
     local label = action.name or action._errorLabel or '(unnamed action)'
     -- Reporting must not turn an already-contained action error into an addon error.
     report(string.format(
         'Action disabled: %s [%s], %s: %s | %s',
         tostring(label), tostring(location), stage, tostring(message), tostring(expression)))
-    local ok, err = pcall(appendLog, action, stage, expression, message, location, label)
+    local detail=tostring(message)..(traceback and ('\n'..traceback) or '')
+    local ok, err = pcall(appendLog, action, stage, expression, detail, location, label)
     if not ok then
         report('Could not write action error log: ' .. tostring(err))
     end
@@ -61,7 +62,8 @@ function guard.evaluate(action, context, fn, stage, expression)
     end
     local ok, value = result[1], result[2]
     if not ok then
-        guard.fail(action, stage, expression, value)
+        local traceback=debug.traceback(thread,tostring(value))
+        guard.fail(action, stage, expression, value,traceback)
         return false
     end
     return true, value

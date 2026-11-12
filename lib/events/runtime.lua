@@ -1,3 +1,4 @@
+local profiling=require('./lib/load-profile')
 -- Request lifecycle. No dependency on Windower packets or the Gambit scheduler.
 local copy=require('./lib/variable-values').copy
 local Runner=require('./lib/events/runner')
@@ -24,8 +25,27 @@ function Runtime:diagnostic(request,message,lostLifecycle)
     end
 end
 function Runtime.new(config,deps)
-    return setmetatable({config=config,deps=deps,pending={},sequence=0,
+    local self=setmetatable({config=config,deps=deps,pending={},sequence=0,
         runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession,deps.targetSnapshot)},Runtime)
+    self:compileReactions()
+    return self
+end
+function Runtime:compileReactions()
+    self.faceAwaySource=self.config.vars.reactions and self.config.vars.reactions.face_away
+    self.faceAwayStockSource=self.config.vars.reactions and self.config.vars.reactions.stock_face_away
+    self.faceAwayStockEnabled=not self.config.vars.reactions or self.config.vars.reactions.stock_face_away_enabled~=false
+    self.faceAwayRules=self.config.faceAwaySource==self.faceAwaySource
+        and self.config.faceAwayStockSource==self.faceAwayStockSource
+        and self.config.faceAwayStockEnabled==self.faceAwayStockEnabled and self.config.faceAwayRules
+        or require('./lib/reaction-rules').compile(self.faceAwaySource,
+            self.faceAwayStockEnabled and self.faceAwayStockSource or nil)
+    require('./lib/reactions').setDebug(self.config.vars.reactions and self.config.vars.reactions.debug==true)
+end
+function Runtime:eventVariables()
+    local seen={}
+    if self.faceAwaySource then seen[self.faceAwaySource]=self.faceAwayRules end
+    if self.faceAwayStockSource then seen[self.faceAwayStockSource]=self.faceAwayRules end
+    return copy(self.config.vars,seen)
 end
 function Runtime:run(request,phase)
     local verifying=verify.active()
@@ -46,13 +66,18 @@ function Runtime:loading()
     if self.loaded then return end
     self.loaded=true
     if not self.config.path then return end
+    profiling.start('loading variable snapshots')
     local vars=copy(self.config.vars)
     vars._={eq_stack={}}
     local request={section='loading',event={kind='loading',cancelled=false,time=self.deps.clock()},
         variables={vars=vars,original=copy(vars)}}
+    profiling.stop('loading variable snapshots')
     if self:run(request,'actions') then
         vars._=nil
         self.config.vars=vars
+        profiling.start('loading reaction refresh')
+        self:compileReactions()
+        profiling.stop('loading reaction refresh')
     end
 end
 -- Observed transitions are independent notifications, not cancellable actions.
@@ -63,6 +88,8 @@ function Runtime:observe(event,phase)
         or event.kind=='buff' and 'buffs'
         or event.kind=='enemy_spell' and 'enemy_spells'
         or event.kind=='enemy_ability' and 'enemy_abilities'
+        or event.kind=='party_weapon_skill' and 'party_weapon_skills'
+        or event.kind=='weapon_skill' and 'weapon_skills'
     local rules=self.config.rules[section]
     if not rules or not rules[phase] or #rules[phase]==0 then return end
     if self.running then self.deps.report('Event rules cannot dispatch nested events'); return end
@@ -71,7 +98,7 @@ function Runtime:observe(event,phase)
     event.request_id=self.sequence
     event.time=self.deps.clock()
     event.cancelled=false
-    local vars=copy(self.config.vars)
+    local vars=self:eventVariables()
     vars._={eq_stack={}}
     local request={section=section,event=event,observational=true,variables={vars=vars,original=copy(vars)}}
     self:run(request,phase)
@@ -158,7 +185,7 @@ function Runtime:submit(event,dispatch,observation)
     event.request_id=self.sequence
     event.time=self.deps.clock()
     event.cancelled=false
-    local vars=copy(self.config.vars)
+    local vars=self:eventVariables()
     vars._={eq_stack={}}
     local request={section=section,event=event,variables={vars=vars,original=copy(vars)},observation=observation}
     if verify.active() then verify.begin(request) end
@@ -224,7 +251,7 @@ function Runtime:spellStarted(id,targetId)
         end
     end
 end
-function Runtime:complete(kind,id,targetId,outcome,results)
+function Runtime:complete(kind,id,targetId,outcome,results,resource)
     for _,request in ipairs(self.pending) do
         local event=request.event
         if request.sent_at and event.kind==kind and (id==nil or event.id==id)
@@ -233,6 +260,7 @@ function Runtime:complete(kind,id,targetId,outcome,results)
             if results then
                 local wsResult=require('./lib/weapon-skill-result')
                 wsResult.apply(event,results,event.target and event.target.id)
+                if resource then wsResult.properties(event,resource) end
                 local selected=wsResult.find(results,event.target and event.target.id)
                 outcome=selected and selected.outcome or outcome
             end

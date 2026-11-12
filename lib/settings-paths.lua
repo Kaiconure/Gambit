@@ -1,14 +1,38 @@
+local profiling=require('./lib/load-profile')
 -- Session state: this module survives settings reloads, but not addon reloads.
 local paths = {}
 local targetSelectors=require('./lib/target-selectors')
 local namespace = nil
 local loadedNamespace = nil
 local loadedPrecedence = {}
+local directoryCache
+
+-- Nested loads share the active snapshot; even failed loads restore the prior
+-- scope. No cached result survives the outermost load.
+function paths.withDirectoryCache(fn)
+    local previous=directoryCache
+    directoryCache=previous or {}
+    local function pack(...)return {n=select('#',...),...}end
+    local result=pack(pcall(fn))
+    directoryCache=previous
+    if not result[1] then error(result[2],0) end
+    return unpack(result,2,result.n)
+end
 
 local SETTINGS_ROOT = './settings'
 local function directoryExists(path)
-    return windower and windower.dir_exists and
-        windower.dir_exists((windower.addon_path or '') .. path:gsub('^%./', '')) or false
+    local started=profiling.now()
+    local resolved=(windower and windower.addon_path or '')..path:gsub('^%./',''):gsub('\\','/')
+    local key=resolved:lower()
+    if directoryCache and directoryCache[key]~=nil then
+        profiling.sample('directory cache hits',started)
+        return directoryCache[key]
+    end
+    local result=windower and windower.dir_exists and
+        windower.dir_exists(resolved) or false
+    if directoryCache then directoryCache[key]=result end
+    profiling.sample('directory probes',started)
+    return result
 end
 
 local function organizationalRoot(parent, name)
@@ -145,20 +169,24 @@ end
 function paths.validateNamespace(name)
     if name ~= nil and (
         type(name) ~= 'string' or
-        not name:match('^[%w_/-]+$') or
+        not name:match('^[%w_/%.-]+$') or
         name:sub(1, 1) == '/' or
         name:sub(-1) == '/' or
         name:find('//', 1, true)
     ) then
-        return false, 'Namespace names must be slash-separated folder names containing only letters, numbers, underscores, and hyphens.'
+        return false, 'Namespace names must be slash-separated folder names containing only letters, numbers, underscores, hyphens, and dots.'
     end
     for segment in (name or ''):gmatch('[^/]+') do
+        if segment:sub(1,1) == '.' or segment:sub(-1) == '.' then
+            return false, 'Namespace folder name "' .. segment .. '" cannot start or end with a dot.'
+        end
         local normalized = segment:lower():gsub('^_+', '')
         if normalized == 'actions' or normalized == 'players' or normalized == 'events' then
             return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
         end
-        if normalized == 'con' or normalized == 'nul' or normalized == 'aux' or normalized == 'prn'
-            or normalized:match('^com[1-9]$') or normalized:match('^lpt[1-9]$') then
+        local device = normalized:match('^[^.]+') or normalized
+        if device == 'con' or device == 'nul' or device == 'aux' or device == 'prn'
+            or device:match('^com[1-9]$') or device:match('^lpt[1-9]$') then
             return false, 'Namespace folder name "' .. segment .. '" is a reserved Windows device name.'
         end
     end

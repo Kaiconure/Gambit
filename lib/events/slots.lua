@@ -37,11 +37,12 @@ function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
     local result={}
     function result.collect(document,path)
         if document.contributions==nil then return end
-        assert(type(document.contributions)=='table',path..': contributions must be an object')
+        local entries,ordered=require('./lib/contribution-entries').read(document.contributions,matchesRequired,function(message)
+            if warn then warn(path..': '..message) end
+        end)
         local definitions={}
-        for name,value in pairs(document.contributions) do
-            local wrapped=type(value)=='table' and (value.actions~=nil or value.optional~=nil or value.required_for~=nil)
-            local actions=wrapped and value.actions or value
+        for _,value in ipairs(entries) do
+            local name,actions=value.slot,value.actions
             assert(type(actions)=='table',path..': contributions require an actions array')
             for index in pairs(actions) do
                 assert(type(index)=='number' and index>=1 and index%1==0 and index<=#actions,
@@ -52,11 +53,10 @@ function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
                 local item=compile(rule,path..':contributions['..tostring(name)..']['..index..']',true)
                 if item then compiled[#compiled+1]=item end
             end
-            if wrapped then
-                local definition=copy(value)
-                definition.actions=compiled
-                definitions[name]=definition
-            else definitions[name]=compiled end
+            local definition=copy(value)
+            definition.actions=compiled
+            if ordered then definitions[#definitions+1]=definition
+            else definition.slot=nil;definitions[name]=definition end
         end
         local ok,err=pcall(engine.collect,{contributions=definitions},path)
         assert(ok,path..': '..tostring(err))

@@ -16,11 +16,36 @@ and persistent state without changing the shared library:
 ```
 
 This captures the entire `haste_cycle` subtree. Its initial value merges the
-override with the parent's initial values after all settings imports are loaded.
+override with the parent's current values when the action is evaluated.
+For example, a duration-only override preserves an angle changed by tank status
+after loading. The captured values stay stable through conditions, commands,
+and yields for that evaluation.
 Objects merge recursively; arrays replace. An empty object/array replaces with
 an empty table. Use ordinary variable names, without `!` or `^` priority prefixes:
 scope overrides already take precedence. JSON null is discarded by the JSON
 loader; use `"$object.null"` to explicitly initialize a captured value to nil.
+
+`csv(...)`, `array.append(...)`, `array.prepend(...)`, and `array.remove(...)` are expanded when the
+scope snapshot is refreshed for an action evaluation. For example:
+
+```json
+{
+  "import": "use-dispel",
+  "with_vars": {
+    "use_dispel": {
+      "array.append(buffs)": ["Blaze Spikes", "Howl"],
+      "array.remove(buffs)": ["Protect"]
+    }
+  }
+}
+```
+
+The operations use the parent's current array and produce a private scoped
+copy. Distinct appends, removal of all matches, warnings for non-arrays, and
+remove winning over append at equal priority in one block match ordinary/event
+variable behavior. CSV-generated subtrees are independent too. Top-level scope
+names still cannot use `!` or `^`; nested definitions support their normal
+priority syntax. Explicit empty tables retain their scoped replacement behavior.
 
 All actions beneath this import share its state, including multiple references
 on one import statement. Separate import statements create separate instances.
@@ -37,13 +62,19 @@ executions until actions are recompiled/reloaded. Uncaptured variables continue
 to resolve through parents to global state, including changes made globally.
 
 `getVarGlobal(name)` and `setVarGlobal(name, value)` access only global state.
-They do not update captured copies. Outside a local scope, normal and global
+They do not update an evaluation's captured copies. A later evaluation refreshes
+inherited fields from the live parent while preserving persistent local edits.
+Outside a local scope, normal and global
 helpers have equivalent behavior. As with ordinary Lua assignments, explicitly
 assigning a table obtained from another scope shares that table reference; the
 initial scoped copies themselves are independent.
 
-`getOriginalVar` returns a copy of the effective scope's initial value;
-`resetVar` restores that value within the owning scope. Reloading rebuilds all
+`getOriginalVar` returns a copy of the current evaluation's baseline: live parent
+values plus configured overrides, before persistent local edits are reapplied.
+`resetVar` restores that value within the owning scope. Local edits are detected
+by comparing with the previous baseline; assigning an unchanged value does not
+pin that field against future parent updates. Arrays are compared as whole values.
+Reloading rebuilds all
 scope instances from the newly loaded configuration.
 
 ## Lua tables

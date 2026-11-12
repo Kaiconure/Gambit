@@ -1,0 +1,5 @@
+local file=assert(io.open('lib/smart-move.lua'))
+local source=file:read('*a');file:close()
+source=source:gsub("('[^'\r\n]*'):format",'(%1):format')
+assert(loadstring(source))
+print('PASS: complete smart-move module compiles')

@@ -71,6 +71,8 @@ function Status:configure(options,trackingOverride)
     self.toggle.text:bold(true)
     self.strategy=self.panel:label(self.toggle.x+self.toggle.width+2,5,options.font_size,'heading')
     self.strategy.text:bold(true)
+    self.targetDistance=self.panel:label(0,7,math.max(6,options.font_size-2),'heading')
+    self.targetDistance.text:bold(false)
     local versionSize=math.max(6,options.font_size-3)
     self.version=self.panel:label(0,(self.panel.background.skin.border or 0)+1,versionSize,'body')
     Theme.color(self.version.text,'version')
@@ -281,11 +283,22 @@ function Status:update()
     self.toggle.text:text(enabled and '[on]' or '[off]')
     Theme.color(self.toggle.text,enabled and 'green' or 'red')
     local strategy=self.deps.strategy and self.deps.strategy()
-    local strategyText=strategy and ('['..tostring(strategy)..']') or ''
-    if strategyText~=self.strategyText then self.nextUpdate=0 end
+    local distance=self.deps.maxDistance and self.deps.maxDistance()
+    local strategyText=strategy and tostring(strategy) or ''
+    local distanceText=''
+    if strategy and type(distance)=='number' then
+        local rgb=Theme.colors.number
+        distanceText=string.format('→\\cs(%d,%d,%d)%.1f\\cr',rgb[1],rgb[2],rgb[3],distance)
+    end
+    if strategyText~=self.strategyText or distanceText~=self.distanceText then self.nextUpdate=0 end
     self.strategyText=strategyText
+    self.distanceText=distanceText
     self.strategyWidth=textWidth(self.strategy,strategyText)
-    Theme.color(self.strategy.text,(strategy=='aggressor' or strategy=='puller') and 'red' or 'green')
+    self.targetDistance.x=self.strategy.x+self.strategyWidth+6
+    self.distanceWidth=textWidth(self.targetDistance,distanceText)
+    local strategyColor=(strategy=='aggressor' or strategy=='puller') and 'red' or 'green'
+    Theme.color(self.strategy.text,strategyColor)
+    Theme.color(self.targetDistance.text,'body')
     if self.panel.visible and os.clock()<self.nextUpdate then return end
     self.nextUpdate=os.clock()+self.options.refresh_interval
     for _, entry in ipairs(self.entries) do
@@ -384,6 +397,7 @@ function Status:update()
         entry.display=table.concat(lines,'\n'); entry.lineCount=math.max(1,#lines)
     end
     local headerEnd=self.strategyWidth>0 and (self.strategy.x+self.strategyWidth) or (self.toggle.x+self.toggle.width)
+    if self.distanceWidth>0 then headerEnd=self.targetDistance.x+self.distanceWidth end
     local width=math.max(displayWidth(self.options),headerEnd+self.versionWidth+20)
     for _,entry in ipairs(self.entries) do
         if not entry.hidden then

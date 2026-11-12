@@ -1,7 +1,7 @@
 local json=dofile('lib/jsonlua.lua')
 local file=assert(io.open('actions/lib/abilities/use-rolls.json'))
 local document=json.parse(file:read('*a'));file:close()
-local expression=assert(loadstring('return '..document.macros.roll_alignment[1]))
+local expression=assert(loadstring('return not vars.use_rolls.alignment.enabled or alignWithReservation(partyAnchorByName(vars.use_rolls.alignment.targets, 30, true) and member or nil, nil, vars.use_rolls.alignment.distance, vars.use_rolls.alignment, true)'))
 local reason, reached, reserved, released, delay, anchor, locked
 local env=setmetatable({
     vars={use_rolls={alignment={enabled=true,targets={'WAR'},range=7,distance=5,duration=3}}},
@@ -38,6 +38,19 @@ assert(expression()==true and not released and delay==nil)
 reset();env.vars.use_rolls.alignment.enabled=false
 assert(expression()==true and not released and delay==nil)
 print('PASS: roll alignment retains progress reservation, retries, and releases on failure or expiry')
+
+local logs={}
+env.action={};env.log=function(message)logs[#logs+1]=message end
+env.resumeMovement=function(timeout)assert(timeout==90);return reserved end
+local diagnosticOptions={timeout=90,debug=true}
+reserved=false;assert(not env.resumeRollAlignment(diagnosticOptions))
+assert(logs[1]:find('reservation FAILED',1,true))
+assert(not env.resumeRollAlignment(diagnosticOptions) and #logs==1)
+reserved=true;assert(env.resumeRollAlignment(diagnosticOptions))
+assert(logs[2]:find('reservation held',1,true))
+diagnosticOptions.debug=false
+assert(env.resumeRollAlignment(diagnosticOptions) and #logs==2)
+print('PASS: reservation diagnostics preserve results, report failure/ownership and throttle repeated output')
 
 local releaseCheck=assert(loadstring('return '..document.actions[1].when[2]))
 local chance=true

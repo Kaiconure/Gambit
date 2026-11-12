@@ -1,5 +1,10 @@
 # Namespace folder names
 
+Names may contain letters, numbers, underscores, hyphens, and dots, with `/`
+separating nested folders. For example, `boss/s.behemoth` is valid both when
+selecting a namespace and in `.nsconfig` inheritance references. Standalone `.`
+and `..` segments, leading/trailing dots, and Windows device names remain invalid.
+
 Bundled namespaces live under `namespaces/<name>/`; user namespaces live under
 `settings/_namespaces/<name>/`. Each contains a `.nsconfig` and shared rules. A user
 namespace replaces the entire bundled namespace with the same name, even if the

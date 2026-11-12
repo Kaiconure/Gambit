@@ -5,9 +5,14 @@ local options={duration=6,tolerance=0.5,retry_delay=10,progress_retry_delay=3}
 reached=false;reason='progress'
 assert(not context.alignWithRetry('target',180,12,options,true,3) and delay==3)
 assert(args[4]==6 and args[5]==true and args[6]==0.5)
+assert(args[7]==options)
 reason='timeout'
 context.alignWithRetry('target',180,12,options)
 assert(delay==10)
+reason='immobilized'
+context.alignWithRetry('target',180,12,options,true,3)
+assert(delay==3)
+reason='alternatives';context.alignWithRetry('target',180,12,options);assert(delay==3)
 reached=true;delay=nil
 assert(context.alignWithRetry('target',180,12,options) and delay==nil)
 context.alignWithRetry('target',180,12,options,true,3)

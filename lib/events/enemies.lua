@@ -8,6 +8,7 @@ function enemies.action(service,action,failures)
     local deps=service.deps
     local observation=Observation.action(action,deps.windower.ffxi,deps.resources,failures,true)
     if not observation then return false end
+    require('./lib/encounter-state').enemy(observation)
     if deps.observeEnemy then
         local ok,err=pcall(deps.observeEnemy,observation)
         if not ok then deps.report('Enemy state observation: '..tostring(err)) end
@@ -41,6 +42,8 @@ function enemies.action(service,action,failures)
         for name,skillId in pairs(magicSkills) do event[name]=resource.skill==skillId end
         event.curing=cureSpell(resource)
     end
+    event.phase=phase
+    require('./lib/reactions').observe(event)
     service.runtime:observe(event,phase)
     if deps.afterEnemy then deps.afterEnemy(observation) end
     return true

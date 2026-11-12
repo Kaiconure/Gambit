@@ -63,7 +63,9 @@ function manager.attach(context, cancel)
         reservation = nil
         return true
     end
-    current(context)
+    -- Context construction is observational. In particular, temporary event and
+    -- manual contexts must not cancel the action loop's active reservation.
+    -- Reconcile lifetime/scope only when a movement operation is requested.
 end
 
 return manager

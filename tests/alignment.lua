@@ -8,7 +8,15 @@ for name, angle in pairs({rear=180,face=0,front=0,facing=0}) do
 end
 assert(contains('backside',180) and not contains('backside',0))
 assert(contains('frontside',350) and contains('330-30',0))
-assert(contains('left',90) and contains('right',-90))
+assert(contains('left',-90) and contains('right',90))
+for name,center in pairs({lefter=-90,righter=90}) do
+ assert(contains(name,center-5) and contains(name,center+5))
+ assert(not contains(name,center-6) and not contains(name,center+6))
+end
+assert(contains('sider',-95) and contains('sider',95) and not contains('sider',0))
+assert(contains('fore',350) and contains('fore',10) and not contains('fore',11))
+assert(contains('aft',165) and contains('aft',195) and not contains('aft',196))
+assert(contains('aside',80) and contains('aside',280) and not contains('aside',79) and not contains('aside',281))
 assert(contains('side',90) and contains('side',270) and not contains('side',180))
 assert(contains('180+/-30',150) and contains('150-210',210))
 assert(contains(nil,234) and contains(180,180) and not contains(180,181))
@@ -137,3 +145,40 @@ for _, path in ipairs({'actions/lib/frontline-engagement.json', 'actions/lib/mem
     assert(loadstring('return ' .. command))
 end
 print('PASS: engagement command expressions compile with the scheduler return prefix')
+
+-- Exercise distributed geometry through the actual context movement path.
+local full=alignment.parse('side')
+local plan={full=full,preferred=alignment.slice(full,1,2),count=2,key='roster-1'}
+env.partyAlignment={plan=function(_,spec)if not spec.exact and not spec.free then return plan end end,
+ accept=function(p,bearing)
+  if not alignment.contains(p.preferred,bearing)then p.preferred=p.full;p.fallback=true end
+ end}
+env.require=function(name)if name=='./lib/party-alignment'then return env.partyAlignment end;return require(name)end
+local options={distribute=true}
+mob.x,mob.y,mob.heading=0,0,0
+me.x,me.y=1,0;clock=0;attempts={};context.action={}
+context.move=function(position)
+ attempts[#attempts+1]=position;clock=clock+position.duration
+ if position.y<0 then return nil,'timeout' end -- Entire left arc blocked.
+ me.x,me.y=position.x,position.y;return true
+end
+assert(context.align(mob,'side',10,3,false,0.33,options))
+assert(#attempts==2 and attempts[2].y>0 and clock<=3 and plan.fallback)
+assert(context.aligned(mob,'side',10,0.33,options))
+context.battleScope=context.battleScope+1
+assert(context.align(mob,'side',10,3,false,0.33,options) and #attempts==2)
+plan.preferred=alignment.slice(full,1,2);plan.fallback=false;plan.key='roster-2'
+me.x,me.y=1,0;attempts={};clock=0;context.action={}
+context.move=function(position)attempts[#attempts+1]=position;return nil,'cancelled'end
+assert(not context.align(mob,'side',10,3,false,0.33,options) and #attempts==1)
+print('PASS: distribution tries assigned arc then unobstructed arc, shares bounded budgets, remembers fallback and honors movement cancellation')
+-- Movement may stop just outside a slice while within arrival tolerance.
+-- Repeated checks must accept that same position instead of restarting movement.
+me.x,me.y=10*math.cos(math.rad(59)),-10*math.sin(math.rad(59))
+attempts={}
+assert(context.aligned(mob,'side',10,0.33,options))
+for i=1,5 do assert(context.align(mob,'side',10,3,false,0.33,options)) end
+assert(#attempts==0,'arrival near a slice boundary must not restart movement')
+me.x,me.y=10*math.cos(math.rad(57)),-10*math.sin(math.rad(57))
+assert(not context.aligned(mob,'side',10,0.33,options))
+print('PASS: distributed slice boundaries honor arrival tolerance without repeated corrections')

@@ -14,6 +14,7 @@
       "partner5_tp_threshold": 800,
       "secondary_tp_min": 700,
       "hold_on_buffs": null,
+      "hold_until_buffs": null,
       "blacklist": null,
       "default_scd": null,
       "fast_scd": null,
@@ -30,26 +31,29 @@
     "close_skillchain": [
       "logf('Preparing to close SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
       "waitSkillchainWithAbility() and useAbility(me)",
+      "facingEnemy() or (faceEnemy() and wait(0.5))",
       "useWeaponSkill()"
     ],
     "open_skillchain": [
       "logf('Preparing to open SC with %s at %s...', _tblue(weapon_skill.name), _tgreen(me.tp .. ' tp'))",
+      "facingEnemy() or (faceEnemy() and wait(0.5))",
       "recastReady(ability_recast) and useAbility() and wait(0.5)",
       "useWeaponSkill()"
     ],
-    "use_weapon_skill": [
-      "useWeaponSkill()"
-    ],
+    "use_weapon_skill": ["useWeaponSkill()"],
     "check_using_ws": ["(partyUsingWeaponSkill2)"],
     "check_skillchaining": ["(skillchaining2)"],
     "can_open_sc": [
       "me.tp >= (vars.ws.min_open_tp or 1000)",
-      "bt and bt.mob_time >= (vars.ws.open_delay or 2)"
+      "bt and bt.mob_time >= (vars.ws.open_delay or 2)",
+      "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
+      "arrayCount(vars.ws.hold_until_buffs) == 0 or hasAllBuffs(bt, vars.ws.hold_until_buffs)"
     ],
     "can_close_sc": ["$macro:check_pre_ws_abilities"],
     "ws_partners_deferring": [
       "not vars.ws.anarchy_for_all or (not party_weapon_skill and not skillchain) or resetSkillchain()",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
+      "arrayCount(vars.ws.hold_until_buffs) == 0 or hasAllBuffs(bt, vars.ws.hold_until_buffs)",
       "arrayCount(vars.ws.blacklist) == 0 or not any(bt.name, vars.ws.blacklist)",
       "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner  or not pinfo[vars.ws.partner]  or (not pinfo[vars.ws.partner].is_engaged  or pinfo[vars.ws.partner].tp <= vars.ws.partner_tp_threshold)",
       "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or not vars.ws.partner2 or not pinfo[vars.ws.partner2] or (not pinfo[vars.ws.partner2].is_engaged or pinfo[vars.ws.partner2].tp <= vars.ws.partner2_tp_threshold)",
@@ -60,6 +64,7 @@
     "ws_defer_to_secondary": [
       "not vars.ws.anarchy_for_all or (not party_weapon_skill and not skillchain) or resetSkillchain()",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
+      "arrayCount(vars.ws.hold_until_buffs) == 0 or hasAllBuffs(bt, vars.ws.hold_until_buffs)",
       "arrayCount(vars.ws.blacklist) == 0 or not any(bt.name, vars.ws.blacklist)",
       "(vars.ws.free_for_all or vars.ws.anarchy_for_all) or vars.ws.is_secondary or (not partyByName(vars.ws.partner or '!!') and (not partyByName(vars.ws.secondary or '!!') or not member.is_engaged or member.tp < vars.ws.secondary_tp_min))"
     ]

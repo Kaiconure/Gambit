@@ -16,7 +16,11 @@
         "   1. The party leader has no battle target -OR-",
         "   2. The party leader has a battle target that differs from yours.",
         " In these cases, disengaging will cause the leader strategy to automatically",
-        " re-engage you with the proper target to stay in sync with the leader."
+        " re-engage you with the proper target to stay in sync with the leader.",
+        "",
+        "Disabling leader sync does NOT prevent you from attacking the leader's target from",
+        "idle if you're in a mode that allows it. It will ONLY prevent you from disengaging",
+        "your current target if you're out of sync with the leader's target/battle state."
       ],
       "when": [
         "not vars.leader_sync.disabled",
@@ -29,8 +33,7 @@
         "not party_leader_bt and (disengage() and logf('Disengaging from [%s] as party leader has no target!', bt.name))",
         "party_leader_bt and setBattleTarget(party_leader_bt) and logf('Acquiring leader target %s!', party_leader_bt.name) and wait(1)"
       ],
-      "frequency": 5,
-      "miss_frequency": 5
+      "frequencies": 5
     }
   ]
 }

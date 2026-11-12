@@ -21,6 +21,7 @@ local smartMove = {
 
 local Modes = {
     position = 'position',
+    route = 'route',
     follow = 'follow',
     backstab = 'backstab'
 }
@@ -38,6 +39,7 @@ local HEADING_TOLERANCE = TWO_PI * 0.0125   -- 1.25% of a unit circle, or 4.5 de
 local resources = require('resources')
 
 local current_settings = {}
+local followStyle
 
 -- ======================================================================================
 -- Helpers
@@ -140,8 +142,21 @@ local function coordVector(coord)
     return nil
 end
 
--- Find the point at the given distance and angle offset from the mob
-local function findMobOffset(mob, angleOffset, distance)
+-- Resolve a center distance once. An explicit multiplier replaces the legacy
+-- player/target adjustment, even when the multiplier is zero.
+local function resolveDistance(mob, distance, options, legacyMultiplier)
+    local player = windower.ffxi.get_mob_by_target('me')
+    if options and type(options.radius_multiplier) == 'number' then
+        return distance + math.max(0, mob and mob.model_size or 0) * math.max(0, options.radius_multiplier)
+    end
+    if not current_settings or not current_settings.useRawDistances then
+        return distance + ((player and player.model_size or 0) + (mob and mob.model_size or 0)) * legacyMultiplier
+    end
+    return distance
+end
+
+-- Find the point at the given distance and angle offset from the mob.
+local function findMobOffset(mob, angleOffset, distance, options)
     local player = windower.ffxi.get_mob_by_target('me')
 
     if not player then
@@ -153,19 +168,8 @@ local function findMobOffset(mob, angleOffset, distance)
 
     distance = (type(distance) == 'number') and distance or 2
 
-    if not current_settings or not current_settings.useRawDistances then
-        if not mob.model_size then
-            mob = windower.ffxi.get_mob_by_id(mob.id)
-        end
-
-        if mob then
-            local distance_offset = 
-                (player.model_size or 0) +      -- Player model size
-                (mob and mob.model_size or 0)   -- Mob model size
-            distance = 
-                distance + (distance_offset * 0.5)
-        end
-    end
+    if not mob.model_size then mob = windower.ffxi.get_mob_by_id(mob.id) or mob end
+    distance = resolveDistance(mob, distance, options, 0.5)
 
     if type(angleOffset) == 'number' then
         -- When an angle offset was provided, we'll calculate that from the mob
@@ -198,12 +202,12 @@ local function findMobRear(mob, distance)
 end
 
 -- h_offset > 0: right, h_offset < 0: left (we pass the sign via angle)
-local function findLateralOffset(mob, h_offset)
+local function findLateralOffset(mob, h_offset, options)
     if h_offset == 0 then
         return V({mob.x, mob.y})
     end
     local angle = (h_offset > 0) and (math.pi / 2) or (-math.pi / 2)
-    return findMobOffset(mob, angle, math.abs(h_offset))
+    return findMobOffset(mob, angle, math.abs(h_offset), options)
 end
 
 local teleporter_matches = {
@@ -307,12 +311,49 @@ local function sm_movement_exp(self, job)
         -- Update the 'me' mob
         me = windower.ffxi.get_mob_by_target('me')
         if not me or not me.x or not me.y then return end
+        if require('./lib/movement-afflictions').current(windower.ffxi) then
+            job.immobilized=true
+            speeds={};nextSpeed=1;iterationTime=0
+            jittering=false;shouldJitter=false;jitterUntil=0
+            windower.ffxi.run(false)
+            return 0.15
+        end
         
         -- Get the new vectors
         local vme2 = coordVector(me)
         local vto2 = job:pos():subtract(vme2)
         local d2 = vto2:length()
         local hdg2 = vectorAngle(vto2)
+
+        -- Route jobs advance their destination without ending the movement job.
+        -- Intermediate points remain continuous; reversals and explicit pauses
+        -- stop long enough to turn before movement resumes.
+        if job.advance then
+            local passed=d2<1.0 and not sharesHalfspace(hdg,hdg2)
+            local transition=job:advance(d2,now,self.tolerance,passed)
+            if transition then
+                vto2=job:pos():subtract(vme2)
+                d2=vto2:length()
+                hdg2=vectorAngle(vto2)
+                speeds={};nextSpeed=1;iterationTime=0
+                jittering=false;shouldJitter=false;jitterUntil=0
+                job.runHeading=nil
+                if transition.stop then
+                    windower.ffxi.run(false)
+                    windower.ffxi.turn(hdg2)
+                    paused=false
+                    local remaining=transition.pause
+                    while remaining>0 and not self.shutting_down and not self.cancel and job:is_valid() do
+                        local slice=math.min(remaining,0.1)
+                        coroutine.sleep(slice)
+                        remaining=remaining-slice
+                    end
+                    if self.shutting_down or self.cancel or not job:is_valid() then return end
+                    job.runHeading=hdg2
+                    windower.ffxi.run(hdg2)
+                end
+            end
+        end
 
         -- Calculate the distance traveled since the last iteration
         local delta = vme2:subtract(vme):length()
@@ -404,13 +445,13 @@ local function sm_movement_exp(self, job)
         end
 
         if paused then
-            if d2 > 1.0 then
+            if d2 > (job.naturalFollow and job.followStyle.resume or 1.0) then
                 -- Unpause if we've put some distance between us and the target
                 paused = false
             end
 
-            -- Stay paused (potentially), but turn to face the target if it's moved further out
-            windower.ffxi.turn(hdg2)
+            -- Travel follows retain their heading at rest. Alignment jobs still face the target.
+            if not job.naturalFollow then windower.ffxi.turn(hdg2) end
         end
         
         if not paused then
@@ -429,9 +470,10 @@ local function sm_movement_exp(self, job)
                 jittering = false
                 jitterUntil = 0
 
-                -- Stop moving and face the target
+                -- Stop moving; only alignment/combat jobs turn toward the target.
                 windower.ffxi.run(false)
-                windower.ffxi.turn(hdg2)
+                job.runHeading=nil
+                if not job.naturalFollow then windower.ffxi.turn(hdg2) end
 
                 -- For jobs that allow auto-comletion, we will return now
                 if job.autoComplete then
@@ -448,8 +490,9 @@ local function sm_movement_exp(self, job)
                         sleepDuration = sleepDuration * 3
                     else
                         -- Keep running toward the target
-                        windower.ffxi.turn(hdg2)
-                        windower.ffxi.run(hdg2)
+                        local heading=job.naturalFollow and followStyle.heading(job.runHeading,hdg2,d2) or hdg2
+                        job.runHeading=heading
+                        windower.ffxi.run(heading)
                     end
                 end
             end
@@ -497,6 +540,10 @@ local function sm_movement_exp(self, job)
 
     -- If there's a completion function, call it
     if self.shutting_down then return end
+    if self.cancel or not self:canMove(job.owner) then
+        windower.ffxi.run(false)
+        return
+    end
     if type(job.oncomplete) == 'function' then
         job:oncomplete()
     else
@@ -518,7 +565,7 @@ function sm_coroutine(self)
             self.queue = {}
         end
 
-        if job ~= nil and job:is_valid() then
+        if job ~= nil and self:canMove(job.owner) and job:is_valid() then
             self.current = job
 
             --if job.mode == Modes.position or job.mode == Modes.follow then
@@ -541,16 +588,17 @@ end
 
 -------------------------------------------------------------------------------
 -- Create the basic job entry
-local function sm_createBaseJob(self, mode, skipcancel)
-    if self.shutting_down then return end
+local function sm_createBaseJob(self, mode, skipcancel, owner)
+    if self.shutting_down or not self:canMove(owner) then return end
     local info = windower.ffxi.get_info()
     if type(info.zone) ~= 'number' or info.zone < 1 or resources.zones[info.zone] == nil then
         return nil
     end
 
     if not skipcancel then
-        self:cancelJob(nil, false)
+        self:cancelJob(nil, false, owner)
     end
+    if not self:canMove(owner) then return end
 
     local jobId = self.latestJobId + 1
     
@@ -565,6 +613,7 @@ local function sm_createBaseJob(self, mode, skipcancel)
         zone = info.zone,
         canJitter = true
     }
+    job.owner = owner
 
     -- By default, jobs will remain valid forever. This can be overridden by 
     -- the specific job type implementations.
@@ -573,9 +622,10 @@ local function sm_createBaseJob(self, mode, skipcancel)
 
     job.oncomplete = function (self)
         windower.ffxi.run(false)
+        if self.naturalFollow then return end
         coroutine.sleep(0.125)
 
-        if smartMove.shutting_down then return end
+        if smartMove.shutting_down or smartMove.cancel or not smartMove:canMove(self.owner) then return end
 
         if self:is_valid() then
             local player = windower.ffxi.get_player()
@@ -609,6 +659,7 @@ local function sm_createBaseJob(self, mode, skipcancel)
                         
                         -- All of this is necessary because of some weirdness in the game actually honoring the
                         -- heading change request. TODO: Investigate why.
+                        if smartMove.cancel or not smartMove:canMove(self.owner) then return end
                         windower.ffxi.turn(heading)
                         coroutine.sleep(0.125)
 
@@ -629,6 +680,36 @@ end
 -- Exposed interface
 -- ======================================================================================
 
+-- A token grants exclusive movement access until explicitly released. Immediate
+-- execution controls yielding only; it never grants ownership privileges.
+function smartMove:canMove(owner)
+    return self.movementOwner==nil or self.movementOwner==owner
+end
+function smartMove:acquireMovement(owner)
+    assert(type(owner)=='table','Movement ownership requires a token')
+    if self.shutting_down or not self:canMove(owner) then return false end
+    if self.movementOwner==owner then return true end
+    self:cancelJob(nil,true)
+    self.previousJob=nil
+    self.movementOwner=owner
+    return true
+end
+function smartMove:releaseMovement(owner)
+    if self.movementOwner==nil or self.movementOwner~=owner then return false end
+    self:cancelJob(nil,true,owner)
+    self.previousJob=nil
+    self.movementOwner=nil
+    return true
+end
+-- Lifecycle cleanup always wins over ownership, without resuming saved jobs.
+function smartMove:stop()
+    self:cancelJob(nil,true,self.movementOwner)
+    self.movementOwner=nil
+    self.previousJob=nil
+    windower.ffxi.follow(-1)
+    windower.ffxi.run(false)
+end
+
 -------------------------------------------------------------------------------
 -- If there's a job running, this will cause its jitter tracker to reset.
 -- The result will be termination of any in-progress jitter, or a reset
@@ -642,6 +723,7 @@ end
 
 -- Terminal, non-yielding cleanup: movement state outlives Lua coroutines.
 function smartMove:shutdown()
+    self.movementOwner = nil
     self.shutting_down = true
     self.cancel = true
     self.queue = {}
@@ -653,8 +735,13 @@ end
 
 -------------------------------------------------------------------------------
 -- Cancels a job. If no job id is provided, all jobs in the queue are cancelled.
-function smartMove:cancelJob(jobId, immediate)
-    if self.shutting_down then return end
+function smartMove:cancelJob(jobId, immediate, owner)
+    if self.shutting_down or not self:canMove(owner) then return end
+    -- Pending jobs have not become current yet, but must not start after the
+    -- reaction or reservation that requested them has been cancelled.
+    for i=#self.queue,1,-1 do
+        if jobId==nil or self.queue[i].jobId==jobId then table.remove(self.queue,i) end
+    end
     local job = self.current
     local canCancel = job and (
         (jobId == nil) or
@@ -664,6 +751,7 @@ function smartMove:cancelJob(jobId, immediate)
     if canCancel then
         self.verbose('Cancelling: %s':format(job.description))
         self.cancel = true
+        if immediate then windower.ffxi.run(false) end
 
         if not immediate then
             -- If we weren't asked for an immediate exit, we'll wait for the job
@@ -695,18 +783,19 @@ end
 
 -------------------------------------------------------------------------------
 -- Returns the job id of the new item on success, or 0 on failure
-function smartMove:moveTo(x, y)
-    local job = sm_createBaseJob(self, Modes.position)
+function smartMove:moveTo(x, y, immediate, owner)
+    local job = sm_createBaseJob(self, Modes.position, immediate, owner)
     if not job then
         return
     end
 
     -- Cancel the current job
-    self:cancelJob()
+    self:cancelJob(nil, immediate, owner)
+    if not self:canMove(owner) then return end
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:moveTo(x, y)
+        return smartMove:moveTo(x, y, immediate, owner)
     end
 
     -- Fill in the new job details
@@ -725,13 +814,83 @@ function smartMove:moveTo(x, y)
     job.description = job.description .. ' (%.1f, %.1f)':format(x, y)
     
     -- Enqueue the new job. For now we only allow one item.
+    if not self:canMove(job.owner) then return end
     self.queue = { job }
 
     self.verbose('Requested: %s':format(job.description))
 
     -- Add a bit of sleep time to give the job a chance to pick up
-    coroutine.sleep(0.25)
+    if not immediate then coroutine.sleep(0.25) end
 
+    return job.jobId
+end
+
+-----------------------------------------------------------------------------------------
+-- Traverse a configured point sequence as one continuous movement job. Repeated calls
+-- with the same configuration refresh its scheduling state without restarting it.
+function smartMove:waypointRoute(config, owner)
+    if self.shutting_down or not self:canMove(owner) or type(config)~='table' then return end
+    local function refresh(job)
+        if job and not self.cancel and job.mode==Modes.route and job.routeConfig==config and job.owner==owner then
+            job.refreshed=os.clock()
+            return job.jobId
+        end
+    end
+    local existing=refresh(self.current)
+    if existing then return existing end
+    for _,queued in ipairs(self.queue) do
+        existing=refresh(queued)
+        if existing then return existing end
+    end
+    local me=windower.ffxi.get_mob_by_target('me')
+    if not me or type(me.x)~='number' or type(me.y)~='number' then return end
+    local now=os.clock()
+    local plan=require('./lib/waypoint-route').new(config,me,now)
+    local initial=plan:point()
+    local initialDistance=math.sqrt((me.x-initial.x)^2+(me.y-initial.y)^2)
+    if #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
+        plan:advance(now)
+    end
+    local job=sm_createBaseJob(self,Modes.route,false,owner)
+    if not job then return end
+    job.routeConfig=config
+    job.routePlan=plan
+    job.refreshed=os.clock()
+    job.heartbeat=config.heartbeat~=nil and tonumber(config.heartbeat) or nil
+    assert(job.heartbeat==nil or (job.heartbeat>=0.5 and job.heartbeat<math.huge),
+        'Waypoint route heartbeat must be at least 0.5 seconds')
+    job.autoComplete=false
+    job.follow_distance=0
+    job.canJitter=config.jitter~=false
+    job.pos=function(self)
+        local point=self.routePlan:point()
+        return V({point.x,point.y})
+    end
+    job.is_valid=function(self)
+        local info=windower.ffxi.get_info()
+        local now=os.clock()
+        return info and info.zone==self.zone and not self.routePlan:timedOut(now)
+    end
+    job.cycle=function(self) return self:is_valid() end
+    job.advance=function(self,distance,now,defaultTolerance,passed)
+        local fresh=self.heartbeat==nil or now-self.refreshed<=self.heartbeat
+        if fresh and (distance<=self.routePlan:threshold(defaultTolerance) or passed) then
+            return self.routePlan:advance(now)
+        end
+    end
+    job.reschedule=function()
+        local player=windower.ffxi.get_player()
+        if player and player.status==1 and config.allow_engaged~=true then
+            self.verbose('Not rescheduling waypoint route while engaged')
+            return
+        end
+        return smartMove:waypointRoute(config,owner)
+    end
+    job.description=job.description..' ('..#plan.points..' points / '..plan.mode..')'
+    if not self:canMove(job.owner) then return end
+    self.queue={job}
+    self.verbose('Requested: %s':format(job.description))
+    coroutine.sleep(0.25)
     return job.jobId
 end
 
@@ -740,8 +899,8 @@ end
 -- of offsetAngle radians from its forward direction. An offset of 0 will be
 -- directly in front of the mob; an offset of PI will be directly behind the
 -- mob; and so on.
-function smartMove:findMobOffset(mob, offsetAngle, offsetDistance)
-    return findMobOffset(mob, offsetAngle, offsetDistance)
+function smartMove:findMobOffset(mob, offsetAngle, offsetDistance, options)
+    return findMobOffset(mob, offsetAngle, offsetDistance, options)
 end
 
 -----------------------------------------------------------------------------------------
@@ -777,14 +936,15 @@ end
 -----------------------------------------------------------------------------------------
 -- Move behind the mob, taking at most a given number of seconds. Use atMobRear to
 -- determine if the movement completed successfully.
-function smartMove:moveBehindMob(mob, maxDuration)
-    return self:moveBehindIndex(mob and mob.index or 0, maxDuration)
+function smartMove:moveBehindMob(mob, maxDuration, owner)
+    return self:moveBehindIndex(mob and mob.index or 0, maxDuration, owner)
 end
 
 -----------------------------------------------------------------------------------------
 -- Move behind the mob with the given index, taking at most a given number of seconds.
 -- Use atMobRear to determine if the movement completed successfully.
-function smartMove:moveBehindIndex(follow_index, maxDuration)
+function smartMove:moveBehindIndex(follow_index, maxDuration, owner)
+    if not self:canMove(owner) then return end
     -- Validate the target
     local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
@@ -792,7 +952,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     end
 
     -- Create and validate the basic job parameters
-    local job = sm_createBaseJob(self, Modes.backstab)
+    local job = sm_createBaseJob(self, Modes.backstab, false, owner)
     if not job then
         return
     end
@@ -808,7 +968,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:moveBehindIndex(follow_index)
+        return smartMove:moveBehindIndex(follow_index, maxDuration, owner)
     end
 
     -- Determine if the job is still valid
@@ -841,6 +1001,7 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     job.description = job.description .. ' %d (%03X)':format(follow_index, follow_index)
     
     -- Enqueue the new job. For now we only allow one item.
+    if not self:canMove(job.owner) then return end
     self.queue = { job }
 
     self.verbose('Requested: %s':format(job.description))
@@ -851,11 +1012,16 @@ function smartMove:moveBehindIndex(follow_index, maxDuration)
     return job.jobId
 end
 
-function smartMove:followMob(mob, distance)
-    return self:followIndex(mob and mob.index or 0, distance)
+function smartMove:followMob(mob, distance, options, owner)
+    return self:followIndex(mob and mob.index or 0, distance, options, owner)
 end
 
-function smartMove:followIndex(follow_index, distance)
+function smartMove:followDistance(mob, distance, options)
+    return resolveDistance(mob, math.max(tonumber(distance) or 0, 0), options, 0.75)
+end
+
+function smartMove:followIndex(follow_index, distance, options, owner)
+    if not self:canMove(owner) then return end
     -- Validate the target
     local mob = smartMove.getMobByIndex(follow_index)--windower.ffxi.get_mob_by_index(follow_index)
     if mob == nil or not mob.valid_target then
@@ -874,36 +1040,27 @@ function smartMove:followIndex(follow_index, distance)
     end
 
     -- Create and validate the basic job parameters
-    local job = sm_createBaseJob(self, Modes.follow)
+    local job = sm_createBaseJob(self, Modes.follow, false, owner)
     if not job then
         return
     end
 
     -- Cancel the current job
-    self:cancelJob()
+    self:cancelJob(nil, false, owner)
 
     -- Fill in the new job details
     
     job.follow_index = follow_index -- Store the follow index
     job.mob = mob                   -- Store the target mob
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
-    job.follow_distance =           -- How far behind the mob we should follow
-        math.max(tonumber(distance) or 0, 0)
-
-    if not current_settings or not current_settings.useRawDistances then
-        local _p = windower.ffxi.get_mob_by_target('me')
-        local distance_offset = 
-            (_p and _p.model_size or 0) +           -- Player size offset
-            (mob.model_size or 0)                   -- Mob size offset
-        job.follow_distance = 
-            job.follow_distance + (distance_offset * 0.75)
-
-        -- local tick = os.clock()
-        -- if tick - (last_raw_output_tick or 0) > 3 then
-        --     print('base: %.2f, final: %.2f':format(distance, job.follow_distance))
-        --     last_raw_output_tick = tick
-        -- end
+    job.follow_distance = self:followDistance(mob, distance, options)
+    if mob.spawn_type==13 or mob.spawn_type==1 then
+        followStyle=followStyle or require('./lib/follow-style')
+        job.followStyle=followStyle.profile(_me.name or _me.id)
     end
+    job.naturalFollow=job.followStyle~=nil and _me.status~=1
+    local requestedDistance = distance
+    local requestedOptions = options and {radius_multiplier=options.radius_multiplier} or nil
 
     --job.autolock = true             -- Automatically lock onto the target on completion
 
@@ -913,7 +1070,7 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Reschedule the job
     job.reschedule = function (self)
-        return smartMove:followIndex(follow_index, job.follow_distance)
+        return smartMove:followIndex(follow_index, requestedDistance, requestedOptions, owner)
     end
 
     -- Determine if the job is still valid
@@ -943,6 +1100,9 @@ function smartMove:followIndex(follow_index, distance)
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
         self.mob = smartMove.getMobByIndex(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
+        local player=windower.ffxi.get_mob_by_target('me')
+        self.naturalFollow=self.followStyle and self.mob and (self.mob.spawn_type==13 or self.mob.spawn_type==1)
+            and player and player.status~=1 or false
 
         if 
             self.mob == nil or
@@ -999,6 +1159,9 @@ function smartMove:followIndex(follow_index, distance)
 
     -- Positioning is based on the mob and any offsets
     job.pos = function (self)
+        if requestedOptions and type(requestedOptions.radius_multiplier) == 'number' then
+            self.follow_distance = smartMove:followDistance(self.mob, requestedDistance, requestedOptions)
+        end
         if 
             self.lost_mob_pos
         then
@@ -1015,19 +1178,27 @@ function smartMove:followIndex(follow_index, distance)
 
                 local follow_distance = job.follow_distance
                 local h_offset = smartMove.h_offset
+                if self.naturalFollow then
+                    follow_distance=follow_distance+self.followStyle.distance
+                    local range=type(current_settings.followOffset)=='number' and math.abs(current_settings.followOffset) or 1
+                    h_offset=self.followStyle.lateral*range
+                end
                 
                 -- If the player is mounted, we'll increase the distances a bit to account
                 -- for the large mount model sizes and greater movement speed.
                 if player.status == 85 or player.status == 5 then
                     -- Note: Status 85 is mount, 5 is chocobo
                     follow_distance = follow_distance + 3
-                    h_offset = smartMove.h_offset_mounted
+                    h_offset = self.naturalFollow and h_offset*1.5 or smartMove.h_offset_mounted
                 end
 
                 -- For players, we'll apply the horizontal offset if one is configured. This is a left or
                 -- right offset relative to the mob's heading.
                 if self.mob.spawn_type == 13 or self.mob.spawn_type == 1 then
-                    vMob = findLateralOffset(self.mob, h_offset)
+                    -- Prefer the leader's direct path when behind; do not widen
+                    -- the approach with lateral spacing during catch-up.
+                    if self.naturalFollow and vMob:subtract(vPlayer):length()>follow_distance+4 then h_offset=0 end
+                    vMob = findLateralOffset(self.mob, h_offset, requestedOptions)
                 end
 
                 local toTarget = vMob:subtract(vPlayer)
@@ -1061,6 +1232,7 @@ function smartMove:followIndex(follow_index, distance)
     job.description = job.description .. ' %d (%03X)':format(follow_index, follow_index)
     
     -- Enqueue the new job. For now we only allow one item.
+    if not self:canMove(job.owner) then return end
     self.queue = { job }
 
     self.verbose('Requested: %s':format(job.description))
@@ -1080,10 +1252,10 @@ end
 ---------------------------------------------------------------------------------
 -- Reschedules the specified jobId. If no joIb is provided, the most recent
 -- job is scheduled automatically. Returns the new job id, or nil if none.
-function smartMove:reschedule(jobId)
-    if self.shutting_down then return end
+function smartMove:reschedule(jobId, owner)
+    if self.shutting_down or not self:canMove(owner) then return end
     local previousJob = self.previousJob
-    if previousJob then
+    if previousJob and previousJob.owner==owner then
         if jobId == nil or jobId == previousJob.jobId then
             if type(previousJob.reschedule) == 'function' then
                 return previousJob.reschedule()
@@ -1124,15 +1296,22 @@ function smartMove:setMobLookupFunctions(byId, byIndex)
     smartMove.getMobByIndex = byIndex or windower.ffxi.get_mob_by_index
 end
 
-function smartMove:getJobInfo(jobId)
+function smartMove:getJobInfo(jobId, includeQueued)
+    if includeQueued and jobId then
+        for _,job in ipairs(self.queue) do
+            if job.jobId==jobId then return {jobId=job.jobId,mode=job.mode,position=job:pos(),queued=true} end
+        end
+    end
     local current = self.current
     if current and (jobId == nil or jobId == current.jobId) then
         if current:is_valid() then
             return {
                 jobId = current.jobId,
                 mode = current.mode,
+                immobilized = current.immobilized,
                 time = current.time,
                 follow_index = current.follow_index,
+                route_index = current.routePlan and current.routePlan.index,
                 position = current:pos()
             }
         end
