@@ -66,6 +66,49 @@ This option defaults to false. Holding ends when the leader leaves the release
 radius, the zone or follow partner changes, or relative alignment is disabled.
 It bridges spawn-trigger disappearance before a battle target becomes available.
 With a configured alternate follow target, that partner is the reference leader.
+
+## Continuous waypoint routes
+
+`waypointRoute(config)` starts or refreshes one smart-move job for an entire
+point sequence. Omit `config` to use `vars.waypoints_ex._current`, falling back
+to the route selected by `vars.waypoints_ex.active`. Repeated calls with the
+same object refresh the job without restarting it.
+
+```json
+{
+  "mode": "bounce",
+  "corner_radius": 1.5,
+  "tolerance": 0.5,
+  "turn_pause": 0.35,
+  "points": [
+    { "x": 10, "y": 20 },
+    { "x": 20, "y": 30, "corner_radius": 2 },
+    { "x": 30, "y": 20, "corner_radius": 0, "pause": 0.5 }
+  ]
+}
+```
+
+The route begins at the nearest point, or advances immediately to the following
+point when already within the nearest point's arrival tolerance. `mode` defaults
+to `bounce`; `cycle` wraps from the final point to the first. Intermediate points change the active
+destination without ending movement. Bounce endpoints stop, turn around, wait
+for `turn_pause` (default 0.35 seconds), and then explicitly resume toward the
+next point.
+
+`corner_radius` controls how close the character gets before selecting the next
+point. It defaults to zero, which uses `tolerance` or smart-move's normal
+tolerance and preserves precise waypoint travel. Larger radii cut the corner
+and produce smoother paths. Each point can override `corner_radius` and
+`tolerance`; `pause` forces a stop before continuing, and `duration` limits time
+on that segment. Routes continue until replaced or cancelled. An optional
+route-level `heartbeat` controls how long the route may advance without its
+action being refreshed; when configured, an expired route finishes its current
+segment and waits at that waypoint until refreshing returns. Set `jitter: false`
+to disable obstacle escape behavior for that route. Automatic rescheduling after an interrupted action is refused while
+engaged by default, preventing a pre-battle route from reclaiming movement from
+engagement behavior. Set `allow_engaged: true` on a route to permit that automatic
+reschedule; ordinary calls to `waypointRoute` remain governed by their action's
+own conditions.
 The reference character skips following and alignment when the resolved partner
 is themselves, including when `follow_leader.target` explicitly names them.
 
@@ -351,6 +394,9 @@ Set `vars.frontline_engagement.distance_priority` to `true` to enforce the assig
 | `"150-210"` | An arc from the first angle to the second in increasing angle order. Wraparound works: `"330-30"` crosses zero. A span of 360° permits the full circle. |
 
 Semantic names are case-insensitive. Invalid specifications raise an error rather than silently becoming unrestricted alignment.
+Negative angles rotate toward the target's left and positive angles toward its
+right: `-90` is left and `90` is right. Viewed from above, those are
+counter-clockwise and clockwise respectively.
 
 For flexible ranges, a character already inside an allowed arc keeps its current bearing when correcting distance. Otherwise, a preferred angle is randomized and remembered on the executing action for the current battle scope, target, and angle specification. A later successful fallback becomes the preference. If already at the requested distance anywhere in an allowed arc, no repositioning is needed. Target movement or turning during an unsuccessful attempt defers correction to a later evaluation instead of trying arc extremes. This reduces clustering but does not coordinate character positions or guarantee separation.
 

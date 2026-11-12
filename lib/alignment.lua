@@ -1,4 +1,6 @@
--- Angles are degrees relative to the target's facing. Positive is left:
+-- Angles are degrees relative to the target's facing. Negative is left and
+-- positive is right (counter-clockwise and clockwise respectively when viewed
+-- from above in FFXI's +Y-north coordinate system):
 -- Windower vectors use (cos(a), -sin(a)), with X east and Y south.
 --
 -- NOTE: For angle pairs, the values are:

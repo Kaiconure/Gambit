@@ -383,6 +383,12 @@ Camp distance bounds describe the character's distance from camp.
 
 Check the active zone and camp coordinates before copying an XP profile. A
 waypoint route (`waypoints_ex.active`) is another independent movement policy.
+Waypoint routes are continuous smart-move jobs. Route-level `corner_radius`
+defaults to zero for exact travel; larger values allow earlier, smoother turns.
+Points may override `corner_radius` or request an explicit `pause`. Bounce routes
+stop and turn around at their endpoints. See `waypointRoute` in the function
+reference for the complete configuration. When its policy becomes ineligible,
+a route finishes the active segment and waits at the next waypoint.
 
 ## Configure weapon skills and skillchains
 

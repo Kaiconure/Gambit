@@ -37,7 +37,9 @@ function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
     local result={}
     function result.collect(document,path)
         if document.contributions==nil then return end
-        local entries,ordered=require('./lib/contribution-entries').read(document.contributions,matchesRequired)
+        local entries,ordered=require('./lib/contribution-entries').read(document.contributions,matchesRequired,function(message)
+            if warn then warn(path..': '..message) end
+        end)
         local definitions={}
         for _,value in ipairs(entries) do
             local name,actions=value.slot,value.actions

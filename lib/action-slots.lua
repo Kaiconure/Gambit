@@ -132,7 +132,9 @@ function slots.new(container, priority, warn, matchesRequired, defaultSource)
             return
         end
         if discovering then discoveredSources[source]=true end
-        local entries,ordered = contributionEntries.read(document.contributions, matchesRequired)
+        local entries,ordered = contributionEntries.read(document.contributions, matchesRequired,function(message)
+            warn((source or defaultSource or '(unknown source)')..': '..message)
+        end)
         local path=parent and parent._contributionPath
         local origin=path and path[#path]
         if origin then

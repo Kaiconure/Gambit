@@ -17,7 +17,7 @@
         "canUse('Erase')",
         "arrayCount(vars.use_erase.targets) > 0",
         "arrayCount(vars.use_erase.debuffs) > 0",
-        "partyByName(vars.use_erase.targets) and hasEffect(member, vars.use_erase.debuffs)"
+        "partyByName(vars.use_erase.targets) and member.distance <= 20 and hasEffect(member, vars.use_erase.debuffs)"
       ],
       "commands": ["use(member)"],
       "frequency": 1,
@@ -31,7 +31,7 @@
         "canUse('Erase')",
         "arrayCount(vars.use_erase.targets) == 0",
         "arrayCount(vars.use_erase.debuffs) > 0",
-        "partyHasEffect(vars.use_erase.debuffs)"
+        "partyHasEffect(vars.use_erase.debuffs) and member.distance <= 20"
       ],
       "commands": ["use(member)"],
       "frequency": 1,

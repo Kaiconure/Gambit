@@ -84,6 +84,11 @@ slot are allowed and retain declaration order at equal source/action priority.
 The legacy name-keyed object form remains readable for external configurations;
 the examples and repository configurations use the ordered form.
 
+Entries may include `comment` or `note` documentation fields; these are removed
+during compilation. Other unknown entry fields produce source-qualified warnings
+and are ignored rather than preventing the namespace from loading. Known fields
+and their values remain strictly validated.
+
 An optional `for` selector array filters entries for the character loading the
 configuration. It supports the same jobs, groups, names, `leader`, and exclusions
 as other target selectors. Nonmatching entries have no effect: their imports,

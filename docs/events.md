@@ -641,6 +641,10 @@ or inline imports.
 | Comma-separated slot names | Contribute to multiple hooks; any alias satisfies a grouped `required_for` requirement |
 | Rule `priority` | Finite number or `highest/high/normal/low/lowest`; lower values run first within that slot |
 
+Contribution entries may include `comment` or `note`; both are stripped during
+compilation. Unknown entry fields warn and are ignored, while malformed values
+for known fields remain load errors.
+
 `optional` and `required_for` control diagnostics, **not execution**. Requirements
 use normal job/group/player-name/leader selectors and exclusions. An empty
 requirements array requires nothing. Missing nonoptional slots warn; malformed

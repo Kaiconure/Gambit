@@ -272,10 +272,12 @@ optionalTest({{missing={optional=true,actions={}}},{missing={}}},1)
 optionalTest({{['^missing']={}},{missing={optional=true,actions={}}}},0)
 optionalTest({{['!missing']={optional=true,actions={}}},{missing={}}},0)
 for _, invalid in ipairs({{optional=true},{optional='true',actions={}},
-    {optional=true,actions='bad'},{optional=true,actions={},silent=true},
+    {optional=true,actions='bad'},
     {optional=true,actions={named='bad'}}}) do
     assert(not pcall(optionalTest,{{missing=invalid}},0))
 end
+optionalTest({{missing={optional=true,actions={},silent=true}}},1)
+optionalTest({{missing={optional=true,actions={},comment='documentation',note={'also documentation'}}}},0)
 print('PASS: optional contribution objects, aliases, mixed warnings, replacements, fallbacks and invalid objects')
 optionalTest({{missing={required_for={'BLM','GEO'},actions={}}}},1)
 optionalTest({{missing={required_for={'WAR'},actions={}}}},0)
@@ -722,9 +724,12 @@ assert(#replaced.battle==3 and replaced.battle[3].commands[1]=='after()')
 local unmatched=orderedReplacement('WAR')
 assert(#unmatched.battle==3 and unmatched.battle[3].commands[1]=='base()')
 for _,entry in ipairs({{slot='a'},{slot='a',actions=false},{slot='a',actions={},['for']='RDM'},
- {slot='a',actions={},['for']={false}},{slot='a',actions={},unexpected=true}}) do
+ {slot='a',actions={},['for']={false}}}) do
  assert(not pcall(load,'Tester',{battle={{slot='a'}},contributions={entry}},player,'entry'))
 end
+warnings={}
+load('Tester',{battle={{slot='a'}},contributions={{slot='a',actions={},unexpected=true}}},player,'entry')
+assert(#warnings==1 and warnings[1]:find('Unknown contribution field: unexpected',1,true))
 local cyclic={battle={{slot='a'}},contributions={{slot='a',['for']={'RDM'},actions={{slot='a'}}}}}
 assert(not pcall(load,'Tester',cyclic,player,'entry'))
 local defaults={battle={{slot='default'}},contributions={

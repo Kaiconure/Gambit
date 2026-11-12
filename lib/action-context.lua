@@ -4984,6 +4984,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     ---------------------------------------------------------------------------
+    -- Refresh or start a continuous waypoint route. The explicit configuration
+    -- wins; otherwise use the route selected by waypoints-ex.
+    context.waypointRoute = function(config)
+        if not context.movementAvailable() then return nil,'reserved' end
+        local options=context.vars.waypoints_ex
+        config=config or (options and options._current)
+            or (options and options.data and options.data[options.active])
+        if type(config)~='table' then return nil,'route unavailable' end
+        local jobId=smartMove:waypointRoute(config)
+        return jobId~=nil,jobId
+    end
+
+    ---------------------------------------------------------------------------
     --
     context.move = function(...)
         if not context.movementAvailable() then return nil, 'reserved' end

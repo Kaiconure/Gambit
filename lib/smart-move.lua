@@ -21,6 +21,7 @@ local smartMove = {
 
 local Modes = {
     position = 'position',
+    route = 'route',
     follow = 'follow',
     backstab = 'backstab'
 }
@@ -324,6 +325,36 @@ local function sm_movement_exp(self, job)
         local d2 = vto2:length()
         local hdg2 = vectorAngle(vto2)
 
+        -- Route jobs advance their destination without ending the movement job.
+        -- Intermediate points remain continuous; reversals and explicit pauses
+        -- stop long enough to turn before movement resumes.
+        if job.advance then
+            local passed=d2<1.0 and not sharesHalfspace(hdg,hdg2)
+            local transition=job:advance(d2,now,self.tolerance,passed)
+            if transition then
+                vto2=job:pos():subtract(vme2)
+                d2=vto2:length()
+                hdg2=vectorAngle(vto2)
+                speeds={};nextSpeed=1;iterationTime=0
+                jittering=false;shouldJitter=false;jitterUntil=0
+                job.runHeading=nil
+                if transition.stop then
+                    windower.ffxi.run(false)
+                    windower.ffxi.turn(hdg2)
+                    paused=false
+                    local remaining=transition.pause
+                    while remaining>0 and not self.shutting_down and not self.cancel and job:is_valid() do
+                        local slice=math.min(remaining,0.1)
+                        coroutine.sleep(slice)
+                        remaining=remaining-slice
+                    end
+                    if self.shutting_down or self.cancel or not job:is_valid() then return end
+                    job.runHeading=hdg2
+                    windower.ffxi.run(hdg2)
+                end
+            end
+        end
+
         -- Calculate the distance traveled since the last iteration
         local delta = vme2:subtract(vme):length()
         local iterationSpeed = (iterationTime > 0 and (delta / iterationTime)) or nil
@@ -461,7 +492,6 @@ local function sm_movement_exp(self, job)
                         -- Keep running toward the target
                         local heading=job.naturalFollow and followStyle.heading(job.runHeading,hdg2,d2) or hdg2
                         job.runHeading=heading
-                        windower.ffxi.turn(heading)
                         windower.ffxi.run(heading)
                     end
                 end
@@ -792,6 +822,75 @@ function smartMove:moveTo(x, y, immediate, owner)
     -- Add a bit of sleep time to give the job a chance to pick up
     if not immediate then coroutine.sleep(0.25) end
 
+    return job.jobId
+end
+
+-----------------------------------------------------------------------------------------
+-- Traverse a configured point sequence as one continuous movement job. Repeated calls
+-- with the same configuration refresh its scheduling state without restarting it.
+function smartMove:waypointRoute(config, owner)
+    if self.shutting_down or not self:canMove(owner) or type(config)~='table' then return end
+    local function refresh(job)
+        if job and not self.cancel and job.mode==Modes.route and job.routeConfig==config and job.owner==owner then
+            job.refreshed=os.clock()
+            return job.jobId
+        end
+    end
+    local existing=refresh(self.current)
+    if existing then return existing end
+    for _,queued in ipairs(self.queue) do
+        existing=refresh(queued)
+        if existing then return existing end
+    end
+    local me=windower.ffxi.get_mob_by_target('me')
+    if not me or type(me.x)~='number' or type(me.y)~='number' then return end
+    local now=os.clock()
+    local plan=require('./lib/waypoint-route').new(config,me,now)
+    local initial=plan:point()
+    local initialDistance=math.sqrt((me.x-initial.x)^2+(me.y-initial.y)^2)
+    if #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
+        plan:advance(now)
+    end
+    local job=sm_createBaseJob(self,Modes.route,false,owner)
+    if not job then return end
+    job.routeConfig=config
+    job.routePlan=plan
+    job.refreshed=os.clock()
+    job.heartbeat=config.heartbeat~=nil and tonumber(config.heartbeat) or nil
+    assert(job.heartbeat==nil or (job.heartbeat>=0.5 and job.heartbeat<math.huge),
+        'Waypoint route heartbeat must be at least 0.5 seconds')
+    job.autoComplete=false
+    job.follow_distance=0
+    job.canJitter=config.jitter~=false
+    job.pos=function(self)
+        local point=self.routePlan:point()
+        return V({point.x,point.y})
+    end
+    job.is_valid=function(self)
+        local info=windower.ffxi.get_info()
+        local now=os.clock()
+        return info and info.zone==self.zone and not self.routePlan:timedOut(now)
+    end
+    job.cycle=function(self) return self:is_valid() end
+    job.advance=function(self,distance,now,defaultTolerance,passed)
+        local fresh=self.heartbeat==nil or now-self.refreshed<=self.heartbeat
+        if fresh and (distance<=self.routePlan:threshold(defaultTolerance) or passed) then
+            return self.routePlan:advance(now)
+        end
+    end
+    job.reschedule=function()
+        local player=windower.ffxi.get_player()
+        if player and player.status==1 and config.allow_engaged~=true then
+            self.verbose('Not rescheduling waypoint route while engaged')
+            return
+        end
+        return smartMove:waypointRoute(config,owner)
+    end
+    job.description=job.description..' ('..#plan.points..' points / '..plan.mode..')'
+    if not self:canMove(job.owner) then return end
+    self.queue={job}
+    self.verbose('Requested: %s':format(job.description))
+    coroutine.sleep(0.25)
     return job.jobId
 end
 
@@ -1212,6 +1311,7 @@ function smartMove:getJobInfo(jobId, includeQueued)
                 immobilized = current.immobilized,
                 time = current.time,
                 follow_index = current.follow_index,
+                route_index = current.routePlan and current.routePlan.index,
                 position = current:pos()
             }
         end
