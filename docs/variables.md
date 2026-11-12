@@ -188,6 +188,31 @@ the append's priority relative to the base; they do not replace the base array.
 The syntax works recursively in action and event variables and `with_vars`, and can be nested
 inside a `csv(...)` expansion. It is load-time syntax, not a runtime function.
 
+### Prepend distinct array entries
+
+`array.prepend(...)` adds entries at the beginning using the same priority,
+validation, copy isolation, nesting, and `with_vars` rules as append:
+
+```json
+{
+  "vars": {
+    "ws": {
+      "multi_stage": {
+        "array.prepend(preferred_weapon_skills)": ["Savage Blade", "Requiescat"]
+      }
+    }
+  }
+}
+```
+
+The supplied entries retain their order, followed by distinct existing entries.
+An entry already in the array moves to the front instead of being duplicated.
+For example, prepending `["B", "A"]` to `["A", "C"]` produces `["B", "A", "C"]`.
+Parent operations run before child operations, so child prepends appear before
+parent prepends. At equal priority within one layer, operations run in the order
+append, prepend, remove, independent of JSON key order. Missing arrays are
+initialized; explicit clears and priority prefixes work as they do for append.
+
 ### Remove array entries
 
 `"array.remove(buffs)": ["Blaze Spikes", "Howl"]` removes every matching
@@ -196,7 +221,7 @@ copy isolation, priority and nesting rules as append. A missing value stays nil;
 a non-array is unchanged with a warning. Removal also filters inherited entries
 that the loader encounters later.
 
-At equal priority in the same layer, append runs before remove, so remove wins
+At equal priority in the same layer, append and prepend run before remove, so remove wins
 regardless of JSON key order. Across layers the child has the last word: it can
 remove a parent's additions or explicitly append a value removed by a parent.
 

@@ -2,21 +2,25 @@
   "vars": {
     "^follow_leader": {
       "distance": null,
-      "suppress_on_leader_engaged": null
+      "suppress_on_battle_target": false,
+      "suppress_on_leader_engaged": null,
+      "align_relative": null
     }
   },
   "actions": [
     {
       "precondition": "movementAvailable()",
       "when": [
+        "not vars.follow_leader.suppress_on_battle_target or not bt",
         "me.can_follow",
         "vars.follow_leader.target or (not me.is_party_leader and party_leader)",
         "not vars.follow_leader.suppress_on_leader_engaged or not party_leader or not party_leader.is_engaged",
         "setVar('vars.follow_leader._target', pinfo[vars.follow_leader.target or party_leader.name])",
-        "vars.follow_leader._target.valid_target and vars.follow_leader._target.distance <= 50"
+        "vars.follow_leader._target and vars.follow_leader._target.valid_target and vars.follow_leader._target.distance <= 50",
+        "not vars.follow_leader._target.is_me and vars.follow_leader._target.id ~= me.id"
       ],
       "commands": [
-        "following(vars.follow_leader._target) or follow(vars.follow_leader._target, vars.follow_leader.distance)"
+        "followLeader(vars.follow_leader._target, vars.follow_leader)"
       ],
       "frequency": 1,
       "miss_frequency": 5,

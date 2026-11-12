@@ -566,6 +566,7 @@ windower.register_event('load', function()
         windower=windower, texts=texts, images=images,
         enabled=function() return globals.enabled end,
         strategy=function() return settings.strategy end,
+        maxDistance=function() return settings.maxDistance end,
         canShareClaim=function(mob) return partyInfo:canShareClaimOnMob(mob) end,
         loggedIn=function() return globals.logged_in end,
         ready=function()

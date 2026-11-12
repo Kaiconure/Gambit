@@ -28,6 +28,8 @@ local env = setmetatable({
     writeWarning=function(message) warnings[#warnings+1]=message end,
     writeMessage=function(message) warnings[#warnings+1]=message end,
     text_action=tostring, text_gold=tostring, text_number=tostring,
+    useArray=function(value) return type(value)=='table' and value or {value} end,
+    arrayIndexOf=function(array,value) for index,item in ipairs(array) do if item==value then return index end end end,
     _processMacros=function() end,
 }, {__index=_G})
 local chunk = assert(loadstring(internal .. loader .. '\nreturn loadActionImports'))
@@ -82,7 +84,9 @@ assert(preconditions.collect(inherited.battle[1])[1].expression=='provider()')
 documents.reaction = {actions={{slot='emergency'}}}
 assert(not pcall(load, 'Tester', {battle={{slot='emergency'}}},player,'entry'))
 documents.reaction = {contributions={other={{commands={'bad()'}}}}}
-assert(not pcall(load, 'Tester', {battle={{slot='emergency'}}},player,'entry'))
+local nested={battle={{slot='other'},{slot='emergency'}}}
+load('Tester',nested,player,'entry')
+assert(nested.battle[1].commands[1]=='bad()') -- Definitions reach an earlier slot.
 documents['./settings/namespaces/child/common.json']=nil
 documents['./settings/namespaces/base/common.json']=nil
 local empty={battle={{slot='empty'},{commands={'ok()'}}}}
@@ -150,13 +154,13 @@ for _, invalid in ipairs({false, 1, {''}, {'good',false}, {name='bad'}}) do
     assert(not pcall(load,'Tester',{battle={{slots=invalid}}},player,'entry'))
 end
 documents.nested={actions={{slots={'nested'}}}}
-assert(not pcall(load,'Tester',{
+assert(pcall(load,'Tester',{
     battle={{slots='test'}},contributions={test={{import='nested'}}},
 },player,'entry'))
 assert(not pcall(load,'Tester',{
-    battle={{slots='test'}},contributions={test={{slots={'nested'}}}},
+    battle={{slots='test'}},contributions={test={{slots={'test'}}}},
 },player,'entry'))
-print('PASS: slot aliases, ordered arrays, repeated scopes, empty arrays, validation and nested-slot rejection')
+print('PASS: slot aliases, ordered arrays, repeated scopes, empty arrays, validation and nested-slot recursion rejection')
 local function fallback(specific)
     local result={battle={{slots={{'geo/burst','burst'},'nuke'}}},contributions={
         ['geo/burst']=specific, burst={{commands={'generic()'}}}, nuke={{commands={'nuke()'}}},
@@ -279,10 +283,16 @@ optionalTest({{missing={optional=true,required_for={'mages'},actions={}}}},1)
 optionalTest({{missing={required_for={'*','~BLM'},actions={}}}},0)
 optionalTest({{['present,missing']={required_for={'BLM'},actions=command('required')}}},0,1)
 optionalTest({{['absent,missing']={required_for={'BLM'},actions={}}}},2)
+optionalTest({{{slot='missing',['for']={'BLM'},actions={}}}},1)
+optionalTest({{{slot='missing',['for']={'WAR'},actions={}}}},0)
+optionalTest({{{slot='missing',['for']={'BLM'},optional=true,actions={}}}},1)
+optionalTest({{{slot='missing',['for']={'BLM','GEO'},required_for={'GEO'},actions={}}}},0)
+optionalTest({{{slot='missing',['for']={'BLM'},required_for={'WAR'},actions={}}}},0)
+optionalTest({{{slot='missing',['for']={'WAR'},required_for={'BLM'},actions={}}}},0)
 for _, required in ipairs({'BLM', {true}, {named='BLM'}, {''}}) do
     assert(not pcall(optionalTest,{{missing={required_for=required,actions={}}}},0))
 end
-print('PASS: required_for job/group selectors, exclusions, optional override and shared-slot satisfaction')
+print('PASS: implicit/explicit required_for selectors, filtering intersection, exclusions, optional override and shared-slot satisfaction')
 -- Use actual generated common-file ordering with the real import/variable loader.
 for path in pairs(documents) do documents[path]=nil end
 local paths=dofile('lib/settings-paths.lua')
@@ -419,3 +429,309 @@ local nestedPrecedence={}
 load('Tester',nestedPrecedence,player,'./settings/namespaces/child/actions/whm.json')
 assert(nestedPrecedence.vars.frontline_engagement.distance==17)
 print('PASS: real import loader gives late child setup vars precedence over ancestor common vars')
+
+env.settingsPaths.commonFiles=function()return {}end
+documents['nested-provider']={vars={nested_default=17},imports={'nested-metadata'},
+ actions={{commands={'provider_action()'}}},
+ contributions={earlier={{import='nested-child',with_vars={nested_value=42},precondition='nested_gate()'}}}}
+documents['nested-metadata']={contributions={['battle-setup']={{commands={'metadata_setup()'}}}}}
+documents['nested-child']={contributions={last={{commands={'last_action()'}}}},actions={{commands={'child_action()'}}}}
+local chain={battle={{slot='last'},{slot='earlier'},{slot='entry'}},pull={{slot='entry'}},
+ contributions={entry={{import='nested-provider',precondition='provider_gate()'}}}}
+load('Tester',chain,player,'entry')
+assert(chain.vars.nested_default==17)
+local counts={}
+for _,a in ipairs(chain.battle)do counts[a.commands[1]]=(counts[a.commands[1]] or 0)+1 end
+assert(counts['metadata_setup()']==1 and counts['last_action()']==1 and counts['child_action()']==1 and counts['provider_action()']==1)
+local last
+for _,a in ipairs(chain.battle)do if a.commands[1]=='last_action()' then last=a end end
+local nestedState=scopes.build({}, {}, chain._variableScopes)
+assert(nestedState.view(function()return last._variableScope end).nested_value==42)
+local gates=preconditions.collect(last)
+assert(gates[1].expression=='provider_gate()' and gates[2].expression=='nested_gate()')
+assert(#chain.pull==1 and chain.pull[1].commands[1]=='provider_action()')
+
+local function rejected(provider,definitions,extra)
+ documents['cycle-provider']=provider
+ local config={battle={{slot='a'},{slot='b'},{slot='c'}},contributions=definitions or {a={{import='cycle-provider'}}}}
+ if extra then extra(config)end
+ local ok,err=pcall(load,'Tester',config,player,'entry')
+ assert(not ok and tostring(err):find('Recursive contribution'),tostring(err))
+end
+rejected({contributions={a={}}})
+documents['cycle-child']={contributions={a={{commands={'cycle()'}}}}}
+rejected({contributions={b={{import='cycle-child'}}}})
+rejected({imports={'cycle-provider'}})
+-- Shared providers must not hide a cycle through deduplicated definitions.
+documents['cycle-shared']={contributions={b={{import='cycle-child'}}}}
+documents['cycle-child']={contributions={c={{import='cycle-shared'}}}}
+rejected({imports={'cycle-shared'}})
+-- Cleared and unselected contributions are not traversed.
+documents['cycle-provider']={contributions={a={}}}
+local cleared={battle={{slot='a'}},contributions={a={{import='cycle-provider'}}},imports={{import='./settings/namespaces/child/actions/clear-a.json'}}}
+documents['./settings/namespaces/child/actions/clear-a.json']={contributions={['!a']={}}}
+load('Tester',cleared,player,'entry');assert(#cleared.battle==0)
+local filtered={battle={{slot='a'}},contributions={a={{import='cycle-provider',disabled=true}}}}
+load('Tester',filtered,player,'entry');assert(#filtered.battle==0)
+print('PASS: nested contribution discovery, earlier/automatic slots, repeated imports, conditions/scopes, direct/indirect/shared/import cycles and cleared/disabled branches')
+local tankFile=assert(io.open('settings/_namespaces/_base/actions/lib/tank-alignment.json'))
+documents['real-tank-alignment']=require('./lib/jsonlua').parse(tankFile:read('*a'));tankFile:close()
+documents['test-dynamic']={actions={{commands={'position()'}}}}
+local tankSlots={battle={{slot='normal-engagement',actions={{imports={'real-tank-alignment','test-dynamic'}}}}},
+ pull={{slot='normal-engagement'}}}
+load('Tester',tankSlots,player,'entry')
+for _,kind in ipairs({'battle','pull'})do
+ assert(#tankSlots[kind]==3)
+ assert(tankSlots[kind][1].commands[1]:find('Gained tank status',1,true))
+ assert(tankSlots[kind][2].commands[1]:find('Lost tank status',1,true))
+ assert(tankSlots[kind][3].commands[1]=='position()')
+end
+print('PASS: real tank-alignment contributions imported inline in engagement populate earlier setup slots exactly once')
+documents['slot-scoped-provider']={contributions={destination={{commands={'scoped_destination()'}}}}}
+local fromScope={battle={{slot='destination'},{slot='origin',precondition='origin_gate()',with_vars={origin_value=99}}},
+ contributions={origin={{import='slot-scoped-provider'}}}}
+load('Tester',fromScope,player,'entry')
+assert(#fromScope.battle==1)
+assert(preconditions.collect(fromScope.battle[1])[1].expression=='origin_gate()')
+local originState=scopes.build({}, {}, fromScope._variableScopes)
+assert(originState.view(function()return fromScope.battle[1]._variableScope end).origin_value==99)
+print('PASS: nested contributions inherit the originating slot condition and variable scope')
+-- Base common files own setup and movement definitions, not the entry points.
+local function diskDocument(path)
+ local f=assert(io.open(path));local doc=require('./lib/jsonlua').parse(f:read('*a'));f:close();return doc
+end
+local baseCommon=diskDocument('settings/_namespaces/_base/actions/lib/common/common.json')
+documents['shared-engagement-common']={contributions={}}
+for _,entry in ipairs(baseCommon.contributions) do
+ if entry.slot=='normal-engagement' then table.insert(documents['shared-engagement-common'].contributions,entry) end
+end
+documents['shared-melee-common']=diskDocument('settings/_namespaces/_base/actions/lib/common/(melee).json')
+documents['tank-alignment']=documents['real-tank-alignment']
+documents['dynamic-engagement']={actions={{commands={'shared_position()'}}}}
+local realSelectors=require('./lib/target-selectors')
+env.settingsPaths.commonFiles=function(_,job)
+ local result={'shared-engagement-common'}
+ for _,group in ipairs(realSelectors.entryPointGroups(job,false))do
+  if group=='melee' then result[#result+1]='shared-melee-common' end
+ end
+ return result
+end
+for _,job in ipairs({'PLD','WAR','SAM','BLM','COR','GEO','RDM','WHM'})do
+ for _,clear in ipairs({false,true})do
+  local selectedPlayer={name='Tester',main_job=job,main_job_level=99}
+  local layout={pull={{slot='normal-engagement'}},battle={{slot='normal-engagement'}},idle={}}
+  if clear then layout.contributions={['!normal-engagement']={}} end
+  load('Tester',layout,selectedPlayer,'./settings/namespaces/child/actions/'..job:lower()..'.json')
+  local tank=job=='PLD' or job=='WAR' or job=='SAM'
+  for _,kind in ipairs({'pull','battle','idle'})do
+   local setup,movement=0,0
+   for _,a in ipairs(layout[kind])do
+    if a.commands[1]:find('tank status',1,true) then setup=setup+1 end
+    if a.commands[1]=='shared_position()' then movement=movement+1 end
+   end
+   assert(setup==(tank and 2 or 0),job..'/'..kind)
+   assert(movement==((not clear and kind~='idle') and 1 or 0),job..'/'..kind)
+  end
+ end
+end
+print('PASS: shared melee setup is registered once per phase, shared engagement reaches pull/battle, child clears retain setup and caster jobs do not load tank setup')
+
+-- Nested hooks expand in place, using the same global contribution selection.
+env.settingsPaths.commonFiles=function() return {} end
+documents['nested-ws']={actions={
+ {commands={'before_ws()'}},
+ {slot='ws-inner',precondition='inner_gate()',with_vars={inner_value=7}},
+ {slot='inline-inner',actions={{commands={'inline_ws()'}}}},
+ {commands={'after_ws()'}},
+}}
+documents['nested-ws-provider']={
+ contributions={earlier_ws={{commands={'earlier_ws()'}}}},
+ actions={{commands={'selected_ws()'}}},
+}
+local function nestedLayout()
+ return {battle={{slot='earlier_ws'},{slot='ws-main',actions={{import='nested-ws',precondition='import_gate()'}},
+  precondition='outer_gate()',with_vars={outer_value=42}},
+  {slot='ws-main',precondition='second_gate()',with_vars={outer_value=99}}},
+  contributions={['ws-inner']={{import='nested-ws-provider'}}}}
+end
+local nestedWS=nestedLayout()
+warnings={}
+load('Tester',nestedWS,player,'entry')
+assert(#nestedWS.battle==10, 'Nested action count: '..#nestedWS.battle) -- Earlier provider registered separately for each outer scope.
+local selectedWS={}
+for _,action in ipairs(nestedWS.battle) do
+ assert(not action.slot and not action.slots and not action.import and #(action.imports or {})==0)
+ if action.commands[1]=='selected_ws()' then selectedWS[#selectedWS+1]=action end
+end
+assert(#selectedWS==2 and selectedWS[1].discriminator~=selectedWS[2].discriminator)
+local state=scopes.build({}, {}, nestedWS._variableScopes)
+for index,action in ipairs(selectedWS) do
+ local view=state.view(function()return action._variableScope end)
+ assert(view.outer_value==(index==1 and 42 or 99) and view.inner_value==7)
+ local gates=preconditions.collect(action)
+ assert(#gates==3 and gates[1].expression==(index==1 and 'outer_gate()' or 'second_gate()'))
+ assert(gates[2].expression=='import_gate()' and gates[3].expression=='inner_gate()')
+end
+assert(nestedWS._availableSlots['ws-inner'].battle and #warnings==0)
+-- A parent replacement removes nested hooks and imports (including metadata).
+documents['./settings/namespaces/child/actions/clear-ws.json']={contributions={['!ws-main']={}}}
+local clearWS=nestedLayout();clearWS.imports={{import='./settings/namespaces/child/actions/clear-ws.json'}}
+load('Tester',clearWS,player,'entry')
+assert(#clearWS.battle==0 and clearWS._availableSlots['ws-inner']==nil)
+-- Inner replacement and fallback selection leave siblings intact.
+documents['./settings/namespaces/child/actions/clear-ws.json']={contributions={['!ws-inner']={{commands={'replacement_ws()'}}},['!inline-inner']={}}}
+local replacedWS=nestedLayout();replacedWS.imports={{import='./settings/namespaces/child/actions/clear-ws.json'}}
+load('Tester',replacedWS,player,'entry')
+assert(#replacedWS.battle==6)
+for i=1,6,3 do
+ assert(replacedWS.battle[i].commands[1]=='before_ws()')
+ assert(replacedWS.battle[i+1].commands[1]=='replacement_ws()')
+ assert(replacedWS.battle[i+2].commands[1]=='after_ws()')
+end
+for _,definitions in ipairs({
+ {a={{slot='a'}}},
+ {a={{slot='b'}},b={{slot='a'}}},
+ {a={{import='recursive-ws'}}},
+}) do
+ documents['recursive-ws']={actions={{slot='a'}}}
+ local ok,err=pcall(load,'Tester',{battle={{slot='a'}},contributions=definitions},player,'entry')
+ assert(not ok and tostring(err):find('Recursive contribution'),tostring(err))
+end
+-- Keep a nested-library fixture independent of the production WS layout.
+documents['melee-ws']={actions={{slot='finisher'},{slot='ws-priority'},
+ {import='ws/ws-finisher'},{import='ws/all-out-melee'},{slot='sc-priority'}}}
+documents['ws/ws-finisher']={actions={{commands={'finisher_ws()'}}}}
+documents['ws/all-out-melee']={actions={{commands={'all_out_ws()'}}}}
+local realWS={battle={{slot='ws-main',actions={{import='melee-ws'}}}},contributions={
+ finisher={{commands={'finisher_slot()'}}},['ws-priority']={{commands={'priority_slot()'}}},
+ ['sc-priority']={{commands={'sc_slot()'}}}}}
+load('Tester',realWS,player,'entry')
+for index,command in ipairs({'finisher_slot()','priority_slot()','finisher_ws()','all_out_ws()','sc_slot()'}) do
+ assert(realWS.battle[index].commands[1]==command)
+end
+print('PASS: nested WS hooks, inline definitions, earlier providers, repeated scopes/conditions, parent/inner replacements and cycles')
+
+documents['nested-destinations']={
+ actions={{slot='branch-action',actions={{commands={'branch_action()'}}}}},
+ loading={{slot='branch-loading',actions={{commands={'branch_loading()'}}}}},
+ functions={{slot='branch-function',actions={{name='branch_function',commands={'branch_function()'}}}}},
+}
+local destinations={battle={{slot='outer'}},contributions={outer={{import='nested-destinations'}}}}
+load('Tester',destinations,player,'entry')
+assert(#destinations.battle==1 and destinations.battle[1].commands[1]=='branch_action()')
+assert(#destinations.loading==1 and destinations.loading[1].commands[1]=='branch_loading()')
+assert(#destinations.functions==1 and destinations.functions[1].name=='branch_function')
+local alternatives={battle={{slot='outer'}},contributions={outer={
+ {slots={{'absent','choice'},'tail'}},
+ {slot='disabled-branch',disabled=true,actions={{import='recursive-ws'}}},
+ {slot='filtered-branch',filter={main_jobs={'PLD'}},actions={{import='recursive-ws'}}},
+},['^choice']={{commands={'fallback_choice()'}}},tail={{commands={'tail()'}}}}}
+load('Tester',alternatives,player,'entry')
+assert(#alternatives.battle==2 and alternatives.battle[1].commands[1]=='fallback_choice()')
+assert(alternatives.battle[2].commands[1]=='tail()')
+print('PASS: nested slots preserve loading/function destinations, fallback aliases and disabled/job-filtered branches')
+
+-- Exercise production WS policies through the import loader. Other libraries
+-- are irrelevant here; WS leaf imports are markers so ordering is observable.
+documents['melee-ws']=diskDocument('settings/_namespaces/_base/actions/lib/melee-ws.json')
+for _,name in ipairs({'ws/mp-recovery','ws/staged/four-part-light','ws/two-part-light','ws/three-part-light'}) do
+ documents[name]={actions={{commands={name}}}}
+end
+local magePath='./settings/namespaces/base/actions/lib/common/(mages).json'
+env.targetSelectors=realSelectors
+local policyPath='./settings/namespaces/child/actions/lib/common/common.json'
+documents[magePath]=diskDocument('settings/_namespaces/_base/actions/lib/common/(mages).json')
+for _,policy in ipairs({'_base','_boss/_normal','xp','sortie/_a','sortie/_b','sortie/_ghatjot','sortie/_leshonn','clear-offense'}) do
+ local policyDoc=policy=='_base' and {} or policy=='clear-offense' and {contributions={['!ws-main']={}}}
+  or diskDocument('settings/_namespaces/'..policy..'/actions/lib/common/common.json')
+ documents[policyPath]={contributions={}}
+ for _,entry in ipairs(require('./lib/contribution-entries').read(policyDoc.contributions)) do
+  local key=entry.slot
+  if key=='ws-main' or key=='!ws-main' or key=='!ws-mp-recovery' then table.insert(documents[policyPath].contributions,entry) end
+ end
+ for _,job in ipairs({'WAR','PLD','COR','BLU','SAM','BLM','GEO','WHM','RDM'}) do
+  local selectedPlayer={name='Tester',main_job=job,main_job_level=99}
+  local isMage=realSelectors.matchesPlayer(selectedPlayer,{'mages'})
+  local isMelee=realSelectors.matchesPlayer(selectedPlayer,{'melee','ranged'})
+  env.settingsPaths.commonFiles=function() return isMage and {magePath,policyPath} or {policyPath} end
+  local entryName=(job=='SAM' or job=='BLU') and '(melee)' or job:lower()
+  local layout=diskDocument('settings/_namespaces/_base/actions/'..entryName..'.json')
+  for index,action in ipairs(layout.battle) do
+   if action.slot=='ws-main' then assert(layout.battle[index-1].slot=='ws-mp-recovery') end
+  end
+  load('Tester',layout,selectedPlayer,'./settings/namespaces/base/actions/'..entryName..'.json')
+  local actual={}
+  for _,action in ipairs(layout.battle) do
+   local command=action.commands and action.commands[1]
+   if command and (command:match('^ws/') or command=='finisher_ws()' or command=='all_out_ws()') then
+    local eligible=true
+    for _,gate in ipairs(preconditions.collect(action)) do
+     if gate.expression:find('selfMatches',1,true) or gate.expression:find('me.main_job',1,true) then
+      local fn=assert(loadstring('return '..gate.expression))
+      setfenv(fn,{me=selectedPlayer,selfMatches=function(...)return realSelectors.matchesPlayer(selectedPlayer,{...})end})
+      if not fn() then eligible=false end
+     end
+    end
+    if eligible then actual[#actual+1]=command end
+   end
+  end
+  local expected={}
+  local suppressMP=policy=='sortie/_ghatjot' or policy=='sortie/_leshonn'
+  if isMage and not suppressMP then expected[#expected+1]='ws/mp-recovery' end
+  if policy=='sortie/_ghatjot' and (job=='WAR' or job=='PLD') then expected[#expected+1]='ws/three-part-light' end
+  if isMelee and policy~='clear-offense' then expected[#expected+1]='finisher_ws()';expected[#expected+1]='all_out_ws()' end
+  if isMelee and (policy=='_boss/_normal' or policy=='xp') then expected[#expected+1]='ws/staged/four-part-light' end
+  if policy=='sortie/_a' and (job=='WAR' or job=='PLD') then expected[#expected+1]='ws/two-part-light' end
+  assert(table.concat(actual,',')==table.concat(expected,','),policy..'/'..job..': '..table.concat(actual,','))
+ end
+end
+print('PASS: WS ordering, separate MP recovery and offensive clearing across eight policies and nine jobs, including BLU and RDM')
+
+env.settingsPaths.commonFiles=function() return {} end
+documents['filtered-cycle']={vars={must_not_load=true},actions={{slot='ordered'}},
+ contributions={{slot='missing',actions={{commands={'unreachable()'}}}}}}
+documents['ordered-provider']={vars={provider_loaded=true},actions={{slot='inner-ordered'}},contributions={
+ {slot='inner-ordered',['for']={'RDM'},actions={{commands={'inner()'}}}},
+ {slot='earlier-ordered',['for']={'RDM'},actions={{commands={'early()'}}}},
+ {slot='ordered',['for']={'fighter'},actions={{import='filtered-cycle'}}},
+}}
+local ordered={battle={{slot='earlier-ordered'},{slot='ordered'}},contributions={
+ {slot='ordered',['for']={'fighter'},actions={{import='filtered-cycle'}}},
+ {slot='ordered',['for']={'RDM'},actions={{commands={'first()'}}}},
+ {slot='ordered',['for']={'mages','~BLM'},actions={{import='ordered-provider'}}},
+ {slot='ordered',actions={{commands={'last()'}}}},
+ {slot='missing',['for']={},actions={}},
+}}
+warnings={}
+load('Tester',ordered,player,'entry')
+assert(#warnings==0 and ordered.vars.provider_loaded and not ordered.vars.must_not_load)
+for index,command in ipairs({'early()','first()','inner()','last()'}) do assert(ordered.battle[index].commands[1]==command) end
+-- A matching replacement retains sibling entries from the same ordered file.
+local function orderedReplacement(job)
+ local config={battle={{slot='ordered'}},contributions={
+  {slot='ordered',actions={{commands={'before()'}}}},
+  {slot='!ordered',['for']={'RDM'},actions={{commands={'replace()'}}}},
+  {slot='ordered',actions={{commands={'after()'}}}},
+ },imports={{import='ordered-base'}}}
+ documents['ordered-base']={contributions={{slot='ordered',actions={{commands={'base()'}}}}}}
+ load('Tester',config,{name='Tester',main_job=job,main_job_level=99},'./settings/namespaces/child/actions/rdm.json')
+ return config
+end
+local replaced=orderedReplacement('RDM')
+assert(#replaced.battle==3 and replaced.battle[3].commands[1]=='after()')
+local unmatched=orderedReplacement('WAR')
+assert(#unmatched.battle==3 and unmatched.battle[3].commands[1]=='base()')
+for _,entry in ipairs({{slot='a'},{slot='a',actions=false},{slot='a',actions={},['for']='RDM'},
+ {slot='a',actions={},['for']={false}},{slot='a',actions={},unexpected=true}}) do
+ assert(not pcall(load,'Tester',{battle={{slot='a'}},contributions={entry}},player,'entry'))
+end
+local cyclic={battle={{slot='a'}},contributions={{slot='a',['for']={'RDM'},actions={{slot='a'}}}}}
+assert(not pcall(load,'Tester',cyclic,player,'entry'))
+local defaults={battle={{slot='default'}},contributions={
+ {slot='^default',actions={{commands={'fallback first()'}}}},
+ {slot='^default',actions={{commands={'fallback second()'}}}},
+ {slot='!default',['for']={'WAR'},actions={}},
+}}
+load('Tester',defaults,player,'entry')
+assert(#defaults.battle==2 and defaults.battle[2].commands[1]=='fallback second()')
+print('PASS: ordered contributions, repeated slots, load-time selector filtering, filtered cycles/vars/warnings, sibling replacements and validation')

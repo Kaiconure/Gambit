@@ -38,6 +38,7 @@ local HEADING_TOLERANCE = TWO_PI * 0.0125   -- 1.25% of a unit circle, or 4.5 de
 local resources = require('resources')
 
 local current_settings = {}
+local followStyle
 
 -- ======================================================================================
 -- Helpers
@@ -413,13 +414,13 @@ local function sm_movement_exp(self, job)
         end
 
         if paused then
-            if d2 > 1.0 then
+            if d2 > (job.naturalFollow and job.followStyle.resume or 1.0) then
                 -- Unpause if we've put some distance between us and the target
                 paused = false
             end
 
-            -- Stay paused (potentially), but turn to face the target if it's moved further out
-            windower.ffxi.turn(hdg2)
+            -- Travel follows retain their heading at rest. Alignment jobs still face the target.
+            if not job.naturalFollow then windower.ffxi.turn(hdg2) end
         end
         
         if not paused then
@@ -438,9 +439,10 @@ local function sm_movement_exp(self, job)
                 jittering = false
                 jitterUntil = 0
 
-                -- Stop moving and face the target
+                -- Stop moving; only alignment/combat jobs turn toward the target.
                 windower.ffxi.run(false)
-                windower.ffxi.turn(hdg2)
+                job.runHeading=nil
+                if not job.naturalFollow then windower.ffxi.turn(hdg2) end
 
                 -- For jobs that allow auto-comletion, we will return now
                 if job.autoComplete then
@@ -457,8 +459,10 @@ local function sm_movement_exp(self, job)
                         sleepDuration = sleepDuration * 3
                     else
                         -- Keep running toward the target
-                        windower.ffxi.turn(hdg2)
-                        windower.ffxi.run(hdg2)
+                        local heading=job.naturalFollow and followStyle.heading(job.runHeading,hdg2,d2) or hdg2
+                        job.runHeading=heading
+                        windower.ffxi.turn(heading)
+                        windower.ffxi.run(heading)
                     end
                 end
             end
@@ -588,6 +592,7 @@ local function sm_createBaseJob(self, mode, skipcancel, owner)
 
     job.oncomplete = function (self)
         windower.ffxi.run(false)
+        if self.naturalFollow then return end
         coroutine.sleep(0.125)
 
         if smartMove.shutting_down or smartMove.cancel or not smartMove:canMove(self.owner) then return end
@@ -950,6 +955,11 @@ function smartMove:followIndex(follow_index, distance, options, owner)
     job.mob = mob                   -- Store the target mob
     job.autoComplete = false        -- Follow operations should not complete when we reach the target (keep following if it moves)
     job.follow_distance = self:followDistance(mob, distance, options)
+    if mob.spawn_type==13 or mob.spawn_type==1 then
+        followStyle=followStyle or require('./lib/follow-style')
+        job.followStyle=followStyle.profile(_me.name or _me.id)
+    end
+    job.naturalFollow=job.followStyle~=nil and _me.status~=1
     local requestedDistance = distance
     local requestedOptions = options and {radius_multiplier=options.radius_multiplier} or nil
 
@@ -991,6 +1001,9 @@ function smartMove:followIndex(follow_index, distance, options, owner)
     -- Cycling involves syncing up with the current state of our target mob
     job.cycle = function(self)
         self.mob = smartMove.getMobByIndex(self.follow_index)--windower.ffxi.get_mob_by_index(self.follow_index)
+        local player=windower.ffxi.get_mob_by_target('me')
+        self.naturalFollow=self.followStyle and self.mob and (self.mob.spawn_type==13 or self.mob.spawn_type==1)
+            and player and player.status~=1 or false
 
         if 
             self.mob == nil or
@@ -1066,18 +1079,26 @@ function smartMove:followIndex(follow_index, distance, options, owner)
 
                 local follow_distance = job.follow_distance
                 local h_offset = smartMove.h_offset
+                if self.naturalFollow then
+                    follow_distance=follow_distance+self.followStyle.distance
+                    local range=type(current_settings.followOffset)=='number' and math.abs(current_settings.followOffset) or 1
+                    h_offset=self.followStyle.lateral*range
+                end
                 
                 -- If the player is mounted, we'll increase the distances a bit to account
                 -- for the large mount model sizes and greater movement speed.
                 if player.status == 85 or player.status == 5 then
                     -- Note: Status 85 is mount, 5 is chocobo
                     follow_distance = follow_distance + 3
-                    h_offset = smartMove.h_offset_mounted
+                    h_offset = self.naturalFollow and h_offset*1.5 or smartMove.h_offset_mounted
                 end
 
                 -- For players, we'll apply the horizontal offset if one is configured. This is a left or
                 -- right offset relative to the mob's heading.
                 if self.mob.spawn_type == 13 or self.mob.spawn_type == 1 then
+                    -- Prefer the leader's direct path when behind; do not widen
+                    -- the approach with lateral spacing during catch-up.
+                    if self.naturalFollow and vMob:subtract(vPlayer):length()>follow_distance+4 then h_offset=0 end
                     vMob = findLateralOffset(self.mob, h_offset, requestedOptions)
                 end
 

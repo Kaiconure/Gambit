@@ -33,7 +33,7 @@ local function context()
     local ctx={vars={_={eq_stack={}}}}
     ctx.getVar=function(path) return require('./lib/variable-values').get(ctx.vars,path) end
     local fn=assert(loadstring(body))
-    setfenv(fn,setmetatable({context=ctx,inventory=inventory,equipmentReferences=require('./lib/equipment/references'),varargs=function(args) return args end},{__index=_G}))
+    setfenv(fn,setmetatable({context=ctx,inventory=inventory,equipmentHelpers={references=require('./lib/equipment/references')},varargs=function(args) return args end},{__index=_G}))
     fn(); return ctx
 end
 local function ack(slot,index)

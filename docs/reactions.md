@@ -135,18 +135,18 @@ You can also specify `angle` without `distance`. The reaction captures your hori
 
 An omitted or `null` angle keeps the original behavior: retreat straight outward, with no angular correction. `angle` controls position around the enemy, not which way your character faces after moving; `no_turn` still controls the face-away behavior. If overlapping distance requests select one movement rule, that rule supplies its angle as well.
 
-The face-away, suppression, and movement request start immediately from the enemy event, without needing an import at a particular position. Movement is updated from frame ticks independently of the normal action loop: it does not wait for casts, other actions, or movement reservations, and running can interrupt a cast. It does not start while you are resting, mounted, dead, or affected by Bind, Sleep, Stun, Petrification, or Terror. Movement runs in short steps with fresh checks if the enemy moves. No path to a safe point is guaranteed.
+The face-away, suppression, and movement request start immediately from the enemy event, without needing an import at a particular position. Movement is updated from frame ticks independently of the normal action loop: it does not wait for casts, other actions, or movement reservations, and running can interrupt a cast. It does not start while you are resting, mounted, dead, or affected by Bind, Sleep, Stun, Petrification, or Terror. Movement runs continuously toward the initially chosen point, without timed stops or replanning. Frame checks can stop movement once the distance and angle are satisfied, the reaction ends, or movement becomes unavailable. If positioning is still needed after the job ends, a new destination is calculated without an artificial retry delay. No path to a safe point is guaranteed.
 
 Movement reactions default to `movement_priority = true` to avoid starting
 actions that could lock the character during an escape, including Thar She Blows.
 The block checks live
 position at dispatch, including actions queued behind equipment changes, and
-remains active between movement slices while repositioning is still needed.
+remains active while repositioning is still needed, including during interruptions.
 It does not cancel an action already accepted by the game. Existing weapon-skill
 and offensive-magic suppression still applies after reaching safety until the
 face-away hold ends. Manual action requests are subject to the same packet guard.
 
-Facing away is reasserted after each movement step. With `no_turn: true`, Gambit still retreats but does not force facing away. Other automated movement and facing are held back while a distance reaction is active, including after you reach the minimum, so normal positioning cannot pull you back into danger. Healing/support actions remain eligible between steps.
+Facing away is reasserted when movement stops. With `no_turn: true`, Gambit still retreats but does not force facing away. Other automated movement and facing are held back while a distance reaction is active, including after you reach the minimum, so normal positioning cannot pull you back into danger. Healing/support actions become eligible once positioning is satisfied, or during movement if `movement_priority` is explicitly disabled.
 
 Turning and distance/angle reactions hold an exclusive ownership token in `smartMove` for the full hold, including movement gaps and the release wait. Ordinary movement submissions, saved-job resumptions, and cancellations cannot override it; `immediate` execution alone does not bypass ownership. Overlapping reactions share ownership until the last movement-blocking hold ends. Cleanup releases ownership without automatically replaying an old movement job. Lifecycle stops such as disabling automation or unloading can always stop movement.
 

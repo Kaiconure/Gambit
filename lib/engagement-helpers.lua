@@ -1,6 +1,10 @@
 local helpers = {}
 
 function helpers.attach(context)
+    local anchor=require('./lib/frontline-anchor')
+    context.frontlineAnchored=function(options) return anchor.active(context,options) end
+    context.frontlineAnchorNeedsReturn=function(options) return anchor.needsReturn(context,options) end
+    context.returnToFrontlineAnchor=function(options) return anchor.run(context,options) end
     -- Explicit one-shot positioning, evaluated in the caller's action coroutine.
     -- No initial-delay/range gate: a priority action must be able to approach
     -- before lower-priority casting starts. Retry policy belongs to the caller.
@@ -13,6 +17,7 @@ function helpers.attach(context)
         local memberModel=model=='member'
         options=options or (memberModel and context.vars.member_engagement or context.vars.frontline_engagement)
         if type(options)~='table' then return retry('engagement options not configured') end
+        if not memberModel and anchor.active(context,options) then return anchor.run(context,options) end
         if not context.movementAvailable() then return retry('reserved') end
         local target=context.bt
         if memberModel then
@@ -34,15 +39,16 @@ function helpers.attach(context)
         if not memberModel and context.movementAvailable() then context.faceEnemy() end
         return true
     end
-    context.frontlineEngage = function()
-        local options=context.vars.frontline_engagement
-        if type(options)=='table' then
+    context.frontlineEngage = function(options)
+        options=options or context.vars.frontline_engagement
+        local defaultConfig=options==context.vars.frontline_engagement
+        if defaultConfig and type(options)=='table' then
             context.setVar('frontline_engagement._distance',math.max(0.125,
                 (options.distance or 0.5)+(options.distance_offset or 0)))
             context.setVar('frontline_engagement.arrived',false)
         end
         local reached,reason=context.applyEngagement(options,'frontline')
-        if reached then context.setVar('frontline_engagement.arrived',true) end
+        if reached and defaultConfig then context.setVar('frontline_engagement.arrived',true) end
         return reached,reason
     end
     local function diagnostic(options,message)

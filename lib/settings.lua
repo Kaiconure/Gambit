@@ -371,7 +371,6 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
             end
 
             if not action.disabled and (action.slot ~= nil or action.slots ~= nil) then
-                assert(not action._slotContribution, 'Contributions cannot import files containing slots')
                 actionSlots.names(action)
                 assert(not action.import and not action.imports and not action.when and not action.commands,
                     'A slot must be a standalone placeholder')
@@ -864,18 +863,36 @@ local function loadActionImports(playerName, actions, player, sourceFile)
         end
         drainLibraryImports()
         actionSlots.addAutomatic(actions, types)
+        actions._slots.discover(types,require('./lib/contribution-discovery').new(actions,player,function(reference,action)
+            local path=action._commonFile or firstSettingsPath(settingsPaths.importCandidates(playerName,reference))
+            local file=path and files.new(path)
+            if file and file:exists() then return profiling.parse(json.parse,profiling.read(file,path)),path end
+        end))
         profiling.start('action slot expansion')
-        actions._slots.expand(types)
+        actions._slots.expand(types,true)
         profiling.stop('action slot expansion')
-        -- Resolve contributed imports through the same loader as ordinary imports.
-        for _, actionType in ipairs(types) do
-            local passes = 0
-            while _loadActionImportsInternal(playerName, actions, actionType, passes + 1, player, variables) do
-                passes = passes + 1
-                assert(passes <= MAX_PASSES, 'Maximum contribution import depth exceeded')
+        -- Imports may reveal nested hooks. Alternate normal import loading and
+        -- slot expansion, retaining the definitions discovered before either ran.
+        for round=1,MAX_PASSES+1 do
+            for _, actionType in ipairs(types) do
+                local passes = 0
+                while _loadActionImportsInternal(playerName, actions, actionType, passes + 1, player, variables) do
+                    passes = passes + 1
+                    assert(passes <= MAX_PASSES, 'Maximum contribution import depth exceeded')
+                end
             end
+            drainLibraryImports()
+            local pending=false
+            for _,kind in ipairs(types) do
+                for _,action in ipairs(actions[kind]) do
+                    if action.slot or action.slots then pending=true end
+                end
+            end
+            if not pending then break end
+            assert(round<=MAX_PASSES,'Maximum nested slot depth exceeded')
+            actions._slots.expand(types,true)
         end
-        drainLibraryImports()
+        actions._slots.finish()
         actions._pendingLibraryImports=nil
         actions._slots = nil
         -- Distinct occurrences must not share discriminator-based scheduler/error state.

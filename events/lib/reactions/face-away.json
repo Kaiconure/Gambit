@@ -28,6 +28,38 @@
         },
         [
           {
+            "key": "stock-fleetstalker-beastruction",
+            "actor": "Fleetstalker",
+            "kind": "enemy_ability",
+            "names": "Beastruction",
+            "options": {
+              "distance": 22,
+              "wait": 4
+            }
+          },
+          {
+            "key": "stock-fleetstalker-abilities",
+            "actor": "Fleetstalker",
+            "kind": "enemy_ability",
+            "names": "*",
+            "options": {
+              "no_turn": true,
+              "wait": 1
+            }
+          },
+          {
+            "key": "stock-fleetstalker-spells",
+            "actor": "Fleetstalker",
+            "kind": "enemy_spell",
+            "names": "*",
+            "options": {
+              "no_turn": true,
+              "wait": 1
+            }
+          }
+        ],
+        [
+          {
             "key": "stock-glavoid-abilities",
             "actor": "Glavoid",
             "kind": "enemy_ability",

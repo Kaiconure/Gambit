@@ -63,7 +63,7 @@ function loader.new(warn, sourceRank)
             if child.operations then
                 child.base = copy(original[key])
                 -- Parent operations first; child operations have the last word.
-                -- At equal priority in one layer, removal wins over append.
+                -- At equal priority in one layer: append, prepend, then remove.
                 table.sort(child.operations, function(a,b)
                     if a.priority ~= b.priority then return a.priority < b.priority end
                     if a.rank ~= b.rank then return a.rank > b.rank end
@@ -104,7 +104,11 @@ function loader.new(warn, sourceRank)
                                     if not found then result[#result+1] = copy(value) end
                                 end
                             end
-                            add(original[key]); add(operation.values)
+                            if operation.kind=='prepend' then
+                                add(operation.values); add(original[key])
+                            else
+                                add(original[key]); add(operation.values)
+                            end
                             original[key] = result
                         end
                     end
@@ -128,7 +132,8 @@ function loader.new(warn, sourceRank)
             local key = marked and raw:sub(2) or raw
             local priority = keyPriority(raw, inherited)
             local value = incoming[raw]
-            local operation = type(key) == 'string' and (key:match('^array%.append') and 'append' or key:match('^array%.remove') and 'remove')
+            local operation = type(key) == 'string' and (key:match('^array%.append') and 'append'
+                or key:match('^array%.prepend') and 'prepend' or key:match('^array%.remove') and 'remove')
             if operation then
                 local target = key:match('^array%.' .. operation .. '%((.*)%)$')
                 assert(target, tostring(source) .. ': malformed array.' .. operation .. ' key ' .. key)

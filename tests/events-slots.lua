@@ -99,3 +99,17 @@ runtime:observe({kind='zone'},'enter')
 assert(notifications[1]=='status' and notifications[2]=='enter')
 Paths.setLoadedNamespace(nil)
 print('PASS: event built-ins/custom slots, hierarchy ordering, priority/default/replacement semantics, requirements, IDs, stopping and validation')
+
+documents[personal]={contributions={
+ {slot='!spells.pre.before',['for']={'GEO'},actions={{commands={"mark('geo first')"}}}},
+ {slot='spells.pre.before',['for']={'mages','~BLM'},actions={{commands={"mark('mage second')"}}}},
+ {slot='missing',['for']={'WAR'},actions={{commands={'broken('}}}},
+}}
+documents[shared]={contributions={{slot='spells.pre.before',actions={{commands={"mark('shared')"}}}}}}
+documents[root]={spells={pre={{commands={"mark('root')"}}}}}
+local geo=load('GEO')
+assert(trace(geo)=='geo first,mage second,root' and #warnings==0)
+local rdm=load('RDM')
+assert(trace(rdm)=='mage second,shared,root' and #warnings==0)
+assert(not pcall(load,'WAR')) -- Matching entries still receive event validation.
+print('PASS: ordered event contributions, repeated slots, selector filtering before compilation and job-specific replacements')

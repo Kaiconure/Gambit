@@ -12,8 +12,12 @@ local magicBurst = require('./lib/magic-burst')
 local magicSkills = require('./meta/magic-skills')
 local cureSpell = require('./lib/cure-spell')
 local targetMetadata = require('./lib/target-metadata')
-local restoreEquipment = require('./lib/equipment/restore')
-local equipmentReferences = require('./lib/equipment/references')
+-- Keep related dependencies together to stay below Lua 5.1's 60-upvalue limit.
+local equipmentHelpers = {
+    restore = require('./lib/equipment/restore'),
+    references = require('./lib/equipment/references'),
+    slotInfo = require('./lib/equipment/slot-info'),
+}
 local checklist = require('./lib/checklist')
 local offensiveMagicExceptions = require('./meta/offensive-magic-exceptions')
 
@@ -2202,6 +2206,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         })
     end
     engagementHelpers.attach(context)
+    require('./lib/relative-alignment').attach(context,{
+        mob=windower.ffxi.get_mob_by_id,
+        me=function() return windower.ffxi.get_mob_by_target('me') end,
+        immobilized=function() return require('./lib/movement-afflictions').current(windower.ffxi) end,
+        start=function(x,y) return smartMove:moveTo(x,y,true) end,
+        cancel=function(id) return smartMove:cancelJob(id,true) end,
+        job=function(id) return smartMove:getJobInfo(id,true) end,
+        tolerance=smartMove.tolerance or 0.33,
+    })
     context.approachWithinRange = function(target,distance,options)
         return require('./lib/approach-range').run(target,distance,options,{
             available=function() return context.movementAvailable() and context.hasMovementReservation() end,
@@ -2512,7 +2525,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                     local equipmentEntries = {}
                     for slot, entry in pairs(entries) do
                         if slot ~= 'meta' then
-                            entry=equipmentReferences.resolve(entry,context.getVar)
+                            entry=equipmentHelpers.references.resolve(entry,context.getVar)
                             if entry~=nil then
                                 if type(entry)=='string' then
                                     equipmentEntries[slot]={name=entry,slot=slot}
@@ -2580,7 +2593,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -- Restore the original lifecycle snapshot in one request, discarding pushes.
     context.equipRestore = function()
-        return restoreEquipment(context.vars._.eq_stack, inventory)
+        return equipmentHelpers.restore(context.vars._.eq_stack, inventory)
     end
 
     context.equipPop = function()
@@ -2619,6 +2632,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     --
     context.canUseWeaponSkill = function (...)
+        -- Match the lower-level readiness check before resolving candidates.
+        if context.player.vitals.tp < 1000 then return end
+        
         local weaponSkills = varargs({...})
         local abilities = windower.ffxi.get_abilities()
 
@@ -3185,6 +3201,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.findEquipmentInSlot = function(slot, confirmed)
         context.item = inventory.find_equipment_in_slot(slot,nil,confirmed)
         return context.item
+    end
+
+    -- Inspect confirmed equipment, keeping the current action's item selection intact.
+    context.slotInfo = function(slot)
+        context.slot_info = nil
+        if type(slot) ~= 'string' then return nil end
+        context.slot_info = equipmentHelpers.slotInfo(inventory.find_equipment_in_slot(slot,nil,true), slot)
+        return context.slot_info
     end
 
     --------------------------------------------------------------------------------------
@@ -4219,6 +4243,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     --------------------------------------------------------------------------------------
     -- 
+    context.facing = function(looker, target, degreesThreshold)
+        return directionality.facing(looker,target,degreesThreshold)
+    end
+
     context.facingEnemy = function (degreesThreshold)
         if degreesThreshold == nil then degreesThreshold = 10 end
         if type(degreesThreshold) ~= 'number' then return end
@@ -7259,6 +7287,7 @@ return {
     end,
     create = function(actionType, time, target, mobEngagedTime, battleScope, party)
         local context = makeActionContext(actionType, time, target, mobEngagedTime, battleScope, party)
+        require('./lib/frontline-anchor').capture(context)
 
         -- if not dumped then
         --     context_dump(context)

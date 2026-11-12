@@ -1,6 +1,29 @@
 local directionality = {}
 local DISTANCE_TOLERANCE = 0.5
 
+-- Pure horizontal facing check. Headings use Windower radians; tolerance is
+-- degrees. Accept raw entities, context symbols, or ordinary position tables.
+directionality.facing = function(looker, target, degreesThreshold)
+    local function finite(value)
+        return type(value)=='number' and value==value and math.abs(value)<math.huge
+    end
+    local function field(entity,key)
+        if type(entity)~='table' then return end
+        if entity[key]~=nil then return entity[key] end
+        if type(entity.mob)=='table' then return entity.mob[key] end
+    end
+    if degreesThreshold==nil then degreesThreshold=10 end
+    if not finite(degreesThreshold) then return false end
+    local x,y,heading=field(looker,'x'),field(looker,'y'),field(looker,'heading')
+    local tx,ty=field(target,'x'),field(target,'y')
+    if not finite(x) or not finite(y) or not finite(heading) or not finite(tx) or not finite(ty) then return false end
+    local dx,dy=tx-x,ty-y
+    if dx==0 and dy==0 then return false end -- No direction to a coincident point.
+    local bearing=-math.atan2(dy,dx)
+    local delta=(heading-bearing+math.pi)%(2*math.pi)-math.pi
+    return math.abs(delta)<=math.min(180,math.abs(degreesThreshold))*math.pi/180+1e-12
+end
+
 directionality.radToDeg = function(rad)
     return rad * 180.0 / math.pi
 end

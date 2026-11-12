@@ -168,18 +168,55 @@ ordinary actions
 
 Types: `loading`, `battle`, `idle_battle`, `pull`, `idle`, `resting`, `event`,
 `dead`, `mounted`. An explicit placement of the same hook retains its position.
-Other hooks such as `sc-priority`, `ws-priority`, `priority-buffs`, and
+Other hooks such as `ws-main`, `priority-buffs`, and
 `normal-debuffs` depend on the loaded entrypoint: check the listing.
+
+All base job entry points expose `normal-engagement` in both pull and battle,
+at their original positioning location. Both are plain placeholders. The shared
+`_base/actions/lib/common/common.json` defines the `normal-engagement`
+contribution importing `dynamic-engagement`, honoring
+`vars.dynamic_engagement.model` (`member` selects member positioning; other
+values select frontline positioning).
+
+`_base/actions/lib/common/(melee).json` imports `tank-alignment` in its general
+`imports` section. Matching melee jobs, including PLD and WAR, therefore register
+the tank setup contributions once, independently of movement-slot placement.
+There are no separate pull, battle, or idle tank-alignment imports in the entry
+points. Clearing the movement slot retains this shared setup behavior. Libraries
+that register setup contributions can also be imported from a contribution,
+subject to dependency-cycle validation.
+
+To disable normal engagement in both pull and battle from a derived common file:
+
+```json
+{
+  "contributions": [
+    {
+      "slot": "!normal-engagement",
+      "actions": []
+    }
+  ]
+}
+```
+
+Replace the empty array with `[{"import": "my-engagement"}]` to supply a custom
+movement library. A plain `normal-engagement` contribution adds actions instead
+of replacing the default. Contributions apply at both occurrences; use action
+preconditions if custom behavior should differ between pull and battle. This
+slot does not disable idle following or explicit positioning calls elsewhere.
 
 Add behavior in the child's common file:
 
 ```json
 {
-  "contributions": {
-    "battle-priority": [
-      { "import": "heals/remove-doom" }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "battle-priority",
+      "actions": [
+        { "import": "heals/remove-doom" }
+      ]
+    }
+  ]
 }
 ```
 
@@ -192,12 +229,15 @@ provide once-only behavior or guaranteed execution.
 
 ```json
 {
-  "contributions": {
-    "battle-priority": [
-      { "priority": "high", "import": "my-event-buffs" },
-      { "priority": 0, "import": "heals/remove-doom" }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "battle-priority",
+      "actions": [
+        { "priority": "high", "import": "my-event-buffs" },
+        { "priority": 0, "import": "heals/remove-doom" }
+      ]
+    }
+  ]
 }
 ```
 
@@ -223,56 +263,69 @@ Base's current `battle-priority` import is an example of this pattern.
 
 | Contribution key | Behavior |
 |---|---|
-| `"ws-priority"` | Add to inherited contributions |
-| `"!ws-priority"` | Keep this and closer contributions; discard lower-precedence ones |
-| `"^ws-priority"` | Use only if no explicit definition exists; closest fallback wins |
+| `"ws-main"` | Add to inherited contributions |
+| `"!ws-main"` | Keep this and closer contributions; discard lower-precedence ones |
+| `"^ws-main"` | Use only if no explicit definition exists; closest fallback wins |
 
 Disable inherited slot behavior with an empty replacement:
 
 ```json
 {
-  "contributions": {
-    "!ws-priority": { "optional": true, "actions": [] }
-  }
+  "contributions": [
+    {
+      "slot": "!ws-main",
+      "optional": true,
+      "actions": []
+    }
+  ]
 }
 ```
 
 `optional` suppresses missing-slot warnings; it does not disable an action.
-For shared files targeting different job-specific hooks:
+For shared files targeting a common hook on selected jobs:
 
 ```json
 {
-  "contributions": {
-    "geo/black-magic-burst, blm/black-magic-burst": {
-      "required_for": ["GEO", "BLM"],
+  "contributions": [
+    {
+      "slot": "black-magic-burst",
+      "for": ["GEO", "BLM"],
       "actions": [{ "import": "nukes/black-magic-burst" }]
     }
-  }
+  ]
 }
 ```
 
-Comma-separated keys contribute to every named slot that exists. With
-`required_for`, any named slot satisfies the warning requirement for a matching
-character. Requirements affect warnings, not whether the contribution executes.
+`for` controls which jobs receive the contribution and, by default, which jobs
+require the slot. An explicit `required_for` narrows or overrides that warning
+audience, but only among characters selected by `for`.
 
 Contribution names prefixed with `^` are defaults. A slot placeholder containing
 a nested array is a different mechanism: ordered alternative names, selecting
 the first declared contribution. See the detailed slot reference before editing
-entrypoint placeholders. Contributions cannot contain slots or import libraries
-that declare slots or further contributions.
+entrypoint placeholders. Contributions can import libraries that define further
+contributions to existing slots, including earlier setup slots. Self-references,
+indirect contribution cycles, and recursive file imports are rejected.
+Contributions can also contain slots or import libraries that declare slots.
+Wrap an import in a slot's `actions` array to make the whole branch replaceable;
+clearing the outer slot removes its nested hooks and imports. Nested slots retain
+global names, so their contributions still apply at other surviving occurrences.
 
 ## Guard imports and isolate variables
 
 ```json
 {
-  "contributions": {
-    "battle-priority": [
-      {
-        "import": "heals/remove-silence",
-        "precondition": ["me.main_job == 'WHM' or me.main_job == 'RDM'"]
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "battle-priority",
+      "actions": [
+        {
+          "import": "heals/remove-silence",
+          "precondition": ["me.main_job == 'WHM' or me.main_job == 'RDM'"]
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -343,12 +396,19 @@ Useful base switches:
       "ws_finisher": { "disabled": true }
     }
   },
-  "contributions": {
-    "sc-priority": {
+  "contributions": [
+    {
+      "slot": "ws-main",
       "optional": true,
-      "actions": [{ "import": "ws/staged/four-part-light" }]
+      "actions": [
+        {
+          "priority": "low",
+          "import": "ws/staged/four-part-light",
+          "precondition": ["selfMatches('melee', 'ranged')"]
+        }
+      ]
     }
-  }
+  ]
 }
 ```
 
@@ -356,6 +416,16 @@ The imported staged library defines the sequence and its settings preset. Its
 `ws.multi_stage_settings` can define participants, stage-specific lists, rotation,
 and static exclusions. Multi-stage lists also support protected `!` participants
 that override manual exclusions, but cannot grant missing weapon skills.
+
+All base entry points place `ws-mp-recovery` immediately before `ws-main`.
+Mage MP recovery contributes to `ws-mp-recovery`; normal melee imports use
+normal priority in `ws-main`, and the example adds the staged chain at low
+priority. Use `!ws-main` to replace the offensive WS policy and explicitly
+import every offensive behavior the replacement should retain. MP recovery
+remains available independently; clear `!ws-mp-recovery` to disable it too.
+The former `finisher`, `ws-priority`, and
+`sc-priority` placeholders have been removed; the `ws/ws-finisher` library and
+its settings remain available.
 
 Capabilities are exchanged as weapon-skill IDs. Unknown characters wait for
 capability information; updates invalidate the plan for its next evaluation.
@@ -450,8 +520,10 @@ Paths are relative to `settings/_namespaces` and reflect the current repository.
 | `_base/actions/lib/common/common.json` | Shared defaults and prioritized battle-action import |
 
 Copy the pattern, not encounter-specific coordinates, restrictions, or target
-names. To avoid duplicate JSON keys, merge new vars and contributions into the
-existing objects instead of pasting a second `vars` or `contributions` block.
+names. Merge new variables into the existing `vars` object and append contribution
+entries to the existing ordered `contributions` array instead of duplicating
+either top-level key. Every contribution entry requires `slot` and `actions`;
+an optional `for` array filters it at load time. Repeated slot entries are allowed.
 
 In particular, `xp/cleave` currently inherits `base` directly, not `xp`. Its
 physical nesting does not mean it receives XP's camp or chain contributions.

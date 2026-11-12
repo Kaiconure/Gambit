@@ -8,5 +8,14 @@
     {
       "imports": ["follow-leader"]
     }
+  ],
+  "battle": [
+    {
+      "imports": ["heals/backup-cure-sequence", "frontline-engagement"],
+      "comments": [
+        "This item is here simply to ensure that you don't sit around being killed if aggro'd.",
+        "You'll enter battle and perform any moderate healing as appropriate/available."
+      ]
+    }
   ]
 }

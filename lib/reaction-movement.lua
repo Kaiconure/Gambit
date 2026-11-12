@@ -16,7 +16,7 @@ local function satisfied(actor,me,minimum,spec,tolerance)
     return (me.x-x)^2+(me.y-y)^2<=tolerance^2,distance
 end
 -- Use the same live geometry for dispatch guards and movement planning. This
--- also covers pauses between slices and a target turning after we arrived.
+-- also covers a target turning after we arrived.
 function M.needsMovement(request,deps)
     local actor=deps.mob(request.actor.id)
     local me=deps.me and deps.me()
@@ -30,7 +30,6 @@ function M.run(deps)
     local request=reactions.distanceRequest()
     if not request then return false end
     if not deps.available() then reactions.movementStatus(request,'waiting');return false end
-    if request.next_move_at and deps.clock()<request.next_move_at then return false end
     local actor=deps.mob(request.actor.id)
     local me=deps.me()
     if not actor or not me or actor.x==nil or actor.y==nil or me.x==nil or me.y==nil then return false end
@@ -55,8 +54,7 @@ function M.run(deps)
     if not jobId then reactions.finishMovement(nil);return false end
     if not reactions.claimMovement(request,jobId) then deps.cancel(jobId);return true end
     if deps.immediate then return true,jobId end
-    local deadline=deps.clock()+0.5
-    while deps.clock()<deadline do
+    while true do
         deps.sleep(0.05)
         reactions.tick(true)
         local current=reactions.distanceRequest()
@@ -71,8 +69,8 @@ function M.run(deps)
     reactions.finishMovement(jobId)
     return true
 end
--- No sleeps or yields: smart-move owns the actual running job. Release each
--- slice before planning again so moving/turning enemies get fresh coordinates.
+-- No sleeps or yields: smart-move owns one continuous run to the initial point.
+-- Check safety and cancellation without interrupting or replanning a live job.
 local active,pulsing
 function M.reset() active=nil end
 local function pulse(deps)
@@ -85,7 +83,7 @@ local function pulse(deps)
             and satisfied(actor,me,active.request.options.distance,
             require('./lib/reaction-options').angle(active.request.options),deps.tolerance or 0.33)
         if not request or request.sequence~=active.request.sequence or not deps.available()
-            or not job or job.jobId~=active.jobId or deps.clock()>=active.deadline or arrived then
+            or not job or job.jobId~=active.jobId or arrived then
             local previous=active;active=nil
             reactions.finishMovement(previous.jobId)
             deps.cancel(previous.jobId)
@@ -96,8 +94,8 @@ local function pulse(deps)
         for key,value in pairs(deps) do immediate[key]=value end
         immediate.immediate=true
         local started,jobId=M.run(immediate)
-        if started then
-            active={request=request,jobId=jobId,deadline=deps.clock()+0.5}
+        if started and jobId then
+            active={request=request,jobId=jobId}
         end
     end
 end

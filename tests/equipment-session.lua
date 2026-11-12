@@ -37,7 +37,7 @@ local function context(_,state)
         findEquipmentInSlot=function(slot,confirmed) return bound.find_equipment_in_slot(slot,nil,confirmed) end,
         fail=function() error('phase failure') end,assert=assert}
     local chunk=assert(loadstring(body))
-    setfenv(chunk,setmetatable({context=ctx,inventory=bound,equipmentReferences=require('./lib/equipment/references'),restoreEquipment=require('./lib/equipment/restore'),Colors={},varargs=function(args) return args end,
+    setfenv(chunk,setmetatable({context=ctx,inventory=bound,equipmentHelpers={references=require('./lib/equipment/references'),restore=require('./lib/equipment/restore')},Colors={},varargs=function(args) return args end,
         writeVerbose=function() end,pluralize=function() return '' end},{__index=_G}))
     chunk(); captured=state
     return ctx
@@ -233,7 +233,7 @@ gear:destroy()
 local json=require('./lib/jsonlua')
 local postFile=assert(io.open('events/lib/post-equip.json'))
 local postDocument=json.parse(postFile:read('*a')); postFile:close()
-local postRules=postDocument.contributions['spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after, loading.actions.after']
+local postRules=postDocument.contributions[1].actions
 for _,restore in ipairs({false,true}) do
     gear=manager(); sent={}
     run=runtime({{commands={'equipPush(vars.general)','equipMany(vars.specific)'}}},nil,postRules)

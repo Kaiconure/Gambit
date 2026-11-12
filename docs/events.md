@@ -505,16 +505,19 @@ that target. Inspect `event.results` to handle all targets explicitly.
   "vars": {
     "party_weapon_skills": {"include_alliance": true}
   },
-  "contributions": {
-    "party_weapon_skills.post.after": [
-      {
-        "when": ["event.completed and event.triggered_skillchain"],
-        "commands": [
-          "logf('%s closed %s for %s', event.actor.name, event.skillchain.name, event.skillchain.amount or '?')"
-        ]
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "party_weapon_skills.post.after",
+      "actions": [
+        {
+          "when": ["event.completed and event.triggered_skillchain"],
+          "commands": [
+            "logf('%s closed %s for %s', event.actor.name, event.skillchain.name, event.skillchain.amount or '?')"
+          ]
+        }
+      ]
+    }
+  ]
 }
 ```
 Nearby targets' hits do not establish a hit on the requested target. Unknown
@@ -603,12 +606,15 @@ and `loading.actions.after`.
 
 ```json
 {
-  "contributions": {
-    "spells.pre.after": [
-      {"when": ["event.matches('Dispel')"],
-       "commands": ["log('Dispel requested')"], "id": "my-dispel-note"}
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "spells.pre.after",
+      "actions": [
+        {"when": ["event.matches('Dispel')"],
+         "commands": ["log('Dispel requested')"], "id": "my-dispel-note"}
+      ]
+    }
+  ]
 }
 ```
 
@@ -626,8 +632,9 @@ or inline imports.
 
 | Contribution feature | Meaning |
 |---|---|
-| `"<slot-name>": [rules]` in `contributions` | Add rules at that slot |
-| `{"actions": [rules], "optional": true}` | Suppress missing-slot diagnostics |
+| `{"slot": "<slot-name>", "actions": [rules]}` in `contributions` | Add rules at that slot; repeated entries are allowed |
+| `for: ["GEO", "BLM"]` | Include this entry only for matching loading players, before rule compilation |
+| `optional: true` | Suppress missing-slot diagnostics |
 | `required_for: ["GEO", "BLM"]` | Require a matching slot only for matching loading players; overrides optional |
 | `"^slot"` | Default definition; ignored if any ordinary/`!` definition exists; otherwise closest default wins |
 | `"!slot"` | Retain higher-precedence additions and replace lower-precedence definitions |

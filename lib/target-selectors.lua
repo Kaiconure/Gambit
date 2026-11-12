@@ -16,6 +16,7 @@ local groups = {
     MELEE = 'WAR MNK THF PLD DRK BST SAM NIN DRG BLU PUP DNC RUN',
     MELEE_DPS = 'SAM WAR MNK DRG THF DRK DNC NIN',
     RANGED = 'RNG COR',
+    FIGHTER = 'WAR MNK THF PLD DRK BST SAM NIN DRG BLU PUP DNC RUN RNG COR',
     MAGE = 'WHM BLM RDM BRD SMN BLU SCH GEO',
     HEALER = 'WHM RDM SCH',
     NUKER = 'BLM RDM BLU SCH GEO',
@@ -33,6 +34,7 @@ groups.MAGES = groups.MAGE
 groups.HEALERS = groups.HEALER
 groups.NUKERS = groups.NUKER
 groups.TANKS = groups.TANK
+groups.FIGHTERS = groups.FIGHTER
 
 -- Membership is static: count each shared table once, and prepare both filename
 -- forms so sorting performs only lookups (including aliases and complements).

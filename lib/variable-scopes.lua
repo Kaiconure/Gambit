@@ -52,8 +52,8 @@ local function scopeValue(value)
     if value[1] ~= nil then return values.copy(value) end
     local result = {}
     for key, child in pairs(value) do
-        if type(key) == 'string' and (key:match('^array%.append%(') or key:match('^array%.remove%(')
-            or key:match('^[!^]array%.append%(') or key:match('^[!^]array%.remove%(')) then
+        if type(key) == 'string' and (key:match('^array%.append%(') or key:match('^array%.remove%(') or key:match('^array%.prepend%(')
+            or key:match('^[!^]array%.append%(') or key:match('^[!^]array%.remove%(') or key:match('^[!^]array%.prepend%(')) then
             result[key] = values.copy(child)
         else
             result[key] = scopeValue(child)
@@ -77,7 +77,7 @@ function scopes.build(global, original, definitions, warn)
         local base = {}
         for raw in pairs(overrides) do
             assert(type(raw) == 'string' and not raw:match('^[!^]'), 'with_vars requires ordinary variable names')
-            local key = raw:match('^array%.append%((.*)%)$') or raw:match('^array%.remove%((.*)%)$') or raw
+            local key = raw:match('^array%.append%((.*)%)$') or raw:match('^array%.prepend%((.*)%)$') or raw:match('^array%.remove%((.*)%)$') or raw
             key = key:match('^%s*(.-)%s*$')
             state.owns[key] = true
             base[key] = values.copy(owner(definition.parent, key).data[key])

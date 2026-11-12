@@ -54,9 +54,15 @@ deps=reset();start(20)
 onSleep=function()actors[2].hpp=0 end
 assert(driver.run(deps) and current==nil and not reactions.active())
 deps=reset();start(20)
-assert(driver.run(deps) and now>=0.5 and current==nil) -- Bounded blocked route.
-assert(not driver.run(deps)) -- Brief retry gap allows normal actions.
-now=now+0.3;assert(driver.run(deps) and #started==2)
+onSleep=function()
+ assert(current and current.jobId==1 and #started==1)
+ if now>=2 then me.x=started[1].x;me.y=started[1].y end
+end
+assert(driver.run(deps) and now>=2 and current==nil and #started==1)
+
+deps=reset();start(20)
+assert(driver.run(deps) and now>=10 and current==nil)
+assert(not reactions.active()) -- A blocked route still stops when the hold expires.
 
 deps=reset();start(20);allowed=false
 assert(not driver.run(deps) and #started==0)
@@ -133,6 +139,24 @@ release();assert(not current and not reactions.active())
 deps=reset();reactionDeps.movement=deps
 start(20,{no_turn=true});assert(current)
 actors[2].hpp=0;reactions.tick(true);assert(not current and not reactions.active())
+-- Shockmaw keeps the original job across the former stop/replan boundaries.
+deps=reset();reactionDeps.movement=deps
+start(5,{angle='sider'})
+local destination=started[1]
+local runningTurns,runningCancels=turns,#cancelled
+for _,time in ipairs({0.5,0.75,1,1.5,2})do
+ now=time;reactions.tick(true)
+ assert(current and current.jobId==1 and #started==1 and started[1]==destination)
+ assert(turns==runningTurns and #cancelled==runningCancels)
+end
+me.x=destination.x;me.y=destination.y;reactions.tick(true)
+assert(not current and #started==1)
+-- Recovery has no artificial retry delay.
+me.x=1;me.y=0;reactions.tick(true)
+assert(current and #started==2)
+allowed=false;reactions.tick(true);assert(not current)
+allowed=true;reactions.tick(true);assert(current and #started==3)
+release();assert(not current)
 reactions.clear()
 local f=assert(io.open('lib/action-processing.lua'));local source=f:read('*a');f:close()
 local scheduler=assert(source:match('(function processNextAction.-)\nlocal function doNextActionCycle'))
@@ -147,4 +171,4 @@ requested=false;assert(env.processNextAction(ctx) and selected==1 and executed==
 requested=true;env.globals.actionsEnabled=false
 assert(env.processNextAction(ctx) and selected==2 and executed==2)
 env.globals.enabled=false;assert(env.processNextAction(ctx)==nil and selected==2)
-print('PASS: raw center minimum, outward-only retreat, event/runner separation, owned jobs, release/start/death cancellation, bounded retries, movement restrictions, no_turn and overlap policy')
+print('PASS: continuous reaction movement, immediate recovery, geometry, ownership, cancellation and overlap policy')

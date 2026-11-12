@@ -8,6 +8,7 @@
       "distribute": false,
       "angle": null,
       "distance_priority": false,
+      "anchor": null,
       "distance": null,
       "distance_offset": 0,
       "radius_multiplier": 0.25,
@@ -57,7 +58,21 @@
       "max_iterations": 1
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "frontlineAnchored()"],
+      "when": ["actionType == 'battle'", "frontlineAnchorNeedsReturn()"],
+      "commands": "returnToFrontlineAnchor()",
+      "frequency": 0.25,
+      "delay": 0
+    },
+    {
+      "precondition": ["movementAvailable()", "frontlineAnchored()"],
+      "when": ["actionType == 'battle'", "not frontlineAnchorNeedsReturn()", "bt and (following(bt) or not facingEnemy())"],
+      "commands": ["following(bt) and cancelFollow()", "faceEnemy()"],
+      "frequency": 0.25,
+      "delay": 0
+    },
+    {
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": [
         "vars.frontline_engagement.camp",
         "vars.frontline_engagement.camp.location",
@@ -81,7 +96,7 @@
       "scope": "battle"
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": "bt and not facingEnemy()",
       "commands": "faceEnemy()",
       "delay": 0,
@@ -96,7 +111,7 @@
         " adhering to the configured engagement distance rules.",
         "========================================================================="
       ],
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": [
         "bt and me.is_party_leader",
         "vars.frontline_engagement.engage_trusts and waiting_for_trusts",
@@ -124,7 +139,7 @@
       "silent": true
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": [
         "actionType == 'battle'",
         "state_time >= (vars.frontline_engagement.initial_delay or 2)",
@@ -143,21 +158,21 @@
       "delay": 0
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": "bt and (bt.center_distance or bt.distance) <= followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + (vars.frontline_engagement.distance_priority and (vars.frontline_engagement.tolerance or 0.5) or 0) and following(bt)",
       "commands": ["cancelFollow()", "faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Stop following and face the enemy if we're close to the mob."
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": "bt and (bt.center_distance or bt.distance) <= followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + (vars.frontline_engagement.distance_priority and (vars.frontline_engagement.tolerance or 0.5) or 0) and not facingEnemy()",
       "commands": ["faceEnemy()", "wait(0.5)"],
       "frequency": 1,
       "comment": "Keep facing the enemy as we fight."
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": "bt and (bt.center_distance or bt.distance) > followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + (vars.frontline_engagement.distance_priority and (vars.frontline_engagement.tolerance or 0.5) or 0) and not following(bt)",
       "commands": [
         "faceEnemy()",
@@ -168,7 +183,7 @@
       "comment": "Maintain a minimum distance from the enemy."
     },
     {
-      "precondition": "movementAvailable()",
+      "precondition": ["movementAvailable()", "not frontlineAnchored()"],
       "when": [
         "vars.frontline_engagement.prioritize_melee_engagement",
         "bt and (bt.center_distance or bt.distance) > (followDistance(bt, vars.frontline_engagement._distance, vars.frontline_engagement) + 2)",

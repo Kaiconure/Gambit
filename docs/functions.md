@@ -4,6 +4,87 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Relative positioning and following
+
+`alignRelative(target, partner, angle, distance)` positions you around `target`
+relative to the ray from target to partner, independent of either heading.
+`0` is the partner's side, `180` is opposite, and positive angles follow `align`'s
+convention. Distance defaults to 5 yalms from the target's center, without mob-size
+adjustment. Targets and partners may be context symbols, raw mobs, or `{x,y,z}`
+positions. Mob positions are refreshed; missing/invalid or coincident reference
+positions return false. Success means arrival within normal movement tolerance;
+each call allows up to three seconds of movement and respects movement reservations
+and immobilizing effects.
+
+Both `alignRelative` and `follow_leader.align_relative.angle` accept the usual
+alignment names (`aft`, `backside`, `lefter`, `side`, etc.) and angular ranges
+such as `180+/-30`. Here the reference is the target-to-partner ray, not the
+target's heading. `aft` allows 180 +/- 15 degrees; `backside` allows 180 +/- 30.
+Within an allowed arc, followers retain their current bearing and only correct
+their distance as needed. Valid in-flight follow destinations are retained.
+Numeric angles remain exact. Arcs do not assign separate party-member positions.
+
+```lua
+findByName('???') and alignRelative(find_result, party_leader, 180)
+```
+
+The stock `follow-leader` import supports an optional mode:
+
+```json
+{
+  "vars": {
+    "follow_leader": {
+      "align_relative": {
+        "target": "???",
+        "target_expression": "any(zone_search, 'EschaZiTah') and findByName('???')",
+        "activate_distance": 5,
+        "release_distance": 7,
+        "angle": 180,
+        "distance": 5
+      }
+    }
+  }
+}
+```
+
+`target` accepts a name or mob/position object. When supplied, `target_expression`
+is evaluated instead; false/nil does not fall back to `target`.
+Activation uses leader-to-target horizontal distance, not the alt's distance.
+The defaults are activation 5, release activation + 2, angle 180, and distance 5.
+Release distance must be at least activation distance. Set `disabled: true` inside
+`align_relative` to disable the mode. Existing follow eligibility and engagement
+suppression settings still apply.
+
+While active, following yields to positioning and stays suspended after arrival.
+An unchanged route continues without restarting on each check. If the target
+disappears, the expression stops matching, or the leader leaves the release
+radius, normal following resumes. `followLeader(partner, config)` performs this
+mode selection; omitted arguments use `party_leader` and `vars.follow_leader`.
+Set `align_relative.hold_on_target_loss: true` to retain an already active
+target's last position when it disappears or its expression stops matching.
+This option defaults to false. Holding ends when the leader leaves the release
+radius, the zone or follow partner changes, or relative alignment is disabled.
+It bridges spawn-trigger disappearance before a battle target becomes available.
+With a configured alternate follow target, that partner is the reference leader.
+The reference character skips following and alignment when the resolved partner
+is themselves, including when `follow_leader.target` explicitly names them.
+
+## Equipment slot information
+
+`slotInfo(slot)` inspects confirmed equipped gear in a named slot such as `main`,
+`sub`, `range`, or `ammo`. It returns an object and assigns it to `slot_info`.
+Empty or invalid slots return `nil` and clear `slot_info`. It does not change `item`.
+
+The object includes `slot`, `id`, `name`, `item` (the resource record), `skill`,
+and boolean flags `one_handed`, `two_handed`, `shield`, `h2h`, `archery`,
+`marksmanship`, and `throwing`. Flags describe the equipped item's category;
+hand-to-hand and ranged equipment are not classified as one- or two-handed.
+Unrelated armor has all flags false. Ranged ammunition follows its resource skill.
+
+```lua
+canUse('Hasso') and not hasEffect('Hasso') and slotInfo('main') and slot_info.two_handed
+```
+
 ## Case-insensitive table keys
 
 `caseInsensitiveKeys(table)` returns a new table with its immediate string keys
@@ -305,6 +386,161 @@ For longer runs in one encounter, for example:
 
 For shorter attempts in a mage's job-specific common file, set the applicable object to `{"duration": 1, "retry_delay": 2}`. These options affect alignment attempts only, not camp movement, trust engagement, or background following. They do not change action ordering or make movement asynchronous.
 
+## General facing checks
+
+`facing(looker, target, degreesThreshold)` returns a boolean indicating whether
+the looker's heading is within the specified angle of the direction to the
+target. The default threshold is 10 degrees, inclusive, matching the default
+used by `facingEnemy`. Headings are Windower radians; the threshold is degrees.
+The check uses horizontal X/Y coordinates and handles heading wraparound.
+
+```lua
+facing(bt, me)       -- Is the enemy facing the player, within 10 degrees?
+facing(bt, me, 20)   -- Allow a wider facing angle.
+facing(me, bt)       -- Is the player facing the enemy?
+facing(bt, vars.frontline_engagement.anchor.position)
+```
+
+Inputs can be raw mob tables, context symbols such as `bt` and `me`, or plain
+tables. The looker needs `x`, `y`, and `heading`; the target needs only `x` and
+`y`. Missing/invalid geometry and coincident positions return false. Neither
+entity needs an ID or must be the player. This helper only reads geometry and
+does not turn or move anyone. Enemy facing can inform tank decisions but does
+not establish who currently holds enmity, especially while an action fixes the
+enemy's facing.
+
+## Fixed frontline tanking position
+
+Anchoring applies only to `battle` actions. The same frontline-engagement import
+can be used in both `pull` and `battle`: pull retains normal frontline behavior
+and does not capture or return to an anchor. `frontlineAnchored()` is false
+outside battle, including idle and manual function contexts.
+
+Enable a battle-start anchor for a job that should hold its starting position:
+
+```json
+{
+  "frontline_engagement": {
+    "anchor": {
+      "capture": "battle_start",
+      "return_distance": 2,
+      "tolerance": 0.5
+    }
+  }
+}
+```
+
+Place this under `vars` in that job's configuration. Shockmaw uses `battle_start`
+and Urma uses the delayed mode below, each in its own `actions/lib/common/pld.json`.
+
+Gambit captures your horizontal world coordinates when it creates the first
+battle context, before executing actions. This is Gambit's transition into
+battle, not necessarily your first attack. The point remains fixed for that
+battle scope and zone; the next battle captures a new point. Reloading settings
+can also clear the saved runtime point.
+
+To allow normal frontline positioning first, use:
+
+```json
+"anchor": {
+  "capture": "when_established",
+  "capture_delay": 10,
+  "return_distance": 2,
+  "tolerance": 0.5
+}
+```
+
+`when_established` captures the current position on the first battle-context
+update at or after `capture_delay` seconds in battle (default 10; zero captures
+immediately). It is a time threshold, not a check that alignment succeeded or
+movement stopped. Normal frontline rules and explicit engagement calls apply
+until capture, then anchoring takes over for the remainder of that battle.
+An action already running can delay the context update. If a face-away happens
+at capture time, the current position is still captured. The next battle starts
+the delay again; if settings reload clears the point after the delay has already
+elapsed, the next battle-context update captures the current position.
+
+With the example above, displacement greater than 2 yalms triggers a return to
+within 0.5 yalms. Returns can happen repeatedly in the same fight. An interrupted
+return continues to use the arrival tolerance, even if already inside the
+2-yalm trigger radius. `anchor.duration` optionally limits each return attempt
+(default 10 seconds). Returns run through the ordinary action loop.
+
+Anchoring replaces frontline camp returns, enemy-relative alignment, trust
+approach, and following; facing the enemy remains enabled. Explicit
+`frontlineEngage()` and frontline `applyEngagement()` also honor the anchor.
+Face-away reactions and movement reservations take priority: return movement
+waits until `movementAvailable()` permits it. No destination is recaptured
+because of a knockback, reaction, or target rotation. Omit `anchor` or set it
+to `null` to retain normal frontline positioning.
+
+Set `anchor.cancel_when` to release an established anchor and resume normal
+frontline positioning for the rest of the battle. It accepts one condition
+expression or an array combined with AND, like `evaluateAll`. Missing or empty
+conditions do not cancel. For example:
+
+```json
+"anchor": {
+  "capture": "when_established",
+  "capture_delay": 10,
+  "return_distance": 2,
+  "tolerance": 0.5,
+  "cancel_when": [
+    "bt and bt.valid_target",
+    "bt.target_index and bt.target_index > 0 and bt.target_index ~= me.index",
+    "(bt.center_distance or bt.distance) > 8"
+  ]
+}
+```
+
+This example requires both the enemy targeting someone else and being more
+than 8 yalms from the player. The threshold is illustrative; enemy target index
+is an observable targeting signal, not an enmity measurement. Use `or` inside
+one expression for independent cancellation scenarios. Conditions are evaluated
+when the anchor helpers run in the ordinary action loop, not on every frame;
+an already-running return can finish or time out before conditions are checked
+again. Cancellation clears the frontline arrival flag so normal alignment can
+establish itself again. The released anchor cannot recapture within that battle,
+even if the condition becomes false. The next battle or cleared runtime state
+allows capture again. Explicit configuration objects may also supply
+`cancel_when`; they release the same shared saved anchor.
+
+The system publishes the captured coordinates as
+`vars.frontline_engagement.anchor.position = {x=..., y=..., zone=...}`.
+Treat this as a read-only runtime output, not a configured destination.
+It is `nil` before capture and is cleared when the default context leaves
+battle or starts a new battle awaiting capture. Cancellation retains the last
+captured position for inspection during that battle; use `frontlineAnchored()`
+to check whether it is still active. Editing the published snapshot does not
+change the internal return destination.
+
+For example, `distanceTo(vars.frontline_engagement.anchor.position)` measures
+your distance from the saved point. To compare the enemy's position instead,
+an anchor cancellation expression can use squared horizontal distance:
+
+```lua
+bt and vars.frontline_engagement.anchor.position and
+  (bt.x - vars.frontline_engagement.anchor.position.x)^2 +
+  (bt.y - vars.frontline_engagement.anchor.position.y)^2 > 8^2
+```
+
+Explicit configuration objects receive their own `anchor.position` snapshot
+when an anchor helper evaluates them, before `cancel_when` is evaluated. For
+example, `frontlineAnchored(vars.custom_tank_position)` updates
+`vars.custom_tank_position.anchor.position` from the shared saved point (or
+clears it if no point exists for the current battle). Custom objects are
+refreshed when passed to a helper, rather than tracked independently each tick.
+
+`frontlineAnchored(config)`, `frontlineAnchorNeedsReturn(config)`,
+`returnToFrontlineAnchor(config)`, and `frontlineEngage(config)` accept an optional
+full engagement configuration (containing `anchor`, not just its inner fields).
+Omitting it defaults to `vars.frontline_engagement`. For example,
+`returnToFrontlineAnchor(vars.custom_tank_position)` uses that configuration's
+return threshold, tolerance, and duration. Overrides use the same saved
+anchor point; they do not capture a new point. Enable the desired capture mode
+in `vars.frontline_engagement` as usual. `applyEngagement(config, 'frontline')`
+also passes the supplied anchor configuration through.
+
 ## Immediate frontline positioning
 
 `applyEngagement(options, model)` aligns using an object
@@ -333,17 +569,20 @@ that also updates the ordinary frontline `_distance` and `arrived` state.
 For one successful initial alignment per battle:
 
 ```json
-"contributions": {
-  "battle-priority": [
-    {
-      "when": ["bt and bt.valid_target"],
-      "commands": ["applyEngagement()"],
-      "scope": "battle",
-      "frequency": "infinity",
-      "delay": 0
-    }
-  ]
-}
+"contributions": [
+  {
+    "slot": "battle-priority",
+    "actions": [
+      {
+        "when": ["bt and bt.valid_target"],
+        "commands": ["applyEngagement()"],
+        "scope": "battle",
+        "frequency": "infinity",
+        "delay": 0
+      }
+    ]
+  }
+]
 ```
 
 The helper returns true on successful alignment, or false and a reason on

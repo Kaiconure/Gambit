@@ -61,7 +61,7 @@ function M.tick(force)
         end
     end
     local request=M.distanceRequest()
-    -- Own the entire hold, including safe positions and gaps between slices.
+    -- Own the entire hold, including safe positions and movement interruptions.
     if M.blocksMovement() and deps.acquireMovement and not deps.acquireMovement() then return end
     if movement and (not request or request.sequence~=movement.sequence) then
         if deps.cancelReactionMovement then deps.cancelReactionMovement(movement.jobId) end
@@ -173,9 +173,6 @@ function M.movementStatus(request,status,distance)
 end
 function M.finishMovement(jobId)
     if movement and movement.jobId==jobId then
-        for _,hold in pairs(holds) do
-            if hold.sequence==movement.sequence then hold.next_move_at=deps.clock()+0.25 end
-        end
         if deps.cancelReactionMovement then deps.cancelReactionMovement(jobId) end
         movement=nil
         M.tick(true)

@@ -108,7 +108,7 @@ Use these recipes in `settings/<character>/events/<job>.vars.json`, unless a
 recipe says otherwise. Replace descriptive item names such as `Your Fast Cast
 Head` with exact names of equipment you own. The examples illustrate configuration,
 not recommended best-in-slot sets. Combine their fields into one `vars` object
-and one `contributions` object; do not paste several whole JSON documents into
+and one `contributions` array; do not paste several whole JSON documents into
 the same file or repeat object keys.
 
 | I want to... | Recipe |
@@ -571,18 +571,24 @@ Contributions let a vars file extend stock behavior at before/after hooks:
 ```json
 {
   "vars": {"announce_cures": true},
-  "contributions": {
-    "loading.actions.after": [
-      {"commands": ["setVar('ready_message', 'Cure rules initialized')"], "id": "personal-init"}
-    ],
-    "spells.pre.before": [
-      {
-        "when": ["vars.announce_cures and event.curing"],
-        "commands": ["log(vars.ready_message, event.name)"],
-        "id": "personal-cure-announcement"
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "loading.actions.after",
+      "actions": [
+        {"commands": ["setVar('ready_message', 'Cure rules initialized')"], "id": "personal-init"}
+      ]
+    },
+    {
+      "slot": "spells.pre.before",
+      "actions": [
+        {
+          "when": ["vars.announce_cures and event.curing"],
+          "commands": ["log(vars.ready_message, event.name)"],
+          "id": "personal-cure-announcement"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -1093,25 +1099,31 @@ from other Gambit gear changes while Doom remains active:
 
 ```json
 {
-  "contributions": {
-    "buffs.added.after": [
-      {
-        "when": ["event.matches('Doom')"],
-        "commands": ["equipMany({ring1={name=\"Eshmun's Ring\", lock_when={\"hasBuff('Doom')\"}}})"],
-        "id": "doom-ring"
-      }
-    ],
-    "buffs.removed.after": [
-      {
-        "when": [
-          "event.matches('Doom')",
-          "me.is_engaged and vars.gear.battle or (not me.is_engaged and vars.gear.idle)"
-        ],
-        "commands": ["equipMany(me.is_engaged and vars.gear.battle or vars.gear.idle)"],
-        "id": "doom-restore"
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "buffs.added.after",
+      "actions": [
+        {
+          "when": ["event.matches('Doom')"],
+          "commands": ["equipMany({ring1={name=\"Eshmun's Ring\", lock_when={\"hasBuff('Doom')\"}}})"],
+          "id": "doom-ring"
+        }
+      ]
+    },
+    {
+      "slot": "buffs.removed.after",
+      "actions": [
+        {
+          "when": [
+            "event.matches('Doom')",
+            "me.is_engaged and vars.gear.battle or (not me.is_engaged and vars.gear.idle)"
+          ],
+          "commands": ["equipMany(me.is_engaged and vars.gear.battle or vars.gear.idle)"],
+          "id": "doom-restore"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -1130,25 +1142,28 @@ one ordered rule list to four built-in hooks:
 
 ```json
 {
-  "contributions": {
-    "spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after": [
-      {
-        "when": ["vars.post_equip.enabled", "vars.post_equip.restore_snapshot"],
-        "commands": ["equipRestore()"],
-        "id": "post-equip-restore"
-      },
-      {
-        "when": ["vars.post_equip.enabled", "me.is_idle and vars.gear.idle"],
-        "commands": ["equipMany(vars.gear.idle)"],
-        "id": "post-equip-idle"
-      },
-      {
-        "when": ["vars.post_equip.enabled", "me.is_engaged and vars.gear.battle"],
-        "commands": ["equipMany(vars.gear.battle)"],
-        "id": "post-equip-battle"
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "spells.post.after, job_abilities.post.after, pet_abilities.post.after, weapon_skills.post.after",
+      "actions": [
+        {
+          "when": ["vars.post_equip.enabled", "vars.post_equip.restore_snapshot"],
+          "commands": ["equipRestore()"],
+          "id": "post-equip-restore"
+        },
+        {
+          "when": ["vars.post_equip.enabled", "me.is_idle and vars.gear.idle"],
+          "commands": ["equipMany(vars.gear.idle)"],
+          "id": "post-equip-idle"
+        },
+        {
+          "when": ["vars.post_equip.enabled", "me.is_engaged and vars.gear.battle"],
+          "commands": ["equipMany(vars.gear.battle)"],
+          "id": "post-equip-battle"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -1183,15 +1198,18 @@ and `loading.actions.after`.
 ```json
 {
   "vars": {"announce_cures": true},
-  "contributions": {
-    "spells.pre.before": [
-      {
-        "when": ["vars.announce_cures and event.curing"],
-        "commands": ["log('Casting', event.name)"],
-        "id": "personal-cure-note"
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "spells.pre.before",
+      "actions": [
+        {
+          "when": ["vars.announce_cures and event.curing"],
+          "commands": ["log('Casting', event.name)"],
+          "id": "personal-cure-note"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -1210,15 +1228,18 @@ contributions. This is opt-in and is not included in the stock rules:
   "vars": {
     "post_equip": {"enabled": true, "restore_snapshot": true}
   },
-  "contributions": {
-    "spells.mid.after": [
-      {
-        "when": ["event.target.is_mob", "event.element_name == 'Dark'"],
-        "commands": ["equip('head', 'Pixie Hairpin +1')"],
-        "id": "pixie-hairpin-for-darkness"
-      }
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "spells.mid.after",
+      "actions": [
+        {
+          "when": ["event.target.is_mob", "event.element_name == 'Dark'"],
+          "commands": ["equip('head', 'Pixie Hairpin +1')"],
+          "id": "pixie-hairpin-for-darkness"
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -1234,11 +1255,14 @@ mid rule:
 
 ```json
 {
-  "contributions": {
-    "spells.mid.after": [
-      {"disabled": true, "id": "spells-buff-overlays-mid"}
-    ]
-  }
+  "contributions": [
+    {
+      "slot": "spells.mid.after",
+      "actions": [
+        {"disabled": true, "id": "spells-buff-overlays-mid"}
+      ]
+    }
+  ]
 }
 ```
 

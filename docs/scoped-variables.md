@@ -25,7 +25,7 @@ an empty table. Use ordinary variable names, without `!` or `^` priority prefixe
 scope overrides already take precedence. JSON null is discarded by the JSON
 loader; use `"$object.null"` to explicitly initialize a captured value to nil.
 
-`csv(...)`, `array.append(...)`, and `array.remove(...)` are expanded when the
+`csv(...)`, `array.append(...)`, `array.prepend(...)`, and `array.remove(...)` are expanded when the
 scope snapshot is refreshed for an action evaluation. For example:
 
 ```json
