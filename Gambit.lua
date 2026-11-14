@@ -1815,6 +1815,7 @@ end)
 
 function cr_ipcSender()
     local MIN_MOVEMENT = 0.33
+    local POSITION_HEARTBEAT = 5
 
     if globals.ipc_sender_started then
         print('Gambit: Warning: Double-entry of IPC sender co-routine detected!')
@@ -1841,7 +1842,9 @@ function cr_ipcSender()
                     --     globals.last_broadcast_pos.zone ~= zone.id and
                     --     os.clock() - globals.zoneEntryTime >= 5.0
                     -- )
-                    globals.last_broadcast_pos.zone ~= zone.id  -- Force send if we've changed zones
+                    globals.last_broadcast_pos.zone ~= zone.id or -- Force send if we've changed zones
+                    type(globals.last_broadcast_pos.t) ~= 'number' or
+                    os.clock()-globals.last_broadcast_pos.t >= POSITION_HEARTBEAT
 
                 -- Otherwise, we can send if we've moved more than a minimum amount
                 if not should_send then
@@ -1871,7 +1874,8 @@ function cr_ipcSender()
                         y = me.y,
                         z = me.z,
                         heading = me.heading,
-                        index = me.index
+                        index = me.index,
+                        t = os.clock()
                     }
                 end
             else

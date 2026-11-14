@@ -184,6 +184,11 @@ setfenv(attach,{context=actionContext,globals={status_panel=panel},assert=assert
 assert(actionContext.setPanelTracking(temporaryRows)==true)
 assert(#panel.entries==2 and panel.entries[1].valueLabel.text.value=='First\nSecond')
 assert(panel.entries[2].valueLabel.text.value=='leader')
+assert(contextSource:find('context.setPanelTrackingSupplement = function(name, enabled)',1,true))
+assert(panel:setTrackingSupplement('nyzul',true))
+assert(#panel.entries==5 and panel.entries[1].definition.name=='Temporary'
+    and panel.entries[3].definition.name=='Nyzul Floor Objective')
+assert(panel:setTrackingSupplement('nyzul',false) and #panel.entries==2)
 assert(#saves==beforeTemporary and panel.buffer==retainedLog)
 assert(panel.options.tracking.current=='none' and #panel.options.tracking.sets.none==0)
 temporaryRows[1].value[1]='Changed externally'

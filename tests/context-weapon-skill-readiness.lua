@@ -7,6 +7,7 @@ local skill={name='Test WS',targets={},range=6}
 local env=setmetatable({context=context,
     varargs=function(args)return args end,
     windower={ffxi={get_abilities=function()calls.abilities=calls.abilities+1;return {}end}},
+    inventory={get_ranged_equipment=function() return calls.ranged end},
     findWeaponSkill=function()calls.lookup=calls.lookup+1;return skill end,
     reactions={suppresses=function()return false end},
     canUseWeaponSkill=function()calls.ready=calls.ready+1;return true end,
@@ -17,4 +18,14 @@ assert(calls.abilities==0 and calls.lookup==0 and calls.ready==0)
 context.player.vitals.tp=1000
 assert(context.canUseWeaponSkill('Test WS')==1 and context.weapon_skill==skill)
 assert(calls.abilities==1 and calls.lookup==1 and calls.ready==1)
-print('PASS: low TP skips candidate and ability lookups; 1000 TP retains normal selection')
+skill.skill=26
+context.weapon_skill=nil
+calls.ranged=nil
+assert(context.canUseWeaponSkill('Test WS')==nil and context.weapon_skill==nil)
+calls.ranged={valid=false,weapon={skill=26}}
+assert(context.canUseWeaponSkill('Test WS')==nil)
+calls.ranged={valid=true,weapon={skill=25}}
+assert(context.canUseWeaponSkill('Test WS')==nil)
+calls.ranged={valid=true,weapon={skill=26}}
+assert(context.canUseWeaponSkill('Test WS')==1 and context.weapon_skill==skill)
+print('PASS: weapon-skill readiness bails on low TP and requires compatible ranged weapon/ammo')

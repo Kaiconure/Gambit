@@ -105,7 +105,7 @@ handlers['panel'] = function(args)
                 panel:setFontSize(size)
             else writeMessage('Panel font size: '..tostring(panel.options.font_size)) end
         elseif command == 'reload' then
-            panel:configure(loadPanelSettings(),false); panel:update()
+            panel:configure(loadPanelSettings(),false,false); panel:update()
             writeMessage('Panel settings reloaded.')
         elseif command == 'theme' then
             if args[2] == '-list' then
@@ -141,6 +141,95 @@ handlers['panel'] = function(args)
         else showHelp() end
     end)
     if not ok then writeError('Panel: ' .. tostring(err)) end
+end
+
+handlers['waypoint'] = function(args)
+    local usage='Usage: gbt waypoint [-name <name>] [-t | -n <mob-name> | -pos <x,y>] '..
+        '[-d] [-range <near,mid,far>] | -clear'
+    local panel=globals.status_panel
+    if not panel then writeError('Waypoint: status panel is unavailable.'); return end
+    local ok,message=pcall(function()
+        if #args==1 and (args[1]:lower()=='-clear' or args[1]:lower()=='clear') then
+            panel:setWaypoint(nil)
+            writeMessage('Waypoint override cleared.')
+            return
+        end
+        local options={}
+        local flags={['-t']=true,['-d']=true,['-name']=true,['-n']=true,['-pos']=true,['-range']=true,
+            ['-clear']=true}
+        local index=1
+        while index<=#args do
+            local option=args[index]:lower()
+            if option=='-t' then
+                assert(not options.target,usage); options.target=true; index=index+1
+            elseif option=='-d' then
+                assert(not options.dynamic,usage); options.dynamic=true; index=index+1
+            elseif option=='-name' or option=='-n' or option=='-pos' or option=='-range' then
+                local value=args[index+1]
+                assert(value and not flags[value:lower()],usage)
+                local field=option=='-name' and 'name' or option=='-n' and 'mobName'
+                    or option=='-pos' and 'position' or 'range'
+                assert(options[field]==nil,usage)
+                options[field]=value; index=index+2
+            else error(usage,0) end
+        end
+        local sources=(options.target and 1 or 0)+(options.mobName and 1 or 0)+(options.position and 1 or 0)
+        assert(sources<=1,'Waypoint: choose only one of -t, -n, or -pos.')
+        assert(not options.dynamic or options.target or options.mobName,'Waypoint: -d requires -t or -n.')
+        local function pair(value,label)
+            local first,second=value:match('^%s*([^,]+),([^,]+)%s*$')
+            assert(first and second and not second:find(',',1,true),'Waypoint: invalid '..label..' value: '..value)
+            first,second=tonumber(first),tonumber(second)
+            assert(first and second,'Waypoint: invalid '..label..' value: '..value)
+            return first,second
+        end
+        local near,mid,far
+        do
+            local range=options.range or '10,30,50'
+            local a,b,c=range:match('^%s*([^,]+),([^,]+),([^,]+)%s*$')
+            assert(a and b and c and not c:find(',',1,true),'Waypoint: -range requires near,mid,far.')
+            near,mid,far=tonumber(a),tonumber(b),tonumber(c)
+            assert(near and mid and far and near>=0 and mid>near and far>=mid,
+                'Waypoint: range must satisfy 0 <= near < mid <= far.')
+        end
+        local info=windower.ffxi.get_info()
+        assert(info and type(info.zone)=='number' and info.zone>0,'Waypoint: current zone is unavailable.')
+        local config={name=options.name,zone=info.zone,near=near,mid=mid,far=far,show_distance=true}
+        local mob
+        if options.target then
+            mob=windower.ffxi.get_mob_by_target('t')
+            assert(mob and type(mob.x)=='number' and type(mob.y)=='number',
+                'Waypoint: no valid current target is available.')
+        elseif options.mobName then
+            local context=actionStateManager and actionStateManager:getContext()
+            assert(context and context.findByName,'Waypoint: no action context is available for name lookup.')
+            local found=context.findByName(options.mobName)
+            mob=found and (found.mob or found)
+            assert(mob and type(mob.x)=='number' and type(mob.y)=='number',
+                'Waypoint: mob not found: '..options.mobName)
+        end
+        if mob then
+            config.name=config.name or mob.name or options.mobName or 'Waypoint'
+            if options.dynamic then
+                assert(type(mob.id)=='number' and mob.id>0,'Waypoint: selected mob has no valid entity ID.')
+                config.mob_id=mob.id
+            else config.x,config.y=mob.x,mob.y end
+        elseif options.position then
+            config.x,config.y=pair(options.position,'-pos')
+            config.name=config.name or 'Waypoint'
+        else
+            local me=windower.ffxi.get_mob_by_target('me')
+            assert(me and type(me.x)=='number' and type(me.y)=='number',
+                'Waypoint: player position is unavailable.')
+            config.x,config.y=me.x,me.y
+            config.name=config.name or 'Waypoint'
+        end
+        panel:setWaypoint(config)
+        writeMessage(string.format('Waypoint set: %s (%s; range %.1f,%.1f,%.1f)',config.name,
+            config.mob_id and ('mob ID '..config.mob_id) or string.format('%.1f,%.1f',config.x,config.y),
+            near,mid,far))
+    end)
+    if not ok then writeError(tostring(message)) end
 end
 
 handlers['slots'] = function(args)

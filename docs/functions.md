@@ -114,9 +114,21 @@ is themselves, including when `follow_leader.target` explicitly names them.
 
 ## Equipment slot information
 
+`itemInfo(item)` resolves static item resource metadata by name, ID, resource,
+or inventory wrapper. It returns that resource and assigns it to `item_info`.
+Missing items return `nil` and clear `item_info`. Unlike inventory selection
+helpers, it does not change `item`, so it can safely be used before an equip or
+item-use command. Fields depend on the resource; ammunition exposes
+`ammo_type`, while ranged weapons expose `range_type`.
+
 `slotInfo(slot)` inspects confirmed equipped gear in a named slot such as `main`,
 `sub`, `range`, or `ammo`. It returns an object and assigns it to `slot_info`.
 Empty or invalid slots return `nil` and clear `slot_info`. It does not change `item`.
+
+`canUseWeaponSkill(...)` includes equipment readiness for ranged weapon skills.
+Archery requires an equipped Bow with Arrows, while Marksmanship requires an
+equipped Crossbow with Bolts or Gun with Bullets. A known ranged weapon skill is
+not considered usable when its weapon or compatible ammunition is missing.
 
 The object includes `slot`, `id`, `name`, `item` (the resource record), `skill`,
 and boolean flags `one_handed`, `two_handed`, `shield`, `h2h`, `archery`,

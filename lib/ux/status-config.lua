@@ -65,6 +65,34 @@ Config.defaults =
                     }
                 }
             },
+            nyzul = {
+                {
+                    id='nyzul_floor',
+                    name='Nyzul Floor Objective',
+                    show_when='session.nyzul and session.nyzul.objective',
+                    checklist={
+                        {
+                            id='objective',
+                            format={'%s','session.nyzul.objective'},
+                            checked_when={'session.nyzul.objective_completed'}
+                        }
+                    }
+                },
+                {
+                    name='Nyzul Status',
+                    show_when='session.nyzul and (session.nyzul.current_floor or (session.nyzul.time_remaining_until and session.nyzul.time_remaining_until > time))',
+                    format={
+                        '%s%s',
+                        "session.nyzul.current_floor and format('%s', color_number('Floor '..session.nyzul.current_floor)) or ''",
+                        "session.nyzul.time_remaining_until and session.nyzul.time_remaining_until > time and format('%s%s', session.nyzul.current_floor and ' • ' or '', color_number(format('%d:%02d', (max(0, session.nyzul.time_remaining_until - time) + 0.999) / 60, (max(0, session.nyzul.time_remaining_until - time) + 0.999) % 60))) or ''"
+                    }
+                },
+                {
+                    name='Restriction',
+                    show_when='session.nyzul and session.nyzul.restriction',
+                    format={'%s','color_yellow(session.nyzul.restriction)'}
+                }
+            },
             none = {
             }
         }
@@ -89,6 +117,46 @@ function Config.expandTracking(entries,sets,visiting)
         else result[#result+1]=copy(entry) end
     end
     return result
+end
+
+function Config.normalizeWaypoint(value)
+    if value==nil then return nil end
+    assert(type(value)=='table','Panel waypoint must be an object')
+    local waypoint=copy(value)
+    assert(type(waypoint.name)=='string' and waypoint.name:match('%S'),
+        'Panel waypoint requires a name')
+    assert((type(waypoint.zone)=='number' and waypoint.zone==math.floor(waypoint.zone))
+        or (type(waypoint.zone)=='string' and waypoint.zone:match('%S')),
+        'Panel waypoint requires a numeric zone ID or zone name')
+    local function finite(number)
+        return type(number)=='number' and number==number and number~=math.huge and number~=-math.huge
+    end
+    local coordinates=finite(waypoint.x) and finite(waypoint.y)
+    assert((waypoint.x==nil and waypoint.y==nil) or coordinates,
+        'Panel waypoint x and y must both be numeric')
+    assert(waypoint.mob_id==nil or (type(waypoint.mob_id)=='number' and waypoint.mob_id>0
+        and waypoint.mob_id==math.floor(waypoint.mob_id)),
+        'Panel waypoint mob_id must be a positive integer')
+    assert(waypoint.mob_name==nil or (type(waypoint.mob_name)=='string' and waypoint.mob_name:match('%S')),
+        'Panel waypoint mob_name must be a nonempty string')
+    assert(coordinates or waypoint.mob_id~=nil or waypoint.mob_name~=nil,
+        'Panel waypoint requires x/y, mob_id, or mob_name')
+    waypoint.near=waypoint.near==nil and 10 or waypoint.near
+    waypoint.mid=waypoint.mid==nil and 30 or waypoint.mid
+    assert(finite(waypoint.near) and waypoint.near>=0,'Panel waypoint near must be nonnegative')
+    assert(finite(waypoint.mid) and waypoint.mid>waypoint.near,
+        'Panel waypoint mid must be greater than near')
+    assert(waypoint.far==nil or (finite(waypoint.far) and waypoint.far>=waypoint.mid),
+        'Panel waypoint far must be at least mid')
+    assert(waypoint.show_distance==nil or type(waypoint.show_distance)=='boolean',
+        'Panel waypoint show_distance must be boolean')
+    waypoint.show_distance=waypoint.show_distance~=false
+    waypoint.distance_format=waypoint.distance_format or '%.1f yalms'
+    assert(type(waypoint.distance_format)=='string','Panel waypoint distance_format must be a string')
+    waypoint.size=waypoint.size or 32
+    assert(type(waypoint.size)=='number' and waypoint.size==math.floor(waypoint.size)
+        and waypoint.size>=16 and waypoint.size<=64,'Panel waypoint size must be an integer from 16 to 64')
+    return waypoint
 end
 
 function Config.normalize(input)
@@ -217,6 +285,7 @@ function Config.normalize(input)
     for _,entries in pairs(tracking.sets) do Config.expandTracking(entries,tracking.sets) end
     assert(type(tracking.current)=='string' and tracking.sets[tracking.current], 'Unknown current tracking set')
     result.tracking=tracking
+    result.waypoint=Config.normalizeWaypoint(result.waypoint)
     return result
 end
 

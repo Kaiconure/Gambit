@@ -1,6 +1,40 @@
 {
   "contributions": [
     {
+      "slot": "loading.actions.after",
+      "when": ["zone_id == 77"],
+      "actions": [
+        {
+          "id": "nyzul-panel-loading",
+          "commands": ["setPanelTrackingSupplement('nyzul', true)"]
+        }
+      ]
+    },
+    {
+      "slot": "zones.enter.after",
+      "when": ["event.matches(77)"],
+      "actions": [
+        {
+          "id": "nyzul-zone-enter",
+          "commands": ["setPanelTrackingSupplement('nyzul', true)"]
+        }
+      ]
+    },
+    {
+      "slot": "zones.leave.after",
+      "when": ["event.matches(77)"],
+      "actions": [
+        {
+          "id": "nyzul-zone-leave",
+          "commands": [
+            "resetSessionVar('nyzul')",
+            "setPanelTrackingSupplement('nyzul', false)",
+            "setPanelWaypoint(nil)"
+          ]
+        }
+      ]
+    },
+    {
       "slot": "texts.received.after",
       "when": ["zone_id == 77"],
       "actions": [
@@ -26,9 +60,7 @@
         },
         {
           "id": "nyzul-lamps-order",
-          "when": [
-            "event.text:find('activated in a specific order', 1, true)"
-          ],
+          "when": ["event.text:find('activated in a specific order', 1, true)"],
           "commands": [
             "setSessionVar('nyzul.objective', 'Objective: Activate all lamps in a specific order.')"
           ]
@@ -53,9 +85,7 @@
         },
         {
           "id": "nyzul-objective-completed",
-          "when": [
-            "event.text:find('Rune of Transfer activated.', 1, true)"
-          ],
+          "when": ["event.text:find('Rune of Transfer activated.', 1, true)"],
           "commands": ["setSessionVar('nyzul.objective_completed', true)"]
         },
         {
@@ -69,25 +99,15 @@
         },
         {
           "id": "nyzul-floor",
-          "when": [
-            "event.text:lower():find('welcome to floor ', 1, true)"
-          ],
+          "when": ["event.text:lower():find('welcome to floor ', 1, true)"],
           "commands": [
             "setSessionVar('nyzul.current_floor', number(event.text:match('[Ww]elcome to [Ff]loor%s+(%d+)')))",
             "setSessionVar('nyzul.objective', nil)",
             "setSessionVar('nyzul.objective_completed', false)",
-            "setSessionVar('nyzul.restriction', nil)"
+            "setSessionVar('nyzul.restriction', nil)",
+            "setPanelWaypoint(nil)",
+            "local rune=findByName('Rune of Transfer'); if rune and rune.mob then setPanelWaypoint({name='Rune of Transfer', zone=77, x=rune.mob.x, y=rune.mob.y, near=15, mid=45}) end"
           ]
-        }
-      ]
-    },
-    {
-      "slot": "zones.leave.after",
-      "when": ["event.matches(77)"],
-      "actions": [
-        {
-          "id": "nyzul-zone-leave",
-          "commands": ["resetSessionVar('nyzul')"]
         }
       ]
     }

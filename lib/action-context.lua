@@ -2654,15 +2654,28 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         
         local weaponSkills = varargs({...})
         local abilities = windower.ffxi.get_abilities()
+        local rangedEquipment
+        local rangedEquipmentChecked=false
 
         for key, _weaponSkill in ipairs(weaponSkills) do
             weaponSkill = findWeaponSkill(_weaponSkill)
             if weaponSkill then
+                local equipmentReady=true
+                -- This check ensures that ranged weapon skills only pass this check if appropriate ammo is also equipped
+                --  Note: Archery==25, Marksmanship==26                
+                if weaponSkill.skill==25 or weaponSkill.skill==26 then
+                    if not rangedEquipmentChecked then
+                        rangedEquipment=inventory.get_ranged_equipment()
+                        rangedEquipmentChecked=true
+                    end
+                    equipmentReady=rangedEquipment~=nil and rangedEquipment.valid==true
+                        and rangedEquipment.weapon and rangedEquipment.weapon.skill==weaponSkill.skill
+                end
                 local target    = weaponSkill.targets.Self and context.me or context.bt
                 local suppress  = reactions.suppresses('weapon_skills') or
                     (context.vars.__suppress_weapon_skills and target == context.bt and not context.runningAsFunction())
 
-                if not suppress then
+                if equipmentReady and not suppress then
                     local targetOutOfRange = target and
                         target.distance and
                         target.distance > math.max(weaponSkill.range, 6)
@@ -3191,6 +3204,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.findItem = function(item)
         context.item = inventory.find_item(item)
         return context.item
+    end
+
+    -- Inspect static item metadata without changing the inventory item selected
+    -- by findEquippableItem/findUsableItem and subsequent action commands.
+    context.itemInfo = function(item)
+        context.item_info = nil
+        if type(item)=='table' and item.item then item=item.item end
+        context.item_info = findItem(item)
+        return context.item_info
     end
 
     --------------------------------------------------------------------------------------
@@ -5452,6 +5474,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         return entity
     end
 
+    -- Resolve a recently broadcast position without promoting it to a normal
+    -- target. IPC positions are useful beyond Windower's targeting range, but
+    -- only while fresh and in the same zone as this context.
+    context.ipcPositionById = function(id)
+        if type(id) ~= 'number' or id <= 0 or id ~= math.floor(id) or id == math.huge then
+            error('ipcPositionById: expected a positive numeric entity ID')
+        end
+        local position=globals.ipc_positions and globals.ipc_positions[tostring(id)]
+        if type(position)~='table' or position.id~=id or position.zone~=context.zone_id
+            or type(position.x)~='number' or type(position.y)~='number'
+            or type(position.t)~='number' or os.clock()-position.t>10 then
+            return nil
+        end
+        return position
+    end
+
     context.mobByIndex = function(index)
         if type(index) ~= 'number' or index <= 0 or index ~= math.floor(index) or index == math.huge then
             error('mobByIndex: expected a positive numeric entity index')
@@ -7154,6 +7192,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.setPanelTracking = function(entries, append)
         assert(globals.status_panel, 'Status panel is not available')
         return globals.status_panel:setTemporaryTracking(entries, append)
+    end
+
+    -- Add or remove named rows without replacing the configured or temporary
+    -- tracking set. Content integrations use this for zone-scoped supplements.
+    context.setPanelTrackingSupplement = function(name, enabled)
+        assert(globals.status_panel, 'Status panel is not available')
+        return globals.status_panel:setTrackingSupplement(name, enabled)
+    end
+
+    -- Attach a temporary directional waypoint beside the status panel. Passing
+    -- nil restores the waypoint from saved panel configuration, if any.
+    context.setPanelWaypoint = function(waypoint)
+        assert(globals.status_panel, 'Status panel is not available')
+        return globals.status_panel:setWaypoint(waypoint)
     end
 
     -- Unlike execute, condition arrays short-circuit and combine results with AND.

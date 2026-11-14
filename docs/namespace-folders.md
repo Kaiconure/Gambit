@@ -17,7 +17,7 @@ differently named user namespace that inherits it.
 
 Prefix a namespace reference with `gambit:` to bypass a same-named user
 namespace and address the bundled namespace explicitly. This works for both
-selection and inheritance, for example `{"inherits_from":"gambit:nyzul"}`.
+selection and inheritance, for example `{"inherits_from":"gambit:follow"}`.
 The bundled origin is transitive: unqualified parents of that bundled namespace
 also resolve from bundled namespace folders. Character settings and processed
 output remain under `settings/_namespace-settings/<name>/`.

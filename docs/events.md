@@ -638,6 +638,13 @@ the imported module's dependencies. For example:
 {"imports": ["gambit:lib/content/nyzul"]}
 ```
 
+The stock Nyzul module records floor, objective, restriction, and remaining-time
+session state. While zone 77 is active it automatically adds the Nyzul rows to
+the current status-panel tracking without replacing namespace-specific rows.
+On each `Welcome to Floor ...` message it captures the stationary `Rune of
+Transfer` coordinates as a fixed waypoint. Leaving the zone removes the panel
+supplement, clears the Nyzul session state, and restores the saved waypoint.
+
 Dependencies expand first, imports in listed order, then the importing file's
 own rules. Thus parent → [A, B] and A → [C] gives C → A → B → parent in each
 phase. Each resolved file is included once at its first occurrence. A later
