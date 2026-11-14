@@ -8,20 +8,29 @@ action.scopes={execution={}};scope.compile(action)
 local config={distance=0.5,distance_offset=0.25,radius_multiplier=0.25}
 local ctx=setmetatable({vars={frontline_engagement=config},bt={model_size=4},
  max=math.max,runningAsFunction=function()return false end,
- setVar=function(_,value)config._distance=value end},{__index=_G})
-local command=assert(loadstring(action.commands[1]));setfenv(command,ctx)
+ setVar=function(path,value)config[path:match('([%w_]+)$')]=value end},{__index=_G})
+local commands={}
+for index=1,2 do
+ local expression=action.commands[index]
+ local command=assert(loadstring(expression));setfenv(command,ctx);commands[#commands+1]=command
+end
 local function tick()
  local snapshot=assert(scope.capture(action,ctx))
  if not scope.ready(action,snapshot)then return false end
- command();action.scopes.execution.variable=snapshot;return true
+ for _,command in ipairs(commands) do command() end
+ action.scopes.execution.variable=snapshot;return true
 end
-assert(tick() and config._distance==0.75)
+assert(tick() and config._distance==0.75 and config._radius_multiplier==0.25)
 ctx.bt.model_size=8;assert(not tick()) -- Target size is resolved by Smart Move.
 config.distance_offset=0.5;assert(tick() and config._distance==1)
 config.radius_multiplier=0;assert(tick() and config._distance==1)
 config.radius_multiplier=nil;assert(tick() and config._distance==1)
 config.distance=-5;assert(tick() and config._distance==0.125)
 config.distance=nil;config.distance_offset=nil;assert(tick() and config._distance==0.5)
+config.distance=12;config.distance_offset=0;config.radius_multiplier=0.25
+assert(tick() and config._distance==12 and config._radius_multiplier==0.25)
+config.distance_offset=0.01
+assert(tick() and config._distance==12.01 and config._radius_multiplier==0)
 
 -- Load actual Smart Move geometry with a minimal vector and Windower host.
 local methods={}
@@ -46,6 +55,7 @@ smart:applySettings({useRawDistances=false,followOffset=0})
 local options={radius_multiplier=0.25}
 assert(smart:findMobOffset(mob,0,0.75,options)[1]==1.75)
 assert(smart:followDistance(mob,0.75,options)==1.75)
+assert(smart:followDistance(mob,12.01,{radius_multiplier=0.25,_radius_multiplier=0})==12.01)
 assert(smart:findMobOffset(mob,0,0.75)[1]==3.75)
 assert(smart:followDistance(mob,0.75)==5.25)
 assert(smart:findMobOffset(mob,0,0.75,{radius_multiplier=0})[1]==0.75)
@@ -57,6 +67,7 @@ assert(smart:followDistance(mob,0.75,options)==1.75)
 smart:applySettings({useRawDistances=false,followOffset=0})
 smart:followIndex(1,0.75,options)
 local job=smart.queue[1];assert(job.follow_distance==1.75)
+assert(job.requested_distance==0.75 and job.requested_radius_multiplier==0.25)
 job:reschedule();job=smart.queue[1];assert(job.follow_distance==1.75)
 mob.model_size=8;job:pos();assert(job.follow_distance==2.75)
 smart:followIndex(1,0.75);job=smart.queue[1];local legacy=job.follow_distance
@@ -114,7 +125,7 @@ assert(not context.aligned(mob,0,0.75,0.01,radial))
 mob.id=1
 mob.heading=0
 
-config._distance=0.75;config.radius_multiplier=0.25
+config._distance=0.75;config.radius_multiplier=0.25;config._radius_multiplier=0.25
 ctx.bt={distance=0,center_distance=3,model_size=4}
 ctx.following=function()return false end
 ctx.followDistance=function(t,d,o)return smart:followDistance(t,d,o)end

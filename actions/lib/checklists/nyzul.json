@@ -1,0 +1,10 @@
+{
+  "vars": {
+    "panel": {
+      "!tracking": [
+        { "references": "compact" },
+        { "references": "nyzul" }
+      ]
+    }
+  }
+}

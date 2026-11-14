@@ -25,6 +25,33 @@ These fields belong in `vars.ws.multi_stage` or a selected
 the initial closer to PLD, and the next stage to WAR followed by PLD. It does not
 define the weapon skills or chain itself.
 
+Top-level `participants` defines the sequence's participant domain and resolves
+against the whole party. A selected settings object inherits that list when it
+does not provide its own `participants`; an explicit list in the settings object
+replaces it. At this level, `"*"` means the whole party.
+
+Every stage-level participant list resolves only within that already-resolved
+domain. This applies to `stage_participants`, stage-local `participants`, and
+individual `on_ws` participant lists. At these levels, `"*"` means every member
+of the sequence domain in its established order—not the whole party. Other
+selectors are constrained to the same domain and therefore cannot introduce a
+character excluded from the overall sequence. When top-level `participants` is
+omitted or genuinely empty, the whole party remains the implicit domain for
+compatibility.
+
+```json
+{
+  "participants": ["fighter"],
+  "stage_participants": {
+    "1": ["COR", "*", "~leader"]
+  }
+}
+```
+
+This gives eligible CORs first, appends the rest of the fighter roster, and then
+removes the party leader. A COR outside the top-level fighter roster would not
+be introduced by the stage selector.
+
 ## Protected participants
 
 Prefix a participant selector or character name with `!` to protect its matches
@@ -46,7 +73,8 @@ Other WAR participants are excluded normally. Protection works in global,
 stage-override, stage-local, and individual `on_ws` participant lists. It survives
 rotation and generated branches, and overrides both inline `~` exclusions and
 stage/substage exclusion rules. An overriding participant list replaces the
-inherited list's protection along with its membership.
+inherited list's protection while filtering and ordering within the global
+membership domain.
 
 Protection does not move a duplicate to a new position: `["melee", "!leader"]`
 retains the leader's first matching position while protecting that match. It
@@ -61,8 +89,9 @@ remain unsuitable for shared coordination even when protected.
 Selectors expand in array order. Multiple members matching a job/group are
 alphabetical by character name; overlaps are deduplicated. Names, jobs, groups
 such as `melee`, semantic member symbols, `*`, and `~` exclusions use the existing
-selector conventions. For example, `["Aidelle", "melee", "~COR"]` prefers Aidelle
-before other melee and removes COR matches.
+selector conventions, subject to the stage domain described above. For example,
+`["Aidelle", "melee", "~COR"]` prefers Aidelle before other eligible melee and
+removes eligible COR matches.
 
 For shared coordination, avoid `me`, `^melee`, positional member symbols such as
 `p0`, and other client-relative selectors. They can produce different lists on

@@ -11,7 +11,7 @@ local function selectors(value,label)
     array(value,label)
     for _,name in ipairs(value) do assert(type(name)=='string' and name:match('%S'),label..' must contain selectors') end
 end
-function M.read(definitions,matches,warn)
+function M.read(definitions,matches,warn,supportsWhen)
     if definitions==nil then return {} end
     assert(type(definitions)=='table','contributions must be an array or legacy object')
     local ordered=definitions[1]~=nil
@@ -25,7 +25,8 @@ function M.read(definitions,matches,warn)
         for name,value in pairs(definitions) do
             assert(type(name)=='string','contributions must be a dense array')
             local entry={slot=name}
-            if type(value)=='table' and (value.actions~=nil or value.optional~=nil or value.required_for~=nil or value['for']~=nil) then
+            if type(value)=='table' and (value.actions~=nil or value.optional~=nil or value.required_for~=nil
+                or value['for']~=nil or supportsWhen and value.when~=nil) then
                 for key,child in pairs(value) do
                     assert(key~='slot','Legacy contributions use the object key as their slot')
                     entry[key]=child
@@ -39,6 +40,7 @@ function M.read(definitions,matches,warn)
         assert(type(entry)=='table','Contribution entries must be objects')
         for key in pairs(entry) do
             local known=key=='slot' or key=='actions' or key=='for' or key=='optional' or key=='required_for'
+                or supportsWhen and key=='when'
             local documentation=key=='comment' or key=='note' or key == 'comments' or key == 'notes'
             if not known and not documentation and warn then warn('Unknown contribution field: '..tostring(key)) end
         end
@@ -49,7 +51,8 @@ function M.read(definitions,matches,warn)
         if entry['for']~=nil then selectors(entry['for'],'Contribution for') end
         if entry['for']==nil or (matches and matches(entry['for'])) then
             result[#result+1]={slot=entry.slot,actions=entry.actions,['for']=entry['for'],
-                optional=entry.optional,required_for=entry.required_for}
+                optional=entry.optional,required_for=entry.required_for,
+                when=supportsWhen and entry.when or nil}
         end
     end
     return result,ordered

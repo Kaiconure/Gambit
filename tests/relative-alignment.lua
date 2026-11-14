@@ -40,6 +40,7 @@ context.findByName=function(name)lookups=lookups+1;assert(name=='???');return {m
 context.execute=function(code)assert(code=='target()');return expressionResult end
 context.following=function()return job and job.follow_index==2 end
 context.follow=function(_,distance)
+ if job and job.follow_index==2 then return job.jobId end
  follows=follows+1;serial=serial+1;job={jobId=serial,follow_index=2};return serial
 end
 context.move=function(point)moves=moves+1;assert(point.duration==3);me.x=point.x;me.y=point.y;return true end

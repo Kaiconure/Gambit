@@ -1,26 +1,30 @@
+local settingsPaths=require('./lib/settings-paths')
 -- Explicit composition; import names resolve through event directories only.
 return function(candidates,read,entryName)
-    local directories,seenDirectories={},{}
+    local directories,stockDirectories,seenDirectories={},{},{}
     for _,path in ipairs(candidates) do
         local directory=path:match('^(.*)/[^/]+$')
         if directory and not seenDirectories[directory] then
             seenDirectories[directory]=true
             directories[#directories+1]=directory
+            if not directory:match('^%./settings/') then stockDirectories[#stockDirectories+1]=directory end
         end
     end
     local documents,seen,visiting,chain={},{},{},{}
     local function reference(value,path)
         assert(type(value)=='string' and value:match('%S'),path..': imports require nonempty strings')
         value=value:gsub('\\','/')
+        local stock
+        stock,value=settingsPaths.gambitReference(value)
         assert(not value:find(':',1,true) and value:sub(1,1)~='/',path..': invalid event import '..value)
         for part in (value..'/'):gmatch('(.-)/') do
             assert(part~='' and part~='.' and part~='..',path..': invalid event import '..value)
         end
         if not value:match('%.json$') then value=value..'.json' end
-        return value
+        return value,stock
     end
     local visit
-    visit=function(path,document)
+    visit=function(path,document,stockOnly)
         local identity=path:lower()
         assert(not visiting[identity],'Event import cycle: '..table.concat(chain,' -> ')..' -> '..path)
         if seen[identity] then return end
@@ -34,12 +38,13 @@ return function(candidates,read,entryName)
             assert(type(key)=='number' and key>=1 and key%1==0 and key<=#imports,path..': imports must be a dense array')
         end
         for _,name in ipairs(imports) do
-            local relative=reference(name,path)
+            local relative,explicitStock=reference(name,path)
+            local childStock=stockOnly or explicitStock
             local found
-            for _,directory in ipairs(directories) do
+            for _,directory in ipairs(childStock and stockDirectories or directories) do
                 local candidate=directory..'/'..relative
                 local value=read(candidate)
-                if value~=nil then found=true; visit(candidate,value); break end
+                if value~=nil then found=true; visit(candidate,value,childStock); break end
             end
             assert(found,'Missing event import '..relative..': '..table.concat(chain,' -> '))
         end
@@ -47,11 +52,11 @@ return function(candidates,read,entryName)
         documents[#documents+1]={path=path,document=document}
     end
     if entryName then
-        local relative=reference(entryName,'Event entry point')
-        for _,directory in ipairs(directories) do
+        local relative,stockOnly=reference(entryName,'Event entry point')
+        for _,directory in ipairs(stockOnly and stockDirectories or directories) do
             local path=directory..'/'..relative
             local document=read(path)
-            if document~=nil then visit(path,document); return documents,path end
+            if document~=nil then visit(path,document,stockOnly); return documents,path end
         end
         error('Event entry point not found: '..relative)
     end

@@ -33,7 +33,7 @@ function Panel:icon(x,y,size)
     image:visible(false); image:draggable(false); image:fit(false)
     image:color(255,255,255); image:alpha(255); image:repeat_xy(1,1)
     image:size(size,size)
-    local item={image=image,x=x,y=y}
+    local item={image=image,x=x,y=y,visible=true}
     self.icons[#self.icons+1]=item
     return item
 end
@@ -53,7 +53,7 @@ function Panel:show(visible)
     self.visible=visible
     self.background:visible(visible)
     for _, item in ipairs(self.labels) do item.text:visible(visible) end
-    for _, item in ipairs(self.icons) do item.image:visible(visible) end
+    for _, item in ipairs(self.icons) do item.image:visible(visible and item.visible) end
     if not visible then self.capture=nil end
     self:updateHover(self.mouseX,self.mouseY,self.mouseBlocked)
 end

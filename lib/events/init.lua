@@ -29,6 +29,14 @@ local function dispatchAllowed(observation)
     end
     return true
 end
+local function plainText(value)
+    if type(value)~='string' then return '' end
+    local text=value:gsub(string.char(0x1E)..'.',''):gsub(string.char(0x1F)..'.','')
+    -- A single incoming-text payload can contain several system lines separated
+    -- by non-printing bytes. Preserve those boundaries without leaking control
+    -- glyphs into expressions or panel output.
+    return (text:gsub('[%z\1-\31\127]+','\n'):gsub('^\n+',''):gsub('\n+$',''))
+end
 local rejected={ [17]=true,[18]=true,[55]=true,[56]=true,[78]=true,[84]=true,
     [87]=true,[88]=true,[89]=true,[90]=true,[94]=true,[104]=true,[191]=true,
     [308]=true,[313]=true,[325]=true,[428]=true,[429]=true }
@@ -58,6 +66,10 @@ function Service.new(deps)
         if discovery.active() then discovery.packet(id,original,modified,injected,blocked,deps) end
     end)
     listen('incoming text',function(original,modified,mode)
+        if self.runtime then
+            self.runtime:observe({kind='text',text=plainText(original),original=original,
+                modified=modified,mode=mode},'received')
+        end
         if self.weaknessText then self.weaknessText(original) end
         if self.encounterText then self.encounterText(original) end
         if discovery.active() then

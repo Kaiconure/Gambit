@@ -33,7 +33,7 @@ assert(docs[root..'events/geo.json'].vars.gear.head=='default')
 config.vars.gear.head='changed'; assert(load().vars.gear.head=='specific')
 -- Invalid variable documents must fail the entire new configuration.
 local extra=child..'events/geo.vars.json'
-for _,bad in ipairs({false,42,{vars={},spells={}}, {vars=42}, {vars={[1]='bad'}}, {imports={}}}) do
+for _,bad in ipairs({false,42,{vars={},spells={}}, {vars=42}, {vars={[1]='bad'}}, {imports='bad'}}) do
     docs[extra]=bad
     local ok,err=pcall(load)
     assert(not ok and tostring(err):find(extra,1,true))

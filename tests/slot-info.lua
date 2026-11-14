@@ -35,4 +35,15 @@ equipped=nil
 assert(context.slotInfo('main')==nil and context.slot_info==nil)
 assert(context.slotInfo('invalid')==nil)
 assert(context.slotInfo({})==nil and calls==3)
+
+local itemBlock=assert(source:match('(context%.itemInfo = function.-)\n    end'))..'\n    end'
+local bullet={id=1,name='Bullet',ammo_type='Bullet'}
+local itemEnv=setmetatable({context={item='selected'},findItem=function(value)
+    if value=='Bullet' or value==bullet or type(value)=='table' and value.id==1 then return bullet end
+end}, {__index=_G})
+local itemChunk=assert(loadstring(itemBlock));setfenv(itemChunk,itemEnv);itemChunk()
+assert(itemEnv.context.itemInfo('Bullet')==bullet and itemEnv.context.item_info==bullet)
+assert(itemEnv.context.item=='selected')
+assert(itemEnv.context.itemInfo({item=bullet})==bullet)
+assert(itemEnv.context.itemInfo('Missing')==nil and itemEnv.context.item_info==nil)
 print('PASS: equipment classifications, shields, empty/invalid slots, confirmed reads and context isolation')

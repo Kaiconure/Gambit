@@ -2175,6 +2175,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         vars = variableState and variableState.vars or actionStateManager.vars
     }
 
+    -- Session variables are process-local observations: they survive action,
+    -- event, and namespace reloads, but not an addon unload/reload.
+    local sessionVariables=require('./lib/session-variables')
+    context.session=sessionVariables.values()
+    context.session_vars=context.session
+    context.getSessionVar=sessionVariables.get
+    context.setSessionVar=sessionVariables.set
+    context.resetSessionVar=sessionVariables.reset
+
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
     movementReservations.attach(context, function() smartMove:cancelJob() end)
     local reactions=require('./lib/reactions')
@@ -2264,6 +2273,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local globalHelpers = {vars=globalVars, _originalVars=originalVars}
     attachVariableHelpers(globalHelpers)
     context.setVarGlobal = globalHelpers.setVar
+    -- Event variables are intentionally request-local. Provide an explicit
+    -- bridge for observations that must publish durable state to actions and
+    -- panel expressions without weakening that isolation.
+    local actionVariables={vars=actionStateManager.vars,_originalVars=actionStateManager.originalVars}
+    attachVariableHelpers(actionVariables)
+    context.getActionVar=actionVariables.getVar
+    context.setActionVar=actionVariables.setVar
+    context.resetActionVar=actionVariables.resetVar
     -- Event variables are isolated; checklist state always belongs to automation.
     local checklistVariables={vars=actionStateManager.vars}
     attachVariableHelpers(checklistVariables)
@@ -2637,15 +2654,28 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         
         local weaponSkills = varargs({...})
         local abilities = windower.ffxi.get_abilities()
+        local rangedEquipment
+        local rangedEquipmentChecked=false
 
         for key, _weaponSkill in ipairs(weaponSkills) do
             weaponSkill = findWeaponSkill(_weaponSkill)
             if weaponSkill then
+                local equipmentReady=true
+                -- This check ensures that ranged weapon skills only pass this check if appropriate ammo is also equipped
+                --  Note: Archery==25, Marksmanship==26                
+                if weaponSkill.skill==25 or weaponSkill.skill==26 then
+                    if not rangedEquipmentChecked then
+                        rangedEquipment=inventory.get_ranged_equipment()
+                        rangedEquipmentChecked=true
+                    end
+                    equipmentReady=rangedEquipment~=nil and rangedEquipment.valid==true
+                        and rangedEquipment.weapon and rangedEquipment.weapon.skill==weaponSkill.skill
+                end
                 local target    = weaponSkill.targets.Self and context.me or context.bt
                 local suppress  = reactions.suppresses('weapon_skills') or
                     (context.vars.__suppress_weapon_skills and target == context.bt and not context.runningAsFunction())
 
-                if not suppress then
+                if equipmentReady and not suppress then
                     local targetOutOfRange = target and
                         target.distance and
                         target.distance > math.max(weaponSkill.range, 6)
@@ -3174,6 +3204,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.findItem = function(item)
         context.item = inventory.find_item(item)
         return context.item
+    end
+
+    -- Inspect static item metadata without changing the inventory item selected
+    -- by findEquippableItem/findUsableItem and subsequent action commands.
+    context.itemInfo = function(item)
+        context.item_info = nil
+        if type(item)=='table' and item.item then item=item.item end
+        context.item_info = findItem(item)
+        return context.item_info
     end
 
     --------------------------------------------------------------------------------------
@@ -4810,11 +4849,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if not context.movementAvailable() then return nil, 'reserved' end
         target = target or context.member or context.bt
 
-        local _mob, _job_id = context.following(target)
-        if _mob and _job_id then
-            return _job_id
-        end
-
         -- Allow string targets
         if type(target) == 'string' then
             target = windower.ffxi.get_mob_by_target(target) 
@@ -4838,12 +4872,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             distance = math.max(settings.minDistanceList[target.name], distance)
         end
 
-        -- We can follow if there isn't already a follow in progress, or if the existing
-        -- follow is already for the current target
+        local effectiveMultiplier=options and options._radius_multiplier
+        if type(effectiveMultiplier)~='number' then effectiveMultiplier=options and options.radius_multiplier end
+
+        -- Retain an equivalent follow, but replace it when live configuration changes.
         local jobInfo = smartMove:getJobInfo()
-        if jobInfo == nil or jobInfo.follow_index ~= target.index then
-            return smartMove:followIndex(target.index, distance, options)
+        if jobInfo and jobInfo.follow_index == target.index
+            and jobInfo.requested_distance == distance
+            and jobInfo.requested_radius_multiplier == effectiveMultiplier then
+            return jobInfo.jobId
         end
+        return smartMove:followIndex(target.index, distance, options)
     end
 
     ---------------------------------------------------------------------------
@@ -5433,6 +5472,22 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         initContextTargetSymbol(context, entity)
         entity.buffs = entity.buffs or {}
         return entity
+    end
+
+    -- Resolve a recently broadcast position without promoting it to a normal
+    -- target. IPC positions are useful beyond Windower's targeting range, but
+    -- only while fresh and in the same zone as this context.
+    context.ipcPositionById = function(id)
+        if type(id) ~= 'number' or id <= 0 or id ~= math.floor(id) or id == math.huge then
+            error('ipcPositionById: expected a positive numeric entity ID')
+        end
+        local position=globals.ipc_positions and globals.ipc_positions[tostring(id)]
+        if type(position)~='table' or position.id~=id or position.zone~=context.zone_id
+            or type(position.x)~='number' or type(position.y)~='number'
+            or type(position.t)~='number' or os.clock()-position.t>10 then
+            return nil
+        end
+        return position
     end
 
     context.mobByIndex = function(index)
@@ -7137,6 +7192,20 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.setPanelTracking = function(entries, append)
         assert(globals.status_panel, 'Status panel is not available')
         return globals.status_panel:setTemporaryTracking(entries, append)
+    end
+
+    -- Add or remove named rows without replacing the configured or temporary
+    -- tracking set. Content integrations use this for zone-scoped supplements.
+    context.setPanelTrackingSupplement = function(name, enabled)
+        assert(globals.status_panel, 'Status panel is not available')
+        return globals.status_panel:setTrackingSupplement(name, enabled)
+    end
+
+    -- Attach a temporary directional waypoint beside the status panel. Passing
+    -- nil restores the waypoint from saved panel configuration, if any.
+    context.setPanelWaypoint = function(waypoint)
+        assert(globals.status_panel, 'Status panel is not available')
+        return globals.status_panel:setWaypoint(waypoint)
     end
 
     -- Unlike execute, condition arrays short-circuit and combine results with AND.

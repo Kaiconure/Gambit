@@ -6,6 +6,8 @@ local copy=require('./lib/variable-values').copy
 local Theme=require('./lib/ux/theme')
 local Metrics=require('./lib/ux/text-metrics')
 local PanelContext=require('./lib/ux/panel-context')
+local Waypoint=require('./lib/ux/waypoint')
+local Background=require('./lib/ux/background')
 local Status={}
 Status.__index=Status
 Status.defaults=Config.defaults
@@ -19,6 +21,25 @@ local function textWidth(item,text)
     -- rather than positioning from the previous frame's measured text.
     return Metrics.width(item,text)
 end
+local function sameWaypointSource(a,b)
+    return a~=nil and b~=nil and a.zone==b.zone and a.mob_id==b.mob_id
+        and a.mob_name==b.mob_name and a.x==b.x and a.y==b.y
+end
+local function entryVisibility(entry,deps)
+    if not entry.showFns then return true end
+    if entry.showError then return true,'[error]' end
+    local ok,context=pcall(deps.context,'status panel visibility')
+    if not ok or not context then return true,'[unavailable]' end
+    local resetColor=PanelContext.attach(context,deps.canShareClaim)
+    resetColor()
+    for _,fn in ipairs(entry.showFns) do
+        setfenv(fn,context)
+        local success,result=pcall(fn)
+        if not success then entry.showError=true; return true,'[error]' end
+        if not result then return false,nil,context,resetColor end
+    end
+    return true,nil,context,resetColor
+end
 function Status.new(deps,options)
     local self=setmetatable({deps=deps},Status)
     self:configure(options)
@@ -29,8 +50,9 @@ function Status.new(deps,options)
     end)
     return self
 end
-function Status:configure(options,trackingOverride)
+function Status:configure(options,trackingOverride,waypointOverride)
     options=Config.normalize(options)
+    local previousWaypoint=self.waypoint
     if trackingOverride==nil then trackingOverride=self.trackingOverride end
     if trackingOverride==false then trackingOverride=nil end
     local tracking=options.tracking.sets[options.tracking.current]
@@ -42,6 +64,24 @@ function Status:configure(options,trackingOverride)
     end
     self.trackingOverride=trackingOverride~=nil and copy(tracking) or nil
     tracking=Config.expandTracking(tracking,options.tracking.sets)
+    local supplementNames={}
+    for name,enabled in pairs(self.trackingSupplements or {}) do
+        if enabled then supplementNames[#supplementNames+1]=name end
+    end
+    table.sort(supplementNames)
+    for _,name in ipairs(supplementNames) do
+        local supplement=assert(options.tracking.sets[name],
+            'Unknown panel tracking supplement: '..tostring(name))
+        for _,entry in ipairs(Config.expandTracking(supplement,options.tracking.sets)) do
+            tracking[#tracking+1]=entry
+        end
+    end
+    if waypointOverride==nil then waypointOverride=self.waypointOverride end
+    if waypointOverride==false then waypointOverride=nil end
+    waypointOverride=Config.normalizeWaypoint(waypointOverride)
+    self.waypointOverride=waypointOverride and copy(waypointOverride) or nil
+    self.waypointConfig=self.waypointOverride or options.waypoint
+    if self.waypoint and self.waypoint.background then self.waypoint.background:destroy() end
     if self.panel then self.panel:destroy() end
     self.options=options; self.entries={}; self.nextUpdate=0
     self.buffer=self.buffer or Buffer.new(options.history_lines,self.deps.windower.from_shift_jis)
@@ -50,7 +90,8 @@ function Status:configure(options,trackingOverride)
     local lineHeight=math.ceil(options.font_size*1.8)
     local trackingLines=0
     for _, entry in ipairs(tracking) do
-        trackingLines=trackingLines+((entry.expression==nil and type(entry.value)=='table') and math.max(1,#entry.value)+1 or 1)
+        trackingLines=trackingLines+((entry.format==nil and entry.expression==nil and type(entry.value)=='table') and
+            math.max(1,#entry.value)+1 or 1)
     end
     -- Consolas advances roughly 0.8 screen pixels per point at standard DPI.
     self.characterWidth=options.font_size*0.8
@@ -65,6 +106,19 @@ function Status:configure(options,trackingOverride)
             self.panel:layout()
             self:persist()
         end},self.deps)
+    if self.waypointConfig then
+        local waypoint=self.waypointConfig
+        self.waypoint={config=waypoint,
+            background=Background.new(options.theme,self.deps),
+            name=self.panel:label(0,5,options.font_size,'subheading'),
+            icon=self.panel:icon(0,0,waypoint.size),
+            distance=self.panel:label(0,0,math.max(6,options.font_size-1),'body')}
+        if previousWaypoint and sameWaypointSource(previousWaypoint.config,waypoint) then
+            self.waypoint.lastKnown=previousWaypoint.lastKnown
+        end
+        self.waypoint.icon.visible=false
+        Theme.color(self.waypoint.distance.text,'number')
+    else self.waypoint=nil end
     self.title=self.panel:label(10,5,options.font_size,'heading')
     self.titleWidth=textWidth(self.title,'Gambit Status')
     self.toggle=self.panel:button(18+self.titleWidth,5,5*(options.font_size+2)*0.8,lineHeight,options.font_size,self.deps.toggle,'heading')
@@ -87,7 +141,16 @@ function Status:configure(options,trackingOverride)
         entry.valueLabel.text:bold(false)
         entry.valueLabel.bold=false
         Theme.color(entry.valueLabel.text,'body')
-        row=row+((definition.expression==nil and type(definition.value)=='table') and math.max(1,#definition.value)+1 or 1)
+        if definition.show_when~=nil then
+            entry.showFns={}
+            local conditions=type(definition.show_when)=='table' and definition.show_when or {definition.show_when}
+            for _,code in ipairs(conditions) do
+                local ok,fn=pcall(factory.get,code)
+                if ok then entry.showFns[#entry.showFns+1]=fn else entry.showError=true end
+            end
+        end
+        row=row+((definition.format==nil and definition.expression==nil and type(definition.value)=='table') and
+            math.max(1,#definition.value)+1 or 1)
         if definition.checklist~=nil then
             entry.checks={}
             for _,objective in ipairs(definition.checklist) do
@@ -107,7 +170,8 @@ function Status:configure(options,trackingOverride)
                 end
                 local size=math.max(10,math.floor(options.font_size*1.2+0.5))
                 local icon=self.panel:icon(18,0,size)
-                local check={button=button,path=path,objective=objective,icon=icon,size=size}
+                local check={button=button,path=path,objective=objective,icon=icon,size=size,
+                    automatic=objective.checked_when~=nil}
                 if objective.format~=nil then
                     check.formatFns={}
                     for index=2,#objective.format do
@@ -126,6 +190,12 @@ function Status:configure(options,trackingOverride)
                     end
                 end
                 entry.checks[#entry.checks+1]=check
+            end
+        elseif definition.format~=nil then
+            entry.formatFns={}
+            for index=2,#definition.format do
+                local ok,fn=pcall(factory.get,definition.format[index])
+                if ok then entry.formatFns[#entry.formatFns+1]=fn else entry.error=true end
             end
         elseif definition.expression~=nil then
             if type(definition.expression)=='table' then
@@ -196,13 +266,34 @@ function Status:setTemporaryTracking(entries,append)
     self:update()
     return true
 end
+function Status:setWaypoint(waypoint)
+    local override=waypoint
+    if waypoint==nil then override=false end
+    self:configure(self.options,nil,override)
+    self:update()
+    return true
+end
+function Status:setTrackingSupplement(name,enabled)
+    assert(type(name)=='string' and name:match('%S'),
+        'Panel tracking supplement requires a name')
+    assert(enabled==nil or type(enabled)=='boolean',
+        'Panel tracking supplement enabled flag must be boolean')
+    assert(self.options.tracking.sets[name],
+        'Unknown panel tracking supplement: '..tostring(name))
+    self.trackingSupplements=self.trackingSupplements or {}
+    if enabled==false then self.trackingSupplements[name]=nil
+    else self.trackingSupplements[name]=true end
+    self:configure(self.options)
+    self:update()
+    return true
+end
 function Status:resetPosition()
     self:setPosition(Status.defaults.x,Status.defaults.y)
 end
 function Status:reset()
     local options=copy(Config.defaults)
     options.tracking.sets=copy(self.options.tracking.sets)
-    self:configure(options,false)
+    self:configure(options,false,false)
     self:update()
     self:persist()
 end
@@ -276,6 +367,7 @@ function Status:update()
     local ready=not self.deps.ready or self.deps.ready()
     local visible=ready and self.deps.loggedIn() and self.options.visible
     if not visible then
+        if self.waypoint then self.waypoint.background:visible(false) end
         if self.panel.visible then self.panel:show(false) end
         return
     end
@@ -301,12 +393,42 @@ function Status:update()
     Theme.color(self.targetDistance.text,'body')
     if self.panel.visible and os.clock()<self.nextUpdate then return end
     self.nextUpdate=os.clock()+self.options.refresh_interval
+    if self.waypoint then
+        local ok,context=pcall(self.deps.context,'status panel waypoint')
+        local state=ok and context and Waypoint.resolve(
+            self.waypoint.config,context,self.waypoint.lastKnown) or nil
+        if state and state.current then
+            self.waypoint.lastKnown={x=state.x,y=state.y,id=state.id}
+        end
+        self.waypoint.state=state
+        local name=state and self.waypoint.config.name or ''
+        local distanceLabel=state and state.label or ''
+        self.waypoint.nameWidth=textWidth(self.waypoint.name,name)
+        self.waypoint.distanceWidth=textWidth(self.waypoint.distance,distanceLabel)
+        self.waypoint.icon.visible=state~=nil
+        if state then
+            local key=state.color..':'..state.frame
+            if self.waypoint.texture~=key then
+                self.waypoint.icon.image:path((self.deps.windower.addon_path or '')..
+                    'content/ui/general/direction/'..state.color..'/'..string.format('%02d.png',state.frame))
+                self.waypoint.texture=key
+            end
+        end
+        if self.panel.visible then self.waypoint.icon.image:visible(self.waypoint.icon.visible) end
+    end
     for _, entry in ipairs(self.entries) do
-        local value=entry.definition.value
+        local shown,visibilityValue,visibilityContext,visibilityReset=entryVisibility(entry,self.deps)
+        entry.visibilityFailure=visibilityValue~=nil
+        local value
+        if not shown then value=nil
+        elseif visibilityValue~=nil then value=visibilityValue
+        else
+        value=entry.definition.value
         if entry.checks then
             value={}
-            local ok,context=pcall(self.deps.context,'status panel checklist')
-            local resetColor=ok and context and PanelContext.attach(context,self.deps.canShareClaim)
+            local ok,context=true,visibilityContext
+            if not context then ok,context=pcall(self.deps.context,'status panel checklist') end
+            local resetColor=visibilityReset or (ok and context and PanelContext.attach(context,self.deps.canShareClaim))
             for _,check in ipairs(entry.checks) do
                 local checked=not not (ok and context and context.getVar(check.path))
                 if check.conditions then
@@ -320,8 +442,9 @@ function Status:update()
                     end
                 end
                 if check.checked~=checked then
+                    local prefix=check.automatic and 'automatic-' or ''
                     check.icon.image:path((self.deps.windower.addon_path or '')..
-                        'content/ui/checklist/'..(checked and 'checked' or 'unchecked')..'.png')
+                        'content/ui/checklist/'..prefix..(checked and 'checked' or 'unchecked')..'.png')
                     check.checked=checked
                 end
                 local label=check.objective.text
@@ -356,13 +479,37 @@ function Status:update()
                 check.display=Buffer.plain(label,self.deps.windower.from_shift_jis):gsub('[\r\n]+',' ')
                 value[#value+1]=check.display
             end
+        elseif entry.definition.format~=nil then
+            value='[error]'
+            if entry.formatFns and not entry.error then
+                local ok,context=true,visibilityContext
+                if not context then ok,context=pcall(self.deps.context,'status panel') end
+                if not ok or not context then value='[unavailable]'
+                else
+                    local resetColor=visibilityReset or PanelContext.attach(context,self.deps.canShareClaim)
+                    resetColor()
+                    local args={}
+                    for index,fn in ipairs(entry.formatFns) do
+                        setfenv(fn,context)
+                        local success,result=pcall(fn)
+                        if not success then entry.error=true; break end
+                        args[index]=result
+                    end
+                    if not entry.error then
+                        local success,result=pcall(string.format,entry.definition.format[1],
+                            unpack(args,1,#entry.formatFns))
+                        if success then value=result else entry.error=true end
+                    end
+                end
+            end
         elseif entry.definition.expression~=nil then
             value='[error]'
             if (entry.fn or entry.fns) and not entry.error then
-                local ok,context=pcall(self.deps.context,'status panel')
+                local ok,context=true,visibilityContext
+                if not context then ok,context=pcall(self.deps.context,'status panel') end
                 if not ok or not context then value='[unavailable]'
                 else
-                    local resetColor=PanelContext.attach(context,self.deps.canShareClaim)
+                    local resetColor=visibilityReset or PanelContext.attach(context,self.deps.canShareClaim)
                     if entry.fns then
                         value={}
                         for _,fn in ipairs(entry.fns) do
@@ -384,8 +531,11 @@ function Status:update()
                 end
             end
         end
+        end
         entry.hidden=value==nil or (type(value)=='table' and #value==0)
-        entry.inline=not entry.checks and type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'
+        entry.inline=(not entry.checks or entry.visibilityFailure) and (entry.visibilityFailure or
+            entry.definition.format~=nil or
+            (type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'))
         local lines={}
         local function append(text)
             text=Buffer.plain(text,self.deps.windower.from_shift_jis)
@@ -411,6 +561,24 @@ function Status:update()
         end
     end
     self.panel.width=math.ceil(width)
+    if self.waypoint then
+        local waypoint=self.waypoint
+        local border=waypoint.background.skin.border or 0
+        local padding=math.max(6,border+2)
+        local sideWidth=math.max(waypoint.config.size,waypoint.nameWidth or 0,waypoint.distanceWidth or 0)+padding*2
+        local sideX=self.options.anchor.horizontal=='right' and -sideWidth-8 or self.panel.width+8
+        local lineHeight=math.ceil(self.options.font_size*1.8)
+        local distanceHeight=waypoint.config.show_distance and math.ceil(math.max(6,self.options.font_size-1)*1.8) or 0
+        waypoint.name.x=sideX+math.floor((sideWidth-(waypoint.nameWidth or 0))/2)
+        waypoint.name.y=padding
+        waypoint.icon.x=sideX+math.floor((sideWidth-waypoint.config.size)/2)
+        waypoint.icon.y=padding+lineHeight
+        waypoint.distance.x=sideX+math.floor((sideWidth-(waypoint.distanceWidth or 0))/2)
+        waypoint.distance.y=waypoint.icon.y+waypoint.config.size+2
+        waypoint.sideX=sideX
+        waypoint.sideWidth=sideWidth
+        waypoint.sideHeight=waypoint.distance.y+distanceHeight+padding
+    end
     self.columns=math.max(8,math.floor((self.panel.width-20)/self.characterWidth))
     self.version.x=self.panel.width-self.versionWidth-6
     -- Expression arrays can change size at runtime: reflow rows and automatic
@@ -425,6 +593,9 @@ function Status:update()
             check.button.width=self.panel.width-check.button.x-10
             check.button.hitX=18; check.button.hitWidth=self.panel.width-28
             check.icon.y=check.button.y+math.floor((lineHeight-check.size)/2)
+            check.icon.visible=not entry.hidden and not entry.visibilityFailure
+            if self.panel.visible then check.icon.image:visible(check.icon.visible) end
+            if not check.icon.visible then check.button.hitWidth=0 end
         end
         if not entry.hidden then y=y+(entry.lineCount+(entry.inline and 0 or 1))*lineHeight end
     end
@@ -435,14 +606,19 @@ function Status:update()
     self.panel.height=math.max(self.options.height or 0,requiredHeight)
     for i,item in ipairs(self.logs) do item.y=logY+(i-1)*lineHeight end
     self.panel:layout()
+    if self.waypoint then
+        local waypoint=self.waypoint
+        waypoint.background:layout(self.panel.x+waypoint.sideX,self.panel.y,
+            waypoint.sideWidth,waypoint.sideHeight)
+    end
     self:setText(self.logHeading,logLines>0 and 'Log' or '')
     for _, entry in ipairs(self.entries) do
         self:setText(entry.label,entry.hidden and '' or entry.heading)
-        self:setText(entry.valueLabel,(entry.hidden or entry.checks) and '' or entry.display)
+        self:setText(entry.valueLabel,(entry.hidden or (entry.checks and not entry.visibilityFailure)) and '' or entry.display)
         for _,check in ipairs(entry.checks or {}) do
-            self:setText(check.button,check.display)
+            self:setText(check.button,(entry.hidden or entry.visibilityFailure) and '' or check.display)
         end
-        Theme.color(entry.valueLabel.text,entry.error and 'red' or 'body')
+        Theme.color(entry.valueLabel.text,(entry.error or (entry.visibilityFailure and entry.showError)) and 'red' or 'body')
     end
     local visibleLogLines=math.min(#self.logs,math.max(0,math.floor((self.panel.height-logY-8)/lineHeight)))
     local firstLogLine=math.max(1,#self.buffer.lines-visibleLogLines+1)
@@ -454,11 +630,15 @@ function Status:update()
     end
     -- Reveal a newly built/reconfigured panel only after final sizing and text.
     if not self.panel.visible then self.panel:show(true) end
+    if self.waypoint then
+        self.waypoint.background:visible(self.waypoint.state~=nil)
+    end
 end
 function Status:destroy()
     self.unsubscribe()
     self.deps.windower.unregister_event(self.frameEvent)
     self.deps.windower.unregister_event(self.mouseEvent)
+    if self.waypoint then self.waypoint.background:destroy() end
     self.panel:destroy()
 end
 return Status

@@ -142,20 +142,23 @@ Merge this `ui` section into your existing global character main configuration:
             },
             {
               "name": "Skillchain",
+              "show_when": "party_weapon_skill and party_weapon_skill.name",
               "expression": [
-                "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
+                "format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
               ]
             },
             {
               "name": "Spell",
+              "show_when": "gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5)",
               "expression": [
-                "(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
+                "format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
               ]
             },
             {
               "name": "Job Ability",
+              "show_when": "gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5",
               "expression": [
-                "(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
+                "format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
               ]
             }
           ]
@@ -168,7 +171,9 @@ Merge this `ui` section into your existing global character main configuration:
 
 Each named set is an array of entries. Names are case-sensitive. `value` accepts
 a string displayed inline with the name, or an array of display lines below
-the heading (even a one-element array). Expressions can also return arrays: each
+the heading (even a one-element array). A `format` array produces an inline
+formatted value; its first element is a literal format string and each remaining
+element is an argument expression. Expressions can also return arrays: each
 element appears on its own indented line under the entry heading. Automatic
 height and subsequent rows reflow as the
 array length changes. Switching sets rebuilds tracking rows and
@@ -240,8 +245,55 @@ width. The panel shrinks toward its minimum when tracking content becomes
 shorter. Log text never drives automatic width. These width changes do not
 modify saved settings.
 
-Expressions use the ordinary action expression compiler and a fresh temporary
-context per entry. A string expression returning a scalar displays inline with
+Formats and expressions use the ordinary action expression compiler and a fresh
+temporary context per entry. A normal-entry `format` uses the same layout as a
+checklist-item format:
+
+```json
+{
+  "name": "Target",
+  "format": [
+    "%s → %s",
+    "color_mob(bt)",
+    "color_number(bt.distance)"
+  ]
+}
+```
+
+The first element is passed literally to Lua's `string.format`; remaining
+elements evaluate in order and supply its arguments. A format-string-only array
+is valid. `format` takes precedence over `expression` and `value`. Structural
+`references` expansion and `checklist` entries take precedence over all three.
+Invalid argument expressions or format mismatches display `[error]`.
+
+Every resolved entry may also declare `show_when` independently of its display
+method. A string evaluates one visibility expression; an array evaluates in
+order and requires every expression to be truthy:
+
+```json
+{
+  "name": "Target",
+  "show_when": ["bt", "bt.hpp > 0"],
+  "format": ["%s → %s", "color_mob(bt)", "color_number(bt.distance)"]
+}
+```
+
+Missing or `null` `show_when` is visible by default. An empty array is also
+visible. Expressions short-circuit at the first false or nil result. A hidden
+entry reserves no panel space and its format, expression, value, or checklist
+is not evaluated. This makes the visibility condition appropriate for guarding
+display expressions whose inputs may not exist yet. Conditions reevaluate on
+each panel refresh, so rows reappear and the panel reflows when they become true.
+Use the expression strings `"true"` or `"false"` for explicit constant behavior.
+
+Visibility compilation/runtime failures show the entry with `[error]` rather
+than silently hiding a broken configuration. An unavailable evaluation context
+similarly shows `[unavailable]` and is retried. `show_when` applies to checklist
+entries as a whole; hidden checklists have no visible or clickable controls.
+Reference declarations remain structural, so visibility belongs on the resolved
+entries inside the referenced set.
+
+A string expression returning a scalar displays inline with
 its heading, for example `Strategy: leader`. An array evaluates each expression
 independently and displays its results below the heading, including when the
 array has only one expression. An expression returning an array expands into
@@ -258,6 +310,90 @@ Syntax/runtime failures display `[error]` on the affected entry and stop retryin
 it until panel recreation (switch sets or run `gbt panel reload`). Unavailable contexts display
 `[unavailable]` and are retried. Failures do not quarantine automation actions or
 produce repeated chat errors.
+
+## Attached waypoint sidecar
+
+The panel may display a directional waypoint as a separate attached element.
+It shows the waypoint name, arrow, and optional distance without consuming a
+tracking row or changing the panel's size. A right-anchored panel places it to
+the left; a left-anchored panel places it to the right. Moving or dynamically
+resizing the panel keeps the sidecar attached. The sidecar uses the same themed
+background as the main panel so it remains legible over bright game scenes.
+The arrow is relative to the player's current heading: straight ahead points
+up, a point directly to the right points right, and a point behind points down.
+
+```json
+{
+  "waypoint": {
+    "name": "Next waypoint",
+    "zone": 77,
+    "x": 500.0,
+    "y": -120.0,
+    "near": 10,
+    "mid": 30,
+    "far": 150,
+    "show_distance": true,
+    "distance_format": "%.1f yalms",
+    "size": 32
+  }
+}
+```
+
+`zone` is a numeric zone ID or an exact English zone name. The entry is hidden
+outside that zone. `x` and `y` are the destination's map coordinates. As an
+alternative, `mob_id` or `mob_name` tracks a live entity and refreshes its
+position on every panel update:
+
+```json
+{
+  "waypoint": {
+    "name": "Rune of Transfer",
+    "zone": 77,
+    "mob_name": "Rune of Transfer",
+    "near": 10,
+    "mid": 30
+  }
+}
+```
+
+When both selectors are present, `mob_id` is attempted first and `mob_name` is
+the fallback. A supplied `x`/`y` pair is the final fallback if the entity is not
+currently available. This permits a stable last-known or expected position
+without preventing live tracking. At least one complete coordinate pair or mob
+selector is required.
+
+After a live entity has been resolved once, the panel remembers its last known
+coordinates and entity ID. If direct targeting data becomes unavailable, a
+fresh same-zone position received from another Gambit instance over IPC is used
+as a known position and retains the normal range color. This permits party
+members that broadcast their own positions to remain trackable beyond normal
+targeting range. Position broadcasts include a five-second heartbeat so a
+stationary character remains fresh. A name-based waypoint gains this behavior
+after resolving once and learning the entity ID.
+
+If neither live nor fresh same-zone IPC data is available, the arrow continues
+to point toward the remembered coordinates in gray. Entity records explicitly
+marked as invalid targets are not treated as current even if Windower still
+exposes their stale coordinates. A configured `x`/`y` fallback behaves like a
+last-known position. A dynamic waypoint that has never resolved and has no
+coordinate fallback remains hidden because it has no meaningful direction to
+display.
+
+Horizontal
+distance at or below `near` uses the green indicator; distance at or below
+`mid` uses yellow; greater distance uses red. `near` defaults to 10 and `mid`
+defaults to 30. A fixed-coordinate waypoint remains visible at any distance so
+it can always guide the player back to that point. For a live `mob_id` or
+`mob_name` waypoint, `far` remains available as the third configured range and
+must be at least `mid`; a resolved entity remains red beyond `mid`, including
+beyond `far`. Gray is reserved for an entity whose current position cannot be
+resolved and whose last known coordinates are being displayed.
+
+`show_distance` defaults to true. When enabled, `distance_format` receives the
+numeric distance through `string.format` and defaults to `"%.1f yalms"`.
+Indicator `size` defaults to 32 pixels and accepts integers from 16 through 64.
+The supplied artwork uses 32 directional frames, giving 11.25-degree bearing
+steps.
 
 ## Panel expression color helpers
 
@@ -493,7 +629,7 @@ Add `checked_when` to an individual checklist item to derive its check mark from
 
 Every expression must return a truthy Lua value. Conditions run in order and stop at the first false/nil result or error. They compile when tracking rows are built and reevaluate on panel refresh, so consuming an item unchecks the objective again. An empty condition array is always checked. Invalid expressions or unavailable context leave the objective unchecked.
 
-Condition-controlled rows do not toggle on click or show the clickable hover highlight. Their displayed state overrides the manual checklist variable without writing to it; `checklistSet`/`checklistGet` continue to manage manual state. Omit `checked_when` to retain normal clickable behavior.
+Condition-controlled rows do not toggle on click or show the clickable hover highlight. Their displayed state overrides the manual checklist variable without writing to it; `checklistSet`/`checklistGet` continue to manage manual state. Omit `checked_when` to retain normal clickable behavior. Manual rows use square checkbox icons, while condition-controlled rows use circular status indicators, making user-owned and automatically observed state visually distinct.
 
 Use `findItem('item name')` for ordinary inventory items or `findKeyItem('key item name')` for owned key items. Both can return a resource/item table as a truthy condition. These lookups do not consume the item.
 Sets with the same checklist and item IDs share state. Switching tracking sets or
@@ -576,6 +712,13 @@ Omitting the argument or passing `false` replaces tracking as usual. Appending
 an empty array leaves the rows unchanged; passing `nil` restores configured
 tracking regardless of the append flag. Appended rows remain temporary.
 
+Named tracking supplements are independent of the configured or temporary base
+rows. `setPanelTrackingSupplement(name, true)` appends a stock tracking set, and
+passing `false` removes only that supplement. This allows content integrations
+such as Nyzul to add zone-scoped information without replacing a namespace's
+own panel layout. Supplements survive ordinary panel and action reconfiguration
+until explicitly removed.
+
 `setPanelTracking({})` clears tracking rows; `setPanelTracking(nil)` restores the
 selected configured set. Overrides do not change that selection, its saved
 entries, position, or log history. Later preference saves do not persist the
@@ -583,6 +726,32 @@ override. Settings reloads, explicit panel/addon reloads, selecting a tracking
 set, or `setPanelTracking(nil)` restore configured tracking. Display
 reconfiguration, including size, theme, visibility, log visibility, and position
 changes, retains the temporary rows.
+
+### Configure the waypoint sidecar
+
+Use `setPanelWaypoint(waypoint)` to temporarily replace the waypoint configured
+under `ui.status_panel.waypoint`. It accepts the same object shown above and
+returns `true` on success:
+
+```json
+{
+  "loading": [
+    {
+      "commands": [
+        "setPanelWaypoint({name='Exit', zone=77, x=500, y=-120, near=10, mid=30})"
+      ]
+    }
+  ]
+}
+```
+
+`setPanelWaypoint(nil)` restores the saved waypoint, or removes the sidecar if
+none is configured. Temporary waypoint data is not written to panel preferences.
+Theme, size, position, visibility, tracking changes, and ordinary action or
+event settings reloads retain it. A dynamic waypoint's last known position is
+also retained while the panel is rebuilt. Explicit panel settings reload,
+`gbt panel reset`, waypoint replacement, and `setPanelWaypoint(nil)` clear or
+replace the temporary state.
 
 ## Shared appearance and log text
 

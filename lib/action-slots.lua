@@ -109,7 +109,7 @@ function slots.names(action)
     return result
 end
 
-function slots.new(container, priority, warn, matchesRequired, defaultSource)
+function slots.new(container, priority, warn, matchesRequired, defaultSource, contributionWhen)
     local groups, seen, used = {}, {}, {}
     local serial = 0
     local discovering,discoveredSources=false,{}
@@ -134,7 +134,7 @@ function slots.new(container, priority, warn, matchesRequired, defaultSource)
         if discovering then discoveredSources[source]=true end
         local entries,ordered = contributionEntries.read(document.contributions, matchesRequired,function(message)
             warn((source or defaultSource or '(unknown source)')..': '..message)
-        end)
+        end,contributionWhen)
         local path=parent and parent._contributionPath
         local origin=path and path[#path]
         if origin then

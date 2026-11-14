@@ -43,6 +43,7 @@
     {
       "commands": [
         "setVar('vars.frontline_engagement._distance', max(0.125, (vars.frontline_engagement.distance or 0.5) + (vars.frontline_engagement.distance_offset or 0)))",
+        "setVar('vars.frontline_engagement._radius_multiplier', vars.frontline_engagement._distance > 12 and 0 or vars.frontline_engagement.radius_multiplier)",
         "runningAsFunction() and log('Applied frontline engagement positioning updates!')"
       ],
       "delay": 0,

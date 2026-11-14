@@ -79,7 +79,8 @@ end
 documents[root].spells.pre={}
 for _,bad in ipairs({{actions={},optional='yes'},{actions={},required_for='GEO'},
     {actions={{priority='invalid'}}},{actions={{slot='nested'}}},
-    {actions={{commands={'broken('}}}},{actions={{unknown=true}}}}) do
+    {actions={{commands={'broken('}}}},{actions={{unknown=true}}},
+    {actions={},when={'broken('}}}) do
     documents[personal].contributions={['spells.pre.before']=bad}
     assert(not pcall(load))
 end
@@ -97,6 +98,29 @@ assert(native.vars.initialized)
 runtime:observe({kind='status',category='idle'},'enter')
 runtime:observe({kind='zone'},'enter')
 assert(notifications[1]=='status' and notifications[2]=='enter')
+
+-- A contribution-level condition is evaluated once and skips its complete
+-- expanded rule run without affecting another contribution to the same slot.
+local gated=Config.load({'gated'},function() return {contributions={
+    {slot='texts.received.after',when={'gate()'},actions={
+        {when={'inner(1)'},commands={'run(1)'}},
+        {when={'inner(2)'},commands={'run(2)'}},
+    }},
+    {slot='texts.received.after',actions={{commands={'run(3)'}}}},
+}} end)
+local gateResult=false
+local gateCalls,innerCalls,runs=0,0,{}
+local gatedRuntime=Runtime.new(gated,{clock=function() return 0 end,report=function(err) error(err) end,
+    context=function() return {
+        gate=function() gateCalls=gateCalls+1; return gateResult end,
+        inner=function() innerCalls=innerCalls+1; return true end,
+        run=function(value) runs[#runs+1]=value end,
+    } end})
+gatedRuntime:observe({kind='text',text='anything'},'received')
+assert(gateCalls==1 and innerCalls==0 and table.concat(runs,',')=='3')
+gateResult=true; runs={}
+gatedRuntime:observe({kind='text',text='anything'},'received')
+assert(gateCalls==2 and innerCalls==2 and table.concat(runs,',')=='1,2,3')
 Paths.setLoadedNamespace(nil)
 print('PASS: event built-ins/custom slots, hierarchy ordering, priority/default/replacement semantics, requirements, IDs, stopping and validation')
 

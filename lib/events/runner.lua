@@ -37,10 +37,17 @@ function Runner:run(request,phase)
     if loading then profiling.start('loading context creation') end
     local ok,context=pcall(self.context,'event '..phase,request.variables)
     if loading then profiling.stop('loading context creation') end
-    if not ok or not context then
+    if not ok then
         discard()
         self.report('Event context unavailable: '..tostring(context))
         return false
+    end
+    -- Player and mob data briefly disappear during zone transitions. Temporary
+    -- context creation returns nil deliberately in that window; signal the
+    -- runtime so observations can be retried without reporting a false error.
+    if not context then
+        discard()
+        return nil
     end
     context.event=copy(request.event)
     if request.event.target and self.targetSnapshot then
@@ -69,7 +76,7 @@ function Runner:run(request,phase)
     end
     -- Shared configuration variables are cloned per request; internal equipment
     -- stacks and changes persist only across that request's phases.
-    for _,rule in ipairs(rules) do
+    local function executeRule(rule)
         context.event.cancelled=request.event.cancelled
         context.event.reason=request.event.reason
         context.event.source=rule.source
@@ -93,7 +100,7 @@ function Runner:run(request,phase)
                     request.event.cancelled=true
                     request.event.reason=request.event.reason or 'pre-rule error'
                 end
-            elseif matched and rule.stop then break end
+            elseif matched and rule.stop then return 'stop' end
         elseif phase=='pre' then
             phaseFailed=true
             -- A quarantined pre rule must not silently bypass its cancellation.
@@ -102,6 +109,46 @@ function Runner:run(request,phase)
                 request.event.reason=request.event.reason or 'pre-rule disabled after error'
             end
         end
+        if stopped then return 'stop' end
+    end
+    local gateResults={}
+    for _,entry in ipairs(rules) do
+        if entry.rules then
+            local allowed=gateResults[entry.gate_id]
+            if entry.failed then
+                allowed=false
+                phaseFailed=true
+                if phase=='pre' and not request.observational then
+                    request.event.cancelled=true
+                    request.event.reason=request.event.reason or 'pre-contribution disabled after error'
+                end
+            elseif allowed==nil then
+                context.event.source=entry.source
+                context.event.rule_id=nil
+                local success,value=pcall(function()
+                    for _,condition in ipairs(entry.conditions) do
+                        if not evaluate(condition,context) then return false end
+                    end
+                    return true
+                end)
+                if not success then
+                    phaseFailed=true
+                    entry.failed=true
+                    allowed=false
+                    self.report(entry.source..': '..tostring(value))
+                    if phase=='pre' and not request.observational then
+                        request.event.cancelled=true
+                        request.event.reason=request.event.reason or 'pre-contribution error'
+                    end
+                else allowed=value end
+                gateResults[entry.gate_id]=allowed
+            end
+            if allowed then
+                for _,rule in ipairs(entry.rules) do
+                    if executeRule(rule)=='stop' then stopped=true; break end
+                end
+            end
+        elseif executeRule(entry)=='stop' then stopped=true end
         if stopped then break end
     end
     active=false

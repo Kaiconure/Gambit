@@ -46,6 +46,7 @@
     "can_open_sc": [
       "me.tp >= (vars.ws.min_open_tp or 1000)",
       "bt and bt.mob_time >= (vars.ws.open_delay or 2)",
+      "not vars.ws.min_hpp or bt.hpp >= vars.ws.min_hpp",
       "arrayCount(vars.ws.hold_on_buffs) == 0 or not hasBuff(bt, vars.ws.hold_on_buffs)",
       "arrayCount(vars.ws.hold_until_buffs) == 0 or hasAllBuffs(bt, vars.ws.hold_until_buffs)"
     ],

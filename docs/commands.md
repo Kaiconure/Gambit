@@ -23,6 +23,10 @@ Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
 `gbt panel tracking -set <name>`. Panel settings persist per character in the
 global `main.json`; see [status panel configuration](status-panel.md).
 
+`gbt waypoint` attaches a temporary directional waypoint to the status panel.
+It can capture the player, current target, a named mob, or explicit coordinates;
+see [waypoint sidecar](status-panel.md#attached-waypoint-sidecar).
+
 `gbt slots` lists the current configuration's contribution slots grouped by action
 type, with sections sorted alphabetically and slots in their placement order.
 Repeated slots appear once at their first occurrence; fallback alternatives retain
@@ -60,6 +64,7 @@ This reference describes the commands registered in [commands.lua](../lib/comman
 | Toggle action execution separately | `//gbt actions -toggle` |
 | Inspect a variable | `//gbt varget <name>` |
 | Evaluate a Lua expression | `//gbt eval <expression>` |
+| Set or clear the waypoint indicator | `//gbt waypoint [options]` / `//gbt waypoint -clear` |
 
 ## Automation and actions
 
@@ -100,6 +105,18 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 | `-verbose` | `-v` | Write processed action and event JSON debugging output to `.output` folders for this reload. Off by default. |
 
 Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
+
+Prefix an action, event, or namespace name with `gambit:` to bypass user
+overrides and select the shipped source explicitly:
+
+```text
+//gbt r -a gambit:rdm
+//gbt events r -e gambit:lib/content/nyzul
+//gbt r -ns gambit:follow
+```
+
+The qualifier is retained by action/event reloads. Gambit-owned action sets are
+read-only and cannot be targets of `actions -save-local`.
 
 ```text
 //gbt r
@@ -257,6 +274,33 @@ List functions with `//gbt func -list`. Filter by a case-insensitive, literal pr
 ```
 
 `eval` supports normal context helpers and guarded error reporting. It is not read-only: calling a movement, casting, or variable-setting helper performs that operation. Expressions return their value; scripts need an explicit `return` to produce a result. Windower command parsing still applies, so avoid assuming a semicolon will reach Lua unchanged.
+
+## Waypoint indicator
+
+```text
+//gbt waypoint [-name <name>] [-t | -n <mob-name> | -pos <x,y>] [-d] [-range <near,mid,far>]
+//gbt waypoint -clear
+```
+
+| Option | Behavior |
+| --- | --- |
+| `-name <name>` | Set the displayed waypoint name. Quote names containing spaces. |
+| `-t` | Capture the current target. |
+| `-n <mob-name>` | Find and capture a live mob by name. Quote names containing spaces. |
+| `-d` | Track the selected target or named mob by entity ID so its moving position refreshes. Requires `-t` or `-n`. |
+| `-pos <x,y>` | Capture an explicit coordinate pair. Do not put spaces around the comma. |
+| `-range <near,mid,far>` | Set the green, yellow, and far range values. Defaults to `10,30,50`. |
+| `-clear` | Clear the command override and restore a waypoint saved in panel settings, if present. |
+
+Choose at most one of `-t`, `-n`, and `-pos`. With none of them, the waypoint
+captures the player's current position. Without `-d`, target and named-mob
+commands snapshot the entity's current coordinates. With `-d`, they store its
+entity ID and follow its movement. An omitted `-name` uses the selected mob's
+name; player-position and explicit-coordinate waypoints use `Waypoint`.
+Fixed waypoints remain visible beyond the configured `far` value; beyond `mid`
+their indicator stays red. Dynamic waypoints also remain red while their entity
+is resolved, regardless of distance. They turn gray only when the entity
+disappears, then continue pointing toward its last known position.
 
 ## Configuration
 

@@ -18,16 +18,27 @@ assert(service:discovery('start'):find('started',1,true))
 assert(service:discovery('start'):find('already exists',1,true))
 now=1
 listeners['incoming chunk'](0x02A,'test',nil,false,true)
-listeners['incoming text']('weakness hint','modified',148)
+local observed
+service.runtime={observe=function(_,event,phase) observed={event=event,phase=phase} end}
+listeners['incoming text'](string.char(0x1E,2)..'weakness hint','modified',148)
+assert(observed.phase=='received' and observed.event.kind=='text' and observed.event.text=='weakness hint'
+    and observed.event.original==string.char(0x1E,2)..'weakness hint' and observed.event.modified=='modified'
+    and observed.event.mode==148)
+listeners['incoming text']('Commencing Nyzul Isle Investigation!'..string.char(7)..
+    'Objective: Complete on-site objectives'..string.char(13),'modified',148)
+assert(observed.event.text=='Commencing Nyzul Isle Investigation!\nObjective: Complete on-site objectives')
+service.runtime=nil
 local action={actor_id=100,category=3,param=46,targets={{id=200,actions={{message=185,param=100}}}}}
 service:action(action)
 action.param=99
 now=2
 assert(service:discovery('stop'):find('saved',1,true))
 assert(path:find('discovery-',1,true) and saved.metadata.player.name=='Tester' and saved.metadata.zone==15)
-assert(#saved.entries==3 and saved.entries[1].fields.Message==123)
+assert(#saved.entries==4 and saved.entries[1].fields.Message==123)
 assert(saved.entries[1].hex=='74657374' and saved.entries[1].blocked)
-assert(saved.entries[2].original=='weakness hint' and saved.entries[3].action.param==46)
+assert(saved.entries[2].original==string.char(0x1E,2)..'weakness hint'
+    and saved.entries[3].original:find('Commencing Nyzul Isle Investigation!',1,true)
+    and saved.entries[4].action.param==46)
 assert(not Discovery.active())
 deps.packets.parse=function() return {} end -- Weakness observer remains active without recording.
 listeners['incoming chunk'](0x02A,'test',nil,false,false)

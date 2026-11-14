@@ -21,7 +21,9 @@ local function primitive()
         end
     end})
 end
-local definition={id='sortie_a',name='Objectives',expression='error("must not run")',value=17,
+context.showChecklist=true
+local definition={id='sortie_a',name='Objectives',show_when='showChecklist',format={'%s','error("must not run")'},
+    expression='error("must not run")',value=17,
     checklist={{id='kill_5_abject',text='Kill 5 abject mobs'}, {text='Kill 5 more abject mobs'}}}
 local options={show_log=false,tracking={current='custom',sets={custom={definition}}}}
 local panel=Status.new({texts={new=primitive},images={new=primitive},
@@ -39,6 +41,13 @@ assert(entry.checks[1].icon.image.shown==true)
 panel.nextUpdate=0; panel:update()
 assert(entry.checks[1].icon.image.loads==1)
 assert(entry.valueLabel.text.value=='')
+context.showChecklist=false
+panel.nextUpdate=0; panel:update()
+assert(entry.hidden and entry.checks[1].icon.image.shown==false and entry.checks[1].button.hitWidth==0 and
+    entry.checks[1].button.text.value=='')
+context.showChecklist=true
+panel.nextUpdate=0; panel:update()
+assert(not entry.hidden and entry.checks[1].icon.image.shown==true and entry.checks[1].button.hitWidth>0)
 local first=entry.checks[1].button
 local hx,hy=panel.panel.x+first.hitX+1,panel.panel.y+first.y+1
 assert(panel.panel:mouse(0,hx,hy,false)==nil) -- hover does not consume movement
@@ -94,6 +103,8 @@ invalid({name='Bad item',id='test',checklist={{text='Two\nlines'}}})
 invalid({name='Not array',id='test',checklist={key={text='One'}}})
 invalid({name='Bad condition',id='test',checklist={{text='One',checked_when='true'}}})
 invalid({name='Bad condition item',id='test',checklist={{text='One',checked_when={true}}}})
+invalid({name='Bad visibility',show_when=true,value='x'})
+invalid({name='Bad visibility item',show_when={true},value='x'})
 context.owned=false
 context.calls=0
 context.checkSecond=function() context.calls=context.calls+1; return true end
@@ -107,11 +118,14 @@ panel.nextUpdate=0; panel:update()
 local automatic=panel.entries[1].checks
 assert(not automatic[1].checked and context.calls==0)
 assert(automatic[2].checked and not automatic[3].checked and not automatic[4].checked)
+assert(automatic[1].icon.image.texture=='content/ui/checklist/automatic-unchecked.png')
+assert(automatic[2].icon.image.texture=='content/ui/checklist/automatic-checked.png')
 click(automatic[1].button)
 assert(not context.getVar('vars.panel.automatic.owned'))
 context.owned=true
 panel.nextUpdate=0; panel:update()
 assert(automatic[1].checked and context.calls==1)
+assert(automatic[1].icon.image.texture=='content/ui/checklist/automatic-checked.png')
 click(automatic[1].button)
 assert(automatic[1].checked and not context.getVar('vars.panel.automatic.owned'))
 context.owned=false
@@ -126,8 +140,8 @@ panel:setTemporaryTracking({{id='labels',name='Labels',checklist={
 }}})
 panel.nextUpdate=0; panel:update()
 local labels=panel.entries[1].checks
-assert(labels[1].display=='\\cs(179,154,255)Tooth\\cr' and not labels[1].checked)
-assert(labels[2].display=='\\cs(188,241,114)Potion\\cr')
+assert(labels[1].display==('\\cs(%d,%d,%d)Tooth\\cr'):format(unpack(Theme.colors.key_item)) and not labels[1].checked)
+assert(labels[2].display==('\\cs(%d,%d,%d)Potion\\cr'):format(unpack(Theme.colors.item)))
 assert(labels[3].display==('\\cs(%d,%d,%d)Independent\\cr'):format(unpack(Theme.colors.body)))
 assert(labels[4].display=='[error]' and labels[5].display=='[error]')
 context.owned=true
@@ -146,10 +160,11 @@ panel:setTemporaryTracking({{id='formats',name='Formats',checklist={
 }}})
 panel.nextUpdate=0; panel:update()
 local formats=panel.entries[1].checks
-assert(formats[1].display=='\\cs(179,154,255)Tooth\\cr: '..('\\cs(%d,%d,%d)Amarok\\cr (E-6)'):format(unpack(Theme.colors.target_engaged)))
+assert(formats[1].display==('\\cs(%d,%d,%d)Tooth\\cr: '):format(unpack(Theme.colors.key_item))..('\\cs(%d,%d,%d)Amarok\\cr (E-6)'):format(unpack(Theme.colors.target_engaged)))
 assert(formats[2].display=='Literal location (E-6)')
 for index=3,5 do assert(formats[index].display=='[error]') end
-assert(formats[6].display=='\\cs(188,241,114)Item\\cr\\cs(188,241,114) suffix\\cr')
+assert(formats[6].display==('\\cs(%d,%d,%d)Item\\cr'):format(unpack(Theme.colors.item))..
+    ('\\cs(%d,%d,%d) suffix\\cr'):format(unpack(Theme.colors.item)))
 invalid({id='empty_format',name='Bad format',checklist={{format={}}}})
 invalid({id='bad_format',name='Bad format',checklist={{format={'%s',123}}}})
 panel:destroy()
