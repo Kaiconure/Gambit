@@ -194,6 +194,29 @@ local inline=values.copy(definition)
 inline.stage_participants['1']={'melee','~PLD','~Theta'}
 participation.prepare(inline,context('Alpha'),env.compile_multi_stage)
 assert(table.concat(inline.stages[1].participants,',')=='Alpha')
+local wholeParty={participants={'*'},stages=values.copy(definition.stages)}
+participation.prepare(wholeParty,context('Alpha'),env.compile_multi_stage)
+assert(table.concat(wholeParty.participants,',')=='Alpha,Beta,Theta')
+local unrestrictedDomain={participants={},stage_participants={['1']={'Beta','*'}},
+    stages=values.copy(definition.stages)}
+participation.prepare(unrestrictedDomain,context('Alpha'),env.compile_multi_stage)
+assert(table.concat(unrestrictedDomain.stages[1].participants,',')=='Beta,Alpha,Theta')
+local scoped={participants={'Theta','Alpha'},stage_participants={
+    ['1']={'Alpha','*','~Theta'},
+    ['2']={'Beta','*'},
+    ['3']={'!Beta','*'},
+},stages=values.copy(definition.stages)}
+participation.prepare(scoped,context('Alpha'),env.compile_multi_stage)
+assert(table.concat(scoped.stages[1].participants,',')=='Alpha')
+assert(table.concat(scoped.stages[2].on_ws[1].participants,',')=='Theta,Alpha')
+assert(table.concat(scoped.stages[3].participants,',')=='Theta,Alpha')
+local nestedDomain=values.copy(definition)
+nestedDomain.participants={'Alpha'}
+nestedDomain.stages[1].participants={'Beta','*'}
+nestedDomain.stages[2].on_ws[1].participants={'Beta','*'}
+participation.prepare(nestedDomain,context('Alpha'),env.compile_multi_stage)
+assert(table.concat(nestedDomain.stages[1].participants,',')=='Alpha')
+assert(table.concat(nestedDomain.stages[2].on_ws[1].participants,',')=='Alpha')
 local overlap=values.copy(definition)
 overlap.exclusions={WAR={1},Alpha={3}}
 participation.prepare(overlap,context('Alpha'),env.compile_multi_stage)

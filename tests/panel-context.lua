@@ -98,7 +98,11 @@ local trackingEnv={format=string.format,bt=target,
 local resetTracking=PanelContext.attach(trackingEnv)
 for index=2,4 do
     resetTracking()
-    local fn=factory.get(Config.defaults.tracking.sets.default[index].expression[1])
+    local definition=Config.defaults.tracking.sets.default[index]
+    local show=factory.get(definition.show_when)
+    setfenv(show,trackingEnv)
+    assert(show())
+    local fn=factory.get(definition.expression[1])
     setfenv(fn,trackingEnv)
     local result=fn()
     assert(result:find('\\cs(255,130,130)Target\\cr',1,true))

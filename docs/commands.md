@@ -101,6 +101,18 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 
 Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
 
+Prefix an action, event, or namespace name with `gambit:` to bypass user
+overrides and select the shipped source explicitly:
+
+```text
+//gbt r -a gambit:rdm
+//gbt events r -e gambit:lib/content/nyzul
+//gbt r -ns gambit:nyzul
+```
+
+The qualifier is retained by action/event reloads. Gambit-owned action sets are
+read-only and cannot be targets of `actions -save-local`.
+
 ```text
 //gbt r
 //gbt r -a rdm -ns bcnm/cleave

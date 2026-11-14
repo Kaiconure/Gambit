@@ -7,12 +7,13 @@ local importDocuments=require('./lib/events/imports')
 local eventSlots=require('./lib/events/slots')
 local Config={kinds={'spells','job_abilities','weapon_skills','pet_abilities'},phases={'pre','mid','post'}}
 local statusCategories=require('./lib/events/statuses').categories
-local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading','buffs','enemy_spells','enemy_abilities','party_weapon_skills'}
+local sections={'spells','job_abilities','weapon_skills','pet_abilities','zones','loading','buffs','texts','enemy_spells','enemy_abilities','party_weapon_skills'}
 for _,category in ipairs(statusCategories) do sections[#sections+1]='statuses.'..category end
 local function phases(kind)
     if kind=='party_weapon_skills' then return {'post'} end
     if kind=='loading' then return {'actions'} end
     if kind=='buffs' then return {'added','removed'} end
+    if kind=='texts' then return {'received'} end
     if kind=='enemy_spells' or kind=='enemy_abilities' then return {'pre','post'} end
     return (kind=='zones' or kind:match('^statuses%.')) and {'enter','leave'} or Config.phases
 end
@@ -77,7 +78,7 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
             layouts[#layouts+1]={section=kind,phase=phase}
         end
     end
-    local slots=eventSlots.new(result.rules,layouts,paths,warn,matchesRequired,compileRule)
+    local slots=eventSlots.new(result.rules,layouts,paths,warn,matchesRequired,compileRule,expressions)
     profiling.start('event import discovery/read')
     local documents,selectedPath=importDocuments(paths,read,entryName)
     profiling.stop('event import discovery/read')
@@ -110,7 +111,7 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
                 if category then section=document.statuses and document.statuses[category] end
                 if section then
                     assert(type(section)=='table',path..': '..kind..' must be an object')
-                    local observational=kind=='zones' or kind=='loading' or kind=='buffs'
+                    local observational=kind=='zones' or kind=='loading' or kind=='buffs' or kind=='texts'
                         or kind=='enemy_spells' or kind=='enemy_abilities' or kind=='party_weapon_skills' or category~=nil
                     assert(not observational or section.use_equipment_snapshot==nil,
                         path..': '..kind..' does not support use_equipment_snapshot')
@@ -139,6 +140,8 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
     local variables=variableLoader.new(warn,sourceRank)
     profiling.start('event variable files/merges')
     local variablePaths,seenVariables={},{}
+    local importedVariableModules={}
+    for _,entry in ipairs(documents) do importedVariableModules[entry.path]=true end
     local function addVariables(path)
         if not seenVariables[path] then
             seenVariables[path]=true
@@ -160,8 +163,39 @@ function Config.load(paths,read,warn,matchesRequired,entryName,sourceRank)
         document=read(path)
         if document~=nil then
             assert(type(document)=='table',path..': expected an object')
-            for key in pairs(document) do assert(key=='vars' or key=='contributions',path..': vars files only support vars and contributions') end
-            assert(document.vars~=nil or document.contributions~=nil,path..': vars files require vars or contributions')
+            for key in pairs(document) do
+                assert(key=='vars' or key=='contributions' or key=='imports',
+                    path..': vars files only support vars, imports, and contributions')
+            end
+            assert(document.vars~=nil or document.contributions~=nil or document.imports~=nil,
+                path..': vars files require vars, imports, or contributions')
+            if document.imports~=nil then
+                assert(type(document.imports)=='table',path..': imports must be an array')
+                for key,name in pairs(document.imports) do
+                    assert(type(key)=='number' and key>=1 and key%1==0 and key<=#document.imports
+                        and type(name)=='string',path..': imports must be a dense string array')
+                end
+                for _,name in ipairs(document.imports) do
+                    local imported=importDocuments(paths,read,name)
+                    assert(#imported>0,path..': event variable import not found: '..name)
+                    for _,entry in ipairs(imported) do
+                        if not importedVariableModules[entry.path] then
+                            importedVariableModules[entry.path]=true
+                            local module=entry.document
+                            for key in pairs(module) do
+                                assert(key=='vars' or key=='imports' or key=='contributions',
+                                    entry.path..': event variable imports must be contribution modules; unsupported key '..tostring(key))
+                            end
+                            if module.vars~=nil then
+                                assert(type(module.vars)=='table',entry.path..': vars must be an object')
+                                variables.merge(result.vars,module.vars,entry.path)
+                            end
+                            slots.collect(module,entry.path)
+                            result.files[#result.files+1]=entry.path
+                        end
+                    end
+                end
+            end
             if document.vars~=nil then
                 assert(type(document.vars)=='table',path..': vars must be an object')
                 for key in pairs(document.vars) do assert(type(key)=='string',path..': vars keys must be names') end

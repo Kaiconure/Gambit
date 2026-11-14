@@ -26,6 +26,7 @@ function Runtime:diagnostic(request,message,lostLifecycle)
 end
 function Runtime.new(config,deps)
     local self=setmetatable({config=config,deps=deps,pending={},sequence=0,
+        deferredObservations={},
         runner=Runner.new(config,deps.context,deps.report,deps.equipmentSession,deps.targetSnapshot)},Runtime)
     self:compileReactions()
     return self
@@ -86,6 +87,7 @@ function Runtime:observe(event,phase)
     local section=event.kind=='status' and ('statuses.'..tostring(event.category))
         or event.kind=='zone' and 'zones'
         or event.kind=='buff' and 'buffs'
+        or event.kind=='text' and 'texts'
         or event.kind=='enemy_spell' and 'enemy_spells'
         or event.kind=='enemy_ability' and 'enemy_abilities'
         or event.kind=='party_weapon_skill' and 'party_weapon_skills'
@@ -101,7 +103,14 @@ function Runtime:observe(event,phase)
     local vars=self:eventVariables()
     vars._={eq_stack={}}
     local request={section=section,event=event,observational=true,variables={vars=vars,original=copy(vars)}}
-    self:run(request,phase)
+    local result=self:run(request,phase)
+    if result==nil then
+        local deferred=self.deferredObservations
+        deferred[#deferred+1]={request=request,phase=phase,queued_at=self.deps.clock()}
+        -- Zone transitions can emit bursts of system text. Keep the queue
+        -- bounded while retaining the newest observations.
+        if #deferred>64 then table.remove(deferred,1) end
+    end
     request.variables.vars._.eq_stack={}
 end
 function Runtime:finish(request,outcome)
@@ -270,6 +279,17 @@ function Runtime:complete(kind,id,targetId,outcome,results,resource)
     end
 end
 function Runtime:tick()
+    if #self.deferredObservations>0 then
+        local now=self.deps.clock()
+        local waiting={}
+        for _,entry in ipairs(self.deferredObservations) do
+            if now-entry.queued_at<=10 then
+                local result=self:run(entry.request,entry.phase)
+                if result==nil then waiting[#waiting+1]=entry end
+            end
+        end
+        self.deferredObservations=waiting
+    end
     for i=#self.pending,1,-1 do
         local request=self.pending[i]
         local limit=request.sent_at and responseTimeout(request.event) or 10
@@ -288,6 +308,7 @@ function Runtime:tick()
     end
 end
 function Runtime:clear(outcome)
+    self.deferredObservations={}
     local pending={}
     -- Preserve request identity (and deferred callbacks' finished flag).
     for i=1,#self.pending do pending[i]=self.pending[i] end

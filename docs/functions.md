@@ -183,6 +183,44 @@ the resource-name cache. Resource IDs and original displayed names are unchanged
 Aliases do not merge same-named resources or make IDs interchangeable between
 resource tables. Buff, status, and zone matching do not use these action aliases.
 
+## Action variable bridge
+
+`getActionVar(name)`, `setActionVar(name, value)`, and
+`resetActionVar(name)` explicitly access the persistent action-variable
+state used by ordinary actions and panel expressions. They follow the same dot
+path and optional leading `vars` conventions as `getVar`, `setVar`, and
+`resetVar`.
+
+Ordinary action contexts already operate on action state, so these helpers
+are mainly useful in event handlers. Event variables are isolated per request;
+`setVar` and `setVarGlobal` intentionally modify only that event request.
+`setActionVar` publishes an observed event value for later actions or panel
+rows without weakening event-variable isolation.
+
+```lua
+setActionVar('omen.objective.type', 'weapon_skill')
+setActionVar('omen.objective.active', true)
+```
+
+## Session variables
+
+`session` is an in-memory variable tree for observed state that should survive
+action reloads, event reloads, and namespace changes. It lasts until Gambit is
+unloaded or reloaded and is never written to disk. Use `getSessionVar(name)`,
+`setSessionVar(name, value)`, and `resetSessionVar(name)` to access it. Resetting
+a parent path clears that complete branch:
+
+```lua
+setSessionVar('nyzul.current_floor', 4)
+resetSessionVar('nyzul')
+```
+
+Expressions may read the tree directly, for example
+`session.nyzul.current_floor`. Unlike action variables, session variables have
+no configuration defaults or original values to restore. They should therefore
+be explicitly cleared at the end of the lifecycle that owns them, such as a
+zone-leave event.
+
 ## Panel checklist state
 
 `checklistSet(checklistId, itemId, checked)` saves a boolean at
@@ -367,7 +405,13 @@ In plain English, this says:
 
 `align(target, angle, distance, duration, noFace, tolerance)` supports exact angles and flexible positioning. Optional positional tolerance is in yalms; `aligned` and `aligning` accept it as their fourth argument. Frontline engagement uses `vars.frontline_engagement.tolerance`, defaulting to 0.5, for its alignment check and movement completion. Other callers retain their existing defaults. The same angle values work with `vars.frontline_engagement.angle`.
 
-Frontline engagement caches only `max(0.125, (distance or 0.5) + (distance_offset or 0))` using variable scope. Smart Move applies `radius_multiplier` from the options object when resolving each target-relative destination; frontline defaults it to `0.25`. A numeric multiplier replaces the automatic player/target size adjustment with `max(0, target.model_size or 0) * max(0, radius_multiplier)`. For example, distance `0.5`, offset `0.25`, and target model size `4` produce a final center distance of `1.75` yalms. Zero means no size adjustment; missing or null retains legacy behavior (alignment adds half the combined player/target sizes, following adds three quarters, unless global `useRawDistances` is enabled). An explicit multiplier also applies when global raw distances are enabled.
+Frontline engagement caches `max(0.125, (distance or 0.5) + (distance_offset or 0))`
+and its effective radius multiplier using variable scope. Smart Move applies
+`radius_multiplier` from the options object when resolving each target-relative destination; frontline defaults it to `0.25`. A numeric multiplier replaces the automatic player/target size adjustment with `max(0, target.model_size or 0) * max(0, radius_multiplier)`. For example, distance `0.5`, offset `0.25`, and target model size `4` produce a final center distance of `1.75` yalms. Zero means no size adjustment; missing or null retains legacy behavior (alignment adds half the combined player/target sizes, following adds three quarters, unless global `useRawDistances` is enabled). An explicit multiplier also applies when global raw distances are enabled.
+When the configured frontline `distance + distance_offset` is greater than 12,
+frontline internally uses an effective radius multiplier of zero. The configured
+value is preserved; only the resulting long-range positioning is measured from
+the target's center.
 
 `align`, `aligned`, `aligning`, and `alignWithRetry` accept this through their existing options argument. `follow(target, distance, options)` now accepts the same optional object. `followDistance(target, distance, options)` returns the resolved center distance for follow range checks without starting movement. Frontline uses it with `center_distance` so range checks and following agree, and forwards the same options to alignment checks and movement. The rear-engagement import inherits this behavior. Smart Move retains its separate mounted-follow and lateral-follow offsets. Follow resumption preserves the original requested distance and multiplier, avoiding repeated size adjustments.
 

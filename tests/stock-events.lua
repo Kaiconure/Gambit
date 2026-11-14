@@ -296,7 +296,11 @@ for _,job in ipairs({'WAR','BRD','NIN','SMN','BST','PUP','SCH','GEO','BLU'}) do
         for phase,rules in pairs(section) do
             if type(rules)=='table' then
                 local seen={}
-                for _,rule in ipairs(rules) do assert(rule.id and not seen[rule.id]); seen[rule.id]=true end
+                for _,rule in ipairs(rules) do
+                    for _,candidate in ipairs(rule.rules or {rule}) do
+                        assert(candidate.id and not seen[candidate.id]); seen[candidate.id]=true
+                    end
+                end
             end
         end
     end

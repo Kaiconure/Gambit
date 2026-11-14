@@ -143,7 +143,7 @@ function M.attach(context,deps)
         end
         state.active=false;state.key=nil
         if state.job then deps.cancel(state.job);state.job=nil end
-        return context.following(partner) or context.follow(partner,config.distance)
+        return context.follow(partner,config.distance)
     end
 end
 return M

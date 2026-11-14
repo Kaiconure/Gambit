@@ -574,6 +574,15 @@ handlers['follow'] = function (args)
     local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
     local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
     local toggle = arrayIndexOfStrI(args, '-toggle')
+    local name = arrayIndexOfStrI(args, '-name') or arrayIndexOfStrI(args, '-n')
+
+    name = name and makePlayerName(args[name + 1])
+    name = name and windower.ffxi.get_mob_by_name(name)
+    if name and name.valid_target then
+        target = name
+    elseif target then
+        target = windower.ffxi.get_mob_by_target('t')
+    end
 
     distance = distance > 0 and tonumber(args[distance + 1]) or settings.followCommandDistance
 
@@ -593,7 +602,6 @@ handlers['follow'] = function (args)
             writeMessage(text_cornsilk('Follow job %s was cancelled.':format(text_number(jobId, Colors.cornsilk))))
         end
     elseif target then
-        local target = windower.ffxi.get_mob_by_target('t')
         if 
             target and
             target.valid_target and

@@ -52,6 +52,7 @@ local strategy='leader'
 local ready=false
 local listener,unsubscribed,toggles,contexts=nil,false,0,0
 local saves={}
+local visibility={show=false,first=0,second=0,content=0}
 local options={x=10,y=20,width=500,font_size=10,history_lines=2,show_log=true,refresh_interval=0.1,
     anchor={horizontal='left',vertical='top'},
     tracking={current='custom',sets={custom={{name='Strategy',expression={'gambit.strategy'}},
@@ -72,7 +73,10 @@ local panel=Status.new({texts={new=primitive},images={new=primitive},
     save=function(config) saves[#saves+1]=config end,
     context=function()
         contexts=contexts+1
-        return setmetatable({gambit={strategy='leader'}},{__index=_G})
+        return setmetatable({gambit={strategy='leader'},visibleFlag=visibility.show,
+            showFirst=function() visibility.first=visibility.first+1; return false end,
+            showSecond=function() visibility.second=visibility.second+1; return true end,
+            content=function() visibility.content=visibility.content+1; return 'content' end},{__index=_G})
     end,
 },options)
 listener('\30\2Hello\30\1')
@@ -375,6 +379,38 @@ assert(panel.entries[3].valueLabel.y>panel.entries[3].label.y)
 assert(not panel.entries[4].inline and panel.entries[4].valueLabel.text.value=='a\nb')
 assert(panel.entries[5].hidden and panel.entries[5].label.text.value=='')
 assert(not pcall(panel.setTemporaryTracking,panel,{{name='Invalid',expression={true}}}))
+panel:setTemporaryTracking({
+    {name='Formatted',format={'%s:%d',"'value'",'3'},expression='error("ignored")',value='ignored'},
+    {name='Literal',format={'constant'}},
+    {name='Multiline',format={'first\nsecond'}},
+    {name='Bad argument',format={'%s','missing.call()'}},
+    {name='Bad syntax',format={'%s','invalid lua !'}},
+    {name='Bad format',format={'%d',"'text'"}},
+})
+assert(panel.entries[1].inline and panel.entries[1].valueLabel.text.value=='value:3')
+assert(panel.entries[2].inline and panel.entries[2].valueLabel.text.value=='constant')
+assert(panel.entries[3].inline and panel.entries[3].valueLabel.text.value=='first\nsecond')
+for index=4,6 do assert(panel.entries[index].valueLabel.text.value=='[error]') end
+assert(not pcall(panel.setTemporaryTracking,panel,{{name='Invalid',format={}}}))
+assert(not pcall(panel.setTemporaryTracking,panel,{{name='Invalid',format={'%s',true}}}))
+panel:setTemporaryTracking({
+    {name='Dynamic',show_when='visibleFlag',format={'%s','content()'}},
+    {name='Short circuit',show_when={'showFirst()','showSecond()'},value='ignored'},
+    {name='Empty',show_when={},value='visible'},
+    {name='Compile error',show_when='invalid lua !',value='ignored'},
+    {name='Runtime error',show_when='missing.call()',value='ignored'},
+    {name='Literal false',show_when='false',value='ignored'},
+})
+assert(panel.entries[1].hidden and visibility.content==0)
+assert(panel.entries[2].hidden and visibility.first==1 and visibility.second==0)
+assert(not panel.entries[3].hidden and panel.entries[3].valueLabel.text.value=='visible')
+assert(panel.entries[4].valueLabel.text.value=='[error]' and panel.entries[4].visibilityFailure)
+assert(panel.entries[5].valueLabel.text.value=='[error]' and panel.entries[5].visibilityFailure)
+assert(panel.entries[6].hidden)
+visibility.show=true; panel.nextUpdate=0; panel:update()
+assert(not panel.entries[1].hidden and panel.entries[1].valueLabel.text.value=='content' and visibility.content==1)
+assert(not pcall(panel.setTemporaryTracking,panel,{{name='Invalid',show_when=true,value='x'}}))
+assert(not pcall(panel.setTemporaryTracking,panel,{{name='Invalid',show_when={true},value='x'}}))
 -- Fractional character widths and indented rows must not clip their final
 -- character after automatic sizing (11pt => estimated 8.8px advance).
 local fractional=require('./lib/variable-values').copy(panel.options)

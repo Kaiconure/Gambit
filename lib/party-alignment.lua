@@ -103,7 +103,9 @@ function M.plan(target,spec,distance,options)
         if own then own=nil;lastSent=nil;fallbacks={};assignment=nil end
         return
     end
-    local parts={tostring(target.id),tostring(target.index),tostring(distance),tostring(options.radius_multiplier)}
+    local multiplier=options._radius_multiplier
+    if type(multiplier)~='number' then multiplier=options.radius_multiplier end
+    local parts={tostring(target.id),tostring(target.index),tostring(distance),tostring(multiplier)}
     for _,range in ipairs(ranges) do parts[#parts+1]=tostring(range[1])..','..tostring(range[2]) end
     local group=table.concat(parts,'|')
     if own~=group then own=group;lastSent=nil;fallbacks={} end

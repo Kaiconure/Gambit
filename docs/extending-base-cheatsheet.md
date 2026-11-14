@@ -110,6 +110,7 @@ Explicit import paths:
 | `"$(PlayerLib)/my-event-buffs"` | Character library scope |
 | `"$(SettingsLib)/my-event-buffs"` | Shared settings library scope |
 | `"$(GlobalLib)/my-event-buffs"` | Shipped `actions/lib` directly |
+| `"gambit:my-event-buffs"` | Shipped `actions/lib` directly, with stock-only resolution propagated through nested imports |
 
 ## Set variables and clear defaults
 

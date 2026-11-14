@@ -20,6 +20,12 @@ function paths.withDirectoryCache(fn)
 end
 
 local SETTINGS_ROOT = './settings'
+local GAMBIT_PREFIX = 'gambit:'
+function paths.gambitReference(value)
+    if type(value)~='string' or value:sub(1,#GAMBIT_PREFIX):lower()~=GAMBIT_PREFIX then return nil,value end
+    return true,value:sub(#GAMBIT_PREFIX+1)
+end
+function paths.isGambitReference(value) return paths.gambitReference(value)==true end
 local function directoryExists(path)
     local started=profiling.now()
     local resolved=(windower and windower.addon_path or '')..path:gsub('^%./',''):gsub('\\','/')
@@ -69,6 +75,9 @@ local function resolvePath(root, name)
 end
 
 function paths.namespacePath(name)
+    local stock
+    stock,name=paths.gambitReference(name)
+    if stock then return resolvePath(paths.bundledNamespaceRoot(),name) end
     local user = resolvePath(paths.namespaceRoot(), name)
     if directoryExists(user) then return user end
     local shipped = resolvePath(paths.bundledNamespaceRoot(), name)
@@ -167,6 +176,11 @@ function paths.getNamespace()
 end
 
 function paths.validateNamespace(name)
+    local stock
+    stock,name=paths.gambitReference(name)
+    if stock and (name=='' or name:lower():find('^gambit:')) then
+        return false, 'gambit: requires a namespace name.'
+    end
     if name ~= nil and (
         type(name) ~= 'string' or
         not name:match('^[%w_/%.-]+$') or
@@ -239,7 +253,10 @@ function paths.resolveInheritance(name, readConfig, exists)
         result[#result+1] = current
         if config.inherits_from ~= nil then
             assert(type(config.inherits_from) == 'string', 'inherits_from must be a single namespace string in ' .. current)
-            visit(config.inherits_from, true)
+            local stock=paths.gambitReference(current)
+            local parent=config.inherits_from
+            if stock and not paths.gambitReference(parent) then parent=GAMBIT_PREFIX..parent end
+            visit(parent, true)
         end
         visiting[identity] = nil
     end
@@ -327,7 +344,8 @@ end
 function paths.eventFiles(playerName, mainJob, groups)
     local roots={}
     for _,name in ipairs(loadedPrecedence) do
-        roots[#roots+1]={paths.namespacePath(name), paths.namespacePlayerRoot(name)}
+        roots[#roots+1]={paths.namespacePath(name),
+            not paths.isGambitReference(name) and paths.namespacePlayerRoot(name) or nil}
     end
     roots[#roots+1]={SETTINGS_ROOT, SETTINGS_ROOT}
     local positives,inverses={},{}
@@ -344,9 +362,8 @@ function paths.eventFiles(playerName, mainJob, groups)
     end
     for _,entry in ipairs(roots) do
         local root, characterRoot=entry[1], entry[2]
-        for _,directory in ipairs({characterRoot..'/'..playerName..'/events',root..'/events'}) do
-            addDirectory(directory)
-        end
+        if characterRoot then addDirectory(characterRoot..'/'..playerName..'/events') end
+        addDirectory(root..'/events')
     end
     addDirectory('./events') -- Shipped defaults never outrank user settings.
     return result
@@ -360,7 +377,8 @@ function paths.entryPointLayers(playerName,relative)
     local result={}
     for _,name in ipairs(loadedPrecedence) do
         local root=paths.namespacePath(name)
-        result[#result+1]={paths.namespacePlayerRoot(name)..'/'..playerName..'/'..relative,root..'/'..relative}
+        if paths.isGambitReference(name) then result[#result+1]=root..'/'..relative
+        else result[#result+1]={paths.namespacePlayerRoot(name)..'/'..playerName..'/'..relative,root..'/'..relative} end
     end
     result[#result+1]=SETTINGS_ROOT..'/'..playerName..'/'..relative
     result[#result+1]=SETTINGS_ROOT..'/'..relative
@@ -370,13 +388,14 @@ end
 function paths.candidates(playerName, relative, scope)
     local roots = {}
     for _, name in ipairs(loadedPrecedence) do
-        roots[#roots + 1] = {paths.namespacePath(name), paths.namespacePlayerRoot(name)}
+        roots[#roots + 1] = {paths.namespacePath(name),
+            not paths.isGambitReference(name) and paths.namespacePlayerRoot(name) or nil}
     end
     roots[#roots + 1] = {SETTINGS_ROOT, SETTINGS_ROOT}
     local result = {}
     for _, entry in ipairs(roots) do
         local root, characterRoot = entry[1], entry[2]
-        if scope ~= 'common' then
+        if scope ~= 'common' and characterRoot then
             result[#result + 1] = characterRoot .. '/' .. playerName .. '/' .. relative
         end
         if scope ~= 'character' then result[#result + 1] = root .. '/' .. relative end
@@ -400,7 +419,9 @@ function paths.commonFiles(playerName, mainJob, groups)
     for i = #loadedPrecedence, 1, -1 do
         local root = paths.namespacePath(loadedPrecedence[i])
         libraries[#libraries + 1] = root .. '/actions/lib'
-        libraries[#libraries + 1] = paths.namespacePlayerRoot(loadedPrecedence[i]) .. '/' .. playerName .. '/actions/lib'
+        if not paths.isGambitReference(loadedPrecedence[i]) then
+            libraries[#libraries + 1] = paths.namespacePlayerRoot(loadedPrecedence[i]) .. '/' .. playerName .. '/actions/lib'
+        end
     end
     local result = {}
     for _, library in ipairs(libraries) do
@@ -422,6 +443,18 @@ function paths.commonFiles(playerName, mainJob, groups)
 end
 
 function paths.importCandidates(playerName, reference)
+    local stock
+    stock,reference=paths.gambitReference(reference)
+    if stock then
+        assert(type(reference)=='string' and reference~='' and not reference:find(':',1,true),
+            'Invalid gambit action import')
+        assert(reference:sub(1,1)~='/' and not reference:find('\\',1,true),
+            'Invalid gambit action import '..reference)
+        for part in (reference..'/'):gmatch('(.-)/') do
+            assert(part~='' and part~='.' and part~='..','Invalid gambit action import '..reference)
+        end
+        return {'./actions/lib/'..reference:gsub('^/','')..'.json'}
+    end
     local suffix = reference:match('^%$%(GlobalLib%)(.*)')
     if suffix then return { './actions/lib' .. suffix .. '.json' } end
     local scope

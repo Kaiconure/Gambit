@@ -19,6 +19,21 @@ local function textWidth(item,text)
     -- rather than positioning from the previous frame's measured text.
     return Metrics.width(item,text)
 end
+local function entryVisibility(entry,deps)
+    if not entry.showFns then return true end
+    if entry.showError then return true,'[error]' end
+    local ok,context=pcall(deps.context,'status panel visibility')
+    if not ok or not context then return true,'[unavailable]' end
+    local resetColor=PanelContext.attach(context,deps.canShareClaim)
+    resetColor()
+    for _,fn in ipairs(entry.showFns) do
+        setfenv(fn,context)
+        local success,result=pcall(fn)
+        if not success then entry.showError=true; return true,'[error]' end
+        if not result then return false,nil,context,resetColor end
+    end
+    return true,nil,context,resetColor
+end
 function Status.new(deps,options)
     local self=setmetatable({deps=deps},Status)
     self:configure(options)
@@ -50,7 +65,8 @@ function Status:configure(options,trackingOverride)
     local lineHeight=math.ceil(options.font_size*1.8)
     local trackingLines=0
     for _, entry in ipairs(tracking) do
-        trackingLines=trackingLines+((entry.expression==nil and type(entry.value)=='table') and math.max(1,#entry.value)+1 or 1)
+        trackingLines=trackingLines+((entry.format==nil and entry.expression==nil and type(entry.value)=='table') and
+            math.max(1,#entry.value)+1 or 1)
     end
     -- Consolas advances roughly 0.8 screen pixels per point at standard DPI.
     self.characterWidth=options.font_size*0.8
@@ -87,7 +103,16 @@ function Status:configure(options,trackingOverride)
         entry.valueLabel.text:bold(false)
         entry.valueLabel.bold=false
         Theme.color(entry.valueLabel.text,'body')
-        row=row+((definition.expression==nil and type(definition.value)=='table') and math.max(1,#definition.value)+1 or 1)
+        if definition.show_when~=nil then
+            entry.showFns={}
+            local conditions=type(definition.show_when)=='table' and definition.show_when or {definition.show_when}
+            for _,code in ipairs(conditions) do
+                local ok,fn=pcall(factory.get,code)
+                if ok then entry.showFns[#entry.showFns+1]=fn else entry.showError=true end
+            end
+        end
+        row=row+((definition.format==nil and definition.expression==nil and type(definition.value)=='table') and
+            math.max(1,#definition.value)+1 or 1)
         if definition.checklist~=nil then
             entry.checks={}
             for _,objective in ipairs(definition.checklist) do
@@ -107,7 +132,8 @@ function Status:configure(options,trackingOverride)
                 end
                 local size=math.max(10,math.floor(options.font_size*1.2+0.5))
                 local icon=self.panel:icon(18,0,size)
-                local check={button=button,path=path,objective=objective,icon=icon,size=size}
+                local check={button=button,path=path,objective=objective,icon=icon,size=size,
+                    automatic=objective.checked_when~=nil}
                 if objective.format~=nil then
                     check.formatFns={}
                     for index=2,#objective.format do
@@ -126,6 +152,12 @@ function Status:configure(options,trackingOverride)
                     end
                 end
                 entry.checks[#entry.checks+1]=check
+            end
+        elseif definition.format~=nil then
+            entry.formatFns={}
+            for index=2,#definition.format do
+                local ok,fn=pcall(factory.get,definition.format[index])
+                if ok then entry.formatFns[#entry.formatFns+1]=fn else entry.error=true end
             end
         elseif definition.expression~=nil then
             if type(definition.expression)=='table' then
@@ -302,11 +334,18 @@ function Status:update()
     if self.panel.visible and os.clock()<self.nextUpdate then return end
     self.nextUpdate=os.clock()+self.options.refresh_interval
     for _, entry in ipairs(self.entries) do
-        local value=entry.definition.value
+        local shown,visibilityValue,visibilityContext,visibilityReset=entryVisibility(entry,self.deps)
+        entry.visibilityFailure=visibilityValue~=nil
+        local value
+        if not shown then value=nil
+        elseif visibilityValue~=nil then value=visibilityValue
+        else
+        value=entry.definition.value
         if entry.checks then
             value={}
-            local ok,context=pcall(self.deps.context,'status panel checklist')
-            local resetColor=ok and context and PanelContext.attach(context,self.deps.canShareClaim)
+            local ok,context=true,visibilityContext
+            if not context then ok,context=pcall(self.deps.context,'status panel checklist') end
+            local resetColor=visibilityReset or (ok and context and PanelContext.attach(context,self.deps.canShareClaim))
             for _,check in ipairs(entry.checks) do
                 local checked=not not (ok and context and context.getVar(check.path))
                 if check.conditions then
@@ -320,8 +359,9 @@ function Status:update()
                     end
                 end
                 if check.checked~=checked then
+                    local prefix=check.automatic and 'automatic-' or ''
                     check.icon.image:path((self.deps.windower.addon_path or '')..
-                        'content/ui/checklist/'..(checked and 'checked' or 'unchecked')..'.png')
+                        'content/ui/checklist/'..prefix..(checked and 'checked' or 'unchecked')..'.png')
                     check.checked=checked
                 end
                 local label=check.objective.text
@@ -356,13 +396,37 @@ function Status:update()
                 check.display=Buffer.plain(label,self.deps.windower.from_shift_jis):gsub('[\r\n]+',' ')
                 value[#value+1]=check.display
             end
+        elseif entry.definition.format~=nil then
+            value='[error]'
+            if entry.formatFns and not entry.error then
+                local ok,context=true,visibilityContext
+                if not context then ok,context=pcall(self.deps.context,'status panel') end
+                if not ok or not context then value='[unavailable]'
+                else
+                    local resetColor=visibilityReset or PanelContext.attach(context,self.deps.canShareClaim)
+                    resetColor()
+                    local args={}
+                    for index,fn in ipairs(entry.formatFns) do
+                        setfenv(fn,context)
+                        local success,result=pcall(fn)
+                        if not success then entry.error=true; break end
+                        args[index]=result
+                    end
+                    if not entry.error then
+                        local success,result=pcall(string.format,entry.definition.format[1],
+                            unpack(args,1,#entry.formatFns))
+                        if success then value=result else entry.error=true end
+                    end
+                end
+            end
         elseif entry.definition.expression~=nil then
             value='[error]'
             if (entry.fn or entry.fns) and not entry.error then
-                local ok,context=pcall(self.deps.context,'status panel')
+                local ok,context=true,visibilityContext
+                if not context then ok,context=pcall(self.deps.context,'status panel') end
                 if not ok or not context then value='[unavailable]'
                 else
-                    local resetColor=PanelContext.attach(context,self.deps.canShareClaim)
+                    local resetColor=visibilityReset or PanelContext.attach(context,self.deps.canShareClaim)
                     if entry.fns then
                         value={}
                         for _,fn in ipairs(entry.fns) do
@@ -384,8 +448,11 @@ function Status:update()
                 end
             end
         end
+        end
         entry.hidden=value==nil or (type(value)=='table' and #value==0)
-        entry.inline=not entry.checks and type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'
+        entry.inline=(not entry.checks or entry.visibilityFailure) and (entry.visibilityFailure or
+            entry.definition.format~=nil or
+            (type(entry.definition.expression or entry.definition.value)~='table' and type(value)~='table'))
         local lines={}
         local function append(text)
             text=Buffer.plain(text,self.deps.windower.from_shift_jis)
@@ -425,6 +492,9 @@ function Status:update()
             check.button.width=self.panel.width-check.button.x-10
             check.button.hitX=18; check.button.hitWidth=self.panel.width-28
             check.icon.y=check.button.y+math.floor((lineHeight-check.size)/2)
+            check.icon.visible=not entry.hidden and not entry.visibilityFailure
+            if self.panel.visible then check.icon.image:visible(check.icon.visible) end
+            if not check.icon.visible then check.button.hitWidth=0 end
         end
         if not entry.hidden then y=y+(entry.lineCount+(entry.inline and 0 or 1))*lineHeight end
     end
@@ -438,11 +508,11 @@ function Status:update()
     self:setText(self.logHeading,logLines>0 and 'Log' or '')
     for _, entry in ipairs(self.entries) do
         self:setText(entry.label,entry.hidden and '' or entry.heading)
-        self:setText(entry.valueLabel,(entry.hidden or entry.checks) and '' or entry.display)
+        self:setText(entry.valueLabel,(entry.hidden or (entry.checks and not entry.visibilityFailure)) and '' or entry.display)
         for _,check in ipairs(entry.checks or {}) do
-            self:setText(check.button,check.display)
+            self:setText(check.button,(entry.hidden or entry.visibilityFailure) and '' or check.display)
         end
-        Theme.color(entry.valueLabel.text,entry.error and 'red' or 'body')
+        Theme.color(entry.valueLabel.text,(entry.error or (entry.visibilityFailure and entry.showError)) and 'red' or 'body')
     end
     local visibleLogLines=math.min(#self.logs,math.max(0,math.floor((self.panel.height-logY-8)/lineHeight)))
     local firstLogLine=math.max(1,#self.buffer.lines-visibleLogLines+1)

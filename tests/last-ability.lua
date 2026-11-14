@@ -72,14 +72,15 @@ local defaults=require('./lib/ux/status-config').defaults.tracking.sets.default
 for _,entry in ipairs(defaults) do
     if entry.name=='Spell' or entry.name=='Job Ability' then
         local display=assert(loadstring('return '..entry.expression[1]))
+        local visible=assert(loadstring('return '..entry.show_when))
         contextEnv.time=128.49
         local displayEnv={gambit=context(),format=string.format}
         require('./lib/ux/panel-context').attach(displayEnv)
-        setfenv(display,displayEnv)
-        assert(type(display())=='string')
+        setfenv(display,displayEnv); setfenv(visible,displayEnv)
+        assert(visible() and type(display())=='string')
         contextEnv.time=128.5
-        setfenv(display,{gambit=context(),format=string.format})
-        assert(display()==nil)
+        setfenv(visible,{gambit=context(),format=string.format})
+        assert(not visible())
     end
 end
 local snapshot=context().last_ability

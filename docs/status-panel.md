@@ -142,20 +142,23 @@ Merge this `ui` section into your existing global character main configuration:
             },
             {
               "name": "Skillchain",
+              "show_when": "party_weapon_skill and party_weapon_skill.name",
               "expression": [
-                "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
+                "format('%s%s%s (~%ss)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1f', (skillchain or party_weapon_skill).lifetime)))"
               ]
             },
             {
               "name": "Spell",
+              "show_when": "gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5)",
               "expression": [
-                "(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
+                "format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
               ]
             },
             {
               "name": "Job Ability",
+              "show_when": "gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5",
               "expression": [
-                "(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
+                "format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
               ]
             }
           ]
@@ -168,7 +171,9 @@ Merge this `ui` section into your existing global character main configuration:
 
 Each named set is an array of entries. Names are case-sensitive. `value` accepts
 a string displayed inline with the name, or an array of display lines below
-the heading (even a one-element array). Expressions can also return arrays: each
+the heading (even a one-element array). A `format` array produces an inline
+formatted value; its first element is a literal format string and each remaining
+element is an argument expression. Expressions can also return arrays: each
 element appears on its own indented line under the entry heading. Automatic
 height and subsequent rows reflow as the
 array length changes. Switching sets rebuilds tracking rows and
@@ -240,8 +245,55 @@ width. The panel shrinks toward its minimum when tracking content becomes
 shorter. Log text never drives automatic width. These width changes do not
 modify saved settings.
 
-Expressions use the ordinary action expression compiler and a fresh temporary
-context per entry. A string expression returning a scalar displays inline with
+Formats and expressions use the ordinary action expression compiler and a fresh
+temporary context per entry. A normal-entry `format` uses the same layout as a
+checklist-item format:
+
+```json
+{
+  "name": "Target",
+  "format": [
+    "%s → %s",
+    "color_mob(bt)",
+    "color_number(bt.distance)"
+  ]
+}
+```
+
+The first element is passed literally to Lua's `string.format`; remaining
+elements evaluate in order and supply its arguments. A format-string-only array
+is valid. `format` takes precedence over `expression` and `value`. Structural
+`references` expansion and `checklist` entries take precedence over all three.
+Invalid argument expressions or format mismatches display `[error]`.
+
+Every resolved entry may also declare `show_when` independently of its display
+method. A string evaluates one visibility expression; an array evaluates in
+order and requires every expression to be truthy:
+
+```json
+{
+  "name": "Target",
+  "show_when": ["bt", "bt.hpp > 0"],
+  "format": ["%s → %s", "color_mob(bt)", "color_number(bt.distance)"]
+}
+```
+
+Missing or `null` `show_when` is visible by default. An empty array is also
+visible. Expressions short-circuit at the first false or nil result. A hidden
+entry reserves no panel space and its format, expression, value, or checklist
+is not evaluated. This makes the visibility condition appropriate for guarding
+display expressions whose inputs may not exist yet. Conditions reevaluate on
+each panel refresh, so rows reappear and the panel reflows when they become true.
+Use the expression strings `"true"` or `"false"` for explicit constant behavior.
+
+Visibility compilation/runtime failures show the entry with `[error]` rather
+than silently hiding a broken configuration. An unavailable evaluation context
+similarly shows `[unavailable]` and is retried. `show_when` applies to checklist
+entries as a whole; hidden checklists have no visible or clickable controls.
+Reference declarations remain structural, so visibility belongs on the resolved
+entries inside the referenced set.
+
+A string expression returning a scalar displays inline with
 its heading, for example `Strategy: leader`. An array evaluates each expression
 independently and displays its results below the heading, including when the
 array has only one expression. An expression returning an array expands into
@@ -493,7 +545,7 @@ Add `checked_when` to an individual checklist item to derive its check mark from
 
 Every expression must return a truthy Lua value. Conditions run in order and stop at the first false/nil result or error. They compile when tracking rows are built and reevaluate on panel refresh, so consuming an item unchecks the objective again. An empty condition array is always checked. Invalid expressions or unavailable context leave the objective unchecked.
 
-Condition-controlled rows do not toggle on click or show the clickable hover highlight. Their displayed state overrides the manual checklist variable without writing to it; `checklistSet`/`checklistGet` continue to manage manual state. Omit `checked_when` to retain normal clickable behavior.
+Condition-controlled rows do not toggle on click or show the clickable hover highlight. Their displayed state overrides the manual checklist variable without writing to it; `checklistSet`/`checklistGet` continue to manage manual state. Omit `checked_when` to retain normal clickable behavior. Manual rows use square checkbox icons, while condition-controlled rows use circular status indicators, making user-owned and automatically observed state visually distinct.
 
 Use `findItem('item name')` for ordinary inventory items or `findKeyItem('key item name')` for owned key items. Both can return a resource/item table as a truthy condition. These lookups do not consume the item.
 Sets with the same checklist and item IDs share state. Switching tracking sets or

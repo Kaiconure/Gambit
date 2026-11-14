@@ -16,7 +16,7 @@ function participants.copyList(list)
     return copy
 end
 
-local function resolveParticipants(context, targets)
+local function resolveParticipants(context, targets, domain)
     if type(targets) == 'string' then targets = {targets} end
     local cleaned, positives, forced = {}, {}, {}
     for _, selector in ipairs(targets) do
@@ -29,12 +29,40 @@ local function resolveParticipants(context, targets)
         cleaned[#cleaned+1] = selector
         if selector:sub(1,1) ~= '~' then positives[#positives+1] = selector end
     end
-    local protected, allowed = {}, {}
-    for _, name in ipairs(selectors.orderedNames(context, forced)) do protected[name:lower()] = true end
-    for _, name in ipairs(selectors.orderedNames(context, cleaned)) do allowed[name:lower()] = true end
-    local result = {}
-    for _, name in ipairs(selectors.orderedNames(context, positives)) do
-        if allowed[name:lower()] or protected[name:lower()] then result[#result+1] = name end
+    local domainNames
+    if domain then
+        domainNames={}
+        for _,name in ipairs(domain) do domainNames[name:lower()]=true end
+    end
+    local function matching(selector)
+        local result={}
+        if domain and selector=='*' then
+            for _,name in ipairs(domain) do result[#result+1]=name end
+        else
+            for _,name in ipairs(selectors.orderedNames(context,{selector})) do
+                if not domainNames or domainNames[name:lower()] then result[#result+1]=name end
+            end
+        end
+        return result
+    end
+    local protected, excluded = {}, {}
+    for _,selector in ipairs(forced) do
+        for _,name in ipairs(matching(selector)) do protected[name:lower()]=true end
+    end
+    for _,selector in ipairs(cleaned) do
+        if selector:sub(1,1)=='~' then
+            for _,name in ipairs(matching(selector:sub(2))) do excluded[name:lower()]=true end
+        end
+    end
+    local result,seen = {},{}
+    for _,selector in ipairs(positives) do
+        for _,name in ipairs(matching(selector)) do
+            local key=name:lower()
+            if not seen[key] and (not excluded[key] or protected[key]) then
+                result[#result+1]=name
+                seen[key]=true
+            end
+        end
     end
     protectedLists[result] = protected
     return result
@@ -56,19 +84,23 @@ local function rosterKey(context)
     return table.concat(rows, '\n')
 end
 
-local function expand(config, context)
+local function expand(config, context, domain)
+    local stageDomain=domain
     if config.participants ~= nil then
         local original = config.participants
-        config.participants = resolveParticipants(context, original)
+        config.participants = resolveParticipants(context, original, domain)
         -- Empty resolved requirements must not become an unrestricted closer.
         if #original > 0 and #config.participants == 0 then
             config.participants = {'--no-matching-participant--'}
         end
+        if domain==nil and #config.participants>0 then stageDomain=config.participants end
     end
     for key, targets in pairs(config.stage_participants or {}) do
-        local holder = {participants=targets}
-        expand(holder, context)
-        config.stage_participants[key] = holder.participants
+        local original=targets
+        config.stage_participants[key]=resolveParticipants(context,original,stageDomain)
+        if #original>0 and #config.stage_participants[key]==0 then
+            config.stage_participants[key]={'--no-matching-participant--'}
+        end
     end
     if config.exclusions then
         local expanded = {}
@@ -82,8 +114,8 @@ local function expand(config, context)
         end
         config.exclusions = expanded
     end
-    for _, stage in ipairs(config.stages or {}) do expand(stage, context) end
-    for _, entry in ipairs(config.on_ws or {}) do expand(entry, context) end
+    for _, stage in ipairs(config.stages or {}) do expand(stage, context, stageDomain) end
+    for _, entry in ipairs(config.on_ws or {}) do expand(entry, context, stageDomain) end
 end
 
 local function same(a, b)

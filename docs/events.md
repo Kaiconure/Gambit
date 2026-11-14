@@ -23,6 +23,7 @@ and serves as a reference when writing or extending rules.
 | React to engagement, disengagement, or death | `statuses.<category>.enter` / `.leave` |
 | React to zoning | `zones.enter` / `.leave` |
 | React to buffs received or lost | `buffs.added` / `.removed`, filtered with `event.matches(nameOrId)` |
+| React to incoming chat/system text | `texts.received`, filtered with `event.text` |
 | React to enemy casting or readying | `enemy_spells.pre` / `.post`, `enemy_abilities.pre` / `.post` |
 | Initialize variables once per load | `loading.actions` |
 | Reuse complete rule modules | Top-level `imports` |
@@ -121,6 +122,44 @@ For example, `"commands": ["me.hpp < 20 and stopEvent(true)"]` makes cancellatio
 conditional. A stopped phase does not suppress later lifecycle phases.
 Cancellation still generates local `post` cleanup. Status, zone, and loading
 handlers cannot cancel their already-observed event.
+
+### Incoming text
+
+`texts.received` observes incoming chat and system messages without requiring
+attribution to a monster or action. It is observational and cannot be cancelled.
+Each notification exposes:
+
+| Field | Value |
+| --- | --- |
+| `event.text` | Original text with Windower color/control pairs removed |
+| `event.original` | Unmodified incoming text |
+| `event.modified` | Text after Windower modifications |
+| `event.mode` | Numeric incoming-text mode |
+
+Use literal matching when possible:
+
+```json
+{
+  "texts": {
+    "received": [
+      {
+        "when": ["event.text:find('Objective:', 1, true)"],
+        "commands": ["setActionVar('content.objective', event.text)"]
+      }
+    ]
+  }
+}
+```
+
+Event variables are request-local. Use `setActionVar` when an observed message
+must update the currently loaded action configuration; `getActionVar` reads that
+state, and `resetActionVar` restores its original action-setting value. For
+observations that must survive action, event, or namespace reloads, use
+`setSessionVar`, read the `session` tree, and clear an owning branch with
+`resetSessionVar`. Session state remains in memory until Gambit itself is
+unloaded or reloaded. These explicit helpers preserve event isolation. Text
+contributions can target the standard `texts.received.before` and
+`texts.received.after` slots.
 
 ### Rule IDs
 
@@ -555,8 +594,9 @@ are blocked before pre, so those attempts have no lifecycle or post.
 See [Variables](variables.md) for definitions, Lua references, clearing markers,
 priority prefixes, and CSV key expansion across actions and events.
 
-`.vars.json` files accept `vars` and/or `contributions`. They cannot contain
-event sections or imports. Values merge through the search hierarchy; nested
+`.vars.json` files accept `vars`, `contributions`, and/or `imports`. Imported
+files must be contribution modules containing only those same three fields;
+they cannot contain direct event sections. Values merge through the search hierarchy; nested
 objects combine, arrays take the winning definition, and more specific values
 win at equal priority.
 
@@ -589,6 +629,14 @@ are errors. Commas cannot be escaped inside a name.
 Imports resolve through **event directories**, not action libraries or relative
 to the importing file. An optional `.json` suffix is allowed. Namespace/player
 overrides precede shipped `events/`. The first existing match wins.
+
+Use `gambit:<name>` to skip all `settings/` event directories and resolve only
+from Gambit-owned event directories. That stock-only policy is transitive to
+the imported module's dependencies. For example:
+
+```json
+{"imports": ["gambit:lib/content/nyzul"]}
+```
 
 Dependencies expand first, imports in listed order, then the importing file's
 own rules. Thus parent → [A, B] and A → [C] gives C → A → B → parent in each
@@ -633,6 +681,7 @@ or inline imports.
 | Contribution feature | Meaning |
 |---|---|
 | `{"slot": "<slot-name>", "actions": [rules]}` in `contributions` | Add rules at that slot; repeated entries are allowed |
+| `when: <expression or array>` on a contribution | Evaluate once per event; when false, skip that contribution's complete rule group |
 | `for: ["GEO", "BLM"]` | Include this entry only for matching loading players, before rule compilation |
 | `optional: true` | Suppress missing-slot diagnostics |
 | `required_for: ["GEO", "BLM"]` | Require a matching slot only for matching loading players; overrides optional |
@@ -640,6 +689,15 @@ or inline imports.
 | `"!slot"` | Retain higher-precedence additions and replace lower-precedence definitions |
 | Comma-separated slot names | Contribute to multiple hooks; any alias satisfies a grouped `required_for` requirement |
 | Rule `priority` | Finite number or `highest/high/normal/low/lowest`; lower values run first within that slot |
+
+A contribution-level `when` is a runtime group gate, not a conditional import.
+The file is still imported, validated, and compiled. Its predicate applies only
+to that particular contribution entry, even when other entries target the same
+slot. A false result skips the group's inner rule iteration; a true result lets
+each rule evaluate its own `when` normally. Arrays are ANDed, conditions cannot
+yield, and any separated runs created by priority ordering share one cached
+result for that event request. Top-level event imports remain unchanged and do
+not inherit a contribution gate.
 
 Contribution entries may include `comment` or `note`; both are stripped during
 compilation. Unknown entry fields warn and are ignored, while malformed values

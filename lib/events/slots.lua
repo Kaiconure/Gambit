@@ -2,7 +2,7 @@
 local actionSlots=require('./lib/action-slots')
 local copy=require('./lib/variable-values').copy
 local slots={}
-function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
+function slots.new(rules,layouts,paths,warn,matchesRequired,compile,compileExpressions)
     local container,types,reserved={},{},{}
     for _,layout in ipairs(layouts) do
         local key=layout.section..'.'..layout.phase
@@ -33,13 +33,14 @@ function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
     end
     local engine=actionSlots.new(container,priority,function(message)
         if warn then warn(message:gsub('No action slot','No event slot')) end
-    end,matchesRequired)
+    end,matchesRequired,nil,true)
     local result={}
+    local gateSequence=0
     function result.collect(document,path)
         if document.contributions==nil then return end
         local entries,ordered=require('./lib/contribution-entries').read(document.contributions,matchesRequired,function(message)
             if warn then warn(path..': '..message) end
-        end)
+        end,true)
         local definitions={}
         for _,value in ipairs(entries) do
             local name,actions=value.slot,value.actions
@@ -49,9 +50,15 @@ function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
                     path..': contribution actions must be a dense array')
             end
             local compiled={}
+            local gate
+            if value.when~=nil then
+                gateSequence=gateSequence+1
+                gate={id=gateSequence,source=path..':contributions['..tostring(name)..'].when',
+                    conditions=compileExpressions(value.when,path..':contributions['..tostring(name)..'].when')}
+            end
             for index,rule in ipairs(actions) do
                 local item=compile(rule,path..':contributions['..tostring(name)..']['..index..']',true)
-                if item then compiled[#compiled+1]=item end
+                if item then item._eventContributionGate=gate; compiled[#compiled+1]=item end
             end
             local definition=copy(value)
             definition.actions=compiled
@@ -85,10 +92,22 @@ function slots.new(rules,layouts,paths,warn,matchesRequired,compile)
                 end
                 if not rule.disabled then
                     list[#list+1]={id=rule.id,source=rule.source,stop=rule.stop,
-                        conditions=rule.conditions,commands=rule.commands}
+                        conditions=rule.conditions,commands=rule.commands,gate=rule._eventContributionGate}
                 end
             end
-            rules[layout.section][layout.phase]=list
+            local grouped={}
+            for _,rule in ipairs(list) do
+                local previous=grouped[#grouped]
+                if rule.gate and previous and previous.gate_id==rule.gate.id then
+                    previous.rules[#previous.rules+1]=rule
+                elseif rule.gate then
+                    grouped[#grouped+1]={gate_id=rule.gate.id,conditions=rule.gate.conditions,
+                        source=rule.gate.source,rules={rule}}
+                else
+                    grouped[#grouped+1]=rule
+                end
+            end
+            rules[layout.section][layout.phase]=grouped
         end
         return container._availableSlots
     end

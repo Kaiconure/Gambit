@@ -1,0 +1,44 @@
+{
+  "vars": {
+    "panel": {
+      "!tracking": [
+        { "references": "compact" },
+        {
+          "id": "nyzul_floor",
+          "name": "Nyzul Floor Objective",
+          "show_when": "session.nyzul and session.nyzul.objective",
+          "checklist": [
+            {
+              "id": "objective",
+              "format": ["%s", "session.nyzul.objective"],
+              "checked_when": ["session.nyzul.objective_completed"]
+            }
+          ]
+        },
+        {
+          "name": "Nyzul Status",
+          "show_when": "session.nyzul and (session.nyzul.current_floor or (session.nyzul.time_remaining_until and session.nyzul.time_remaining_until > time))",
+          "format": [
+            "%s%s",
+            "session.nyzul.current_floor and format('Floor %s', color_number(session.nyzul.current_floor)) or ''",
+            "session.nyzul.time_remaining_until and session.nyzul.time_remaining_until > time and format('%s%s', session.nyzul.current_floor and ' • ' or '', color_number(format('%d:%02d', (max(0, session.nyzul.time_remaining_until - time) + 0.999) / 60, (max(0, session.nyzul.time_remaining_until - time) + 0.999) % 60))) or ''"
+          ]
+        },
+        {
+          "name": "Restriction",
+          "show_when": "session.nyzul and session.nyzul.restriction",
+          "format": ["%s", "color_yellow(session.nyzul.restriction)"]
+        }
+      ]
+    }
+  },
+  "loading": [
+    {
+      "when": [
+        "vars.panel and vars.panel.tracking",
+        "arrayCount(vars.panel.tracking)"
+      ],
+      "commands": ["setPanelTracking(vars.panel.tracking)"]
+    }
+  ]
+}

@@ -269,11 +269,19 @@ local function findExistingActionsFileName(playerName, actionsName, skip_standar
     if playerName == nil then print('No player name provided') end
     if actionsName == nil then print('no actionsName provided') end
 
-    local paths = settingsPaths.candidates(playerName, 'actions/' .. actionsName .. '.json')
+    local stock
+    stock,actionsName=settingsPaths.gambitReference(actionsName)
+    if stock then
+        assert(actionsName~='' and not actionsName:find(':',1,true) and actionsName:sub(1,1)~='/'
+            and not actionsName:find('\\',1,true) and not actionsName:find('%.%./'),
+            'Invalid gambit action name')
+    end
+    local paths = stock and {} or settingsPaths.candidates(playerName, 'actions/' .. actionsName .. '.json')
 
     if not skip_standard then
         table.insert(paths, './actions/standard/%s.json':format(actionsName))
     end
+    if stock then table.insert(paths,'./actions/'..actionsName..'.json') end
 
     for i, path in ipairs(paths) do
         if path then
@@ -298,6 +306,11 @@ end
 -- Pulls the next round of imports into the specified actions array. Returns
 -- true if new actions were imported as part of this pass.
 local function _loadActionImportsInternal(playerName, baseActions, actionType, pass, player, variables)
+    local function markGambitImports(value)
+        if type(value)~='table' then return end
+        if value.import~=nil or value.imports~=nil then value._gambitSource=true end
+        for _,child in pairs(value) do markGambitImports(child) end
+    end
     local imported = false
     local actions = baseActions and baseActions[actionType] or {}
     if actions then
@@ -409,13 +422,16 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                     -- Process all remaining imports
                     for import_index = #action.imports, 1, -1 do
                         local action_import = action.imports[import_index]
+                        local explicitStock=settingsPaths.gambitReference and settingsPaths.gambitReference(action_import)
+                        local stock=action._gambitSource or explicitStock
+                        local resolvedImport=stock and not explicitStock and ('gambit:'..action_import) or action_import
                         local file = nil
                         local fileName = nil
 
                         -- Automatic common imports pin a physical file so namespace
                         -- variants supplement base files instead of hiding them.
                         profiling.start('action import resolution')
-                        fileName = action._commonFile or firstSettingsPath(settingsPaths.importCandidates(playerName, action_import))
+                        fileName = action._commonFile or firstSettingsPath(settingsPaths.importCandidates(playerName, resolvedImport))
                         if fileName then file = files.new(fileName) end
                         profiling.stop('action import resolution')
 
@@ -423,6 +439,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                             import = profiling.parse(json.parse,profiling.read(file,fileName))
 
                             if import then
+                                if stock then markGambitImports(import) end
                                 baseActions._slots.collect(import, fileName, action)
                                 --
                                 -- Merge by explicit priority, then defining namespace.
@@ -447,6 +464,7 @@ local function _loadActionImportsInternal(playerName, baseActions, actionType, p
                                     for _,entry in ipairs(import.imports) do
                                         if type(entry)=='string' then entry={import=entry} end
                                         assert(type(entry)=='table','Library imports must contain import objects')
+                                        if stock then entry._gambitSource=true end
                                         entry._slotContribution=action._slotContribution
                                         actionPreconditions.inherit(action,entry)
                                         variableScopes.inherit(action,entry)
@@ -1009,6 +1027,9 @@ function saveDefaultActions(player, force)
 end
 
 function saveActions(player, force, actionsName)
+    if settingsPaths.gambitReference(actionsName) then
+        return false, 'Gambit-owned action sets are read-only; choose an unqualified local action name.'
+    end
     local saveAsFileName = getActionsJobFileName(player, actionsName)
     local targetFile = files.new(saveAsFileName)
 

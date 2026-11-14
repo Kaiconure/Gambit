@@ -11,11 +11,22 @@ return function(config)
             elseif #rules>0 then
                 populated=true
                 output[phase]={}
-                for _,rule in ipairs(rules) do
+                local function append(rule,contributionWhen)
                     local item={id=rule.id,stop=rule.stop,_source=rule.source,when={},commands={}}
+                    if contributionWhen then
+                        item.contribution_when={}
+                        for _,condition in ipairs(contributionWhen) do
+                            item.contribution_when[#item.contribution_when+1]=condition.code
+                        end
+                    end
                     for _,condition in ipairs(rule.conditions) do item.when[#item.when+1]=condition.code end
                     for _,command in ipairs(rule.commands) do item.commands[#item.commands+1]=command.code end
                     output[phase][#output[phase]+1]=item
+                end
+                for _,rule in ipairs(rules) do
+                    if rule.rules then
+                        for _,child in ipairs(rule.rules) do append(child,rule.conditions) end
+                    else append(rule) end
                 end
             end
         end

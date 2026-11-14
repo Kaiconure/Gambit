@@ -146,8 +146,10 @@ end
 -- player/target adjustment, even when the multiplier is zero.
 local function resolveDistance(mob, distance, options, legacyMultiplier)
     local player = windower.ffxi.get_mob_by_target('me')
-    if options and type(options.radius_multiplier) == 'number' then
-        return distance + math.max(0, mob and mob.model_size or 0) * math.max(0, options.radius_multiplier)
+    local radiusMultiplier=options and options._radius_multiplier
+    if type(radiusMultiplier)~='number' then radiusMultiplier=options and options.radius_multiplier end
+    if type(radiusMultiplier) == 'number' then
+        return distance + math.max(0, mob and mob.model_size or 0) * math.max(0, radiusMultiplier)
     end
     if not current_settings or not current_settings.useRawDistances then
         return distance + ((player and player.model_size or 0) + (mob and mob.model_size or 0)) * legacyMultiplier
@@ -1060,7 +1062,11 @@ function smartMove:followIndex(follow_index, distance, options, owner)
     end
     job.naturalFollow=job.followStyle~=nil and _me.status~=1
     local requestedDistance = distance
-    local requestedOptions = options and {radius_multiplier=options.radius_multiplier} or nil
+    local effectiveMultiplier=options and options._radius_multiplier
+    if type(effectiveMultiplier)~='number' then effectiveMultiplier=options and options.radius_multiplier end
+    local requestedOptions = options and {radius_multiplier=effectiveMultiplier} or nil
+    job.requested_distance=requestedDistance
+    job.requested_radius_multiplier=effectiveMultiplier
 
     --job.autolock = true             -- Automatically lock onto the target on completion
 
@@ -1311,6 +1317,8 @@ function smartMove:getJobInfo(jobId, includeQueued)
                 immobilized = current.immobilized,
                 time = current.time,
                 follow_index = current.follow_index,
+                requested_distance = current.requested_distance,
+                requested_radius_multiplier = current.requested_radius_multiplier,
                 route_index = current.routePlan and current.routePlan.index,
                 position = current:pos()
             }

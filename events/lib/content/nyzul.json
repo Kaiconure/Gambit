@@ -1,0 +1,95 @@
+{
+  "contributions": [
+    {
+      "slot": "texts.received.after",
+      "when": ["zone_id == 77"],
+      "actions": [
+        {
+          "id": "nyzul-objective",
+          "when": [
+            "event.text:find('Objective: Eliminate specified enemy', 1, true) or event.text:find('Objective: Eliminate specified enemies', 1, true) or event.text:find('Objective: Eliminate all enemies', 1, true) or event.text:find('Objective: Eliminate enemy leader', 1, true) or event.text:find('Objective: Activate all lamps', 1, true)"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.objective', event.text:match('[Oo]bjective:[^%c]*'))",
+            "setSessionVar('nyzul.objective_completed', false)",
+            "setSessionVar('nyzul.restriction', nil)"
+          ]
+        },
+        {
+          "id": "nyzul-archaic-gear-restriction",
+          "when": [
+            "event.text:lower():find('avoid discovery by archaic gears', 1, true) or event.text:lower():find('do not destroy archaic gears', 1, true)"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.restriction', event.text:lower():find('do not destroy archaic gears', 1, true) and 'Do not destroy archaic gears!' or 'Avoid discovery by archaic gears!')"
+          ]
+        },
+        {
+          "id": "nyzul-lamps-order",
+          "when": [
+            "event.text:find('activated in a specific order', 1, true)"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.objective', 'Objective: Activate all lamps in a specific order.')"
+          ]
+        },
+        {
+          "id": "nyzul-lamps-simultaneous",
+          "when": [
+            "event.text:find('all other lamps are activated at the same time', 1, true)"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.objective', 'Objective: Activate all lamps at the same time.')"
+          ]
+        },
+        {
+          "id": "nyzul-lamps-code",
+          "when": [
+            "event.text:find('certification code has been registered', 1, true)"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.objective', 'Objective: Activate all lamps by registering certification codes.')"
+          ]
+        },
+        {
+          "id": "nyzul-objective-completed",
+          "when": [
+            "event.text:find('Rune of Transfer activated.', 1, true)"
+          ],
+          "commands": ["setSessionVar('nyzul.objective_completed', true)"]
+        },
+        {
+          "id": "nyzul-time-remaining",
+          "when": [
+            "event.text:lower():find('time remaining:', 1, true) or (event.text:lower():find('you have ', 1, true) and event.text:lower():find('(earth time) to complete this mission.', 1, true))"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.time_remaining_until', event.time + number(event.text:match('[Tt]ime [Rr]emaining:%s*(%d+)') or event.text:match('[Yy]ou have%s+(%d+)'), 0) * (event.text:lower():find('minute', 1, true) and 60 or 1))"
+          ]
+        },
+        {
+          "id": "nyzul-floor",
+          "when": [
+            "event.text:lower():find('welcome to floor ', 1, true)"
+          ],
+          "commands": [
+            "setSessionVar('nyzul.current_floor', number(event.text:match('[Ww]elcome to [Ff]loor%s+(%d+)')))",
+            "setSessionVar('nyzul.objective', nil)",
+            "setSessionVar('nyzul.objective_completed', false)",
+            "setSessionVar('nyzul.restriction', nil)"
+          ]
+        }
+      ]
+    },
+    {
+      "slot": "zones.leave.after",
+      "when": ["event.matches(77)"],
+      "actions": [
+        {
+          "id": "nyzul-zone-leave",
+          "commands": ["resetSessionVar('nyzul')"]
+        }
+      ]
+    }
+  ]
+}

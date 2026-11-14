@@ -15,6 +15,13 @@ followed by the normal global settings and shipped-library fallbacks.
 folder. To customize shared rules, copy it into the user root or create a
 differently named user namespace that inherits it.
 
+Prefix a namespace reference with `gambit:` to bypass a same-named user
+namespace and address the bundled namespace explicitly. This works for both
+selection and inheritance, for example `{"inherits_from":"gambit:nyzul"}`.
+The bundled origin is transitive: unqualified parents of that bundled namespace
+also resolve from bundled namespace folders. Character settings and processed
+output remain under `settings/_namespace-settings/<name>/`.
+
 For **all** namespaces, character files are loaded and saved under
 `settings/_namespace-settings/<name>/players/<character>/`. Within each namespace,
 these precede shared rules; inherited parents have their own character files at

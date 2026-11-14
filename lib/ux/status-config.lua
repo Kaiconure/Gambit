@@ -34,20 +34,23 @@ Config.defaults =
                 },
                 {
                     name='Skillchain',
+                    show_when='party_weapon_skill and party_weapon_skill.name',
                     expression={
-                        "(party_weapon_skill and party_weapon_skill.name or nil) and format('%s%s%s (~%s)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1fs', (skillchain or party_weapon_skill).lifetime)))"
+                        "format('%s%s%s (~%s)', color_element(party_weapon_skill.skill or party_weapon_skill), skillchain and skillchain.name and (' → ' .. color_skillchain(skillchain)) or '', bt and (' → ' .. color_mob(bt)) or '', color_number(format('%.1fs', (skillchain or party_weapon_skill).lifetime)))"
                     }
                 },
                 {
                     name='Spell',
+                    show_when="gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5)",
                     expression={
-                        "(gambit.last_spell and gambit.last_spell.name and (gambit.last_spell.status == 'casting' or gambit.last_spell.age < 5) or nil) and format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
+                        "format('%s%s (%s)', color_element(gambit.last_spell), gambit.last_spell.target and gambit.last_spell.target.name and (' → ' .. color_mob(gambit.last_spell.target)) or '', color_status(gambit.last_spell.status))"
                     }
                 },
                 {
                     name='Job Ability',
+                    show_when='gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5',
                     expression={
-                        "(gambit.last_ability and gambit.last_ability.name and gambit.last_ability.age < 5 or nil) and format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
+                        "format('%s%s', color_element(gambit.last_ability), gambit.last_ability.target and gambit.last_ability.target.name and (' → ' .. color_mob(gambit.last_ability.target)) or '')"
                     }
                 }
             },
@@ -136,6 +139,16 @@ function Config.normalize(input)
                     'Tracking references must name a tracking set')
             else
             assert(type(entry.name)=='string','Tracking entries require a name')
+            if entry.show_when~=nil then
+                assert(type(entry.show_when)=='string' or type(entry.show_when)=='table',
+                    'Tracking show_when must be a string or array')
+                if type(entry.show_when)=='table' then
+                    for i,code in pairs(entry.show_when) do
+                        assert(type(i)=='number' and i%1==0 and i>=1 and i<=#entry.show_when and
+                            type(code)=='string','Tracking show_when arrays must contain strings')
+                    end
+                end
+            end
             if entry.checklist~=nil then
                 local function validId(id)
                     return type(id)=='string' and id:match('^[%a_][%w_-]*$')
@@ -173,6 +186,14 @@ function Config.normalize(input)
                     end
                 end
             else
+                if entry.format~=nil then
+                    assert(type(entry.format)=='table' and #entry.format>=1,
+                        'Tracking format requires a format string')
+                    for i,code in pairs(entry.format) do
+                        assert(type(i)=='number' and i%1==0 and i>=1 and i<=#entry.format and
+                            type(code)=='string','Tracking format must be an array of strings')
+                    end
+                end
                 assert(entry.expression==nil or type(entry.expression)=='string' or type(entry.expression)=='table',
                     'Tracking expression must be a string or array')
                 if type(entry.expression)=='table' then

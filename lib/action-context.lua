@@ -2175,6 +2175,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         vars = variableState and variableState.vars or actionStateManager.vars
     }
 
+    -- Session variables are process-local observations: they survive action,
+    -- event, and namespace reloads, but not an addon unload/reload.
+    local sessionVariables=require('./lib/session-variables')
+    context.session=sessionVariables.values()
+    context.session_vars=context.session
+    context.getSessionVar=sessionVariables.get
+    context.setSessionVar=sessionVariables.set
+    context.resetSessionVar=sessionVariables.reset
+
     -- Alias the 'gambit' context var as 'settings' (for backcompat)
     movementReservations.attach(context, function() smartMove:cancelJob() end)
     local reactions=require('./lib/reactions')
@@ -2264,6 +2273,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local globalHelpers = {vars=globalVars, _originalVars=originalVars}
     attachVariableHelpers(globalHelpers)
     context.setVarGlobal = globalHelpers.setVar
+    -- Event variables are intentionally request-local. Provide an explicit
+    -- bridge for observations that must publish durable state to actions and
+    -- panel expressions without weakening that isolation.
+    local actionVariables={vars=actionStateManager.vars,_originalVars=actionStateManager.originalVars}
+    attachVariableHelpers(actionVariables)
+    context.getActionVar=actionVariables.getVar
+    context.setActionVar=actionVariables.setVar
+    context.resetActionVar=actionVariables.resetVar
     -- Event variables are isolated; checklist state always belongs to automation.
     local checklistVariables={vars=actionStateManager.vars}
     attachVariableHelpers(checklistVariables)
@@ -4810,11 +4827,6 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if not context.movementAvailable() then return nil, 'reserved' end
         target = target or context.member or context.bt
 
-        local _mob, _job_id = context.following(target)
-        if _mob and _job_id then
-            return _job_id
-        end
-
         -- Allow string targets
         if type(target) == 'string' then
             target = windower.ffxi.get_mob_by_target(target) 
@@ -4838,12 +4850,17 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             distance = math.max(settings.minDistanceList[target.name], distance)
         end
 
-        -- We can follow if there isn't already a follow in progress, or if the existing
-        -- follow is already for the current target
+        local effectiveMultiplier=options and options._radius_multiplier
+        if type(effectiveMultiplier)~='number' then effectiveMultiplier=options and options.radius_multiplier end
+
+        -- Retain an equivalent follow, but replace it when live configuration changes.
         local jobInfo = smartMove:getJobInfo()
-        if jobInfo == nil or jobInfo.follow_index ~= target.index then
-            return smartMove:followIndex(target.index, distance, options)
+        if jobInfo and jobInfo.follow_index == target.index
+            and jobInfo.requested_distance == distance
+            and jobInfo.requested_radius_multiplier == effectiveMultiplier then
+            return jobInfo.jobId
         end
+        return smartMove:followIndex(target.index, distance, options)
     end
 
     ---------------------------------------------------------------------------
