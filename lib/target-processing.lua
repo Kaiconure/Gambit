@@ -18,6 +18,14 @@ local ELVORSEAL_MOBS = {
     "Mireu"
 }
 
+-- Certain mobs are only targetable when they are actively engaged.
+local BATTLE_ONLY_MOBS = {
+    ['Amphiptere'] = true,
+    ['Eschan Yovra'] = true,
+    ['Greater Amphiptere'] = true,
+    ['Turul'] = true
+}
+
 --------------------------------------------------------------------------------------
 -- Determines if a mob should be ignored by the auto-engage algorithm.
 -- Note that this assumes the mob passes all other checks, and it just
@@ -59,7 +67,7 @@ local function findIgnoreListMatch(mob)
 end
 
 
-local function setTargetMob(mob)
+local function setTargetMob(mob, engage)
     if mob == nil then
         resetCurrentMob(nil)
         return
@@ -72,14 +80,20 @@ local function setTargetMob(mob)
         return
     end
 
-    -- Don't message if we're just re-targeting the same mob
-    --local currentTarget = globals.target
-    --if not currentTarget or not currentTarget.id or currentTarget.id ~= mob.id then
+    if BATTLE_ONLY_MOBS[mob.name] and mob.status ~= STATUS_ENGAGED then
+        return
+    end
+
+    -- Don't message if we're just retrying engagement with the same selected mob.
+    local currentTarget = globals.target
+    local currentMob = currentTarget and currentTarget:initialMob()
+    local isNewTarget = not currentMob or currentMob.id ~= mob.id
+    if isNewTarget then
         writeMessage('Identified %s %s as the next best target...':format(
             text_mob(mob.name),
             text_number(tostring(mob.id))
         ))
-    --end
+    end
 
     -- Cancel any active movement job now that we have a target. As of v0.96.0-beta11, this cancellation
     -- will only happen if the slowTargetTransitions setting is enabled (off by default).
@@ -87,18 +101,19 @@ local function setTargetMob(mob)
         smartMove:cancelJob()
     end
 
-    local result, overridden = lockTarget(player, mob, true)
-    if result then
-        if overridden then
-            printDebug('Was looking for %d, identified %d':format(mob.id, overridden.id))
-        end
-        
-        resetCurrentMob(overridden or mob)
+    if isNewTarget then
+        windower.send_ipc_message('set_bt -from %s -id %s -index %s -zone %s':format(
+            tostring(globals.me_id) or 'n/a',
+            tostring(mob.id) or 'n/a',
+            tostring(mob.index) or 'n/a',
+            tostring(globals.currentZone and globals.currentZone.id) or 'n/a'
+        ))
     end
 
-    -- if lockTarget(player, mob, true) then
-    --     resetCurrentMob(mob)
-    -- end
+    -- Selection and engagement are intentionally independent. Recording the mob
+    -- lets idle/pull actions approach it even when it is currently out of range.
+    resetCurrentMob(mob)
+    if engage~=false then targetAndEngage(mob.id) end
 end
 
 local function shouldAquireNewTarget(player, party)
@@ -150,7 +165,7 @@ local function shouldAquireNewTarget(player, party)
                 currentTarget:markClaim()
             end
 
-            local refDistance = settings.maxDistance + 2
+            local refDistance = settings.maxDistance + settings.targetDistanceBuffer
             local maxDistanceSquared = refDistance * refDistance
 
             local claimStolen = 
@@ -258,15 +273,6 @@ local function shouldAquireNewTarget(player, party)
     return false
 end
 
---------------------------------------------------------------------------------------
--- Certain mobs are only targetable when they are actively engaged
-local BATTLE_ONLY_MOBS = {
-    ['Amphiptere'] = true,
-    ['Eschan Yovra'] = true,
-    ['Greater Amphiptere'] = true,
-    ['Turul'] = true
-}
-
 local function sendKeys(...)
     for i, key in ipairs({...}) do
         windower.send_command('setkey %s down; wait 0.1; setkey %s up; wait 0.1;':format(key, key))
@@ -316,11 +322,7 @@ local MAX_HEADING_DELTA = directionality.degToRad(30)
 
 --------------------------------------------------------------------------------------
 -- Locks the player onto the specified target
-local lock_target_id = 1
-function lockTarget(player, mob, battleTarget, skip_packet_targeting)
-    local id = lock_target_id
-    lock_target_id = lock_target_id + 1
-
+function lockTarget(player, mob, battleTarget, _skip_packet_targeting)
     -- We will store the id of the most recent mob we tried to lock onto
     globals.last_lock_target_id = mob and type(mob.id) == 'number' and mob.id
 
@@ -355,8 +357,6 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
             local mob_id = mob.id
 
             local start_t = os.clock()
-            local fail_fast = false
-
             -- We'll first try and see if the mob is already targeted. This will often be the case during battle, as any member
             -- who is in the leader strategy will use a /assist command to set the cursor before calling lockTarget.
             local t = windower.ffxi.get_mob_by_target('t')
@@ -395,108 +395,14 @@ function lockTarget(player, mob, battleTarget, skip_packet_targeting)
                 end
             end
             
-            if
-                mob.spawn_type == SPAWN_TYPE_TRUST or
-                mob.spawn_type == SPAWN_TYPE_MOB
-            then
-                -- if skip_packet_targeting == nil then
-                --     skip_packet_targeting = settings.skipPacketTargeting
-                -- end
-                skip_packet_targeting = false
-
-                if not skip_packet_targeting then
-                    local num_attempted = 0
-                    local max_attempts = 15
-
-                    -- We'll try a few times to establish our target directly
-                    for i = 1, max_attempts do
-                        -- We'll sleep a bit every iteration, a little longer as we go
-                        if num_attempted == 0 then
-                            coroutine.sleep(0.5)
-                        elseif num_attempted <= 8 then
-                            coroutine.sleep(0.5)
-                        elseif num_attempted <= 15 then
-                            coroutine.sleep(0.5)
-                        else
-                            coroutine.sleep(0.5)
-                        end
-
-                        -- If this is a subsequent retry, we'll make sure that the mob is
-                        -- still something we can actually claim for ourselves.
-                        if num_attempted > 0 then
-                            local current = windower.ffxi.get_mob_by_id(mob.id)
-                            if
-                                not current or
-                                not current.valid_target
-                            then
-                                printDebug('Exiting targeting loop due to invalid target.')
-                                fail_fast = true
-                                break
-                            elseif
-                                not partyInfo:canShareClaimOnMob(current) 
-                            then
-                                printDebug('Exiting targeting loop due to stolen claim.')
-                                fail_fast = true
-                                break
-                            elseif
-                                current.distance >= (30 * 30)
-                            then
-                                -- If the mob moves out of engagement range, this packet won't work. Fall back.
-                                fail_fast = false
-                                break
-                            end
-                        end
-
-                        num_attempted = num_attempted + 1
-
-                        directionality.faceTarget(mob)
-                        targetAndEngage(mob.id)
-
-                        t = windower.ffxi.get_mob_by_target('t')
-                        if 
-                            t and
-                            t.id == mob.id
-                        then
-                            -- Bail if this target is no loner valid (dead, despawned, etc)
-                            if not t.valid_target then
-                                printDebug('Exiting targeting loop due to invalidated target.')
-                                fail_fast = true
-                                break
-                            end
-
-                            -- printDebug('Packet targeting of %s/%d was successful after %.2fs (%d/%d)':format(
-                            --     t.name,
-                            --     t.id,
-                            --     os.clock() - start_t,
-                            --     num_attempted,
-                            --     max_attempts
-                            -- ))
-
-                            return true, nil
-                        end
-                    end
-
-                    printDebug('Packet targeting %s/%d failed after %.2fs and %d attempt(s)':format(
-                        mob.name,
-                        mob.id,
-                        os.clock() - start_t,
-                        num_attempted
-                    ))
-                else
-                    --printDebug('Packet targeting has been disabled. Re-enable with: gbt config -spt off')
-                end
-            end
-
             -- In laggy situations, it can take a while for the target to be acquired. This gives us 
             -- some time to try and ensure we can get the target.
-            if not fail_fast then
+            do
                 local target_overridden = false
                 local looping = true
 
                 local has_st    = false
                 local has_fps   = false
-                local is_trust = mob.spawn_type == SPAWN_TYPE_TRUST
-
                 local num_tabs = 0
 
                 -- Toggle whether we will ignore trusts in targeting or not
@@ -655,26 +561,36 @@ end
 
 --------------------------------------------------------------------------------------
 -- Targets and engages a battle target by mob ID.
+local engagementAttempt = {mob_id=nil, at=-math.huge}
 function targetAndEngage(mobId)
     local mob = windower.ffxi.get_mob_by_id(mobId)
 
-    -- We can only proceed if we have a valid enemy-type mob within targeting range
+    -- Engagement packets are intentionally single-attempt and range bounded. The
+    -- normal processing cycle owns retries so no stale targeting coroutine remains.
+    local engagementRange = 30
     if 
         not mob or
         not mob.valid_target or
         mob.spawn_type ~= SPAWN_TYPE_MOB or
-        mob.distance >= 50 * 50
+        (tonumber(mob.hpp) or 0) <= 0 or
+        type(mob.distance) ~= 'number' or
+        mob.distance >= engagementRange * engagementRange
     then
         return false
     end
+
+    local now = os.clock()
+    if engagementAttempt.mob_id == mob.id and now-engagementAttempt.at < 0.5 then
+        return false
+    end
+    engagementAttempt.mob_id = mob.id
+    engagementAttempt.at = now
 
     packets.inject(packets.new('outgoing', 0x01A, {
         ['Target'] = mob.id,
         ['Target Index'] = mob.index,
         ['Category'] = 0x02
     }))
-
-    coroutine.sleep(0.25)
 
     return true
 end
@@ -868,7 +784,7 @@ function processTargeting(player, party)
                             t.spawn_type == SPAWN_TYPE_MOB and
                             t.valid_target
                         then
-                            setTargetMob(t)
+                            setTargetMob(t, false)
                         end
                     else
                         -- If we don't have the mob targeted
@@ -883,7 +799,7 @@ function processTargeting(player, party)
                             t.id == target.id and
                             t.index == target.index
                         then
-                            setTargetMob(t) -- Match up with the party leader's target, which we've already acquired
+                            setTargetMob(t, false) -- Pull processing engages after idle actions have priority.
                         end
                     end
                 end
@@ -1024,6 +940,8 @@ function processTargeting(player, party)
     -- At this point, we'll take the nearest aggroing mob or the best match we found via strategy
     local mobToTarget = nearestAggroingMob or bestMatchingMob
     if mobToTarget ~= nil then
-        setTargetMob(mobToTarget)   -- Set the mob that was selected based on strategy, ignore list, and other settings
+        -- Automated selection establishes bt, but pull processing owns the
+        -- engagement attempt after all ready idle actions have run.
+        setTargetMob(mobToTarget, false)
     end
 end

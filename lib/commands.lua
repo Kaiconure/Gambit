@@ -232,6 +232,107 @@ handlers['waypoint'] = function(args)
     if not ok then writeError(tostring(message)) end
 end
 
+handlers['moblist'] = function(args)
+    local usage='Usage: gbt moblist [-f <name-prefix>] [-d <range>] [-t <npc|mob|player|all|spawn-type>]'
+    local ok,message=pcall(function()
+        local prefix=nil
+        local maxDistance=50
+        local typeFilter='all'
+        local seen={}
+        local index=1
+        while index<=#args do
+            local option=tostring(args[index]):lower()
+            local value=args[index+1]
+            assert(not seen[option],usage)
+            seen[option]=true
+            if option=='-f' then
+                assert(value,usage)
+                prefix=tostring(value):lower()
+                index=index+2
+            elseif option=='-d' then
+                assert(value,usage)
+                maxDistance=tonumber(value)
+                assert(maxDistance and maxDistance>=0,usage)
+                index=index+2
+            elseif option=='-t' then
+                assert(value,usage)
+                local named=tostring(value):lower()
+                local numeric=tonumber(value)
+                if numeric then
+                    assert(numeric>=0 and numeric==math.floor(numeric),usage)
+                    typeFilter=numeric
+                else
+                    assert(named=='npc' or named=='mob' or named=='player' or named=='all',usage)
+                    typeFilter=named
+                end
+                index=index+2
+            else error(usage,0) end
+        end
+
+        local me=windower.ffxi.get_mob_by_target('me')
+        assert(me and type(me.x)=='number' and type(me.y)=='number',
+            'Mob list: player position is unavailable.')
+        local mobs=windower.ffxi.get_mob_array()
+        assert(type(mobs)=='table','Mob list: entity list is unavailable.')
+
+        local compass={'N','NNE','NE','ENE','E','ESE','SE','SSE',
+            'S','SSW','SW','WSW','W','WNW','NW','NNW'}
+        local function classify(mob)
+            if mob.spawn_type==SPAWN_TYPE_MOB then return 'mob' end
+            if mob.spawn_type==SPAWN_TYPE_PLAYER or mob.spawn_type==SPAWN_TYPE_PLAYER2 then return 'player' end
+            if mob.is_npc then return 'npc' end
+            return 'spawn '..tostring(mob.spawn_type or '?')
+        end
+        local function matchesType(mob,kind)
+            if typeFilter=='all' then return true end
+            if type(typeFilter)=='number' then return mob.spawn_type==typeFilter end
+            return kind==typeFilter
+        end
+        local function direction(dx,dy,distance)
+            if distance==0 then return '--' end
+            -- FFXI world X increases southward and Y increases westward.
+            local angle=math.atan2(-dy,-dx)
+            if angle<0 then angle=angle+2*math.pi end
+            local slice=math.floor(angle/(2*math.pi)*16+0.5)%16+1
+            return compass[slice]
+        end
+
+        local matches={}
+        for _,mob in pairs(mobs) do
+            if type(mob)=='table' and mob.valid_target and type(mob.x)=='number' and type(mob.y)=='number' then
+                local name=tostring(mob.name or '')
+                local kind=classify(mob)
+                local dx,dy=mob.x-me.x,mob.y-me.y
+                local distance=math.sqrt(dx*dx+dy*dy)
+                if distance<=maxDistance and matchesType(mob,kind)
+                    and (not prefix or name:lower():sub(1,#prefix)==prefix) then
+                    matches[#matches+1]={mob=mob,name=name,kind=kind,distance=distance,
+                        direction=direction(dx,dy,distance)}
+                end
+            end
+        end
+        table.sort(matches,function(left,right)
+            if left.distance~=right.distance then return left.distance<right.distance end
+            local leftName,rightName=left.name:lower(),right.name:lower()
+            if leftName~=rightName then return leftName<rightName end
+            return (left.mob.id or 0)<(right.mob.id or 0)
+        end)
+
+        writeMessage(string.format('Mob list: %s match%s within %s yalms.',text_number(tostring(#matches)),
+            #matches==1 and '' or 'es',text_number(string.format('%.1f',maxDistance))))
+        for _,entry in ipairs(matches) do
+            local nameText=entry.kind=='mob' and text_mob(entry.name)
+                or entry.kind=='player' and text_player(entry.name)
+                or text_npc(entry.name)
+            writeMessage(string.format('- %s (%s): %s %s (%s%s%s)',
+                nameText,entry.kind,text_number(string.format('%.1fy',entry.distance)),
+                text_direction(entry.direction),text_number(tostring(tonumber(entry.mob.id) or 0)),
+                CHAR_BULLET,text_number(string.format('%03X',tonumber(entry.mob.index) or 0))))
+        end
+    end)
+    if not ok then writeError(tostring(message)) end
+end
+
 handlers['slots'] = function(args)
     local actionType = getArgValue(args, '-t')
     if hasArg(args, '-t') and (not actionType or actionType:sub(1,1) == '-') then
@@ -907,6 +1008,13 @@ handlers['iteminfo'] = function(args)
         ))
     end
 
+    local currencies = actionStateManager:getCurrencyInfo()
+    local escha_beads = currencies and tonumber(currencies['Escha Beads'])
+    writeMessage('  %s: %s':format(
+        text_yellow('Escha Beads'),
+        text_number(escha_beads and format_number(escha_beads) or '--')
+    ))
+
     if verbose then
         local conquest = actionStateManager:getConquestInfo()
         local conquest_points = conquest and tonumber(conquest.conquestPoints)
@@ -924,6 +1032,24 @@ handlers['iteminfo'] = function(args)
                 text_yellow('Imperial Standing'),
                 text_number(format_number(imperial_standing))
             ))
+        end
+
+        for _, currency in ipairs({
+            {'Escha Silt', 'Escha Silt'},
+            {'Hallmarks', 'Hallmarks'},
+            {'Badges of Gallantry', 'Badges of Gallantry'},
+            {'Domain Points', 'Domain Points'},
+            {'Domain Points Today', 'Domain Points Earned Today'},
+            {'Mog Segments', 'Mog Segments'},
+            {'Gallimaufry', 'Gallimaufry'},
+        }) do
+            local amount = currencies and tonumber(currencies[currency[2]])
+            if amount then
+                writeMessage('  %s: %s':format(
+                    text_yellow(currency[1]),
+                    text_number(format_number(amount))
+                ))
+            end
         end
 
         local sack = bag_info.sack and bag_info.sack.enabled and bag_info.sack
@@ -1152,6 +1278,7 @@ handlers['ji'] = handlers['jobinfo']
 -- distance
 handlers['config'] = function(args)
     local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
+    local distanceBuffer = tonumber(arrayIndexOfStrI(args, '-distancebuffer') or arrayIndexOfStrI(args, '-db') or 0)
     local distancez = tonumber(arrayIndexOfStrI(args, '-distancez') or arrayIndexOfStrI(args, '-z') or 0)
     local strat = tonumber(arrayIndexOfStrI(args, '-strategy') or arrayIndexOfStrI(args, '-strat') or 0)
     local fcd = tonumber(arrayIndexOfStrI(args, '-followd') or arrayIndexOfStrI(args, '-fd') or 0)
@@ -1180,6 +1307,25 @@ handlers['config'] = function(args)
         end
 
         writeMessage('Max targeting distance: %s':format(text_number('%.1f':format(settings.maxDistance))))
+    end
+
+    if distanceBuffer > 0 then
+        local value = tonumber(args[distanceBuffer + 1])
+        if value and value >= 0 then
+            settings.targetDistanceBuffer = value
+            hasChanges = true
+        end
+
+        local buffer = settings.targetDistanceBuffer
+        local retentionDistance = settings.maxDistance + buffer
+        writeMessage('Target distance buffer: %s':format(
+            text_number('%.1f':format(buffer))
+        ))
+        writeMessage('Target retention distance: %s (%s + %s)':format(
+            text_number('%.1f':format(retentionDistance)),
+            text_number('%.1f':format(settings.maxDistance)),
+            text_number('%.1f':format(buffer))
+        ))
     end
 
     if distancez > 0 then
@@ -1848,7 +1994,7 @@ handlers['target'] = function(args)
         end
     else
         id = id and tonumber(args[id + 1]) or 0
-        index = index and tonumber(args[index + 1]) or 0
+        index = index and tonumber(args[index + 1], 16) or 0
         name = name and args[name + 1] and tostring(args[name + 1])
     end
 

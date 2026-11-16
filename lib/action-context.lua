@@ -1904,6 +1904,8 @@ local function loadContextTargetSymbols(context, target)
         context.t = nil
         context.bt = nil
     end
+    context.target_acquired = context.cursor ~= nil and context.bt ~= nil
+        and context.cursor.valid_target and context.cursor.id == context.bt.id
 
     -- Set up the pet symbol
     local pet = windower.ffxi.get_mob_by_target('pet')
@@ -1938,6 +1940,17 @@ local function loadContextTargetSymbols(context, target)
     context.conquest_points = conquest and tonumber(conquest.conquestPoints) or 0
     context.imperial_standing = conquest and tonumber(conquest.imperialStanding) or 0
 
+    local currencies = actionStateManager:getCurrencyInfo()
+    context.currencies = currencies or {}
+    context.escha_beads = currencies and tonumber(currencies['Escha Beads']) or nil
+    context.escha_silt = currencies and tonumber(currencies['Escha Silt']) or nil
+    context.gallimaufry = currencies and tonumber(currencies['Gallimaufry']) or nil
+    context.mog_segments = currencies and tonumber(currencies['Mog Segments']) or nil
+    context.domain_points = currencies and tonumber(currencies['Domain Points']) or nil
+    context.domain_points_today = currencies and tonumber(currencies['Domain Points Earned Today']) or nil
+    context.hallmarks = currencies and tonumber(currencies['Hallmarks']) or nil
+    context.badges_of_gallantry = currencies and tonumber(currencies['Badges of Gallantry']) or nil
+
     local mpi = actionStateManager:getMeritPointInfo()
     context.merit_points = tonumber(mpi and mpi.current) or 0
 
@@ -1958,6 +1971,14 @@ local function loadContextTargetSymbols(context, target)
     --
     context.me.conquest_points      = context.conquest_points
     context.me.imperial_standing    = context.imperial_standing
+    context.me.escha_beads          = context.escha_beads
+    context.me.escha_silt           = context.escha_silt
+    context.me.gallimaufry          = context.gallimaufry
+    context.me.mog_segments         = context.mog_segments
+    context.me.domain_points        = context.domain_points
+    context.me.domain_points_today  = context.domain_points_today
+    context.me.hallmarks            = context.hallmarks
+    context.me.badges_of_gallantry  = context.badges_of_gallantry
     --
     context.me.merit_points         = context.merit_points
     --
@@ -2493,6 +2514,15 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         context.equipMany(items)
 
         return true
+    end
+
+    -- Explicitly send an equipment request for the selected inventory item,
+    -- bypassing only the cached "already equipped" comparison.
+    context.forceEquip = function(slot,item)
+        item=item or context.item
+        if type(slot)~='string' or type(item)~='table' then return end
+        local count=inventory.force_equip(slot,item)
+        if count and count>0 then return count end
     end
 
     context.sanitizeEquipmentList = function(allow_simple_strings, ...)
@@ -3482,7 +3512,10 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Get information about the ranged gear you have equipped
     context.canRangedAttack = function()
-        local info = inventory.get_ranged_equipment()
+        -- Read the client's live equipment slots. Projected equipment is useful
+        -- while planning swaps, but an exhausted ammo slot can otherwise retain a
+        -- stale bag reference that later points at newly created, unequipped ammo.
+        local info = inventory.get_ranged_equipment(true)
         context.ranged = info
 
         return info and info.valid
@@ -3518,6 +3551,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 end
             end
         end
+    end
+
+    --------------------------------------------------------------------------------------
+    -- Request a fresh Currency 2 packet. The response updates currency values on a
+    -- later action cycle; this function intentionally does not wait for it.
+    context.refreshCurrencies = function()
+        requestCurrencies()
+        return true
     end
 
     --------------------------------------------------------------------------------------
@@ -5031,7 +5072,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         config=config or (options and options._current)
             or (options and options.data and options.data[options.active])
         if type(config)~='table' then return nil,'route unavailable' end
-        local jobId=smartMove:waypointRoute(config)
+        local routeKey
+        if options and type(options.active)=='string' then
+            local activeConfig=options.data and options.data[options.active]
+            if config==options._current or config==activeConfig then
+                routeKey='waypoints_ex:'..options.active
+            end
+        end
+        local jobId=smartMove:waypointRoute(config,nil,routeKey)
         return jobId~=nil,jobId
     end
 
@@ -6627,17 +6675,13 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- Determine if you have a ranged weapon and ammo equipped
     context.canShoot = function()
-        if context.t then
-            return inventory.find_equipment_in_slot('range')~=nil and inventory.find_equipment_in_slot('ammo')~=nil
-        end
-
-        return false
+        return context.target_acquired and context.canRangedAttack() or false
     end
 
     --------------------------------------------------------------------------------------
     -- 
     context.shoot = function (duration)
-        if context.t then
+        if context.target_acquired then
             return sendRangedAttackCommand(context.t, context, duration or 1.0)
         end
     end

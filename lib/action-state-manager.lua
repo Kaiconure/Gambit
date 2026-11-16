@@ -156,6 +156,15 @@ state_manager.getConquestInfo = function(self)
 end
 
 -----------------------------------------------------------------------------------------
+-- Set/get the newer currency-menu values reported by incoming packet 0x118.
+state_manager.setCurrencyInfo = function(self, currencies)
+    self.currencies = currencies
+end
+state_manager.getCurrencyInfo = function(self)
+    return self.currencies
+end
+
+-----------------------------------------------------------------------------------------
 -- Set/get character stats info
 state_manager.setCharStatInfo = function(self, masterLevel, itemLevel, suLevel, ep, epRequired, nation, nationRank, unity, unityRank, unityAccolades)
     self.charStats = {

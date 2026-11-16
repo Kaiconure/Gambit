@@ -18,6 +18,9 @@ assert(called==true and #sent==2 and sent[2].item.id==30)
 assert(queue:view(true)[13].id==31) -- Raw inventory is still stale at 30.
 queue:ack(13,item(30)); queue:tick(); assert(#queue.batches==0)
 now=10; queue:tick(); assert(#sent==2) -- Old temporary gear never retries after restoration.
+queue:submit({{slot=13,item=item(30),force=true}})
+assert(#sent==3 and sent[3].item.id==30) -- Explicit recovery bypasses same-slot coalescing.
+queue:ack(13,item(30)); queue:tick()
 queue:submit({{slot=1,item=item(0)},{slot=0,item=item(11),after=1},{slot=1,item=item(21),after=0}})
 assert(sent[#sent].slot==1 and sent[#sent].item.id==0)
 queue:ack(1,item(0)); assert(sent[#sent].slot==0)

@@ -109,6 +109,13 @@ engaged by default, preventing a pre-battle route from reclaiming movement from
 engagement behavior. Set `allow_engaged: true` on a route to permit that automatic
 reschedule; ordinary calls to `waypointRoute` remain governed by their action's
 own conditions.
+
+Unscoped routes (`scoped` false or omitted) retain their current waypoint and
+travel direction when movement is cancelled, so battle interruptions resume
+toward the same waypoint. This also preserves the return direction of `bounce`
+routes and the exact position within `cycle` routes whose coordinates loop back.
+Scoped routes restart from the nearest point as before. Saved route progress is
+discarded when the route definition or zone changes, or when Gambit shuts down.
 The reference character skips following and alignment when the resolved partner
 is themselves, including when `follow_leader.target` explicitly names them.
 

@@ -1,7 +1,11 @@
 {
   "vars": {
+    "configuration": {
+      "disabled": true,
+      "commands": ["gbt config -d 25", "gbt config -strat aggressor"]
+    },
     "ensure_trusts": {
-      "spells": ["Yoran-Oran (UC)", "Koru-Moru"],
+      "spells": ["Yoran-Oran (UC)", "Koru-Moru", "Ulmia", "Joachim"],
       "mob_safety_range": 0
     },
     "frontline_engagement": {
@@ -10,32 +14,44 @@
     "use_rolls": {
       "rolls": ["Hunter's Roll"]
     },
-    "waypoints": {
-      "active": "NO woh_gates_h10_north",
-      "mode": "cycle",
-      "scoped": true
-    },
     "keep_ammo": {
       "ammo": "Bullet",
       "pouch": "Bullet Pouch"
+    },
+    "setup": {
+      "food": ["Maringna"],
+      "stationary": true,
+      "allow_ws": false,
+      "abilities": ["Triple Shot"],
+      "ws": ["Leaden Salute", "Slug Shot", "Hot Shot"]
     }
   },
-  "imports": [],
   "pull": [
     {
       "import": "keep-ammo"
     },
     {
-      "when": ["bt and bt.distance < 20", "canRA()"],
+      "when": ["bt and bt.distance <= min(25, gambit.distance)", "canShoot()"],
       "commands": ["facingEnemy() or faceEnemy()", "shoot(0)"],
       "delay": 0,
       "frequency": 5
     },
     {
-      "import": "frontline-engagement"
+      "import": "frontline-engagement",
+      "with_vars": {
+        "frontline_engagement": {
+          "distance": 10
+        }
+      },
+      "precondition": ["not vars.setup.stationary"]
     }
   ],
   "battle": [
+    {
+      "when": ["not hasBuff('Food') and canUseItem(vars.setup.food)"],
+      "commands": ["useItem(me)"],
+      "frequencies": 10
+    },
     {
       "import": "keep-ammo"
     },
@@ -52,17 +68,29 @@
       "import": "abilities/use-rolls"
     },
     {
-      "import": "frontline-engagement"
+      "import": "frontline-engagement",
+      "precondition": ["not vars.setup.stationary"]
     },
     {
-      "when": ["canRA()"],
-      "commands": ["facingEnemy() or faceEnemy()", "shoot(0)"],
+      "when": ["vars.setup.allow_ws", "canUseWeaponSkill(vars.setup.ws)"],
+      "commands": ["facingEnemy() or faceEnemy()", "useWeaponSkill()"]
+    },
+    {
+      "when": ["bt and bt.distance <= min(25, gambit.distance)", "canShoot()"],
+      "commands": [
+        "canUseAbility(vars.setup.abilities) and not hasEffectOf(vars.setup.abilities) and useAbility(me) and wait(0.5)",
+        "facingEnemy() or faceEnemy()",
+        "shoot(0)"
+      ],
       "delay": 0
     }
   ],
   "idle": [
     {
       "import": "configuration"
+    },
+    {
+      "import": "keep-ammo"
     },
     {
       "import": "ensure-trusts"

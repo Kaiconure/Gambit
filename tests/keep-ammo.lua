@@ -4,8 +4,13 @@ local document=json.parse(file:read('*a'));file:close()
 assert(#document.actions==2)
 local equip=document.actions[1]
 local pouch=document.actions[2]
-assert(equip.when[2]=='not canRangedAttack()' and pouch.when[3]=='not canRangedAttack()')
+assert(equip.when[2]=='vars.keep_ammo._requip or not canRangedAttack()'
+    and pouch.when[3]=='not canRangedAttack()')
 assert(equip.when[3]==pouch.when[4])
+assert(document.vars['^keep_ammo']._requip==false)
+assert(equip.commands[2]:find("forceEquip('ammo')",1,true))
+assert(pouch.commands[2]:find("setVar('vars.keep_ammo._requip', true)",1,true))
+assert(pouch.when[5]=='not findEquippableItem(vars.keep_ammo.ammo)')
 local compatible=assert(loadstring('return '..equip.when[3]))
 
 local function matches(rangeType,ammoType)

@@ -252,7 +252,7 @@ function Service:submit(ops)
     if mainChanged and sub and current[1] and current[1].localId~=0 then
         local ordered={{slot=1,item={localId=0,bagId=0,id=0}}}
         for _,op in ipairs(ops) do
-            local item={slot=op.slot,item=op.item,after=op.after}
+            local item={slot=op.slot,item=op.item,after=op.after,force=op.force}
             if item.slot==0 then item.after=1 end
             ordered[#ordered+1]=item
         end

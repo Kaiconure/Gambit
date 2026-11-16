@@ -37,10 +37,10 @@
       "commands": [
         "log('Calling trust:', spell.name)",
         "callTrust()",
-        "wait(1.5)"
+        "wait(2.0)"
       ],
       "delay": 0,
-      "miss_frequency": 0,
+      "frequencies": 0,
       "scope": "battle"
     },
     {

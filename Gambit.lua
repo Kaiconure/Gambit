@@ -1,6 +1,6 @@
 local profiling=require('./lib/load-profile')
 profiling.begin('startup modules')
-__version = '1.0.7.2'
+__version = '1.0.7.3'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -142,6 +142,9 @@ function requestCurrencies()
     -- Conquest Points and Imperial Standing
     local conquest_packet = packets.new('outgoing', 0x05A, {["_unknown2"]=0})
     packets.inject(conquest_packet)
+
+    -- Bayld, Escha beads/silt, Ambuscade points, and other newer currencies.
+    packets.inject(packets.new('outgoing', 0x115))
 end
 
 ---------------------------------------------------------------------------------------------------
@@ -398,6 +401,7 @@ windower.register_event('zone change', function(zone_id)
 
     require('./lib/reactions').clear('zone changed')
     smartMove:stop()
+    smartMove:clearWaypointProgress()
 
     -- Store the new zone
     globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil
@@ -662,6 +666,7 @@ end)
 windower.register_event('login', function ()
     globals.status_panel_ready = false
     actionStateManager:setConquestInfo()
+    actionStateManager:setCurrencyInfo(nil)
 
     if 
         not windower or
@@ -1683,6 +1688,10 @@ local function _handle_conquestInfoChunk(id, data)
     actionStateManager:setConquestInfo(conquest_points, imperial_standing)
 end
 
+local function _handle_currency2Chunk(id, data)
+    actionStateManager:setCurrencyInfo(packets.parse('incoming', data))
+end
+
 local _handle_charStatsChunk = function(id, data)
     local packet = packets.parse('incoming', data)
 
@@ -1793,6 +1802,10 @@ windower.register_event('incoming chunk', function (id, data, modified_data, inj
         id == 0x05E     -- Conquest/Beseiged info
     then
         _handle_conquestInfoChunk(id, data)
+    elseif
+        id == 0x118     -- Currency 2 info (Escha beads/silt, etc.)
+    then
+        _handle_currency2Chunk(id, data)
     elseif
         id == 0x061     -- Char stats
     then

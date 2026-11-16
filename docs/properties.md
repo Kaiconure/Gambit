@@ -17,6 +17,8 @@ These represent targetable mobs, players, and trusts on the map.
   - `index` - The internal index within the zone for this mob (commonly known, somewhat misleadingly, as the "hex id").
   - `distance` - The distance between you and the mob. For those familiar with the Windower 4 Lua interface, this is the actual distance and not the distance squared.
   - `x`, `y`, `z` - The 3D position of the mob on the map.
+- `cursor` - The mob currently selected as the in-game `<t>`, if any.
+- `target_acquired` - True when `cursor` and Gambit's selected `bt` identify the same valid mob. Operations such as `canShoot()` and `shoot()` require this because their game commands use `<t>`.
 - `p0`, `p1`, `p2`, `p3`, `p4`, `p5` - Members of your party, or nil if there is no party member in a given slot. All properties on `t` and `bt` above are available here, in addition to the following:
   - `hp`, `mp` - The party member's actual remaining HP and MP values.
   - `mpp` - The party member's remaining MP, expressed as a percent from 0 - 100.

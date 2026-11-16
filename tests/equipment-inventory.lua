@@ -38,6 +38,57 @@ assert(inventory.find_equipment_in_slot('ring1').name=='Original')
 inventory.equipment_manager:destroy(); inventory.equipment_manager=nil
 print('PASS: real inventory selection, pending equipment queries, confirmed queries, snapshots and queued restoration')
 
+-- Exhausted ammunition can remain in its old bag slot with a count of zero.
+-- It must not satisfy ranged readiness or hide a replacement stack.
+resources.items[303]={id=303,name='Test Gun',category='Weapon',range_type='Gun',flags={Equippable=true},slots={[2]=true}}
+resources.items[404]={id=404,name='Bullet',ammo_type='Bullet',flags={Equippable=true},slots={[3]=true}}
+items={equipment={range=1,range_bag=0,ammo=2,ammo_bag=0},inventory={enabled=true,
+    [1]={id=303,slot=1,count=1,status=5},
+    [2]={id=404,slot=2,count=0,status=5},
+    [3]={id=404,slot=3,count=12,status=0}}}
+local ranged=inventory.get_ranged_equipment()
+assert(ranged and ranged.weapon and ranged.ammo==nil and not ranged.valid)
+local replacement=inventory.find_item('Bullet',{equippable=true})
+assert(replacement and replacement.localId==3 and replacement.count==12)
+items.inventory[2].count=1
+ranged=inventory.get_ranged_equipment()
+assert(ranged and ranged.valid and ranged.ammo and ranged.ammo.name=='Bullet')
+
+-- A cached equipment location can be reused by newly generated pouch ammo even
+-- though the live ammo slot is empty. Live readiness must ignore that projection.
+items.equipment.ammo=0;items.equipment.ammo_bag=0
+inventory.equipment_manager={snapshot=function()
+    local projected={}
+    for key,value in pairs(items) do projected[key]=value end
+    projected.equipment={range=1,range_bag=0,ammo=2,ammo_bag=0}
+    return projected
+end}
+assert(inventory.get_ranged_equipment().valid)
+ranged=inventory.get_ranged_equipment(nil,true)
+assert(ranged and ranged.weapon and ranged.ammo==nil and not ranged.valid)
+assert(not inventory.get_ranged_equipment(true).valid)
+
+-- The same stale projection must not suppress a request to equip the new stack.
+local staleSent={}
+inventory.equipment_manager.submit=function(_,operations)
+    for _,operation in ipairs(operations) do staleSent[#staleSent+1]=operation end
+    return #operations
+end
+assert(inventory.equip_many({ammo='Bullet'})==1)
+assert(#staleSent==1 and staleSent[1].slot==3 and staleSent[1].item.localId==2)
+
+-- Pouch output may reuse the exhausted equipped stack's exact bag index. The
+-- live item status, rather than coordinates alone, identifies it as unequipped.
+staleSent={}
+items.equipment.ammo=2;items.equipment.ammo_bag=0
+items.inventory[2].status=0
+items.inventory[3].count=0
+assert(not inventory.get_ranged_equipment(true).valid)
+assert(inventory.equip_many({ammo='Bullet'})==1)
+assert(#staleSent==1 and staleSent[1].slot==3 and staleSent[1].item.localId==2)
+inventory.equipment_manager=nil
+print('PASS: exhausted ammo does not satisfy ranged readiness or equipment selection')
+
 -- Zoning snapshots can be absent or omit equipment fields/bags.
 items=nil
 assert(not inventory.get_ranged_equipment())

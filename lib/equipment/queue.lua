@@ -37,8 +37,9 @@ function Queue:submit(ops)
     local current=self:view()
     local planned={}
     for _,op in ipairs(ops) do
-        if not same(current[op.slot],op.item) then
-            local entry={slot=op.slot,item=copy(op.item),after=op.after,state='queued',attempts=0}
+        if op.force or not same(current[op.slot],op.item) then
+            local entry={slot=op.slot,item=copy(op.item),after=op.after,force=op.force,
+                state='queued',attempts=0}
             planned[#planned+1]=entry
             current[op.slot]=entry.item
         end
@@ -94,7 +95,7 @@ function Queue:tick()
                     local now=self.deps.clock()
                     if ready and (op.state=='queued' or now-op.sent_at>=0.75)
                         and (op.attempts<3 or now-op.first_sent_at>=(op.ackTimeout or 2.25)) then
-                        if op.state=='queued' and same(self.confirmed[op.slot],op.item) then
+                        if op.state=='queued' and not op.force and same(self.confirmed[op.slot],op.item) then
                             -- A refreshed zone baseline may already contain this
                             -- item; the server need not acknowledge a no-op equip.
                             op.state='acknowledged'
