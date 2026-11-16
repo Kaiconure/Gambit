@@ -5,18 +5,22 @@
   "vars": {
     "^keep_ammo": {
       "ammo": null,
-      "pouch": null
+      "pouch": null,
+      "_requip": false
     }
   },
   "actions": [
     {
       "when": [
         "vars.keep_ammo.ammo",
-        "not canRangedAttack()",
+        "vars.keep_ammo._requip or not canRangedAttack()",
         "itemInfo(vars.keep_ammo.ammo) and slotInfo('range') and ((slot_info.item.range_type == 'Bow' and item_info.ammo_type == 'Arrow') or (slot_info.item.range_type == 'Crossbow' and item_info.ammo_type == 'Bolt') or (slot_info.item.range_type == 'Gun' and item_info.ammo_type == 'Bullet'))",
         "findEquippableItem(vars.keep_ammo.ammo)"
       ],
-      "commands": ["log('Equipping ammo:', item.name)", "equip('ammo')"],
+      "commands": [
+        "log('Equipping ammo:', item.name)",
+        "(vars.keep_ammo._requip and forceEquip('ammo') or equip('ammo')) and setVar('vars.keep_ammo._requip', false)"
+      ],
       "delay": 0,
       "frequency": 5
     },
@@ -26,10 +30,13 @@
         "actionType == 'battle' or (not bt or not bt.has_claim)",
         "not canRangedAttack()",
         "itemInfo(vars.keep_ammo.ammo) and slotInfo('range') and ((slot_info.item.range_type == 'Bow' and item_info.ammo_type == 'Arrow') or (slot_info.item.range_type == 'Crossbow' and item_info.ammo_type == 'Bolt') or (slot_info.item.range_type == 'Gun' and item_info.ammo_type == 'Bullet'))",
-        "not findUnequippedItem(vars.keep_ammo.ammo)",
+        "not findEquippableItem(vars.keep_ammo.ammo)",
         "findUsableItem(vars.keep_ammo.pouch)"
       ],
-      "commands": ["log('Using ammo pouch:', item.name)", "useItem()"],
+      "commands": [
+        "log('Using ammo pouch:', item.name)",
+        "useItem() and setVar('vars.keep_ammo._requip', true)"
+      ],
       "delay": 0,
       "frequency": 5
     }

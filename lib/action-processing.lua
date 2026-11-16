@@ -988,31 +988,16 @@ local function doNextActionCycle(time, player, party)
             --  3. We're not in a forced/timed idle state.
             if not actionsExecuted and not isTimedIdling then
                 if hasPullableMob and not isBattle then
-                    local command = ''
-                    local commandDelay = 0
-                    local hasCommand = false
-
-                    -- Manual strategy leaves cursor acquisition and engagement to
-                    -- actions. A tracked target alone must not bypass their gates.
+                    -- Manual strategy leaves engagement to actions. A tracked target
+                    -- alone must not bypass their gates.
                     if settings.strategy ~= 'manual' then
-                        -- Lock on if necessary
-                        local target = windower.ffxi.get_mob_by_target('t')
-                        if target == nil or target.id ~= mob.id then
-                            lockTarget(player, mob, true)
-                        end
-
-                        -- Engage if necessary
-                        if mobDistance < 22 and player.status ~= STATUS_ENGAGED then
-                            command = command .. string.format('input /attack <t>; ')
-                            hasCommand = true
-                        end
-
-                        if hasCommand then
-                            sendActionCommand(command, nil, 0.25)
+                        -- Engagement is packet-only. Repeated action cycles provide
+                        -- bounded retries without opening a target cursor or tabbing.
+                        if player.status ~= STATUS_ENGAGED then
+                            targetAndEngage(mob.id)
                         end
                     end
 
-                    -- Give some time for us to establish and engage with a new target before jumping straight to the pull
                     if mobTime > 1 then
                         local context = ActionContext.create('pull', time, mob, mobTime, battleScope, party)
 

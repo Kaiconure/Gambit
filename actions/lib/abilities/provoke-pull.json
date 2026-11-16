@@ -64,7 +64,7 @@
         "not any(bt.name, vars.provoke_pull.blacklist)",
         "not bt.has_claim and (bt.mob_time > (vars.provoke_pull.ranged_mob_time or 1) and (bt.distance >= 15 or not canUse('Provoke', 'Animated Flourish')))",
         "bt.hpp >= 100",
-        "(bt.distance <= 25 and bt.distance > (vars.provoke_pull.ranged_min_distance or 3) and canRA())"
+        "(bt.distance <= 25 and bt.distance > (vars.provoke_pull.ranged_min_distance or 3) and canShoot())"
       ],
       "commands": [
         "logf('Pulling %s with RA at distance: %.2f (%.2f)', bt.name, bt.distance, bt.center_distance)",

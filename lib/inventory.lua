@@ -169,7 +169,7 @@ inventory.get_item_from_bag = function (items, bagId, localId)
     -- Find the item in the bag
     local bagName = bagInfo.field
     local bagItem = items[bagName] and items[bagName][localId]
-    if bagItem == nil then
+    if bagItem == nil or (tonumber(bagItem.count) or 0) <= 0 then
         return
     end
 
@@ -189,7 +189,7 @@ local default_find_item_flags = {
     equippable = false
 }
 
-inventory.find_equipment_in_slot = function(slot, items, confirmed, session)
+inventory.find_equipment_in_slot = function(slot, items, confirmed, session, live)
     if slot == nil then return end
 
     local slotId = GEAR_SLOT_IDS_BY_NAME[slot]
@@ -197,7 +197,8 @@ inventory.find_equipment_in_slot = function(slot, items, confirmed, session)
     local slotField = GEAR_SLOT_FIELDS_BY_ID[slotId]
     if slotField == nil then return end
 
-    items = equipment_view(items or windower.ffxi.get_items(),confirmed,session)
+    items = items or windower.ffxi.get_items()
+    if not live then items = equipment_view(items,confirmed,session) end
     if not items or not items.equipment then return end
 
     -- 0 in the slot item id (local id) means nothing is equipped
@@ -215,6 +216,10 @@ inventory.find_equipment_in_slot = function(slot, items, confirmed, session)
     -- Get the item entry from the bag
     local bagItem = bag[localId]
     if not bagItem then return end
+    -- An exhausted stack can be replaced at the same bag index by pouch output.
+    -- The equipment coordinates may remain stale, but the new stack is not
+    -- equipped until the server accepts a new equip request.
+    if live and bagItem.status~=5 and bagItem.status~=19 then return end
 
     return inventory.find_item(nil,
         {
@@ -296,8 +301,8 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
         end
         pieces=equipment
     end
-    all_items = profiling.measure('equipment snapshot/view',equipment_view,
-        all_items or profiling.measure('equipment get_items',windower.ffxi.get_items),false,session)
+    local live_items=all_items or profiling.measure('equipment get_items',windower.ffxi.get_items)
+    all_items = profiling.measure('equipment snapshot/view',equipment_view,live_items,false,session)
     
     if type(changes) == 'table' then
         changes.removed = {}
@@ -334,6 +339,20 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
             local choices=type(piece)=='table' and #piece>0 and piece
                 or type(nested)=='table' and nested or {piece}
             local equipped=inventory.find_equipment_in_slot(slot,all_items,false,session)
+            local liveEquipped=inventory.find_equipment_in_slot(slot,live_items,false,session,true)
+            -- Ammunition is unusual: consuming the final item can empty the
+            -- live slot without producing an equipment acknowledgement.
+            local liveMismatch=info.id==3 and ((equipped and not liveEquipped) or (liveEquipped and not equipped)
+                or (equipped and liveEquipped and (equipped.localId~=liveEquipped.localId
+                    or equipped.bagId~=liveEquipped.bagId or equipped.id~=liveEquipped.id)))
+            -- A consumed stack can leave the equipment queue remembering its old
+            -- bag location even after Windower reports that the live slot is empty.
+            -- Resolve this request against the live snapshot in that case; the
+            -- queue will still coalesce a genuinely pending duplicate operation.
+            local candidateItems=liveMismatch and live_items or all_items
+            local candidateFlags=liveMismatch
+                and {equippable=true,equipped=false,live=true} or flags
+            if liveMismatch then equipped=liveEquipped end
             local selected,selectedChoice
             for _,choice in ipairs(choices) do
                 if type(choice)=='string' then choice={name=choice} end
@@ -355,7 +374,8 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
                         for _,item in ipairs(exclusion_list) do excluded[#excluded+1]=item end
                         while true do
                             local candidate=profiling.measure('equipment inventory search',inventory.find_item,
-                                {id=resource.id,name=name,augments=augments,slot=slot},flags,all_items,excluded,session)
+                                {id=resource.id,name=name,augments=augments,slot=slot},candidateFlags,
+                                candidateItems,excluded,session)
                             if not candidate then break end
                             excluded[#excluded+1]=candidate
                             if candidate.raw_slots[info.id] then selected=candidate; break end
@@ -451,6 +471,24 @@ inventory.equip_many = function(pieces, all_items, simulate, changes, session)
     end
 
     return #swaps
+end
+
+-- Submit an explicit equip request even when the cached slot identity already
+-- matches. This is intentionally separate from normal equipment planning and
+-- is used for ambiguous server state such as pouch output reusing an exhausted
+-- ammunition stack's bag index.
+inventory.force_equip = function(slot,item,session)
+    local slotId=type(slot)=='string' and inventory.get_slot_id_by_name(slot)
+    if slotId==nil or type(item)~='table' or type(item.localId)~='number'
+        or type(item.bagId)~='number' or type(item.id)~='number' then return end
+    local items=windower.ffxi.get_items()
+    local current=inventory.get_item_from_bag(items,item.bagId,item.localId)
+    if not current or current.id~=item.id or not current.slots or not current.slots[slotId] then return end
+    local operation={slot=slotId,item={id=item.id,localId=item.localId,bagId=item.bagId},force=true}
+    local manager=session or inventory.equipment_manager
+    if manager then return manager:submit({operation}) end
+    windower.ffxi.set_equip(item.localId,slotId,item.bagId)
+    return 1
 end
 
 -- Restoration must not depend on the asynchronous equipped-status cache.
@@ -597,7 +635,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
     end
 
     items = items or profiling.measure('equipment search get_items',windower.ffxi.get_items)
-    if not flags.usable then items=equipment_view(items,flags.confirmed,session) end
+    if not flags.usable and not flags.live then items=equipment_view(items,flags.confirmed,session) end
     -- Inventory can be absent or partially populated while zoning.
     if type(items)~='table' then return end
 
@@ -645,6 +683,7 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
             for _i, bagItem in ipairs(bagItems) do
                 if 
                     bagItem and
+                    (tonumber(bagItem.count) or 0) > 0 and
                     item and
                     not is_item_excluded(exclusion_list, bagId, bagItem.slot)
                 then
@@ -691,7 +730,18 @@ inventory.find_item = function(item, flags, items, exclusion_list, session)
                         bagItem.status ~= 25
 
                     local isEquipped = bagItem.status == 5 or bagItem.status == 19
-                    if (session or inventory.equipment_manager) and not flags.usable and bagInfo.equippable then
+                    if flags.live and bagInfo.equippable then
+                        local equippedStatus=isEquipped
+                        isEquipped=false
+                        for _,field in pairs(GEAR_SLOT_FIELDS_BY_ID) do
+                            if equippedStatus and items.equipment
+                                and items.equipment[field]==bagItem.slot
+                                and items.equipment[field..'_bag']==bagId then
+                                isEquipped=true; break
+                            end
+                        end
+                    elseif (session or inventory.equipment_manager) and not flags.usable
+                        and bagInfo.equippable then
                         isEquipped=false
                         for _,field in pairs(GEAR_SLOT_FIELDS_BY_ID) do
                                 if items.equipment and items.equipment[field]==bagItem.slot and items.equipment[field..'_bag']==bagId then
@@ -780,11 +830,23 @@ end
 -- Determine if appropriate ranged attack gear is equipped. Note that this will NOT register 
 -- for consumable thrown items (i.e. it will not let you throw your Rare/Ex sachet).
 --
-inventory.get_ranged_equipment = function (session)
-    local items = equipment_view(windower.ffxi.get_items(),false,session)
+inventory.get_ranged_equipment = function (session, live)
+    -- Public callers pass only the live flag; bound equipment sessions pass the
+    -- session first. Support both forms without treating true as a manager.
+    if type(session)=='boolean' and live==nil then
+        live=session
+        session=nil
+    end
+    local items = windower.ffxi.get_items()
+    if not live then items = equipment_view(items,false,session) end
     if items and type(items.equipment)=='table' then
         local range = inventory.get_item_from_bag(items, items.equipment.range_bag, items.equipment.range)
         local ammo = inventory.get_item_from_bag(items, items.equipment.ammo_bag, items.equipment.ammo)
+        if live and ammo then
+            local bagInfo=INVENTORY_BAGS_BY_ID[items.equipment.ammo_bag]
+            local bagItem=bagInfo and items[bagInfo.field] and items[bagInfo.field][items.equipment.ammo]
+            if not bagItem or (bagItem.status~=5 and bagItem.status~=19) then ammo=nil end
+        end
 
         -- Can't do anything if there's no ranged weapon equipped
         if range == nil then return end
@@ -852,11 +914,14 @@ end
 function inventory.bind_equipment(session)
     return setmetatable({
         equip_many=function(pieces,items,simulate,changes) return inventory.equip_many(pieces,items,simulate,changes,session) end,
+        force_equip=function(slot,item) return inventory.force_equip(slot,item,session) end,
         restore_equipment=function(removed) return inventory.restore_equipment(removed,session) end,
         snapshot_equipment=function() return inventory.snapshot_equipment(session) end,
-        find_equipment_in_slot=function(slot,items,confirmed) return inventory.find_equipment_in_slot(slot,items,confirmed,session) end,
+        find_equipment_in_slot=function(slot,items,confirmed,live)
+            return inventory.find_equipment_in_slot(slot,items,confirmed,session,live)
+        end,
         find_item=function(item,flags,items,excluded) return inventory.find_item(item,flags,items,excluded,session) end,
-        get_ranged_equipment=function() return inventory.get_ranged_equipment(session) end,
+        get_ranged_equipment=function(live) return inventory.get_ranged_equipment(session,live) end,
     },{__index=inventory})
 end
 return inventory

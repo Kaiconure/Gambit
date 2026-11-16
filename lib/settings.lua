@@ -227,6 +227,7 @@ local DefaultMinDistanceList = {
 
 local defaultSettings = {
     maxDistance = 25,
+    targetDistanceBuffer = 5,
     maxDistanceZ = 5,
     retargetDelay = 0.0,
     strategy = TargetStrategy.default,
@@ -1108,6 +1109,10 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
 
     -- The maximum horizontal search radius to use when acquiring targets. Clamped between 5-60 units.
     tempSettings.maxDistance = math.max(3, math.min(tempSettings.maxDistance or 0, 60))
+
+    -- Newly acquired targets must be within maxDistance, but a selected target may
+    -- drift this much farther before it is abandoned. Must be nonnegative.
+    tempSettings.targetDistanceBuffer = math.max(tonumber(tempSettings.targetDistanceBuffer) or 5, 0)
 
     -- The maximum vertical search radius to use when acquiring targets. Can be used to prevent
     -- acquiring targets on unreachable platforms, or to avoid walking down stairs or ramps.

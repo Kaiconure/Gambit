@@ -8,7 +8,6 @@
       "custom_items": [],
       "escha_items": [
         "Silt Pouch",
-        "--Bead Pouch",
         "Frayed Sack (Pel)",
         "Frayed Sack (Fer)",
         "Frayed Sack (Tau)"
@@ -48,7 +47,9 @@
         "Pluton Box",
         "Pluton Case",
         "Pluton Coffer"
-      ]
+      ],
+      "bead_pouch": "Bead Pouch",
+      "escha_bead_cap": 50000
     }
   },
   "actions": [
@@ -67,6 +68,22 @@
       "delay": 0,
       "frequency": "infinity",
       "miss_frequency": "infinity"
+    },
+    {
+      "when": [
+        "not vars.common_consumables.disabled",
+        "not vars.common_consumables.escha_items_disabled",
+        "not bt or not bt.is_engaged",
+        "freeInventorySlots() > 0",
+        "escha_beads ~= nil and escha_beads < (vars.common_consumables.escha_bead_cap or 50000)",
+        "canUseItem(vars.common_consumables.bead_pouch)"
+      ],
+      "commands": [
+        "useItem(me)",
+        "refreshCurrencies()"
+      ],
+      "miss_frequency": 30,
+      "scope": "battle"
     },
     {
       "when": [

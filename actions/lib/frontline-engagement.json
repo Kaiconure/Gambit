@@ -11,7 +11,7 @@
       "anchor": null,
       "distance": null,
       "distance_offset": 0,
-      "radius_multiplier": 0.25,
+      "radius_multiplier": 0.9,
       "duration": null,
       "movement_slice_min": 1,
       "movement_slice_max": 5,
@@ -67,7 +67,11 @@
     },
     {
       "precondition": ["movementAvailable()", "frontlineAnchored()"],
-      "when": ["actionType == 'battle'", "not frontlineAnchorNeedsReturn()", "bt and (following(bt) or not facingEnemy())"],
+      "when": [
+        "actionType == 'battle'",
+        "not frontlineAnchorNeedsReturn()",
+        "bt and (following(bt) or not facingEnemy())"
+      ],
       "commands": ["following(bt) and cancelFollow()", "faceEnemy()"],
       "frequency": 0.25,
       "delay": 0

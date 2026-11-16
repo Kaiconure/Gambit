@@ -65,6 +65,7 @@ This reference describes the commands registered in [commands.lua](../lib/comman
 | Inspect a variable | `//gbt varget <name>` |
 | Evaluate a Lua expression | `//gbt eval <expression>` |
 | Set or clear the waypoint indicator | `//gbt waypoint [options]` / `//gbt waypoint -clear` |
+| List nearby entities | `//gbt moblist [-f <prefix>] [-d <range>] [-t <type>]` |
 
 ## Automation and actions
 
@@ -302,6 +303,23 @@ their indicator stays red. Dynamic waypoints also remain red while their entity
 is resolved, regardless of distance. They turn gray only when the entity
 disappears, then continue pointing toward its last known position.
 
+## Nearby entity list
+
+```text
+//gbt moblist [-f <name-prefix>] [-d <range>] [-t <npc|mob|player|all|spawn-type>]
+```
+
+`moblist` prints valid targets from nearest to furthest. `-f` applies a
+case-insensitive starts-with name filter, `-d` sets the maximum horizontal
+distance (default `50` yalms), and `-t` limits results to NPCs, hostile mobs,
+players, all types, or an exact numeric `spawn_type`. Each result includes its
+type, distance, 16-point compass direction, entity ID, and hexadecimal index.
+
+```text
+//gbt moblist -f gob -d 30 -t mob
+//gbt moblist -t 16
+```
+
 ## Configuration
 
 `show` prints scalar settings. `config` accepts multiple options, for example:
@@ -315,6 +333,7 @@ disappears, then continue pointing toward its last known position.
 | `config` option | Aliases | Behavior / accepted range |
 | --- | --- | --- |
 | `-distance <number>` | `-d` | Maximum targeting distance; clamped to 3–50. |
+| `-distancebuffer [number]` | `-db` | Nonnegative distance added only when retaining an already-selected, unclaimed target; defaults to 5. Omit the value to display the buffer and effective retention distance. |
 | `-distancez <number>` | `-z` | Maximum vertical targeting distance; clamped to 1–50. |
 | `-strategy <name>` | `-strat` | Set targeting strategy. |
 | `-followd <number>` | `-fd` | Default follow-command distance; clamped to 0.25–10. |

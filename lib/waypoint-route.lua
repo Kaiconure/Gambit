@@ -13,7 +13,7 @@ local function dense(value,label)
         assert(type(key)=='number' and key>=1 and key%1==0 and key<=#value,label..' must be a dense array')
     end
 end
-function M.new(config,position,now)
+function M.new(config,position,now,progress)
     assert(type(config)=='table','Waypoint route configuration must be an object')
     dense(config.points,'Waypoint route points')
     assert(#config.points>0,'Waypoint route requires at least one point')
@@ -32,8 +32,14 @@ function M.new(config,position,now)
             pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
             duration=point.duration~=nil and nonnegative(point.duration,'Waypoint duration') or nil}
     end
-    route.index=1
-    if position and finite(position.x) and finite(position.y) then
+    local restored=type(progress)=='table'
+        and type(progress.index)=='number' and progress.index%1==0
+        and progress.index>=1 and progress.index<=#route.points
+        and (progress.step==1 or progress.step==-1)
+    route.index=restored and progress.index or 1
+    route.step=restored and progress.step or 1
+    if route.mode=='cycle' then route.step=1 end
+    if not restored and position and finite(position.x) and finite(position.y) then
         local nearestDistance
         for index,point in ipairs(route.points) do
             local distance=(position.x-point.x)^2+(position.y-point.y)^2
@@ -46,6 +52,7 @@ function M.new(config,position,now)
     return route
 end
 function M:point() return self.points[self.index] end
+function M:snapshot() return {index=self.index,step=self.step} end
 function M:threshold(defaultTolerance)
     local point=self:point()
     local tolerance=point.tolerance or self.tolerance or defaultTolerance or 0.33
