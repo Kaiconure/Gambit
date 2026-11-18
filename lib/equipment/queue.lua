@@ -8,6 +8,9 @@ local function same(a,b)
     return a and b and a.localId==b.localId and (a.localId==0 or a.bagId==b.bagId)
         and (a.id==nil or b.id==nil or a.id==b.id)
 end
+local function reportFailure(self,message)
+    if self.deps.diagnostic then self.deps.diagnostic(message) end
+end
 function Queue.new(deps)
     local self=setmetatable({deps=deps,batches={},confirmed={},running=false},Queue)
     self:bootstrap()
@@ -110,7 +113,7 @@ function Queue:tick()
                                 self:ack(op.slot,actual,true)
                             else
                                 op.state='failed'; failed=true
-                                self.deps.report('Equipment swap failed for slot '..op.slot..
+                                reportFailure(self,'Equipment swap failed for slot '..op.slot..
                                     ' (no acknowledgment after 3 attempts; live slot does not match request)')
                                 break
                             end
@@ -118,7 +121,7 @@ function Queue:tick()
                             op.state='failed'; failed=true
                             local reason=op.attempts>=3 and 'no acknowledgment after 3 attempts'
                                 or 'item unavailable or changed at its inventory location'
-                            self.deps.report('Equipment swap failed for slot '..op.slot..' ('..reason..')')
+                            reportFailure(self,'Equipment swap failed for slot '..op.slot..' ('..reason..')')
                             break
                         else
                             op.attempts=op.attempts+1

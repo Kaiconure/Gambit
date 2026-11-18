@@ -6,7 +6,7 @@ selecting a namespace and in `.nsconfig` inheritance references. Standalone `.`
 and `..` segments, leading/trailing dots, and Windows device names remain invalid.
 
 Bundled namespaces live under `namespaces/<name>/`; user namespaces live under
-`settings/_namespaces/<name>/`. Each contains a `.nsconfig` and shared rules. A user
+`settings/namespaces/<name>/`. Each contains a `.nsconfig` and shared rules. A user
 namespace replaces the entire bundled namespace with the same name, even if the
 user folder lacks a `.nsconfig`. Files are never merged between those two copies.
 Only explicitly inherited parents contribute additional namespace content,
@@ -15,15 +15,22 @@ followed by the normal global settings and shipped-library fallbacks.
 folder. To customize shared rules, copy it into the user root or create a
 differently named user namespace that inherits it.
 
+Global character settings normally live under
+`settings/players/<character>/`. For backward compatibility, Gambit falls back
+to the former `settings/<character>/` location when the organized character
+directory does not exist. The two locations are not merged: once
+`settings/players/<character>/` exists, it owns that character's global
+settings, actions, events, data, and output paths.
+
 Prefix a namespace reference with `gambit:` to bypass a same-named user
 namespace and address the bundled namespace explicitly. This works for both
 selection and inheritance, for example `{"inherits_from":"gambit:follow"}`.
 The bundled origin is transitive: unqualified parents of that bundled namespace
 also resolve from bundled namespace folders. Character settings and processed
-output remain under `settings/_namespace-settings/<name>/`.
+output remain under `settings/namespace-settings/<name>/`.
 
 For **all** namespaces, character files are loaded and saved under
-`settings/_namespace-settings/<name>/players/<character>/`. Within each namespace,
+`settings/namespace-settings/<name>/players/<character>/`. Within each namespace,
 these precede shared rules; inherited parents have their own character files at
 the same location. Diagnostics and processed output also go here. The name uses
 the resolved namespace spelling, so underscore aliases share character files.
@@ -31,7 +38,7 @@ Replacing a bundled namespace with a user copy at the same resolved name keeps
 these settings. A differently named copy has separate character settings.
 The former `<namespace>/players/` location is no longer searched.
 
-Organizational roots accept an optional underscore: `settings/_namespaces` or `settings/namespaces`, and `settings/_namespace-settings` or `settings/namespace-settings`. Bundled namespaces likewise accept `_namespaces/` or `namespaces/`. For each root, the underscore version wins when both exist; the two versions are never merged. Existing plain roots remain usable. When neither version exists, automatic creation uses the underscore version. Old `ns`, `_ns`, and `.ns` roots are not searched.
+Organizational roots accept an optional underscore: `settings/namespaces` or `settings/_namespaces`, and `settings/namespace-settings` or `settings/_namespace-settings`. Bundled namespaces likewise accept `namespaces/` or `_namespaces/`. For each root, the plain version wins when both exist; the two versions are never merged. Existing underscored roots remain usable. When neither version exists, automatic creation uses the plain version. Old `ns`, `_ns`, and `.ns` roots are not searched.
 
 Each namespace path segment is resolved independently: the exact directory name
 wins; if absent, Gambit tries an underscore-prefixed directory. Thus `xp/cleave`

@@ -300,6 +300,23 @@ Role resolution depends on known party job information; no match yields an empty
 array or false. Client-relative selectors such as `me` and `^` should not be used
 for a shared cross-client WS order.
 
+`findPrimaryTank()` returns the participant selected by the same deterministic
+policy used by `isPrimaryTank()`, or `nil` when no eligible tank is present. It
+also assigns the result to `primary_tank` for reuse later in the action. The
+party leader wins when eligible; otherwise the order is PLD, RUN, NIN, WAR, then
+other eligible jobs, with names breaking ties alphabetically. PLD and RUN are
+eligible without Provoke; other player jobs require access to Provoke, while
+Trust eligibility comes from Trust tank metadata.
+
+`setPrimaryTank(member)` overrides that automatic choice using a party-member
+object, mob wrapper, player name, or server ID. Passing `nil` or `false` clears
+the override. Only stable identity is retained: every `findPrimaryTank()` call
+resolves a fresh member from the current party and uses the override only while
+that member has `is_participant == true`. If the member is absent or outside the
+local participant group, selection falls back to the normal deterministic
+policy. The override does not require the selected member to otherwise qualify
+as an automatic tank candidate.
+
 ## Member positioning
 
 ### Movement reservations

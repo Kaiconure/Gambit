@@ -1,6 +1,6 @@
 local profiling=require('./lib/load-profile')
 profiling.begin('startup modules')
-__version = '1.0.7.3'
+__version = '1.0.7.4'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -13,9 +13,18 @@ _addon.author = __author
 _addon.commands = __commands
 
 ---------------------------------------------------------------------------------------------------
+-- Action/execution diagnostics may be enabled directly, or implicitly by the
+-- broader debug logging level. The explicit setting is never changed here, so
+-- lowering verbosity restores its independently configured state.
+function isDebugging()
+    return settings and (settings.debugging
+        or (tonumber(settings.verbosity) or 0) >= (VERBOSITY_DEBUG or 3))
+end
+
+---------------------------------------------------------------------------------------------------
 -- Print a formatted message to the Windower console
 function printDebug(format, ...)
-    if settings and settings.debugging then
+    if isDebugging() then
         print('[%s] GBT: ':format(os.date("%X")) .. string.format(tostring(format) or '', ...))
     end
 end
@@ -23,7 +32,7 @@ end
 ---------------------------------------------------------------------------------------------------
 -- Print a formatted message to the Windower console, with stack trace included
 function printDebugST(format, ...)
-    if settings and settings.debugging then
+    if isDebugging() then
         printDebug(format, ...)
         printDebug('%s', debug.traceback())
     end
@@ -341,7 +350,7 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
         profiling.stop('events')
     end
 
-    if settings.debugging then
+    if isDebugging() then
         inventory.printDebug = printDebug
     end
     -- Full reloads report after the action processor finishes compilation.
@@ -361,6 +370,10 @@ windower.register_event('prerender', function()
 end)
 
 windower.register_event('status change', function(new_id, previous_id)
+
+    if new_id == 5 or new_id == 85 then
+        require('./lib/follow-distance').resetTransient()
+    end
 
     local previous_status   = previous_id and resources.statuses[previous_id]
     local new_status        = new_id and resources.statuses[new_id]
@@ -400,6 +413,9 @@ windower.register_event('zone change', function(zone_id)
     end
 
     require('./lib/reactions').clear('zone changed')
+    require('./lib/session-variables').reset('panel_checklists')
+    require('./lib/session-variables').reset('panel_branches')
+    require('./lib/follow-distance').resetTransient()
     smartMove:stop()
     smartMove:clearWaypointProgress()
 
@@ -465,6 +481,9 @@ windower.register_event('load', function()
         end,
         context=ActionContext.createTemporary,
         report=function(message) writeError('[equipment] '..message) end,
+        diagnostic=function(message)
+            if isDebugging() then writeError('[equipment] '..message) end
+        end,
         debug=function(message) writeDebug(message) end,
         debugEnabled=function() return hasVerbosity(VERBOSITY_DEBUG) end,
         formatCount=function(count) return text_number(count, Colors.debug) end,

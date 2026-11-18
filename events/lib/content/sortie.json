@@ -1,0 +1,34 @@
+{
+  "contributions": [
+    {
+      "slot": "loading.actions.after",
+      "when": ["zone_id == 275 or zone_id == 133 or zone_id == 189"],
+      "actions": [
+        {
+          "id": "sortie-panel-loading",
+          "commands": ["setPanelTrackingSupplement('sortie', true)"]
+        }
+      ]
+    },
+    {
+      "slot": "zones.enter.after",
+      "when": ["event.matches(275) or event.matches(133) or event.matches(189)"],
+      "actions": [
+        {
+          "id": "sortie-zone-enter",
+          "commands": ["setPanelTrackingSupplement('sortie', true)"]
+        }
+      ]
+    },
+    {
+      "slot": "zones.leave.after",
+      "when": ["event.matches(275) or event.matches(133) or event.matches(189)"],
+      "actions": [
+        {
+          "id": "sortie-zone-leave",
+          "commands": ["setPanelTrackingSupplement('sortie', false)"]
+        }
+      ]
+    }
+  ]
+}

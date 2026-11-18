@@ -1,16 +1,19 @@
 local dirs={
-    ['settings/_namespaces']=true,['_namespaces']=true,
-    ['settings/_namespaces/example']=true,['_namespaces/example']=true,['_namespaces/base']=true,
+    ['settings/namespaces']=true,['_namespaces']=true,
+    ['settings/namespaces/example']=true,['_namespaces/example']=true,['_namespaces/base']=true,
 }
 windower={addon_path='',dir_exists=function(path) return dirs[path] or false end}
 local Paths=dofile('lib/settings-paths.lua')
-assert(Paths.namespacePath('example')=='./settings/_namespaces/example')
+assert(Paths.namespacePath('example')=='./settings/namespaces/example')
 assert(Paths.namespacePath('gambit:example')=='./_namespaces/example')
 assert(Paths.validateNamespace('gambit:example'))
 assert(not Paths.validateNamespace('gambit:'))
-assert(Paths.namespacePlayerRoot('gambit:example')=='./settings/_namespace-settings/example/players')
+assert(not Paths.validateNamespace('global'))
+assert(not Paths.validateNamespace('gambit'))
+assert(not Paths.validateNamespace('example/global'))
+assert(Paths.namespacePlayerRoot('gambit:example')=='./settings/namespace-settings/example/players')
 local configs={
-    ['./settings/_namespaces/example']={inherits_from='gambit:example'},
+    ['./settings/namespaces/example']={inherits_from='gambit:example'},
     ['./_namespaces/example']={inherits_from='base'},
     ['./_namespaces/base']={},
 }
@@ -21,7 +24,7 @@ Paths.setLoadedNamespace('example',chain)
 local candidates=Paths.candidates('Tester','actions/war.json')
 local personal=0
 for _,path in ipairs(candidates) do
-    if path:find('_namespace%-settings/example/players/Tester',1) then personal=personal+1 end
+    if path:find('namespace%-settings/example/players/Tester',1) then personal=personal+1 end
 end
 assert(personal==1)
 local layers=Paths.entryPointLayers('Tester','actions')

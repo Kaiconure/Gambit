@@ -8,7 +8,7 @@ Keep definitions in the array format shown below. Gambit prepares keyed lookups 
 
 ## Add a reaction
 
-Put reactions in your character's **event variables**, such as `settings/Aidelle/events/geo.vars.json`. To share rules across jobs or a namespace, use the corresponding `events/(all).vars.json` or `events/common.vars.json`. Merge the following into the file's existing `vars` object:
+Put reactions in your character's **event variables**, such as `settings/players/Aidelle/events/geo.vars.json`. To share rules across jobs or a namespace, use the corresponding `events/(all).vars.json` or `events/common.vars.json`. Merge the following into the file's existing `vars` object:
 
 ```json
 {

@@ -1058,6 +1058,20 @@ local function setPartyEnumerators(context)
     context.partyHasJob = function(...)
         return targetSelectors.partyHasJob(context, varargs({...}))
     end
+    context.findPrimaryTank = function()
+        context.primary_tank = targetSelectors.primaryTank(context)
+        return context.primary_tank
+    end
+    context.setPrimaryTank = function(member)
+        if not targetSelectors.setPrimaryTank(member) then return false end
+        return context.findPrimaryTank()
+    end
+    context.isPrimaryTank = function()
+        if not context.me then return false end
+        local tank=context.findPrimaryTank()
+        return tank==context.me or (tank and tank.id~=nil and context.me.id~=nil
+            and tank.id==context.me.id) or false
+    end
     -- Pure selector queries: no member-enumerator or selected-target side effects.
     context.partyNames = function(targets)
         return targetSelectors.orderedNames(context, targets)
@@ -2183,7 +2197,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             strategy = settings.strategy,
             distance = settings.maxDistance,
             distance_z = settings.maxDistanceZ,
-            follow_distance = settings.followCommandDistance,
+            follow_distance = require('./lib/follow-distance').get(settings),
         },
         mobTime = mobEngagedTime or 0,
         scopes = {
@@ -4906,7 +4920,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         -- we will fall back to the follow command distance. If that is not valid,
         -- we will fall back to a default of 1.0.
         if type(distance) ~= 'number' or distance < 0 then
-            distance = math.max(tonumber(settings.followCommandDistance) or 1, 1)
+            distance = require('./lib/follow-distance').get(settings)
         end
 
         if settings and type(settings.minDistanceList[target.name]) == 'number' then
@@ -7240,9 +7254,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
 
     -- Add or remove named rows without replacing the configured or temporary
     -- tracking set. Content integrations use this for zone-scoped supplements.
-    context.setPanelTrackingSupplement = function(name, enabled)
+    context.setPanelTrackingSupplement = function(name, enabled, settings)
         assert(globals.status_panel, 'Status panel is not available')
-        return globals.status_panel:setTrackingSupplement(name, enabled)
+        return globals.status_panel:setTrackingSupplement(name, enabled, settings)
     end
 
     -- Attach a temporary directional waypoint beside the status panel. Passing

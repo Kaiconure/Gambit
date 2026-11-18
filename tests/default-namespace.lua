@@ -16,6 +16,8 @@ paths.ensureNamespaceFolders=function() error('Normal loads must not initialize 
 local messages={}
 local abstractWarnings={}
 local env=setmetatable({
+    profiling={start=function() end,stop=function() end},
+    panelConfig={forSave=copy},
     Colors={warning=1},
     writeWarning=function(message) abstractWarnings[#abstractWarnings+1]=message end,
     settingsPaths=paths, json={parse=copy,stringify=copy},

@@ -52,7 +52,9 @@ function slots.priority(source, namespaces, playerName, mainJob)
         end
     end
     if layer == #namespaces * 2 + 2 then
-        local personal = 'settings/' .. playerName:lower() .. '/'
+        local personalRoot=settingsPaths.globalPlayerRoot and settingsPaths.globalPlayerRoot(playerName)
+            or ('./settings/'..playerName)
+        local personal = personalRoot:gsub('^%./',''):lower() .. '/'
         if source:sub(1, #personal) == personal then
             layer, relative = #namespaces*2, source:sub(#personal+1)
         elseif source:sub(1,9) == 'settings/' then

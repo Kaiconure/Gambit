@@ -1058,7 +1058,12 @@ function smartMove:followMob(mob, distance, options, owner)
 end
 
 function smartMove:followDistance(mob, distance, options)
-    return resolveDistance(mob, math.max(tonumber(distance) or 0, 0), options, 0.75)
+    distance = math.max(tonumber(distance) or 0, 0)
+    if distance == 0 then
+        return 0
+    end
+
+    return resolveDistance(mob, distance, options, 0.75)
 end
 
 function smartMove:followIndex(follow_index, distance, options, owner)

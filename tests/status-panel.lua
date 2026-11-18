@@ -190,6 +190,12 @@ assert(#panel.entries==5 and panel.entries[1].definition.name=='Temporary'
     and panel.entries[3].definition.name=='Nyzul Floor Objective')
 assert(panel:setTrackingSupplement('nyzul',false) and #panel.entries==2)
 assert(#saves==beforeTemporary and panel.buffer==retainedLog)
+panel:setTemporaryTracking({{id='preview',name='Preview',checklist={{id='warning',
+    text='Restriction',icon='general/indicators/warning.png'}}}})
+assert(panel.entries[1].checks[1].icon.image.pathValue[1]:find(
+    'content/ui/general/indicators/warning.png',1,true))
+assert(panel.entries[1].checks[1].icon.visible and panel.entries[1].checks[1].button.text.value=='Restriction')
+panel:setTemporaryTracking(temporaryRows)
 assert(panel.options.tracking.current=='none' and #panel.options.tracking.sets.none==0)
 temporaryRows[1].value[1]='Changed externally'
 assert(panel.entries[1].definition.value[1]=='First')

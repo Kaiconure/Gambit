@@ -11,7 +11,7 @@ for _,path in ipairs(manifest)do
  path=norm(path);fileset[path]=true
  local dir=path:match('^(.*)/[^/]+$')
  while dir do dirs[dir]=true;dir=dir:match('^(.*)/[^/]+$')end
- local ns=path:match('^settings/_namespaces/(.*)/%.nsconfig$')
+ local ns=path:match('^settings/namespaces/(.*)/%.nsconfig$')
  if ns then namespaces[#namespaces+1]=ns end
 end
 table.sort(namespaces)
@@ -23,7 +23,7 @@ local baseline=false
 local cache={}
 local function exists(path)
  path=norm(path)
- if baseline and path=='settings/_namespaces/_base/actions/lib/common/(melee).json' then return false end
+ if baseline and path=='settings/namespaces/_base/actions/lib/common/(melee).json' then return false end
  return fileset[path] or false
 end
 local function document(path)
@@ -31,10 +31,10 @@ local function document(path)
  if not cache[path] then cache[path]=json.parse(read(path))end
  local doc=copy(cache[path])
  if not baseline then return doc end
- if path=='settings/_namespaces/_base/actions/lib/common/common.json' then
+ if path=='settings/namespaces/_base/actions/lib/common/common.json' then
   for index=#doc.contributions,1,-1 do if doc.contributions[index].slot=='normal-engagement' then table.remove(doc.contributions,index) end end
  end
- local job=path:match('^settings/_namespaces/_base/actions/([^/]+)%.json$')
+ local job=path:match('^settings/namespaces/_base/actions/([^/]+)%.json$')
  if job then
   for _,kind in ipairs({'pull','battle'})do
    for i=#(doc[kind] or {}),1,-1 do
@@ -92,7 +92,7 @@ for _,ns in ipairs(namespaces)do
  local chain=paths.resolveInheritance(ns,function(name)return document(paths.namespacePath(name)..'/.nsconfig')end,
   function(name)return exists(paths.namespacePath(name)..'/.nsconfig')end)
  local derived=false
- for _,name in ipairs(chain)do if norm(paths.namespacePath(name))=='settings/_namespaces/_base' then derived=true end end
+ for _,name in ipairs(chain)do if norm(paths.namespacePath(name))=='settings/namespaces/_base' then derived=true end end
  if derived then
   paths.setLoadedNamespace(ns,chain)
   local nsCount=0

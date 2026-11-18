@@ -1,6 +1,6 @@
 local json=require('./lib/jsonlua')
 local M=require('./lib/encounter-state')
-local root='settings/_namespaces/ambuscade/dullahan/actions/'
+local root='settings/namespaces/ambuscade/dullahan/actions/'
 local f=assert(io.open(root..'lib/dullahan/setup.json'));local d=json.parse(f:read('*a')).vars.dullahan;f:close()
 local params={tank=d.tank,miasma_order=d.miasma_order,miasma_spacing=d.miasma_spacing,
     pull={anchor=d.positioning.tank,tank_tolerance=d.pull.tank_tolerance,enemy_radius=d.pull.enemy_radius}}

@@ -1,0 +1,7 @@
+{
+  "vars": {
+    "panel": {
+      "tracking": [{ "references": "compact" }, { "references": "sortie_b" }]
+    }
+  }
+}

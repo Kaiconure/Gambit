@@ -23,7 +23,7 @@ assert(not pcall(snapshot,math.huge))
 -- Compare representative real action data, including defaults and contributions.
 for _,path in ipairs({'actions/lib/abilities/use-rolls.json',
  'actions/lib/frontline-engagement.json','actions/lib/buffs/keep-protectra-shellra.json',
- 'settings/_namespaces/_base/actions/lib/common/common.json'})do
+ 'settings/namespaces/_base/actions/lib/common/common.json'})do
  local f=assert(io.open(path));local data=json.parse(f:read('*a'));f:close()
  assert(equal(snapshot(data),json.parse(json.stringify(data))),path)
 end

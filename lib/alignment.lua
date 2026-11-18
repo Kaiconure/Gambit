@@ -21,6 +21,7 @@ local named = {
     righter={{90, 5}},
     sider={{-90,5},{90,5}},
     aside={{180, 100}},     -- Anywhere except near the mob's front
+    afront={{0, 80}},       -- Anywhere but near the mob's rear
     side={                  -- Side: Either left or right is acceptable
         {90, 30},
         {-90, 30}

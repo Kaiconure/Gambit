@@ -12,7 +12,7 @@ assert(result.entrypoint=='pld')
 assert(result.entrypoint_path==settings.actionInfo.fileName)
 assert(result.entrypoint_name=='./settings/Carbonite/actions/pld')
 assert(result.entrypoint_relative=='settings/Carbonite/actions/pld.json')
-settings.actionInfo={name='pld',fileName='./settings/_namespace-settings/boss/_vagary/players/Carbonite/actions/pld.json'}
+settings.actionInfo={name='pld',fileName='./settings/namespace-settings/boss/_vagary/players/Carbonite/actions/pld.json'}
 assert(context().entrypoint_relative=='players/Carbonite/actions/pld.json')
 settings.actionInfo.fileName='./settings/namespaces/_base/actions/pld.json'
 assert(context().entrypoint_relative=='actions/pld.json')

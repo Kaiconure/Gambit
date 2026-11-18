@@ -13,12 +13,12 @@ local function countImport(actions,name)
  end
  return count
 end
-local common=read('settings/_namespaces/_base/actions/lib/common/common.json')
+local common=read('settings/namespaces/_base/actions/lib/common/common.json')
 local shared={contributions={}}
 for _,entry in ipairs(common.contributions) do
  if entry.slot=='normal-engagement' then shared.contributions[#shared.contributions+1]=entry end
 end
-local melee=read('settings/_namespaces/_base/actions/lib/common/(melee).json')
+local melee=read('settings/namespaces/_base/actions/lib/common/(melee).json')
 assert(#melee.imports==1 and melee.imports[1]=='tank-alignment')
 local selectors=require('./lib/target-selectors')
 for _,job in ipairs({'WAR','PLD','SAM','RUN','BLU'})do
@@ -30,7 +30,7 @@ for _,job in ipairs({'WHM','BLM','RDM','GEO','COR'})do
  for _,group in ipairs(selectors.entryPointGroups(job,false))do assert(group~='melee',job) end
 end
 for _,job in ipairs({'(melee)','pld','war','blm','cor','geo','rdm','whm'})do
- local doc=read('settings/_namespaces/_base/actions/'..job..'.json')
+ local doc=read('settings/namespaces/_base/actions/'..job..'.json')
  for _,kind in ipairs({'pull','battle'})do
   local found=0
   for index,action in ipairs(doc[kind])do

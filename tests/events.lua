@@ -52,20 +52,20 @@ for _,comment in ipairs({false,42,{'valid',false},{text='not an array'}}) do
 end
 Paths.setLoadedNamespace('child',{'child','parent'})
 local paths=Paths.eventFiles('Tester','RDM')
-assert(paths[1]=='./settings/_namespace-settings/child/players/Tester/events/rdm.json' and paths[4]=='./settings/_namespaces/child/events/(all).json')
-assert(paths[5]=='./settings/_namespace-settings/parent/players/Tester/events/rdm.json')
+assert(paths[1]=='./settings/namespace-settings/child/players/Tester/events/rdm.json' and paths[4]=='./settings/namespaces/child/events/(all).json')
+assert(paths[5]=='./settings/namespace-settings/parent/players/Tester/events/rdm.json')
 assert(paths[9]=='./settings/Tester/events/rdm.json')
 local available={
-    ['./settings/_namespaces/child/events/(all).json']={},
+    ['./settings/namespaces/child/events/(all).json']={},
     ['./settings/Tester/events/rdm.json']={vars={wrong_scope=true}},
 }
 local function selected() return Config.load(paths,function(path) return available[path] end) end
-assert(selected().path=='./settings/_namespaces/child/events/(all).json')
-available['./settings/_namespace-settings/child/players/Tester/events/(all).json']={}
-available['./settings/_namespaces/child/events/rdm.json']={}
-assert(selected().path=='./settings/_namespace-settings/child/players/Tester/events/(all).json')
-available['./settings/_namespace-settings/child/players/Tester/events/rdm.json']={}
-assert(selected().path=='./settings/_namespace-settings/child/players/Tester/events/rdm.json')
+assert(selected().path=='./settings/namespaces/child/events/(all).json')
+available['./settings/namespace-settings/child/players/Tester/events/(all).json']={}
+available['./settings/namespaces/child/events/rdm.json']={}
+assert(selected().path=='./settings/namespace-settings/child/players/Tester/events/(all).json')
+available['./settings/namespace-settings/child/players/Tester/events/rdm.json']={}
+assert(selected().path=='./settings/namespace-settings/child/players/Tester/events/rdm.json')
 assert(not Paths.validateNamespace('child/events/test'))
 Paths.setLoadedNamespace(nil)
 local selectors=require('./lib/target-selectors')

@@ -1,6 +1,6 @@
 local json=require('./lib/jsonlua')
 local Loader=require('./lib/variable-loader')
-local root='settings/_namespaces/'
+local root='settings/namespaces/'
 local function read(path)
  local f=assert(io.open(path));local doc=json.parse(f:read('*a'));f:close();return doc
 end
@@ -19,11 +19,11 @@ assert(next(defaults.antidote_mobs)==nil and next(defaults.suppress_ws_mobs)==ni
  and next(defaults.suppress_offensive_magic_mobs)==nil)
 local ghatjot=config('sortie/_ghatjot')
 assert(ghatjot.antidote_mobs.Ghatjot and not ghatjot.suppress_ws_mobs.Ghatjot)
-local glazemane=config('_unm/glazemane')
+local glazemane=config('unm/glazemane')
 assert(glazemane.suppress_ws_mobs.Glazemane and glazemane.suppress_offensive_magic_mobs.Glazemane)
-local perfidien=config('_boss/_vagary/perfidien')
+local perfidien=config('boss/_vagary/perfidien')
 assert(perfidien.suppress_ws_mobs.Perfidien==false and perfidien.suppress_offensive_magic_mobs.Perfidien)
-local plouton=config('_boss/_vagary/plouton','_boss/_vagary/perfidien')
+local plouton=config('boss/_vagary/plouton','boss/_vagary/perfidien')
 assert(plouton.suppress_offensive_magic_mobs.Plouton and not plouton.suppress_ws_mobs.Plouton)
 local ws=read(root..'_base/actions/lib/ws/all-out-melee.json')
 assert(ws.vars.ws.all_out_melee.allow_suppression==nil and ws.vars.ws.all_out_melee.suppression_targets==nil)

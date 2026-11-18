@@ -3,10 +3,18 @@ local Config=require('./lib/ux/status-config')
 local values=require('./lib/variable-values')
 local Theme=require('./lib/ux/theme')
 local vars={panel={sortie_a={kill_5_abject=true}}}
+local session={}
 local context={getVar=function(path) return values.get(vars,path) end,
     setVar=function(path,value)
         local parts=values.path(path)
         local target=vars
+        for i=1,#parts-1 do target[parts[i]]=target[parts[i]] or {}; target=target[parts[i]] end
+        target[parts[#parts]]=value
+    end,
+    getSessionVar=function(path) return values.get(session,path) end,
+    setSessionVar=function(path,value)
+        local parts=values.path(path)
+        local target=session
         for i=1,#parts-1 do target[parts[i]]=target[parts[i]] or {}; target=target[parts[i]] end
         target[parts[#parts]]=value
     end}
@@ -98,8 +106,9 @@ local function invalid(row)
 end
 invalid({name='Missing id',checklist={}})
 invalid({name='Bad path',id='a.b',checklist={}})
+invalid({name='Bad persistence',id='test',persistent='yes',checklist={}})
 invalid({name='Duplicate',id='test',checklist={{id='objective_2',text='One'},{text='Two'}}})
-invalid({name='Bad item',id='test',checklist={{text='Two\nlines'}}})
+invalid({name='Bad item',id='test',checklist={{text='Bad\1control'}}})
 invalid({name='Not array',id='test',checklist={key={text='One'}}})
 invalid({name='Bad condition',id='test',checklist={{text='One',checked_when='true'}}})
 invalid({name='Bad condition item',id='test',checklist={{text='One',checked_when={true}}}})
@@ -131,6 +140,33 @@ assert(automatic[1].checked and not context.getVar('vars.panel.automatic.owned')
 context.owned=false
 panel.nextUpdate=0; panel:update()
 assert(not automatic[1].checked)
+local persistentDefinition={id='sortie_manual',name='Persistent',persistent=true,
+    checklist={{id='manual',text='Manual objective'}}}
+panel:setTemporaryTracking({persistentDefinition})
+panel.nextUpdate=0; panel:update()
+local persistent=panel.entries[1].checks[1]
+assert(persistent.path=='panel_checklists.sortie_manual.manual' and not persistent.checked)
+click(persistent.button)
+assert(context.getSessionVar(persistent.path)==true)
+vars={panel={}} -- Simulate action variables being reconstructed by a reload.
+panel:setTemporaryTracking({persistentDefinition})
+panel.nextUpdate=0; panel:update()
+assert(panel.entries[1].checks[1].checked)
+panel:setTemporaryTracking({{id='multiline',name='Multiline',checklist={
+    {id='text',text='Hello\n\tworld'},
+    {id='format',format={'First\n\t%s',"'second'"}},
+    {id='expression',expression="'Top\\n\\tbottom'"},
+}}})
+panel.nextUpdate=0; panel:update()
+local multiline=panel.entries[1].checks
+local lineHeight=math.ceil(panel.options.font_size*1.8)
+assert(multiline[1].display=='Hello\n    world' and multiline[1].lineCount==2)
+assert(multiline[2].display=='First\n    second' and multiline[2].lineCount==2)
+assert(multiline[3].display=='Top\n    bottom' and multiline[3].lineCount==2)
+assert(multiline[1].button.height==lineHeight*2)
+assert(multiline[2].button.y==multiline[1].button.y+lineHeight*2)
+assert(multiline[1].icon.y==multiline[1].button.y+
+    math.floor((lineHeight-multiline[1].size)/2))
 panel:setTemporaryTracking({{id='labels',name='Labels',checklist={
     {text='Ignored',expression="color_ki('Tooth')",checked_when={'owned'}},
     {expression="color_item('Potion')"},
@@ -167,5 +203,28 @@ assert(formats[6].display==('\\cs(%d,%d,%d)Item\\cr'):format(unpack(Theme.colors
     ('\\cs(%d,%d,%d) suffix\\cr'):format(unpack(Theme.colors.item)))
 invalid({id='empty_format',name='Bad format',checklist={{format={}}}})
 invalid({id='bad_format',name='Bad format',checklist={{format={'%s',123}}}})
+panel:setTrackingSupplement('sortie',true)
+panel.nextUpdate=0; panel:update()
+local selector,sortieA
+for _,candidate in ipairs(panel.entries) do
+    if candidate.definition.id=='sortie' then selector=candidate end
+    if candidate.definition.id=='sortie_a' then sortieA=candidate end
+end
+assert(selector and sortieA and selector.checks[1].checked)
+click(selector.checks[2].button)
+assert(context.getSessionVar('panel_branches.sortie')=='b')
+local sortieB
+for _,candidate in ipairs(panel.entries) do
+    assert(candidate.definition.id~='sortie_a')
+    if candidate.definition.id=='sortie_b' then sortieB=candidate end
+end
+assert(sortieB)
+panel:setTrackingSupplement('sortie',true,{branch='d'})
+panel.nextUpdate=0; panel:update()
+local sortieD
+for _,candidate in ipairs(panel.entries) do
+    if candidate.definition.id=='sortie_d' then sortieD=candidate end
+end
+assert(sortieD)
 panel:destroy()
-print('PASS: checklist precedence, rendering, clicks, external updates, generated ids and validation')
+print('PASS: checklist precedence, rendering, branches, clicks, external updates, generated ids and validation')

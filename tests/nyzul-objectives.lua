@@ -71,9 +71,11 @@ for _,candidate in ipairs(textRules) do
 end
 assert(timeRule)
 local remaining
+local sessionState={}
 local env={zone_id=77,event={text='Notice\nTime Remaining: 1 minute (Earth time).',time=25},
     number=function(value,default) return tonumber(value) or tonumber(default) end,
-    setSessionVar=function(name,value) if name=='nyzul.time_remaining_until' then remaining=value end end}
+    setSessionVar=function(name,value) sessionState[name]=value; if name=='nyzul.time_remaining_until' then remaining=value end end,
+    setPanelWaypoint=function() end}
 for _,source in ipairs(timeRule.when) do
     local expression=assert(loadstring('return '..source)); setfenv(expression,env); assert(expression())
 end
@@ -81,6 +83,12 @@ for _,source in ipairs(timeRule.commands) do
     local command=assert(loadstring(source)); setfenv(command,env); command()
 end
 assert(remaining==85)
+sessionState['nyzul.completed_floor_count']=4
+env.event={text='You have 30 minutes (Earth time) to complete this mission.',time=200}
+for _,source in ipairs(timeRule.commands) do
+    local command=assert(loadstring(source)); setfenv(command,env); command()
+end
+assert(remaining==2000 and sessionState['nyzul.completed_floor_count']==nil)
 env.event={text='Time remaining: 30 seconds (Earth time).',time=100}
 for _,source in ipairs(timeRule.commands) do
     local command=assert(loadstring(source)); setfenv(command,env); command()
@@ -106,10 +114,15 @@ for _,candidate in ipairs(textRules) do
 end
 assert(floorRule)
 local floor
+local nyzulState={}
 local waypoints={}
-local floorEnv={zone_id=77,event={text='The transfer completes. Welcome to Floor 4.'},
+local floorEnv={zone_id=77,event={text='The transfer completes. Welcome to Floor 4.',time=100},
     number=function(value,default) return tonumber(value) or tonumber(default) end,
-    setSessionVar=function(name,value) if name=='nyzul.current_floor' then floor=value end end,
+    getSessionVar=function(name) return nyzulState[name] end,
+    setSessionVar=function(name,value)
+        nyzulState[name]=value
+        if name=='nyzul.current_floor' then floor=value end
+    end,
     findByName=function(name)
         assert(name=='Rune of Transfer')
         return {mob={name=name,x=123.5,y=-45.25}}
@@ -124,6 +137,7 @@ for _,source in ipairs(floorRule.commands) do
     local command=assert(loadstring(source)); setfenv(command,floorEnv); command()
 end
 assert(floor==4)
+assert(nyzulState['nyzul.floor_started_at']==100)
 assert(waypoints[1]=='cleared' and waypoints[2].name=='Rune of Transfer'
     and waypoints[2].mob_name==nil and waypoints[2].zone==77
     and waypoints[2].x==123.5 and waypoints[2].y==-45.25)
@@ -135,16 +149,59 @@ assert(tracking[1].references=='compact' and tracking[2].references=='nyzul')
 local PanelConfig=require('./lib/ux/status-config')
 local timer=PanelConfig.defaults.tracking.sets.nyzul[2]
 assert(timer.name=='Nyzul Status')
-local displayFloor=assert(loadstring('return '..timer.format[2]))
-local displayTime=assert(loadstring('return '..timer.format[3]))
-local panelEnv={session={nyzul={time_remaining_until=85,current_floor=4}},time=25,max=math.max,
-    format=string.format,color_number=function(value) return value end}
+local objectivePanel=PanelConfig.defaults.tracking.sets.nyzul[1]
+assert(objectivePanel.checklist[2].id=='restriction'
+    and objectivePanel.checklist[2].icon=='general/indicators/warning.png'
+    and objectivePanel.checklist[2].show_when=='session.nyzul.restriction')
+local displayFloor=assert(loadstring('return '..timer.expression[1]))
+local displayTime=assert(loadstring('return '..timer.expression[2]))
+local panelEnv={session={nyzul={time_remaining_until=85,current_floor=28,completed_floors='26 27'}},time=25,max=math.max,
+    format=string.format,color_number=function(value) return value end,color_muted=function(value) return value end}
 setfenv(displayFloor,panelEnv); setfenv(displayTime,panelEnv)
 --[=[
 assert(displayFloor()=='Floor 4' and displayTime()==' • 1:00')
 
 ]=]
-assert(displayFloor()=='Floor 4' and displayTime():find('1:00',1,true))
+assert(displayFloor():find('Floor: ',1,true) and displayFloor():find('26 27 28',1,true)
+    and displayTime():find('Remaining: ',1,true)
+    and displayTime():find('1:00',1,true))
+
+local completeRule
+for _,candidate in ipairs(textRules) do
+    if candidate.id=='nyzul-objective-completed' then completeRule=candidate; break end
+end
+assert(completeRule)
+nyzulState['nyzul.current_floor']=4
+nyzulState['nyzul.floor_started_at']=100
+floorEnv.event={text='Rune of Transfer activated.',time=190}
+floorEnv.max=math.max
+for _,source in ipairs(completeRule.commands) do
+    local command=assert(loadstring(source)); setfenv(command,floorEnv); command()
+end
+assert(nyzulState['nyzul.objective_completed']==true)
+assert(nyzulState['nyzul.completed_floor_count']==nil and nyzulState['nyzul.completed_floor_time']==nil)
+for _,source in ipairs(completeRule.commands) do
+    local command=assert(loadstring(source)); setfenv(command,floorEnv); command()
+end
+assert(nyzulState['nyzul.completed_floor_count']==nil)
+floorEnv.event={text='The transfer completes. Welcome to Floor 5.',time=195}
+local nextFloor=assert(loadstring(floorRule.commands[1])); setfenv(nextFloor,floorEnv); nextFloor()
+assert(nyzulState['nyzul.completed_floors']=='4' and nyzulState['nyzul.current_floor']==5)
+assert(nyzulState['nyzul.completed_floor_count']==1 and nyzulState['nyzul.completed_floor_time']==95)
+assert(nyzulState['nyzul.longest_floor_time']==95)
+
+local pace=PanelConfig.defaults.tracking.sets.nyzul[3]
+assert(pace.name=='Nyzul Pace')
+local paceDisplay=assert(loadstring('return '..pace.expression[1]))
+panelEnv.session.nyzul.completed_floor_count=2
+panelEnv.session.nyzul.completed_floor_time=210
+panelEnv.session.nyzul.longest_floor_time=120
+panelEnv.session.nyzul.floor_started_at=10
+setfenv(paceDisplay,panelEnv)
+assert(paceDisplay():find('Avg 1:15',1,true) and paceDisplay():find('Longest 2:00',1,true)
+    and paceDisplay():find('Current 0:15',1,true))
+panelEnv.session.nyzul.completed_floor_count=nil
+assert(paceDisplay()=='Current 0:15')
 
 -- The ordinary stock event entry point attaches Nyzul observation globally.
 local Config=require('./lib/events/config')
@@ -154,7 +211,7 @@ local function read(path)
     local value=json.parse(source:read('*a')); source:close(); return value
 end
 local compiled=Config.load({
-    './settings/_namespaces/_nyzul/events/(all).json',
+    './settings/namespaces/nyzul/events/(all).json',
     './events/(all).json',
 },read)
 local foundFloor=false

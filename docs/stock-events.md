@@ -66,9 +66,9 @@ for output locations and diagnostics.
 
 ## Quick start
 
-Create `settings/<character>/events/<job>.vars.json`, using the character's name
+Create `settings/players/<character>/events/<job>.vars.json`, using the character's name
 and lowercase main-job abbreviation. For example:
-`settings/Miyajima/events/whm.vars.json`.
+`settings/players/Miyajima/events/whm.vars.json`.
 
 ```json
 {
@@ -104,7 +104,7 @@ point; adding a vars file does not remove that override.
 
 ## How-to guide
 
-Use these recipes in `settings/<character>/events/<job>.vars.json`, unless a
+Use these recipes in `settings/players/<character>/events/<job>.vars.json`, unless a
 recipe says otherwise. Replace descriptive item names such as `Your Fast Cast
 Head` with exact names of equipment you own. The examples illustrate configuration,
 not recommended best-in-slot sets. Combine their fields into one `vars` object
@@ -404,7 +404,7 @@ automaton actions; random Sic moves are not command-correlated Ready events.
 
 #### SMN: named Blood Pact Rage and Ward sets
 
-In `settings/<character>/events/smn.vars.json`, configure avatar summoning
+In `settings/players/<character>/events/smn.vars.json`, configure avatar summoning
 separately from Rage and Ward. Put named pact overrides inside the corresponding
 `rage` or `ward` object:
 
@@ -467,7 +467,7 @@ Use one location unless you intentionally want another layer.
 
 #### BST: named Ready sets
 
-In `settings/<character>/events/bst.vars.json`, use
+In `settings/players/<character>/events/bst.vars.json`, use
 `gear.beastmaster.ready[<English ability name>].pre/mid` for named Ready moves:
 
 ```json
@@ -513,7 +513,7 @@ leave stopping unset for normal general-then-specific layering.
 
 #### RUN: runes, wards, and effusions
 
-In `settings/<character>/events/run.vars.json`, organize ability enhancement
+In `settings/players/<character>/events/run.vars.json`, organize ability enhancement
 sets by resource type. Each group accepts a general `pre` set and named `pre`
 overrides:
 
@@ -627,10 +627,10 @@ For variable syntax and merging basics, see [Variables](variables.md).
 |---|---|
 | `events/` | Shipped rule entry points and reusable modules |
 | `settings/events/<job>.vars.json` | Shared job configuration |
-| `settings/<character>/events/<job>.vars.json` | Character-specific configuration |
-| `settings/<character>/events/(mages).vars.json` | Character configuration for a matching job group |
-| `settings/_namespaces/<namespace>/events/` | Namespace-wide settings |
-| `settings/_namespace-settings/<namespace>/players/<character>/events/` | Character settings within a namespace |
+| `settings/players/<character>/events/<job>.vars.json` | Character-specific configuration |
+| `settings/players/<character>/events/(mages).vars.json` | Character configuration for a matching job group |
+| `settings/namespaces/<namespace>/events/` | Namespace-wide settings |
+| `settings/namespace-settings/<namespace>/players/<character>/events/` | Character settings within a namespace |
 
 Exactly one rule entry point wins. All applicable vars files are layered, even
 when the selected entry point is a shipped file. More specific settings win at
@@ -1310,6 +1310,6 @@ For more details, see [the event guide](events.md),
 [equipment](equipment.md), and [commands](commands.md).
 ## Export a baseline from equipped gear
 
-Use `//gbt events save-gear` (or `//gbt events sg`) while wearing your desired baseline set. Gambit writes a two-space-indented file to `settings/<player>/data/<job>-<timestamp>.vars.json`, adding a numeric suffix if needed. The location is global character data even when a namespace is active.
+Use `//gbt events save-gear` (or `//gbt events sg`) while wearing your desired baseline set. Gambit writes a two-space-indented file to `settings/players/<player>/data/<job>-<timestamp>.vars.json`, adding a numeric suffix if needed. The location is global character data even when a namespace is active.
 
 The file contains only `vars.gear["csv(battle, idle)"]`, with every equipped slot's name and decoded augments. Empty slots and inventory-location metadata are omitted. Wait until equipment has settled before exporting. The command does not equip anything or load the generated file automatically; copy the gear into your event vars file, or move/rename the generated file to the appropriate events vars location after reviewing it.

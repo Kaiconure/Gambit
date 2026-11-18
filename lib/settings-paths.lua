@@ -44,9 +44,9 @@ end
 local function organizationalRoot(parent, name)
     local preferred = parent .. '/_' .. name
     local plain = parent .. '/' .. name
-    if directoryExists(preferred) then return preferred end
     if directoryExists(plain) then return plain end
-    return preferred
+    if directoryExists(preferred) then return preferred end
+    return plain
 end
 
 function paths.namespaceRoot()
@@ -91,6 +91,19 @@ function paths.namespacePlayerRoot(name)
     local relative = resolved:match('^%./settings/_?namespaces/(.*)$')
         or resolved:match('^%./_?namespaces/(.*)$')
     return paths.namespaceSettingsRoot() .. '/' .. relative .. '/players'
+end
+
+-- Prefer the organized global character tree when that character directory
+-- exists. Otherwise retain the legacy settings/<character> layout so existing
+-- installations continue to load without migration.
+function paths.globalPlayerParent(playerName)
+    local organized=SETTINGS_ROOT..'/players/'..playerName
+    if directoryExists(organized) then return SETTINGS_ROOT..'/players' end
+    return SETTINGS_ROOT
+end
+
+function paths.globalPlayerRoot(playerName)
+    return paths.globalPlayerParent(playerName)..'/'..playerName
 end
 
 function paths.namespaceExists(name)
@@ -195,6 +208,9 @@ function paths.validateNamespace(name)
             return false, 'Namespace folder name "' .. segment .. '" cannot start or end with a dot.'
         end
         local normalized = segment:lower():gsub('^_+', '')
+        if normalized == 'global' or normalized == 'gambit' then
+            return false, 'Namespace folder name "' .. segment .. '" is reserved for global namespace selection.'
+        end
         if normalized == 'actions' or normalized == 'players' or normalized == 'events' then
             return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
         end
@@ -336,7 +352,8 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
 end
 
 function paths.writePath(playerName, relative)
-    local root = loadedNamespace and paths.namespacePlayerRoot(loadedNamespace) or './settings'
+    local root = loadedNamespace and paths.namespacePlayerRoot(loadedNamespace)
+        or paths.globalPlayerParent(playerName)
     return root .. '/' .. playerName .. '/' .. relative
 end
 
@@ -347,7 +364,7 @@ function paths.eventFiles(playerName, mainJob, groups)
         roots[#roots+1]={paths.namespacePath(name),
             not paths.isGambitReference(name) and paths.namespacePlayerRoot(name) or nil}
     end
-    roots[#roots+1]={SETTINGS_ROOT, SETTINGS_ROOT}
+    roots[#roots+1]={SETTINGS_ROOT, paths.globalPlayerParent(playerName)}
     local positives,inverses={},{}
     for _,group in ipairs(targetSelectors.orderEntryPointGroups(groups)) do
         local list=group:sub(1,1)=='~' and inverses or positives
@@ -380,7 +397,7 @@ function paths.entryPointLayers(playerName,relative)
         if paths.isGambitReference(name) then result[#result+1]=root..'/'..relative
         else result[#result+1]={paths.namespacePlayerRoot(name)..'/'..playerName..'/'..relative,root..'/'..relative} end
     end
-    result[#result+1]=SETTINGS_ROOT..'/'..playerName..'/'..relative
+    result[#result+1]=paths.globalPlayerRoot(playerName)..'/'..relative
     result[#result+1]=SETTINGS_ROOT..'/'..relative
     return result
 end
@@ -391,7 +408,7 @@ function paths.candidates(playerName, relative, scope)
         roots[#roots + 1] = {paths.namespacePath(name),
             not paths.isGambitReference(name) and paths.namespacePlayerRoot(name) or nil}
     end
-    roots[#roots + 1] = {SETTINGS_ROOT, SETTINGS_ROOT}
+    roots[#roots + 1] = {SETTINGS_ROOT, paths.globalPlayerParent(playerName)}
     local result = {}
     for _, entry in ipairs(roots) do
         local root, characterRoot = entry[1], entry[2]
@@ -414,7 +431,7 @@ function paths.commonFiles(playerName, mainJob, groups)
     local libraries = {
         './actions/lib',
         SETTINGS_ROOT .. '/actions/lib',
-        SETTINGS_ROOT .. '/' .. playerName .. '/actions/lib',
+        paths.globalPlayerRoot(playerName) .. '/actions/lib',
     }
     for i = #loadedPrecedence, 1, -1 do
         local root = paths.namespacePath(loadedPrecedence[i])

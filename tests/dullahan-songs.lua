@@ -1,7 +1,7 @@
 local json=require('./lib/jsonlua')
 local factory=require('./lib/execution-factory')
 local values=require('./lib/variable-values')
-local root='settings/_namespaces/ambuscade/dullahan/actions/lib/dullahan/'
+local root='settings/namespaces/ambuscade/dullahan/actions/lib/dullahan/'
 local function read(name)local f=assert(io.open(root..name));local d=json.parse(f:read('*a'));f:close();return d end
 local f=assert(io.open('lib/action-context.lua'));local source=f:read('*a');f:close()
 source=source:gsub("('[^'\r\n]*'):format", '(%1):format')
