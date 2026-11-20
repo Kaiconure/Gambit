@@ -525,6 +525,12 @@ windower.register_event('load', function()
             cancelReactionMovement=function(jobId) smartMove:cancelJob(jobId,true,reactionMovementOwner) end,
             unlock=function() windower.send_command('input /lockon') end,
             faceAway=function(target) directionality.faceAwayFromTarget(target) end,
+            faceAfterMovement=function(actor)
+                local target=windower.ffxi.get_mob_by_target('bt')
+                if not actor or (target and target.id~=actor.id) then return end
+                local heading,delta=directionality.faceTarget(actor,true)
+                if heading and delta>math.rad(5) then windower.ffxi.turn(heading) end
+            end,
             restore=function(id)
                 local target=windower.ffxi.get_mob_by_target('bt')
                 if target and target.id==id then directionality.faceTarget(target) end

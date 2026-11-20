@@ -4425,7 +4425,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     local function preferredAlignment(target, angle, distance, options)
         local spec=alignment.parse(angle)
         local plan=options and options.distribute~=nil and require('./lib/party-alignment').plan(target,spec,distance,options) or nil
-        return plan and plan.preferred or spec,plan,spec
+        local preferred=plan and plan.preferred or spec
+        local me=plan and not plan.fallback and windower.ffxi.get_mob_by_target('me')
+        local currentArc=me and alignment.arcAt(spec,alignment.bearing(target,me))
+        if currentArc then
+            local localSlices={arcs={}}
+            for _,arc in ipairs(preferred.arcs) do
+                if alignment.contains(currentArc,arc[1]) then
+                    localSlices.arcs[#localSlices.arcs+1]=arc
+                end
+            end
+            preferred=#localSlices.arcs>0 and localSlices or currentArc
+        end
+        return preferred,plan,spec
     end
 
     context.aligned = function(target, angle, distance, tolerance, options)

@@ -522,20 +522,24 @@ end
 -- Explicit namespace selection is remembered in the base character settings.
 handlers['namespace'] = function(args)
     if #args == 0 then
-        writeMessage('Current namespace: ' .. text_green(settingsPaths.getNamespace() or '(global)'))
+        local name = settingsPaths.getLoadedNamespace()
+        writeMessage('Current namespace: ' .. text_green(name or '(global)'))
         return
     end
 
     local option = (args[1] or ''):lower()
     if option == '-list' and #args == 1 then
-        local names, abstract, bundled = settingsPaths.listNamespaces()
+        local names, abstract, bundled, aliases = settingsPaths.listNamespaces()
         if #names == 0 then
             writeMessage('No namespaces with a .nsconfig file found.')
         else
             writeMessage('Available namespaces:')
             for _, name in ipairs(names) do
                 local label = name .. (bundled and bundled[name] and ' (bundled)' or '')
-                if abstract and abstract[name] then
+                local target = aliases and aliases[name]
+                if target then
+                    writeMessage('  ' .. text_yellow(name, Colors.default) .. ' ' .. CHAR_RIGHT_ARROW .. ' ' .. text_namespace(target, Colors.default))
+                elseif abstract and abstract[name] then
                     writeMessage('  ' .. text_gray(label .. ' (abstract)', Colors.default))
                 else
                     writeMessage('  ' .. text_namespace(label, Colors.default))
@@ -656,6 +660,7 @@ handlers['strat'] = handlers['strategy']
 
 handlers['status'] = function(args)
     writeMessage(text_gray('Gambit status:'))
+    handlers['namespace']({})
     writeMessage('  Current gambit is %s':format(settings and settings.actionInfo and text_green(settings.actionInfo.name) or text_red('n/a')))
     writeMessage('  Automation is %s':format(globals.enabled and text_green('enabled') or text_red('disabled')))
     writeMessage('  Targeting strategy is %s':format(text_green(settings.strategy)))

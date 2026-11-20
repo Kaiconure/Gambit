@@ -74,7 +74,7 @@ local function resolvePath(root, name)
     return root
 end
 
-function paths.namespacePath(name)
+local function directNamespacePath(name)
     local stock
     stock,name=paths.gambitReference(name)
     if stock then return resolvePath(paths.bundledNamespaceRoot(),name) end
@@ -83,6 +83,50 @@ function paths.namespacePath(name)
     local shipped = resolvePath(paths.bundledNamespaceRoot(), name)
     if directoryExists(shipped) then return shipped end
     return user
+end
+
+local aliasCacheKey = {}
+local function namespaceAliases()
+    if directoryCache and directoryCache[aliasCacheKey] then return directoryCache[aliasCacheKey] end
+    local aliases = {}
+    local file = files and files.new(paths.namespaceRoot() .. '/index.json')
+    if file and file:exists() then
+        local ok, index = pcall(json.parse, file:read())
+        assert(ok and type(index) == 'table', 'Invalid namespace index.json: expected a JSON object')
+        if index.aliases ~= nil then
+            assert(type(index.aliases) == 'table', 'Invalid namespace index.json: aliases must be an object')
+            for alias, target in pairs(index.aliases) do
+                assert(type(alias) == 'string' and not paths.isGambitReference(alias)
+                    and paths.validateNamespace(alias) and type(target) == 'string'
+                    and not paths.isGambitReference(target) and paths.validateNamespace(target),
+                    'Invalid namespace alias: ' .. tostring(alias))
+            end
+            aliases = index.aliases
+        end
+    end
+    if directoryCache then directoryCache[aliasCacheKey] = aliases end
+    return aliases
+end
+
+local function resolveNamespace(name)
+    local direct = directNamespacePath(name)
+    if not name or paths.isGambitReference(name) or directoryExists(direct) then return name, direct end
+    local target = namespaceAliases()[name]
+    if target then
+        local resolved = directNamespacePath(target)
+        if directoryExists(resolved) then return target, resolved end
+    end
+    return name, direct
+end
+
+function paths.namespaceName(name)
+    local resolved = resolveNamespace(name)
+    return resolved
+end
+
+function paths.namespacePath(name)
+    local _, folder = resolveNamespace(name)
+    return folder
 end
 
 function paths.namespacePlayerRoot(name)
@@ -147,7 +191,7 @@ end
 -- A .nsconfig marks a listable namespace; unmarked organizational folders
 -- are still traversed. Never descend into reserved namespace content folders.
 function paths.listNamespaces()
-    local result, abstract, bundled = {}, {}, {}
+    local result, abstract, bundled, aliases = {}, {}, {}, {}
     local seen = {}
     local function visit(directory, parent, sourceRoot)
         local absolute = (windower.addon_path or '') .. directory:gsub('^%./', '') .. '/'
@@ -177,11 +221,20 @@ function paths.listNamespaces()
     for _, root in ipairs({paths.namespaceRoot(), paths.bundledNamespaceRoot()}) do
         if directoryExists(root) then visit(root, nil, root) end
     end
+    for alias, target in pairs(namespaceAliases()) do
+        if not directoryExists(directNamespacePath(alias)) then
+            local folder = directNamespacePath(target)
+            if directoryExists(folder) and files.new(folder .. '/.nsconfig'):exists() then
+                result[#result+1] = alias
+                aliases[alias] = target
+            end
+        end
+    end
     table.sort(result, function(a,b)
         if a:lower() == b:lower() then return a < b end
         return a:lower() < b:lower()
     end)
-    return result, abstract, bundled
+    return result, abstract, bundled, aliases
 end
 
 function paths.getNamespace()
@@ -272,7 +325,7 @@ function paths.resolveInheritance(name, readConfig, exists)
             local stock=paths.gambitReference(current)
             local parent=config.inherits_from
             if stock and not paths.gambitReference(parent) then parent=GAMBIT_PREFIX..parent end
-            visit(parent, true)
+            visit(paths.namespaceName(parent), true)
         end
         visiting[identity] = nil
     end

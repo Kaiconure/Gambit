@@ -1,0 +1,69 @@
+{
+  "name": "gambit-namespace-tools",
+  "displayName": "Gambit Namespace Tools",
+  "description": "Inspect and validate Gambit namespace settings.",
+  "version": "0.1.0",
+  "publisher": "gambit-local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:Gambit.lua",
+    "onView:gambitNamespaces",
+    "onCommand:gambitNamespaces.refresh"
+  ],
+  "main": "./src/extension.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "gambitNamespaces.refresh",
+        "title": "Gambit: Refresh Namespaces",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gambitNamespaces.openConfig",
+        "title": "Gambit: Open Namespace Configuration"
+      },
+      {
+        "command": "gambitNamespaces.createChild",
+        "title": "New Child Namespace…"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "gambitNamespaces",
+          "name": "Gambit Namespaces",
+          "visibility": "visible"
+        }
+      ]
+    },
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "gambitNamespaces.createChild",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "gambitNamespaces.createChild",
+          "when": "view == gambitNamespaces && viewItem == gambitNamespace"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "gambitNamespaces.refresh",
+          "when": "view == gambitNamespaces",
+          "group": "navigation"
+        }
+      ]
+    }
+  }
+}

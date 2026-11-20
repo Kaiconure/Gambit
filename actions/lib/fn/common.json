@@ -12,6 +12,17 @@
       ]
     },
     {
+      "name": "si_self",
+      "when": [
+        "(not hasBuff('Sneak') and canUse('Sneak', 'Spectral Jig', 'Silent Oil')) or (not hasBuff('Invisible') and canUse('Invisible', 'Spectral Jig', 'Prism Powder'))"
+      ],
+      "commands": [
+        "-- Cancel sneak if we're about to use spectral jig",
+        "ability and any(ability.name, 'Spectral Jig') and hasBuff('Sneak') and cancelBuff('Sneak') and wait(0.5)",
+        "use(me)"
+      ]
+    },
+    {
       "name": "invis_self",
       "when": [
         "not hasBuff('Invisible') and canUse('Invisible', 'Spectral Jig')"
@@ -36,9 +47,7 @@
         "hasSpell('Sneak')",
         "partyAny('is_player and distance < 15 and not hasBuff(\"Sneak\")', {randomize=true, self_last=true})"
       ],
-      "commands": [
-        "canUseSpell() and useSpell(member) and wait(3) or wait(1)"
-      ]
+      "commands": ["canUseSpell() and useSpell(member) and wait(3) or wait(1)"]
     },
     {
       "name": "invis_all",
@@ -47,9 +56,7 @@
         "hasSpell('Invisible')",
         "partyAny('is_player and distance < 15 and not hasBuff(\"Invisible\")', {randomize=true, self_last=true})"
       ],
-      "commands": [
-        "canUseSpell() and useSpell(member) and wait(3) or wait(1)"
-      ]
+      "commands": ["canUseSpell() and useSpell(member) and wait(3) or wait(1)"]
     },
     {
       "name": "sneak_pt",

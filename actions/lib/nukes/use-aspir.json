@@ -38,6 +38,7 @@
         "Shah": true,
         "Sprinkler": true,
         "Thunder Elemental": true,
+        "Tolba": true,
         "Water Elemental": true,
         "Wazir": true
       }
@@ -53,10 +54,7 @@
         "canUse(vars.use_aspir.spells)"
       ],
       "comment": "Prefixed elementals inherit eligibility from their base elemental name. An explicit target entry, including false, takes precedence.",
-      "commands": [
-        "use(bt)",
-        "postpone(vars.use_aspir.frequency)"
-      ]
+      "commands": ["use(bt)", "postpone(vars.use_aspir.frequency)"]
     }
   ]
 }

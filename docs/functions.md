@@ -753,9 +753,11 @@ Slices apply to the actual arc union, including custom ranges, gaps, overlaps,
 and wraparound. They do not special-case names such as `side`. Exact angles and
 unrestricted/nil angles bypass distribution. Following distances are unchanged.
 
-The nearest point in the assigned slice is tried first. If blocked, alternatives
-may use the entire configured arc set, including other arcs and slices. Movement
-attempts share the existing duration budget; distributed attempts check progress
+The nearest point in the assigned slice is tried first when starting outside
+the allowed arcs. Once you occupy an allowed arc, positioning prefers any part
+of your assigned slice on that arc. If your slice is on another arc, your current
+arc takes precedence. Movement tries the current arc's destinations before
+trying other arcs. Attempts share the existing duration budget and check progress
 in short steps. Continuing progress or untried alternatives return to the scheduler
 using `progress_retry_delay`; exhausted attempts use `retry_delay`. Cancellation
 does not restart movement via an alternative.

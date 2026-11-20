@@ -26,6 +26,8 @@ assert(not pcall(alignment.parse,'180+/-181'))
 local c=alignment.candidates(alignment.parse('side'),0,90)
 assert(c[1]==90 and #c==5)
 for _,a in ipairs(c) do assert(contains('side',a)) end
+c=alignment.candidates(alignment.parse('side'),-90)
+assert(c[1]==-90 and c[2]==-120 and c[3]==-60)
 c=alignment.candidates(alignment.parse(nil),10)
 assert(c[1]==10 and c[2]==55 and c[3]==-35)
 assert(alignment.candidates(alignment.parse('backside'),165,200)[1]==165)
@@ -162,11 +164,20 @@ context.move=function(position)
  if position.y<0 then return nil,'timeout' end -- Entire left arc blocked.
  me.x,me.y=position.x,position.y;return true
 end
-assert(context.align(mob,'side',10,3,false,0.33,options))
-assert(#attempts==2 and attempts[2].y>0 and clock<=3 and plan.fallback)
+local arrived,reason=context.align(mob,'side',10,3,false,0.33,options)
+assert(not arrived and reason=='alternatives' and clock<=3)
+for _,attempt in ipairs(attempts) do assert(attempt.y<0) end
+for _=1,4 do
+ if arrived then break end
+ clock=0
+ arrived=context.align(mob,'side',10,3,false,0.33,options)
+ assert(clock<=3)
+end
+assert(arrived and #attempts>=4 and attempts[#attempts].y>0 and plan.fallback)
+local attemptCount=#attempts
 assert(context.aligned(mob,'side',10,0.33,options))
 context.battleScope=context.battleScope+1
-assert(context.align(mob,'side',10,3,false,0.33,options) and #attempts==2)
+assert(context.align(mob,'side',10,3,false,0.33,options) and #attempts==attemptCount)
 plan.preferred=alignment.slice(full,1,2);plan.fallback=false;plan.key='roster-2'
 me.x,me.y=1,0;attempts={};clock=0;context.action={}
 context.move=function(position)attempts[#attempts+1]=position;return nil,'cancelled'end
@@ -182,3 +193,15 @@ assert(#attempts==0,'arrival near a slice boundary must not restart movement')
 me.x,me.y=10*math.cos(math.rad(57)),-10*math.sin(math.rad(57))
 assert(not context.aligned(mob,'side',10,0.33,options))
 print('PASS: distributed slice boundaries honor arrival tolerance without repeated corrections')
+me.x,me.y=0,10
+assert(context.aligned(mob,'side',10,0.33,options))
+assert(context.align(mob,'side',10,3,false,0.33,options) and #attempts==0)
+me.y=12;clock=0;context.action={}
+context.move=function(position)
+ attempts[#attempts+1]=position
+ me.x,me.y=position.x,position.y
+ return true
+end
+assert(context.align(mob,'side',10,3,false,0.33,options))
+assert(#attempts==1 and attempts[1].y>0)
+print('PASS: a slice on the opposite side preserves valid positioning and same-side distance corrections')

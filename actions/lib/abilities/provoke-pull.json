@@ -10,7 +10,8 @@
       "allow_spells": null,
       "ranged_mob_time": null,
       "ranged_idle_only": null,
-      "ranged_min_distance": null
+      "ranged_min_distance": null,
+      "spells": ["Flash", "Banish", "Banish II", "Holy"]
     }
   },
   "actions": [
@@ -22,8 +23,8 @@
         "not vars.provoke_pull.min_distance or (bt.distance >= vars.provoke_pull.min_distance)",
         "not vars.provoke_pull.min_time or (bt.mob_time >= vars.provoke_pull.min_time)",
         "not any(bt.name, vars.provoke_pull.blacklist)",
-        "(bt.distance <= 15 and canUse('Provoke')) or \\",
-        "  (bt.distance <= 20 and vars.provoke_pull.allow_spells and canUse('Flash', 'Banish', 'Banish II', 'Holy'))"
+        "(bt.distance <= 17 and canUse('Provoke')) or \\",
+        "  (bt.distance <= 20 and vars.provoke_pull.allow_spells and canUse(vars.provoke_pull.spells))"
       ],
       "commands": [
         "logf('Pulling %s with %s at distance: %.2f (%.2f)', bt.name, (recastReady(spell_recast) and spell or ability).name, bt.distance, bt.center_distance)",
@@ -43,8 +44,8 @@
         "not vars.provoke_pull.min_time or (bt.mob_time >= vars.provoke_pull.min_time)",
         "not any(bt.name, vars.provoke_pull.blacklist)",
         "not canUse('Provoke')",
-        "(bt.distance <= 15 and finishingMoves() > 0 and canUse('Animated Flourish')) or \\",
-        "  (bt.distance <= 20 and vars.provoke_pull.allow_spells and canUse('Flash', 'Banish', 'Banish II', 'Holy'))"
+        "(bt.distance <= 17 and finishingMoves() > 0 and canUse('Animated Flourish')) or \\",
+        "  (bt.distance <= 20 and vars.provoke_pull.allow_spells and canUse(vars.provoke_pull.spells))"
       ],
       "commands": [
         "logf('Pulling %s with %s at distance: %.2f (%.2f)', bt.name, (recastReady(spell_recast) and spell or ability).name, bt.distance, bt.center_distance)",
@@ -64,7 +65,7 @@
         "not any(bt.name, vars.provoke_pull.blacklist)",
         "not bt.has_claim and (bt.mob_time > (vars.provoke_pull.ranged_mob_time or 1) and (bt.distance >= 15 or not canUse('Provoke', 'Animated Flourish')))",
         "bt.hpp >= 100",
-        "(bt.distance <= 25 and bt.distance > (vars.provoke_pull.ranged_min_distance or 3) and canShoot())"
+        "(bt.center_distance <= 24.5 and bt.center_distance > (vars.provoke_pull.ranged_min_distance or 3) and canShoot())"
       ],
       "commands": [
         "logf('Pulling %s with RA at distance: %.2f (%.2f)', bt.name, bt.distance, bt.center_distance)",

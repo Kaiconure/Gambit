@@ -1,7 +1,7 @@
 {
   "vars": {
     "reactions": {
-      "debug": false,
+      "^debug": false,
       "face_away": [],
       "stock_face_away_enabled": true,
       "stock_face_away": [
@@ -119,7 +119,26 @@
           "actor": "Shockmaw",
           "kind": "enemy_ability",
           "names": "Thar She Blows",
-          "options": { "wait": 3, "angle": "sider" }
+          "options": {
+            "wait": 3,
+            "angle": "sider",
+            "no_turn": true,
+            "allow_weapon_skills": true,
+            "allow_offensive_magic": true
+          }
+        },
+        {
+          "key": "stock-tolba-earth-breath",
+          "actor": "Tolba",
+          "kind": "enemy_ability",
+          "names": ["Earth Breath", "Aqua Breath"],
+          "options": {
+            "wait": 4,
+            "angle": "aside",
+            "no_turn": true,
+            "allow_weapon_skills": true,
+            "allow_offensive_magic": true
+          }
         }
       ]
     }

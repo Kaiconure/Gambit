@@ -40,6 +40,25 @@ The former `<namespace>/players/` location is no longer searched.
 
 Organizational roots accept an optional underscore: `settings/namespaces` or `settings/_namespaces`, and `settings/namespace-settings` or `settings/_namespace-settings`. Bundled namespaces likewise accept `namespaces/` or `_namespaces/`. For each root, the plain version wins when both exist; the two versions are never merged. Existing underscored roots remain usable. When neither version exists, automatic creation uses the plain version. Old `ns`, `_ns`, and `.ns` roots are not searched.
 
+Add `index.json` to the active user namespace root to define aliases for commands,
+character defaults, and `inherits_from`.
+
+```json
+{
+  "aliases": {
+    "xp": "battle",
+    "xp/di": "battle/di",
+    "di": "battle/di",
+    "ghatjot": "sortie/ghatjot"
+  }
+}
+```
+
+Alias keys match the full reference exactly. Define each nested alias explicitly.
+Existing folders take precedence, and a `gambit:` reference goes directly to the
+bundled namespace root. Each alias target must resolve to an existing folder for
+the alias to take effect. Character files use the target's resolved folder.
+
 Each namespace path segment is resolved independently: the exact directory name
 wins; if absent, Gambit tries an underscore-prefixed directory. Thus `xp/cleave`
 can refer to `namespaces/_xp/_cleave`, `namespaces/xp/_cleave`, or `namespaces/_xp/cleave`.

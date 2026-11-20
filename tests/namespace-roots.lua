@@ -45,4 +45,33 @@ for _,prefix in ipairs({'namespace-settings','_namespace-settings'}) do
     assert(paths.fileNamespace(p)=='example')
     assert(paths.namespaceRelativeFile(p)=='players/Tester/events/war.json')
 end
+local index = './settings/_namespaces/index.json'
+local indexContents = '{"aliases":{"xp":"battle","xp/di":"battle/di","di":"battle/di","chain":"di"}}'
+local newFile = files.new
+files.new=function(path)
+    if path==index then
+        return {exists=function() return true end,read=function() return indexContents end}
+    end
+    return newFile(path)
+end
+dirs['settings/_namespaces/battle']=true
+dirs['settings/_namespaces/battle/di']=true
+assert(paths.namespacePath('xp')=='./settings/_namespaces/battle')
+assert(paths.namespacePlayerRoot('xp/di')=='./settings/_namespace-settings/battle/di/players')
+assert(not paths.namespaceExists('xp/cleave') and not paths.namespaceExists('chain'))
+assert(not paths.namespaceExists('gambit:xp'))
+local configs={di={inherits_from='xp'},battle={}}
+local chain=paths.resolveInheritance('di',function(name) return configs[name] end,paths.namespaceExists)
+assert(#chain==2 and chain[2]=='battle')
+dirs['_namespaces/xp']=true
+assert(paths.namespacePath('xp')=='./_namespaces/xp')
+dirs['settings/_namespaces/xp']=true
+assert(paths.namespacePath('xp')=='./settings/_namespaces/xp')
+paths.withDirectoryCache(function()
+    assert(paths.namespaceExists('di'))
+    indexContents='{}'
+    assert(paths.namespaceExists('di'))
+end)
+assert(not paths.namespaceExists('di'))
+print('PASS: namespace index aliases, exact and bundled precedence, inheritance, personal paths and reload scope')
 print('PASS: plain organizational defaults, underscore fallback, root conflicts, bundled selection and path metadata')

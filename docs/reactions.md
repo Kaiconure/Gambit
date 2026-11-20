@@ -89,7 +89,7 @@ Use these options to change the behavior:
 | --- | --- | --- |
 | `wait` | `0.25` seconds | How long to keep holding after completion, interruption, or a bracket's release trigger. It does not delay the initial response. |
 | `timeout` | No automatic expiry | Optional maximum total duration in seconds from the start, including the release wait. Omit, use `null`, or use `"inf"`/`"infinity"` for no deadline. |
-| `no_turn` | `false` | Do not force a face-away. Normal positioning and facing continue unless `distance` also requests a retreat. |
+| `no_turn` | `false` | Skip the forced face-away. After reaching safety, maintain facing toward the reaction enemy unless another reaction requires facing away or you have a different battle target. |
 | `allow_weapon_skills` | `false` | Allow weapon skills during this reaction. |
 | `allow_offensive_magic` | `false` | Allow offensive spells during this reaction. |
 | `distance` | Not set | Retreat to at least this horizontal center distance from the triggering enemy, in yalms. Does not move you closer if already farther away. |
@@ -146,7 +146,7 @@ It does not cancel an action already accepted by the game. Existing weapon-skill
 and offensive-magic suppression still applies after reaching safety until the
 face-away hold ends. Manual action requests are subject to the same packet guard.
 
-Facing away is reasserted when movement stops. With `no_turn: true`, Gambit still retreats but does not force facing away. Other automated movement and facing are held back while a distance reaction is active, including after you reach the minimum, so normal positioning cannot pull you back into danger. Healing/support actions become eligible once positioning is satisfied, or during movement if `movement_priority` is explicitly disabled.
+Facing away is reasserted when movement stops. With `no_turn: true`, Gambit checks facing after safe arrival and corrects it as needed while the hold remains active. If you have no battle target, it uses the enemy that triggered the movement. Other automated movement and facing are held back while a distance reaction is active, including after you reach the minimum, so normal positioning cannot pull you back into danger. Healing/support actions become eligible once safe positioning is reached and the movement job ends, or during movement if `movement_priority` is explicitly disabled.
 
 Turning and distance/angle reactions hold an exclusive ownership token in `smartMove` for the full hold, including movement gaps and the release wait. Ordinary movement submissions, saved-job resumptions, and cancellations cannot override it; `immediate` execution alone does not bypass ownership. Overlapping reactions share ownership until the last movement-blocking hold ends. Cleanup releases ownership without automatically replaying an old movement job. Lifecycle stops such as disabling automation or unloading can always stop movement.
 

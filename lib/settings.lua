@@ -1295,6 +1295,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     name = name or nil
     local valid, message = settingsPaths.validateNamespace(name)
     if not valid then error(message) end
+    name = settingsPaths.namespaceName(name)
     local descriptions = {}
     local abstract = false
     local descriptionsClosed = false

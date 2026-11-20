@@ -80,6 +80,12 @@ function M.tick(force)
         lastFacing=nil
     end
     if deps.movement then require('./lib/reaction-movement').pulse(deps.movement) end
+    -- Give the escape driver first opportunity to start or continue a run.
+    if not chosen and not movement and request and request.hasMoved and request.options.no_turn
+        and deps.faceAfterMovement
+        and not require('./lib/reaction-movement').needsMovement(request,deps.movement or deps) then
+        deps.faceAfterMovement(deps.mob(request.actor.id))
+    end
     if not M.blocksMovement() and deps.releaseMovement then deps.releaseMovement() end
 end
 function M.immediateMovement() return deps and deps.movement~=nil end
@@ -160,6 +166,11 @@ function M.claimMovement(request,jobId)
     local current=M.distanceRequest()
     if not current or current.sequence~=request.sequence then return false end
     movement={sequence=request.sequence,jobId=jobId}
+    if jobId then
+        for _,hold in pairs(holds) do
+            if hold.sequence==request.sequence then hold.hasMoved=true; break end
+        end
+    end
     return true
 end
 function M.movementStatus(request,status,distance)
@@ -171,11 +182,17 @@ function M.movementStatus(request,status,distance)
         end
     end
 end
-function M.finishMovement(jobId)
+function M.finishMovement(jobId,arrived)
     if movement and movement.jobId==jobId then
+        local sequence=movement.sequence
         if deps.cancelReactionMovement then deps.cancelReactionMovement(jobId) end
         movement=nil
         M.tick(true)
+        local request=arrived and M.distanceRequest()
+        -- Running changes heading even when the forced face-away is disabled.
+        if not deps.faceAfterMovement and request and request.sequence==sequence and request.options.no_turn and not lastFacing then
+            deps.restore(request.actor.id)
+        end
     end
 end
 function M.suppresses(kind)
@@ -192,7 +209,8 @@ function M.blocksActionsWhileMoving()
         if hold.options.movement_priority~=false and hold.options.distance~=nil
             and (not hold.expires or deps.clock()<hold.expires)
             and (not hold.release_at or deps.clock()<hold.release_at)
-            and require('./lib/reaction-movement').needsMovement(hold,deps.movement or deps) then
+            and ((movement and movement.sequence==hold.sequence)
+                or require('./lib/reaction-movement').needsMovement(hold,deps.movement or deps)) then
             return true
         end
     end
