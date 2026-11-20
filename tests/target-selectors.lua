@@ -26,6 +26,53 @@ assert(#selectors.resolve(leaderParty,'leader')==1)
 leaderParty.p1=nil
 assert(#selectors.resolve(leaderParty,'leader')==0)
 assert(not selectors.partyHasJob(leaderParty,'leader'))
+local function tank(id,name,main,sub,leader,participant)
+    return {id=id,name=name,main_job=main,main_job_level=99,
+        sub_job=sub,sub_job_level=sub and 49 or 0,
+        is_party_leader=leader,is_participant=participant~=false}
+end
+assert(selectors.hasProvoke(tank(1,'War','WAR')))
+assert(selectors.hasProvoke(tank(1,'Support War','RDM','WAR')))
+assert(not selectors.hasProvoke(tank(1,'No Provoke','PLD')))
+assert(not selectors.hasProvoke({main_job='WAR',main_job_level=4}))
+assert(selectors.isTankCandidate(tank(1,'Paladin','PLD')))
+assert(selectors.isTankCandidate(tank(1,'Rune','RUN')))
+assert(not selectors.isTankCandidate(tank(1,'Ninja','NIN')))
+assert(selectors.isTankCandidate(tank(1,'Ninja Warrior','NIN','WAR')))
+assert(not selectors.isTankCandidate(tank(1,'Mage','RDM')))
+assert(selectors.isTankCandidate({is_trust=true,meta={tank=true},main_job='PLD'}))
+assert(not selectors.isTankCandidate({is_trust=true,meta={tank=false},main_job='PLD'}))
+local tanks={
+    p0=tank(1,'Zulu','PLD','WAR'),
+    p1=tank(2,'Alpha','PLD','WAR'),
+    p2=tank(3,'Runner','RUN','WAR'),
+    p3=tank(4,'Leader','RDM','WAR',true),
+    p4=tank(5,'Absent','PLD','WAR',nil,false),
+    p5=tank(6,'No Provoke','WAR',nil),
+}
+tanks.p5.main_job_level=4
+tanks.party_leader=tanks.p3
+assert(selectors.primaryTank(tanks)==tanks.p3)
+assert(selectors.setPrimaryTank(tanks.p1))
+assert(selectors.primaryTank(tanks)==tanks.p1)
+local refreshed=tank(2,'Alpha','PLD','WAR')
+tanks.p1=refreshed
+assert(selectors.primaryTank(tanks)==refreshed) -- Resolve the current object by stable ID.
+refreshed.is_participant=false
+assert(selectors.primaryTank(tanks)==tanks.p3) -- Invalid overrides fall back automatically.
+refreshed.is_participant=true
+assert(selectors.setPrimaryTank('Alpha'))
+assert(selectors.primaryTank(tanks)==refreshed)
+assert(selectors.setPrimaryTank(nil))
+assert(selectors.primaryTank(tanks)==tanks.p3)
+tanks.p3.is_participant=false
+assert(selectors.primaryTank(tanks)==tanks.p1) -- PLD, then alphabetical.
+tanks.p0.main_job='RUN'; tanks.p1.main_job='NIN'
+assert(selectors.primaryTank(tanks)==tanks.p2) -- RUN beats NIN; equal jobs use names.
+tanks.p0.main_job='RDM'; tanks.p1.main_job='RDM'; tanks.p2.main_job='RDM'
+assert(selectors.primaryTank(tanks)==tanks.p1) -- Other jobs are alphabetical too.
+for i=0,5 do if tanks['p'..i] then tanks['p'..i].is_participant=false end end
+assert(selectors.primaryTank(tanks)==nil)
 local me, first, last = {id=1}, {id=2}, {id=3}
 local members = {first, me, last}
 assert(selectors.selfFirst({me={id=1}}, members) == members)
@@ -108,6 +155,11 @@ local source=file:read('*all');file:close()
 source=source:gsub("('[^'\r\n]*'):format", '(%1):format')
     :gsub('("[^"\r\n]*"):format', '(%1):format')
 assert(loadstring(source))
+assert(source:find('context.findPrimaryTank = function()',1,true))
+assert(source:find('context.primary_tank = targetSelectors.primaryTank(context)',1,true))
+assert(source:find('context.setPrimaryTank = function(member)',1,true))
+assert(source:find('local tank=context.findPrimaryTank()',1,true))
+assert(not source:find('not targetSelectors.isTankCandidate(context.me)',1,true))
 local setupSource = assert(source:match('(local function setPartyEnumerators.-)local function setArrayEnumerators'))
 local setup = assert(loadstring(setupSource .. '\nreturn setPartyEnumerators'))()
 for _, name in ipairs({'partyByName', 'alliesByName'}) do

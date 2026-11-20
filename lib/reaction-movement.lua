@@ -54,19 +54,21 @@ function M.run(deps)
     if not jobId then reactions.finishMovement(nil);return false end
     if not reactions.claimMovement(request,jobId) then deps.cancel(jobId);return true end
     if deps.immediate then return true,jobId end
+    local arrived
     while true do
         deps.sleep(0.05)
         reactions.tick(true)
         local current=reactions.distanceRequest()
-        local job=deps.job()
-        if not current or current.sequence~=request.sequence or not deps.available()
-            or not job or job.jobId~=jobId then break end
+        if not current or current.sequence~=request.sequence or not deps.available() then break end
         actor=deps.mob(request.actor.id);me=deps.me()
         if not actor or not me then break end
-        local arrived,actual=satisfied(actor,me,minimum,spec,tolerance)
+        local actual
+        arrived,actual=satisfied(actor,me,minimum,spec,tolerance)
         if arrived then reactions.movementStatus(request,'safe',actual);break end
+        local job=deps.job()
+        if not job or job.jobId~=jobId then break end
     end
-    reactions.finishMovement(jobId)
+    reactions.finishMovement(jobId,arrived)
     return true
 end
 -- No sleeps or yields: smart-move owns one continuous run to the initial point.
@@ -82,10 +84,10 @@ local function pulse(deps)
         local arrived=actor and me and actor.x~=nil and actor.y~=nil and me.x~=nil and me.y~=nil
             and satisfied(actor,me,active.request.options.distance,
             require('./lib/reaction-options').angle(active.request.options),deps.tolerance or 0.33)
-        if not request or request.sequence~=active.request.sequence or not deps.available()
-            or not job or job.jobId~=active.jobId or arrived then
+        local canContinue=request and request.sequence==active.request.sequence and deps.available()
+        if not canContinue or not job or job.jobId~=active.jobId or arrived then
             local previous=active;active=nil
-            reactions.finishMovement(previous.jobId)
+            reactions.finishMovement(previous.jobId,canContinue and arrived)
             deps.cancel(previous.jobId)
         end
     end

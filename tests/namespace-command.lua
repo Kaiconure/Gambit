@@ -7,11 +7,13 @@ local initialized={existing=true}
 local warnings, errors, creates, reloads, saves={}, {}, 0, 0, 0
 local receivedParent
 local descriptionReports=0
-local listed={'base','sortie/a'}
+local listed={'base','shortcut','sortie/a'}
 local messages={}
+local arrow=string.char(0x81, 0xA8)
 local env=setmetatable({handlers={}, settingsPaths={
     getNamespace=function() return selected end,
-    listNamespaces=function() return listed, {base=true} end,
+    getLoadedNamespace=function() return 'battle/di' end,
+    listNamespaces=function() return listed, {base=true}, {}, {shortcut='sortie/a'} end,
     validateNamespace=function(name) return name~='invalid', 'Invalid namespace' end,
     namespaceExists=function(name) return directories[name] or false end,
     isNamespaceInitialized=function(name) return directories[name] and initialized[name] or false end,
@@ -23,12 +25,14 @@ local env=setmetatable({handlers={}, settingsPaths={
         directories[name]=true; initialized[name]=true; return true
     end,
 }, windower={ffxi={get_player=function() return {name='Player'} end}},
-    Colors={warning=1,default=2},
+    Colors={warning=1,default=2}, CHAR_RIGHT_ARROW=arrow,
     text_namespace=function(name, returnColor)
         assert(returnColor==1 or returnColor==2, 'Namespace text must restore its enclosing color')
         return name
     end,
     text_gray=function(text, returnColor) assert(returnColor==2); return '[gray]'..text end,
+    text_green=function(text) return text end,
+    text_yellow=function(text, returnColor) assert(returnColor==2); return '[yellow]'..text end,
     writeWarning=function(message) warnings[#warnings+1]=message end,
     writeMessage=function(message) messages[#messages+1]=message end,
     writeError=function(message) errors[#errors+1]=message end,
@@ -39,7 +43,10 @@ local env=setmetatable({handlers={}, settingsPaths={
 local chunk=assert(loadstring(handler)); setfenv(chunk,env); chunk()
 local run=env.handlers.namespace
 run({'-list'})
-assert(messages[1]=='Available namespaces:' and messages[2]=='  [gray]base (abstract)' and messages[3]=='  sortie/a')
+assert(messages[1]=='Available namespaces:' and messages[2]=='  [gray]base (abstract)'
+    and messages[3]=='  [yellow]shortcut '..arrow..' sortie/a' and messages[4]=='  sortie/a')
+run({})
+assert(messages[#messages]=='Current namespace: battle/di')
 listed={}
 run({'-list'})
 assert(messages[#messages]=='No namespaces with a .nsconfig file found.')
@@ -67,6 +74,12 @@ run({'-set','new','-force','-force'})
 assert(#errors==3 and reloads==3)
 run({'-clear'})
 assert(selected==nil and reloads==4 and saves==4)
+run({'-set','global'})
+assert(selected==nil and reloads==5 and saves==5)
+run({'-set','gambit'})
+assert(selected==nil and reloads==6 and saves==6)
+run({'-set','global','-force'})
+assert(#errors==4 and reloads==6)
 run({'-set','unmarked','-force'})
-assert(initialized.unmarked and selected=='unmarked' and reloads==5 and saves==5)
+assert(initialized.unmarked and selected=='unmarked' and reloads==7 and saves==7)
 print('PASS: namespace creation requires force, existing force warns, option ordering, failures and clear')

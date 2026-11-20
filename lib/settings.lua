@@ -50,7 +50,7 @@ local lastSavedSettings
 local namespacePlayer
 
 local function readBaseSettings(playerName)
-    local fileName = './settings/' .. playerName .. '/main.json'
+    local fileName = settingsPaths.globalPlayerRoot(playerName) .. '/main.json'
     local file = files.new(fileName)
     local value = {}
     if file:exists() then value = json.parse(file:read()) end
@@ -1120,7 +1120,7 @@ local function loadSettingsInternal(actionsName, settingsOnly, outputProcessed)
     tempSettings.maxDistanceZ = math.max(tempSettings.maxDistanceZ or 0, 1)
 
     -- The default distance that the follow command will use if none is specified
-    tempSettings.followCommandDistance = math.clamp(tempSettings.followCommandDistance, 0.25, 10.0)
+    tempSettings.followCommandDistance = math.clamp(tonumber(tempSettings.followCommandDistance) or 1, 1.0, 10.0)
 
     -- We will leave the horizontal follow offset unassigned if it is not a valid number. Otherwise, we will
     -- ensure it is a non-negative number.
@@ -1295,6 +1295,7 @@ function loadSettings(actionsName, settingsOnly, namespaceOverride, outputProces
     name = name or nil
     local valid, message = settingsPaths.validateNamespace(name)
     if not valid then error(message) end
+    name = settingsPaths.namespaceName(name)
     local descriptions = {}
     local abstract = false
     local descriptionsClosed = false
@@ -1364,7 +1365,8 @@ end
 
 function saveSettings(settingsToSave, force)
     local player = windower.ffxi.get_player()
-    local fileName = './settings/' .. player.name .. '/main.json'
+    local baseFileName = settingsPaths.globalPlayerRoot(player.name) .. '/main.json'
+    local fileName = baseFileName
     -- Keep namespace save routing available, but save shared character preferences
     -- to the base file until per-namespace saves are enabled again.
     local savePerNamespace = false
@@ -1384,7 +1386,7 @@ function saveSettings(settingsToSave, force)
     -- Save the result
     -- Preserve the independent startup preference when saving the base file.
     local output = settingsSnapshot(settingsToSave)
-    if fileName == './settings/' .. player.name .. '/main.json' then
+    if fileName == baseFileName then
         local base = readBaseSettings(player.name)
         output.default_namespace = base.default_namespace
         output.ui = base.ui

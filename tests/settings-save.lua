@@ -10,7 +10,10 @@ local env=setmetatable({
     json={stringify=copy,parse=copy},
     windower={ffxi={get_player=function() return {name='Player'} end}},
     getSettingsFileName=function() error('Saves must bypass namespace file selection') end,
-    settingsPaths={getLoadedNamespace=function() error('Saves must bypass namespace routing') end},
+    settingsPaths={
+        getLoadedNamespace=function() error('Saves must bypass namespace routing') end,
+        globalPlayerRoot=function(name) return './settings/'..name end,
+    },
     files={new=function(path)
         assert(path=='./settings/Player/main.json')
         return {exists=function() return true end, read=function() return {default_namespace='xp'} end}

@@ -21,7 +21,7 @@ assert(not pcall(set,mob,'bad'))
 print('PASS: explicit selection-only targeting emits no engage/cursor path; legacy callers retain behavior')
 local json=require('./lib/jsonlua')
 local factory=require('./lib/execution-factory')
-local f=assert(io.open('settings/_namespaces/ambuscade/dullahan/actions/lib/dullahan/targeting.json'))
+local f=assert(io.open('settings/namespaces/ambuscade/dullahan/actions/lib/dullahan/targeting.json'))
 local rule=json.parse(f:read('*a')).actions[1];f:close()
 local horse={id=20,name='Bozzetto Charger',alive=true,engaged=false}
 local boss={id=30,name='Bozzetto Retributionist',alive=true,engaged=false}

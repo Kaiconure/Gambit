@@ -1,6 +1,6 @@
 local Tracker=require('./lib/encounter-state')
 local json=require('./lib/jsonlua')
-local f=assert(io.open('settings/_namespaces/ambuscade/dullahan/actions/lib/dullahan/setup.json'))
+local f=assert(io.open('settings/namespaces/ambuscade/dullahan/actions/lib/dullahan/setup.json'))
 local definition=json.parse(f:read('*a')).vars.dullahan.tracker; f:close()
 local now=0
 Tracker.attach({deps={clock=function() return now end,windower={ffxi={}}}})

@@ -55,6 +55,8 @@ smart:applySettings({useRawDistances=false,followOffset=0})
 local options={radius_multiplier=0.25}
 assert(smart:findMobOffset(mob,0,0.75,options)[1]==1.75)
 assert(smart:followDistance(mob,0.75,options)==1.75)
+assert(smart:followDistance(mob,0,options)==0)
+assert(smart:followDistance(mob,0)==0)
 assert(smart:followDistance(mob,12.01,{radius_multiplier=0.25,_radius_multiplier=0})==12.01)
 assert(smart:findMobOffset(mob,0,0.75)[1]==3.75)
 assert(smart:followDistance(mob,0.75)==5.25)
@@ -73,6 +75,9 @@ mob.model_size=8;job:pos();assert(job.follow_distance==2.75)
 smart:followIndex(1,0.75);job=smart.queue[1];local legacy=job.follow_distance
 job:reschedule();assert(smart.queue[1].follow_distance==legacy)
 mob.model_size=4
+smart:followIndex(1,0);job=smart.queue[1]
+assert(job.follow_distance==0)
+local exact=job:pos();assert(exact[1]==mob.x and exact[2]==mob.y)
 
 -- Exercise alignment checks and actual destinations with the real geometry.
 f=assert(io.open('lib/action-context.lua'));source=f:read('*a');f:close()

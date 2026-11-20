@@ -44,9 +44,9 @@ end
 local function organizationalRoot(parent, name)
     local preferred = parent .. '/_' .. name
     local plain = parent .. '/' .. name
-    if directoryExists(preferred) then return preferred end
     if directoryExists(plain) then return plain end
-    return preferred
+    if directoryExists(preferred) then return preferred end
+    return plain
 end
 
 function paths.namespaceRoot()
@@ -74,7 +74,7 @@ local function resolvePath(root, name)
     return root
 end
 
-function paths.namespacePath(name)
+local function directNamespacePath(name)
     local stock
     stock,name=paths.gambitReference(name)
     if stock then return resolvePath(paths.bundledNamespaceRoot(),name) end
@@ -85,12 +85,69 @@ function paths.namespacePath(name)
     return user
 end
 
+local aliasCacheKey = {}
+local function namespaceAliases()
+    if directoryCache and directoryCache[aliasCacheKey] then return directoryCache[aliasCacheKey] end
+    local aliases = {}
+    local file = files and files.new(paths.namespaceRoot() .. '/index.json')
+    if file and file:exists() then
+        local ok, index = pcall(json.parse, file:read())
+        assert(ok and type(index) == 'table', 'Invalid namespace index.json: expected a JSON object')
+        if index.aliases ~= nil then
+            assert(type(index.aliases) == 'table', 'Invalid namespace index.json: aliases must be an object')
+            for alias, target in pairs(index.aliases) do
+                assert(type(alias) == 'string' and not paths.isGambitReference(alias)
+                    and paths.validateNamespace(alias) and type(target) == 'string'
+                    and not paths.isGambitReference(target) and paths.validateNamespace(target),
+                    'Invalid namespace alias: ' .. tostring(alias))
+            end
+            aliases = index.aliases
+        end
+    end
+    if directoryCache then directoryCache[aliasCacheKey] = aliases end
+    return aliases
+end
+
+local function resolveNamespace(name)
+    local direct = directNamespacePath(name)
+    if not name or paths.isGambitReference(name) or directoryExists(direct) then return name, direct end
+    local target = namespaceAliases()[name]
+    if target then
+        local resolved = directNamespacePath(target)
+        if directoryExists(resolved) then return target, resolved end
+    end
+    return name, direct
+end
+
+function paths.namespaceName(name)
+    local resolved = resolveNamespace(name)
+    return resolved
+end
+
+function paths.namespacePath(name)
+    local _, folder = resolveNamespace(name)
+    return folder
+end
+
 function paths.namespacePlayerRoot(name)
     -- Use the resolved spelling so underscore aliases share personal settings.
     local resolved = paths.namespacePath(name)
     local relative = resolved:match('^%./settings/_?namespaces/(.*)$')
         or resolved:match('^%./_?namespaces/(.*)$')
     return paths.namespaceSettingsRoot() .. '/' .. relative .. '/players'
+end
+
+-- Prefer the organized global character tree when that character directory
+-- exists. Otherwise retain the legacy settings/<character> layout so existing
+-- installations continue to load without migration.
+function paths.globalPlayerParent(playerName)
+    local organized=SETTINGS_ROOT..'/players/'..playerName
+    if directoryExists(organized) then return SETTINGS_ROOT..'/players' end
+    return SETTINGS_ROOT
+end
+
+function paths.globalPlayerRoot(playerName)
+    return paths.globalPlayerParent(playerName)..'/'..playerName
 end
 
 function paths.namespaceExists(name)
@@ -134,7 +191,7 @@ end
 -- A .nsconfig marks a listable namespace; unmarked organizational folders
 -- are still traversed. Never descend into reserved namespace content folders.
 function paths.listNamespaces()
-    local result, abstract, bundled = {}, {}, {}
+    local result, abstract, bundled, aliases = {}, {}, {}, {}
     local seen = {}
     local function visit(directory, parent, sourceRoot)
         local absolute = (windower.addon_path or '') .. directory:gsub('^%./', '') .. '/'
@@ -164,11 +221,20 @@ function paths.listNamespaces()
     for _, root in ipairs({paths.namespaceRoot(), paths.bundledNamespaceRoot()}) do
         if directoryExists(root) then visit(root, nil, root) end
     end
+    for alias, target in pairs(namespaceAliases()) do
+        if not directoryExists(directNamespacePath(alias)) then
+            local folder = directNamespacePath(target)
+            if directoryExists(folder) and files.new(folder .. '/.nsconfig'):exists() then
+                result[#result+1] = alias
+                aliases[alias] = target
+            end
+        end
+    end
     table.sort(result, function(a,b)
         if a:lower() == b:lower() then return a < b end
         return a:lower() < b:lower()
     end)
-    return result, abstract, bundled
+    return result, abstract, bundled, aliases
 end
 
 function paths.getNamespace()
@@ -195,6 +261,9 @@ function paths.validateNamespace(name)
             return false, 'Namespace folder name "' .. segment .. '" cannot start or end with a dot.'
         end
         local normalized = segment:lower():gsub('^_+', '')
+        if normalized == 'global' or normalized == 'gambit' then
+            return false, 'Namespace folder name "' .. segment .. '" is reserved for global namespace selection.'
+        end
         if normalized == 'actions' or normalized == 'players' or normalized == 'events' then
             return false, 'Namespace folder name "' .. segment .. '" is reserved for namespace contents.'
         end
@@ -256,7 +325,7 @@ function paths.resolveInheritance(name, readConfig, exists)
             local stock=paths.gambitReference(current)
             local parent=config.inherits_from
             if stock and not paths.gambitReference(parent) then parent=GAMBIT_PREFIX..parent end
-            visit(parent, true)
+            visit(paths.namespaceName(parent), true)
         end
         visiting[identity] = nil
     end
@@ -336,7 +405,8 @@ function paths.ensureNamespaceFolders(playerName, name, parent)
 end
 
 function paths.writePath(playerName, relative)
-    local root = loadedNamespace and paths.namespacePlayerRoot(loadedNamespace) or './settings'
+    local root = loadedNamespace and paths.namespacePlayerRoot(loadedNamespace)
+        or paths.globalPlayerParent(playerName)
     return root .. '/' .. playerName .. '/' .. relative
 end
 
@@ -347,7 +417,7 @@ function paths.eventFiles(playerName, mainJob, groups)
         roots[#roots+1]={paths.namespacePath(name),
             not paths.isGambitReference(name) and paths.namespacePlayerRoot(name) or nil}
     end
-    roots[#roots+1]={SETTINGS_ROOT, SETTINGS_ROOT}
+    roots[#roots+1]={SETTINGS_ROOT, paths.globalPlayerParent(playerName)}
     local positives,inverses={},{}
     for _,group in ipairs(targetSelectors.orderEntryPointGroups(groups)) do
         local list=group:sub(1,1)=='~' and inverses or positives
@@ -380,7 +450,7 @@ function paths.entryPointLayers(playerName,relative)
         if paths.isGambitReference(name) then result[#result+1]=root..'/'..relative
         else result[#result+1]={paths.namespacePlayerRoot(name)..'/'..playerName..'/'..relative,root..'/'..relative} end
     end
-    result[#result+1]=SETTINGS_ROOT..'/'..playerName..'/'..relative
+    result[#result+1]=paths.globalPlayerRoot(playerName)..'/'..relative
     result[#result+1]=SETTINGS_ROOT..'/'..relative
     return result
 end
@@ -391,7 +461,7 @@ function paths.candidates(playerName, relative, scope)
         roots[#roots + 1] = {paths.namespacePath(name),
             not paths.isGambitReference(name) and paths.namespacePlayerRoot(name) or nil}
     end
-    roots[#roots + 1] = {SETTINGS_ROOT, SETTINGS_ROOT}
+    roots[#roots + 1] = {SETTINGS_ROOT, paths.globalPlayerParent(playerName)}
     local result = {}
     for _, entry in ipairs(roots) do
         local root, characterRoot = entry[1], entry[2]
@@ -414,7 +484,7 @@ function paths.commonFiles(playerName, mainJob, groups)
     local libraries = {
         './actions/lib',
         SETTINGS_ROOT .. '/actions/lib',
-        SETTINGS_ROOT .. '/' .. playerName .. '/actions/lib',
+        paths.globalPlayerRoot(playerName) .. '/actions/lib',
     }
     for i = #loadedPrecedence, 1, -1 do
         local root = paths.namespacePath(loadedPrecedence[i])

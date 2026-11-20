@@ -24,6 +24,7 @@
         "Harold's Coffer",
         "Shedu's Coffer",
         "Sovereign's Coffer",
+        "Tolba's Coffer",
         "Vedrfolnir's Coffer"
       ],
       "woe_items": [
@@ -78,10 +79,7 @@
         "escha_beads ~= nil and escha_beads < (vars.common_consumables.escha_bead_cap or 50000)",
         "canUseItem(vars.common_consumables.bead_pouch)"
       ],
-      "commands": [
-        "useItem(me)",
-        "refreshCurrencies()"
-      ],
+      "commands": ["useItem(me)", "refreshCurrencies()"],
       "miss_frequency": 30,
       "scope": "battle"
     },

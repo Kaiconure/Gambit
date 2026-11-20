@@ -1,6 +1,6 @@
 local json=require('./lib/jsonlua')
 local factory=require('./lib/execution-factory')
-local root='settings/_namespaces/ambuscade/dullahan/actions/lib/dullahan/'
+local root='settings/namespaces/ambuscade/dullahan/actions/lib/dullahan/'
 local function read(name)
     local f=assert(io.open(root..name)); local d=json.parse(f:read('*a')); f:close(); return d
 end

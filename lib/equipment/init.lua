@@ -36,7 +36,7 @@ function Service.new(deps)
     end
     profiling.start('equipment queue creation and bootstrap (inclusive)')
     local initializing=true
-    self.queue=Queue.new({clock=deps.clock or os.clock,report=deps.report,
+    self.queue=Queue.new({clock=deps.clock or os.clock,report=deps.report,diagnostic=deps.diagnostic,
         ready=function() return self:canEquip() and not self.zoneLoading end,
         ackTimeout=function()
             local now=(deps.clock or os.clock)()

@@ -1,7 +1,7 @@
 local json=require('./lib/jsonlua')
 local factory=require('./lib/execution-factory')
 local tracker=require('./lib/encounter-state')
-local root='settings/_namespaces/ambuscade/dullahan/actions/'
+local root='settings/namespaces/ambuscade/dullahan/actions/'
 local function read(path)local f=assert(io.open(root..path));local d=json.parse(f:read('*a'));f:close();return d end
 local vars=read('lib/dullahan/setup.json').vars
 tracker.configure('retreat',vars.dullahan.tracker,{retreat=true,tank=vars.dullahan.tank})

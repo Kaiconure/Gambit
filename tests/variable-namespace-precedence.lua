@@ -36,7 +36,7 @@ for _,pair in ipairs({
 -- Use actual Geas setup data, discovered after an ancestor WHM common file.
 local json=require('./lib/jsonlua')
 local function read(path)local f=assert(io.open(path));local d=json.parse(f:read('*a'));f:close();return d.vars end
-local actual=merged({'parent',read('settings/_namespaces/_boss/actions/lib/common/whm.json')},
- {'child',read('settings/_namespaces/_geas/actions/lib/setup/use-spacing.json')})
+local actual=merged({'parent',read('settings/namespaces/boss/actions/lib/common/whm.json')},
+ {'child',read('settings/namespaces/geas/actions/lib/setup/use-spacing.json')})
 assert(actual.frontline_engagement.distance==17 and actual.frontline_engagement.radius_multiplier==0)
 print('PASS: namespace ties in both import orders, nested fields, explicit priorities, arrays/overlays/clears and real Geas spacing')

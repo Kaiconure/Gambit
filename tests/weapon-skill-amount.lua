@@ -14,7 +14,7 @@ Result.apply(event,results,3);assert(event.amount==nil)
 Result.apply(event,results,1);results[1].amount=99;assert(event.results[1].amount==700)
 assert(Result.summary({results=results,target_id=2,outcome='completed'}).amount==1200)
 local json=require('./lib/jsonlua')
-local f=assert(io.open('settings/_namespaces/boss/_s.behemoth/events/(leader).vars.json'))
+local f=assert(io.open('settings/namespaces/boss/_s.behemoth/events/(leader).vars.json'))
 local document=json.parse(f:read('*a'));f:close()
 local rule=document.contributions['party_weapon_skills.post.after'][1]
 local sent

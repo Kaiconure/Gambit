@@ -39,13 +39,13 @@ also contribute rules at named slots.
 | Purpose | Global settings path |
 |---|---|
 | Shared job configuration | `settings/events/geo.vars.json` |
-| Character job configuration | `settings/Aidelle/events/geo.vars.json` |
-| Character rule override | `settings/Aidelle/events/geo.json` |
+| Character job configuration | `settings/players/Aidelle/events/geo.vars.json` |
+| Character rule override | `settings/players/Aidelle/events/geo.json` |
 | Shipped rule defaults | `events/geo.json`, or `events/(all).json` |
 
 Namespace equivalents are
-`settings/_namespaces/<namespace>/events/` and
-`settings/_namespace-settings/<namespace>/players/<character>/events/`.
+`settings/namespaces/<namespace>/events/` and
+`settings/namespace-settings/<namespace>/players/<character>/events/`.
 
 **Exactly one rule entry point is selected.** The search order is:
 

@@ -32,6 +32,7 @@ handlers['panel'] = function(args)
         writeMessage('  gbt panel log [show | hide] - View or change recent output visibility')
         writeMessage('  gbt panel theme [<name> | -list] - View, list, or change background skin')
         writeMessage('  gbt panel tracking [-list | -set <name> | -save <name> [-force]] - View, list, switch, or save tracking sets')
+        writeMessage('  gbt panel preview <warning|error|clear> - Preview an indicator in temporary tracking')
         writeMessage('  gbt panel reset-position - Restore default position')
         writeMessage('  gbt panel reset - Restore and save all panel defaults')
         writeMessage('  gbt panel reload - Apply panel settings from main.json')
@@ -138,6 +139,26 @@ handlers['panel'] = function(args)
                 writeMessage('Saved tracking set: ' .. panel.options.tracking.current)
             elseif not args[2] then writeMessage('Tracking set: ' .. panel.options.tracking.current)
             else writeMessage('Usage: gbt panel tracking [-list | -set <name> | -save <name> [-force]]') end
+        elseif command == 'preview' then
+            local indicator=(args[2] or ''):lower()
+            if indicator=='clear' then
+                panel:setTemporaryTracking(nil)
+                writeMessage('Panel indicator preview cleared.')
+            elseif indicator=='warning' or indicator=='error' then
+                local labels={warning='Do not destroy archaic gears!',error='Example critical error'}
+                panel:setTemporaryTracking({{
+                    id='indicator_preview',
+                    name='Indicator Preview',
+                    checklist={{
+                        id=indicator,
+                        text=labels[indicator],
+                        icon='general/indicators/'..indicator..'.png'
+                    }}
+                }})
+                writeMessage('Previewing the '..indicator..' indicator.')
+            else
+                writeMessage('Usage: gbt panel preview <warning|error|clear>')
+            end
         else showHelp() end
     end)
     if not ok then writeError('Panel: ' .. tostring(err)) end
@@ -406,7 +427,7 @@ handlers['events'] = function(args)
             assert(not manager or manager:isReady(),'Wait for equipment readiness before exporting')
             assert(not manager or #manager.queue.batches==0,'Wait for pending equipment swaps before exporting')
             local contents=gearExport.render(inventory,windower.ffxi.get_items())
-            local directory='./settings/'..player.name..'/data'
+            local directory=require('./lib/settings-paths').globalPlayerRoot(player.name)..'/data'
             windower.create_dir((windower.addon_path or '')..directory)
             local base=directory..'/'..player.main_job:lower()..'-'..os.date('%Y%m%d-%H%M%S')
             local path=base..'.vars.json'
@@ -501,20 +522,24 @@ end
 -- Explicit namespace selection is remembered in the base character settings.
 handlers['namespace'] = function(args)
     if #args == 0 then
-        writeMessage('Current namespace: ' .. text_green(settingsPaths.getNamespace() or '(global)'))
+        local name = settingsPaths.getLoadedNamespace()
+        writeMessage('Current namespace: ' .. text_green(name or '(global)'))
         return
     end
 
     local option = (args[1] or ''):lower()
     if option == '-list' and #args == 1 then
-        local names, abstract, bundled = settingsPaths.listNamespaces()
+        local names, abstract, bundled, aliases = settingsPaths.listNamespaces()
         if #names == 0 then
             writeMessage('No namespaces with a .nsconfig file found.')
         else
             writeMessage('Available namespaces:')
             for _, name in ipairs(names) do
                 local label = name .. (bundled and bundled[name] and ' (bundled)' or '')
-                if abstract and abstract[name] then
+                local target = aliases and aliases[name]
+                if target then
+                    writeMessage('  ' .. text_yellow(name, Colors.default) .. ' ' .. CHAR_RIGHT_ARROW .. ' ' .. text_namespace(target, Colors.default))
+                elseif abstract and abstract[name] then
                     writeMessage('  ' .. text_gray(label .. ' (abstract)', Colors.default))
                 else
                     writeMessage('  ' .. text_namespace(label, Colors.default))
@@ -547,11 +572,17 @@ handlers['namespace'] = function(args)
         end
     end
     if not validArgs then
-        writeError('Usage: gbt namespace [-list | -v | -set <name> [-force] [-parent <namespace>] | -clear] (alias: ns)')
+        writeError('Usage: gbt namespace [-list | -v | -set <name|global|gambit> [-force] [-parent <namespace>] | -clear] (alias: ns)')
         return
     end
 
     local name = option == '-set' and args[2] or nil
+    local globalAlias = type(name)=='string' and (name:lower()=='global' or name:lower()=='gambit')
+    if globalAlias and (force or parent) then
+        writeError('The global namespace aliases cannot be combined with -force or -parent.')
+        return
+    end
+    if globalAlias then name=nil end
     if name then
         local valid, message = settingsPaths.validateNamespace(name)
         if not valid then writeError(message); return end
@@ -629,6 +660,7 @@ handlers['strat'] = handlers['strategy']
 
 handlers['status'] = function(args)
     writeMessage(text_gray('Gambit status:'))
+    handlers['namespace']({})
     writeMessage('  Current gambit is %s':format(settings and settings.actionInfo and text_green(settings.actionInfo.name) or text_red('n/a')))
     writeMessage('  Automation is %s':format(globals.enabled and text_green('enabled') or text_red('disabled')))
     writeMessage('  Targeting strategy is %s':format(text_green(settings.strategy)))
@@ -760,6 +792,7 @@ end
 -------------------------------------------------------------------------------
 -- follow
 handlers['follow'] = function (args)
+    local followDistance = require('./lib/follow-distance')
     local target = arrayIndexOfStrI(args, '-target') or arrayIndexOfStrI(args, '-t')
     local distance = tonumber(arrayIndexOfStrI(args, '-distance') or arrayIndexOfStrI(args, '-d') or 0)
     local cancel = arrayIndexOfStrI(args, '-cancel') or arrayIndexOfStrI(args, '-c')
@@ -774,7 +807,7 @@ handlers['follow'] = function (args)
         target = windower.ffxi.get_mob_by_target('t')
     end
 
-    distance = distance > 0 and tonumber(args[distance + 1]) or settings.followCommandDistance
+    distance = distance > 0 and tonumber(args[distance + 1]) or followDistance.get(settings)
 
     if toggle then
         -- If not following, initiate follow in the current target at the specified distance
@@ -868,18 +901,33 @@ handlers['reload'] = function (args)
     local actionsName = arrayIndexOfStrI(args, '-actions') or arrayIndexOfStrI(args, '-a')
     local reload = arrayIndexOfStrI(args, '-reload') or arrayIndexOfStrI(args, '-r')
     local nsIndex = arrayIndexOfStrI(args, '-ns')
+    local globalFlag = arrayIndexOfStrI(args, '-global')
+    local gambitFlag = arrayIndexOfStrI(args, '-gambit')
     local namespaceOverride
-    if nsIndex then
+    if (globalFlag and gambitFlag) or (nsIndex and (globalFlag or gambitFlag)) then
+        writeError('Use only one namespace selector: -ns <name>, -global, or -gambit.')
+        return
+    end
+    if globalFlag or gambitFlag then
+        if bypassActions then
+            writeError('The global namespace options cannot be combined with -settings-only.')
+            return
+        end
+        namespaceOverride = false
+    elseif nsIndex then
         if bypassActions then
             writeError('The -ns option cannot be combined with -settings-only.')
             return
         end
         namespaceOverride = args[nsIndex + 1]
-        local valid, message = settingsPaths.validateNamespace(namespaceOverride)
+        local globalAlias=type(namespaceOverride)=='string'
+            and (namespaceOverride:lower()=='global' or namespaceOverride:lower()=='gambit')
+        local valid, message = globalAlias or settingsPaths.validateNamespace(namespaceOverride)
         if not namespaceOverride or namespaceOverride:sub(1, 1) == '-' or not valid then
             writeError(message or 'Usage: gbt r -ns <namespace>')
             return
         end
+        if globalAlias then namespaceOverride=false end
     elseif reload then
         namespaceOverride = settingsPaths.getLoadedNamespace() or false
     end
@@ -1340,14 +1388,23 @@ handlers['config'] = function(args)
     end
 
     if fcd > 0 then
-        fcd = tonumber(args[fcd + 1])
-        if fcd and fcd > 0 then
-            fcd = math.clamp(fcd, 0.25, 10.0)
-            settings.followCommandDistance = fcd
+        local value = tonumber(args[fcd + 1])
+        local followDistance = require('./lib/follow-distance')
+        if value == 0 then
+            followDistance.set(0)
+        elseif value and value > 0 then
+            value = math.clamp(value, 1.0, 10.0)
+            followDistance.set(value)
+            settings.followCommandDistance = value
             hasChanges = true
         end
 
-        writeMessage('Follow command distance: %s':format(text_number('%.1f':format(settings.followCommandDistance))))
+        local effective = followDistance.get(settings)
+        local transient = effective == 0 and ' (until zoning or mounting)' or ''
+        writeMessage('Follow command distance: %s%s':format(
+            text_number('%.1f':format(effective)),
+            transient
+        ))
     end
 
     if h_offset > 0 then
@@ -1457,8 +1514,10 @@ handlers['config'] = function(args)
             hasChanges = true
         end
 
-        writeMessage('Additional debugging details: %s':format(
-            settings.debugging and text_green('on') or text_red('off')
+        local effective = isDebugging and isDebugging() or settings.debugging
+        local inherited = effective and not settings.debugging and ' (via verbosity)' or ''
+        writeMessage('Additional debugging details: %s%s':format(
+            effective and text_green('on') or text_red('off'), inherited
         ))
     end
 

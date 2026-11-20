@@ -1,12 +1,13 @@
 local Queue=require('./lib/equipment/queue')
 local copy=require('./lib/variable-values').copy
-local now,sent,reports=0,{},{}
+local now,sent,reports,diagnostics=0,{},{},{}
 local function item(id) return {localId=id,bagId=id==0 and 0 or 8,id=id} end
 local actual={[0]=item(10),[1]=item(20),[13]=item(30)}
 local queue=Queue.new({read=function() return actual end,clock=function() return now end,
     send=function(slot,value) sent[#sent+1]={slot=slot,item=copy(value)} end,
     valid=function(value) return value.id~=999 end,
-    report=function(value) reports[#reports+1]=value end})
+    report=function(value) reports[#reports+1]=value end,
+    diagnostic=function(value) diagnostics[#diagnostics+1]=value end})
 queue:submit({{slot=13,item=item(31)}})
 assert(#sent==1 and queue:view()[13].id==31 and queue:view(true)[13].id==30)
 local called
@@ -29,12 +30,12 @@ queue:ack(1,item(21)); queue:tick()
 queue:submit({{slot=13,item=item(32)}})
 local start=#sent
 for i=1,3 do now=now+1; queue:tick() end
-assert(#sent==start+2 and #reports==1)
-assert(reports[1]:find('no acknowledgment after 3 attempts',1,true))
+assert(#sent==start+2 and #reports==0 and #diagnostics==1)
+assert(diagnostics[1]:find('no acknowledgment after 3 attempts',1,true))
 queue:barrier(function(ok) assert(ok==false) end)
 queue:submit({{slot=13,item=item(999)}})
-assert(#sent==start+2 and #reports==2)
-assert(reports[2]:find('item unavailable or changed at its inventory location',1,true))
+assert(#sent==start+2 and #reports==0 and #diagnostics==2)
+assert(diagnostics[2]:find('item unavailable or changed at its inventory location',1,true))
 queue:barrier(function(ok) assert(ok==false) end)
 queue:submit({{slot=13,item=item(33)}})
 local cleared=false
@@ -169,7 +170,8 @@ local live=item(71)
 local recovery=Queue.new({read=function() return {[13]=item(70)} end,
     clock=function() return now end,valid=function() return true end,send=function() end,
     readSlot=function(slot) assert(slot==13); reconciles=reconciles+1; return live end,
-    report=function(message) issues[#issues+1]=message end})
+    report=function(message) error(message) end,
+    diagnostic=function(message) issues[#issues+1]=message end})
 recovery:submit({{slot=13,item=item(71)}})
 assert(reconciles==0)
 for i=1,3 do now=now+1; recovery:tick() end
@@ -194,7 +196,8 @@ local delayed=Queue.new({read=function() return {[13]=item(80)} end,
     clock=function() return now end,valid=function() return true end,
     ackTimeout=function() return grace and 6 or 2.25 end,
     send=function() sends=sends+1 end,
-    report=function(message) graceErrors[#graceErrors+1]=message end})
+    report=function(message) error(message) end,
+    diagnostic=function(message) graceErrors[#graceErrors+1]=message end})
 delayed:submit({{slot=13,item=item(81)}})
 local graceBarrier
 delayed:barrier(function(ok) graceBarrier=ok end)

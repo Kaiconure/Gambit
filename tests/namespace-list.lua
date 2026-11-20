@@ -36,6 +36,14 @@ assert(table.concat(names,',')=='_foo,base,foo,group/child,sortie,sortie/a,sorti
 assert(not visits['addon/settings/namespaces/actions/'] and not visits['addon/settings/namespaces/players/'])
 assert(not visits['addon/settings/namespaces/.git/'])
 for _, name in ipairs(names) do assert(paths.namespaceExists(name)) end
+configs['./settings/namespaces/index.json']={aliases={
+    ghatjot='sortie/ghatjot',foo='sortie',group='sortie',
+    missing='missing-target',chain='ghatjot',uninitialized='group',
+}}
+local listed, _, _, aliases=paths.listNamespaces()
+assert(table.concat(listed,',')=='_foo,base,foo,ghatjot,group/child,sortie,sortie/a,sortie/ghatjot,Zeta')
+assert(aliases.ghatjot=='sortie/ghatjot' and next(aliases,'ghatjot')==nil)
+configs['./settings/namespaces/index.json']=nil
 directories['addon/settings/namespaces']=nil
 for _, oldRoot in ipairs({'ns','_ns','.ns'}) do
     directories['addon/settings/'..oldRoot]=true

@@ -94,6 +94,7 @@
             "event.text:lower():find('time remaining:', 1, true) or (event.text:lower():find('you have ', 1, true) and event.text:lower():find('(earth time) to complete this mission.', 1, true))"
           ],
           "commands": [
+            "if event.text:lower():find('you have ', 1, true) and event.text:lower():find('(earth time) to complete this mission.', 1, true) then setSessionVar('nyzul.current_floor', nil); setSessionVar('nyzul.floor_started_at', nil); setSessionVar('nyzul.completed_floors', nil); setSessionVar('nyzul.completed_floor_count', nil); setSessionVar('nyzul.completed_floor_time', nil); setSessionVar('nyzul.longest_floor_time', nil); setSessionVar('nyzul.last_completed_floor', nil); setSessionVar('nyzul.last_displayed_floor', nil); setSessionVar('nyzul.objective_completed', false); setPanelWaypoint(nil) end",
             "setSessionVar('nyzul.time_remaining_until', event.time + number(event.text:match('[Tt]ime [Rr]emaining:%s*(%d+)') or event.text:match('[Yy]ou have%s+(%d+)'), 0) * (event.text:lower():find('minute', 1, true) and 60 or 1))"
           ]
         },
@@ -101,7 +102,7 @@
           "id": "nyzul-floor",
           "when": ["event.text:lower():find('welcome to floor ', 1, true)"],
           "commands": [
-            "setSessionVar('nyzul.current_floor', number(event.text:match('[Ww]elcome to [Ff]loor%s+(%d+)')))",
+            "local floor=number(event.text:match('[Ww]elcome to [Ff]loor%s+(%d+)')); local previous=getSessionVar('nyzul.current_floor'); local started=getSessionVar('nyzul.floor_started_at'); if floor ~= previous then if previous and started and getSessionVar('nyzul.last_completed_floor') ~= previous then local elapsed=max(0,event.time-started); local floors=getSessionVar('nyzul.completed_floors'); setSessionVar('nyzul.completed_floors',(floors and floors..' ' or '')..previous); setSessionVar('nyzul.completed_floor_count',number(getSessionVar('nyzul.completed_floor_count'),0)+1); setSessionVar('nyzul.completed_floor_time',number(getSessionVar('nyzul.completed_floor_time'),0)+elapsed); setSessionVar('nyzul.longest_floor_time',max(number(getSessionVar('nyzul.longest_floor_time'),0),elapsed)); setSessionVar('nyzul.last_completed_floor',previous) end; setSessionVar('nyzul.floor_started_at',event.time) end; setSessionVar('nyzul.current_floor',floor)",
             "setSessionVar('nyzul.objective', nil)",
             "setSessionVar('nyzul.objective_completed', false)",
             "setSessionVar('nyzul.restriction', nil)",

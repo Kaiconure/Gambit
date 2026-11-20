@@ -15,16 +15,17 @@ If no layer matches, Gambit uses the existing
 `actions/defaults/default-actions.json` starter fallback.
 
 Each named namespace is one layer containing both
-`settings/_namespace-settings/<namespace>/players/<player>/actions` and
-`settings/_namespaces/<namespace>/actions` (or `namespaces/<namespace>/actions` for a
+`settings/namespace-settings/<namespace>/players/<player>/actions` and
+`settings/namespaces/<namespace>/actions` (or `namespaces/<namespace>/actions` for a
 bundled namespace). For each selector, the character directory
 is checked before the shared directory. Thus a namespace's shared `blm.json`
 beats its character-specific `(all).json`, while a character `blm.json` wins
 over the shared `blm.json`. A child namespace's `(all).json` beats any inherited
 or shipped job-specific file.
 
-Global `settings/<player>/actions` and `settings/actions` are separate fallback
-layers; global character folders do not use a `players` subdirectory. For an
+Global `settings/players/<player>/actions` and `settings/actions` are separate fallback
+layers. Legacy `settings/<player>/actions` remains a fallback when the organized
+character directory does not exist. For an
 inheritance chain C → B → A, resolution searches C, B, A, global character,
 global shared, then shipped standard actions.
 

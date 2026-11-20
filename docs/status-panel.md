@@ -10,7 +10,7 @@ space for the right-aligned version.
 The addon version appears as a small right-aligned label just below the top border
 and follows the panel width as it resizes.
 
-Personal settings live under `ui.status_panel` in `settings/<character>/main.json`.
+Personal settings live under `ui.status_panel` in `settings/players/<character>/main.json`.
 They are loaded directly from that global character file, regardless of namespace
 main overrides. Defaults live in `lib/ux/status-config.lua`; omitted properties
 use those defaults. Mouse resizing is not implemented yet.
@@ -183,8 +183,8 @@ the automation toggle and log.
 
 ### Stock and custom tracking sets
 
-Gambit owns every set defined in its stock configuration: currently `default`,
-`compact`, and `none`. Their definitions always come from Gambit. Saved copies
+Gambit owns every set defined in its stock configuration, including `default`,
+`compact`, `none`, and content-specific sets such as Nyzul and Sortie. Their definitions always come from Gambit. Saved copies
 under these names are ignored and removed the next time panel preferences are
 saved. The selected name (`tracking.current`) is still saved.
 
@@ -204,6 +204,42 @@ preference save if you want to retain them.
 Coordinates must be nonnegative integers; width is 180–2000, font size 6–30,
 history lines 0–100, and refresh interval 0.1–60 seconds. Bounds errors reject the
 configuration rather than silently changing it.
+
+### Branched tracking supplements
+
+A tracking entry can expose a set of named, mutually exclusive branches. The
+panel renders the branch `short_name` values as a clickable selector and expands
+only the selected branch's entries. `default_branch` is used until the user
+chooses another branch:
+
+```json
+{
+  "id": "sortie",
+  "name": "Sortie Objectives",
+  "default_branch": "a",
+  "branches": {
+    "a": {
+      "name": "Sector A Objectives",
+      "short_name": "A",
+      "entries": [{"references": "sortie_a"}]
+    },
+    "b": {
+      "name": "Sector B Objectives",
+      "short_name": "B",
+      "entries": [{"references": "sortie_b"}]
+    }
+  }
+}
+```
+
+Branch choices are session state: they survive action and event reloads but are
+cleared on zoning. A content integration may also select a branch explicitly
+with `setPanelTrackingSupplement('sortie', true, {branch='b'})`; an explicit
+selection takes precedence over session state. Gambit ships a reusable Sortie
+supplement and zone-lifecycle event file, but does not import them globally by
+default because the full checklist occupies substantial panel space. The
+`sortie/_a`, `_b`, `_c`, and `_d` namespaces explicitly import their respective
+stock checklists instead.
 
 `position`, `x`, or `y` without arguments reports the current position.
 Coordinates are pixel offsets inward from the selected window edges, not relative
@@ -573,6 +609,13 @@ above; event handlers can use `setVarGlobal` for that lower-level interface.
 
 Code-driven changes appear on the next panel refresh; clicks refresh immediately.
 
+Set `"persistent": true` on a checklist entry to keep its manually toggled
+state across action, event, and namespace reloads. Persistent state remains
+in memory only: it resets when zoning or unloading Gambit, and is not written
+to settings. Automatic `checked_when` rows continue to derive their state live.
+Persistent manual values are available to expressions under
+`session.panel_checklists.<checklist-id>.<item-id>`.
+
 ### Automatically checked objectives
 
 Checklist labels accept `format`, `expression`, or `text`, in that order of precedence. A `format` array starts with a literal format string; remaining entries are argument expressions. Keep static text directly in the format string:
@@ -601,7 +644,24 @@ Alternatively, use a single panel `expression`. It takes precedence over `text` 
 }
 ```
 
-Each item stays on one line; newline characters in results become spaces. A nil result gives an empty label, while evaluation/compilation errors show `[error]`. Label expressions do not change click behavior: only `checked_when` makes an item condition-controlled.
+Checklist labels may contain explicit newlines. Multiline items receive a
+matching click area, their indicator is vertically centered, and subsequent
+items move down accordingly. Tabs are normalized to four spaces before
+measurement and display, so these produce the same layout:
+
+```json
+{"text": "Hello\n\tworld"}
+```
+
+```json
+{"text": "Hello\n    world"}
+```
+
+This applies to labels produced by `text`, `format`, and `expression`. Line
+breaks are explicit; the panel does not automatically wrap checklist text. A
+nil expression result gives an empty label, while evaluation/compilation errors
+show `[error]`. Label expressions do not change click behavior: only
+`checked_when` makes an item condition-controlled.
 
 Add `checked_when` to an individual checklist item to derive its check mark from conditions instead of manual state:
 
@@ -636,7 +696,8 @@ Sets with the same checklist and item IDs share state. Switching tracking sets o
 changing panel preferences does not clear that state. Completion is runtime
 variable state, not a saved panel preference; initialize or reset it through
 variables/actions when starting a new run. Reloading automation settings may
-reset it along with other automation variables.
+reset it along with other automation variables unless the checklist declares
+`"persistent": true`.
 
 ## Temporary tracking from actions
 

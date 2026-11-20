@@ -1,6 +1,6 @@
 local json=require('./lib/jsonlua')
 local scope=require('./lib/action-variable-scope')
-local f=assert(io.open('settings/_namespaces/_base/actions/lib/tank-alignment.json'))
+local f=assert(io.open('settings/namespaces/_base/actions/lib/tank-alignment.json'))
 local document=json.parse(f:read('*a'));f:close()
 assert(#document.actions==1)
 local action=document.actions[1];action.scopes={execution={}}

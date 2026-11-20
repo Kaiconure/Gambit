@@ -67,7 +67,7 @@ ctx.me.x=35;assert(ctx.applyEngagement(override,'frontline') and overrideMoves==
 ctx.me.x=35;assert(ctx.frontlineEngage(override) and overrideMoves==3)
 assert(config._anchor.x==30 and config.anchor.return_distance==nil and override._anchor==nil)
 -- Only the Shockmaw PLD override enables anchoring.
-local f=assert(io.open('settings/_namespaces/_geas/shockmaw/actions/lib/common/pld.json'))
+local f=assert(io.open('settings/namespaces/geas/shockmaw/actions/lib/common/pld.json'))
 local pld=require('./lib/jsonlua').parse(f:read('*a'));f:close()
 assert(anchor.enabled(pld.vars.frontline_engagement))
 -- Actual stock action guards prevent every normal movement branch from running.

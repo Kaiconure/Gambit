@@ -20,8 +20,10 @@ local named = {
     lefter={{-90, 5}},      -- Lefter/righter: Left and right, but with tighter constraints
     righter={{90, 5}},
     sider={{-90,5},{90,5}},
-    aside={{180, 100}},     -- Anywhere except near the mob's front
-    side={                  -- Side: Either left or right is acceptable
+    aside={{180, 100}},         -- Anywhere except near the mob's front
+    afront={{0, 80}},           -- Anywhere but near the mob's rear
+    frontgap={{55,8},{-55,8}},   -- Frontside, but avoid front conal areas
+    side={                      -- Side: Either left or right is acceptable
         {90, 30},
         {-90, 30}
     }
@@ -76,6 +78,27 @@ function alignment.contains(spec, angle)
     return false
 end
 
+function alignment.arcAt(spec, bearing)
+    if not spec.arcs or #spec.arcs < 2 then return end
+    for _,arc in ipairs(spec.arcs) do
+        if math.abs(delta(bearing,arc[1]))<=arc[2]+0.000001 then
+            return {arcs={arc}}
+        end
+    end
+end
+
+local function localArcFirst(spec,bearing,candidates)
+    local arc=alignment.arcAt(spec,bearing) or alignment.arcAt(spec,candidates[1])
+    if not arc then return candidates end
+    local localCandidates,otherCandidates={},{}
+    for _,angle in ipairs(candidates) do
+        local group=alignment.contains(arc,angle) and localCandidates or otherCandidates
+        group[#group+1]=angle
+    end
+    for _,angle in ipairs(otherCandidates) do localCandidates[#localCandidates+1]=angle end
+    return localCandidates
+end
+
 function alignment.candidates(spec, bearing, preferred)
     if spec.exact then return {spec.exact} end
     if spec.free then return {bearing,bearing+45,bearing-45} end
@@ -91,7 +114,7 @@ function alignment.candidates(spec, bearing, preferred)
     end
     -- Include both extremes of every allowed arc (including the opposite side).
     for _,arc in ipairs(spec.arcs) do add(arc[1]-arc[2]);add(arc[1]+arc[2]) end
-    return result
+    return localArcFirst(spec,bearing,result)
 end
 
 -- Work with the union of all allowed arcs, excluding gaps and double-counted
@@ -162,17 +185,12 @@ function alignment.distributedCandidates(spec,preferred,bearing,count)
     -- Accept the current valid region after trying the assigned region; then
     -- explore every actual arc and other fractional slices, never named cases.
     add(alignment.closest(spec,bearing))
-    -- If a whole arc is blocked, try a different arc before spending the
-    -- movement budget on more points in that same obstructed region.
-    for _,arc in ipairs(spec.arcs or {}) do
-        if not alignment.contains({arcs={arc}},first) then add(arc[1]) end
-    end
     for _,arc in ipairs(spec.arcs or {}) do add(arc[1]) end
     for i=1,count do
         for _,arc in ipairs(alignment.slice(spec,i,count).arcs or {}) do add(arc[1]) end
     end
     for _,arc in ipairs(spec.arcs or {}) do add(arc[1]-arc[2]);add(arc[1]+arc[2]) end
-    return candidates
+    return localArcFirst(spec,bearing,candidates)
 end
 
 return alignment

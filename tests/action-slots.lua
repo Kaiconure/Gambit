@@ -476,7 +476,7 @@ load('Tester',cleared,player,'entry');assert(#cleared.battle==0)
 local filtered={battle={{slot='a'}},contributions={a={{import='cycle-provider',disabled=true}}}}
 load('Tester',filtered,player,'entry');assert(#filtered.battle==0)
 print('PASS: nested contribution discovery, earlier/automatic slots, repeated imports, conditions/scopes, direct/indirect/shared/import cycles and cleared/disabled branches')
-local tankFile=assert(io.open('settings/_namespaces/_base/actions/lib/tank-alignment.json'))
+local tankFile=assert(io.open('settings/namespaces/_base/actions/lib/tank-alignment.json'))
 documents['real-tank-alignment']=require('./lib/jsonlua').parse(tankFile:read('*a'));tankFile:close()
 documents['test-dynamic']={actions={{commands={'position()'}}}}
 local tankSlots={battle={{slot='normal-engagement',actions={{imports={'real-tank-alignment','test-dynamic'}}}}},
@@ -502,12 +502,12 @@ print('PASS: nested contributions inherit the originating slot condition and var
 local function diskDocument(path)
  local f=assert(io.open(path));local doc=require('./lib/jsonlua').parse(f:read('*a'));f:close();return doc
 end
-local baseCommon=diskDocument('settings/_namespaces/_base/actions/lib/common/common.json')
+local baseCommon=diskDocument('settings/namespaces/_base/actions/lib/common/common.json')
 documents['shared-engagement-common']={contributions={}}
 for _,entry in ipairs(baseCommon.contributions) do
  if entry.slot=='normal-engagement' then table.insert(documents['shared-engagement-common'].contributions,entry) end
 end
-documents['shared-melee-common']=diskDocument('settings/_namespaces/_base/actions/lib/common/(melee).json')
+documents['shared-melee-common']=diskDocument('settings/namespaces/_base/actions/lib/common/(melee).json')
 documents['tank-alignment']=documents['real-tank-alignment']
 documents['dynamic-engagement']={actions={{commands={'shared_position()'}}}}
 local realSelectors=require('./lib/target-selectors')
@@ -635,17 +635,17 @@ print('PASS: nested slots preserve loading/function destinations, fallback alias
 
 -- Exercise production WS policies through the import loader. Other libraries
 -- are irrelevant here; WS leaf imports are markers so ordering is observable.
-documents['melee-ws']=diskDocument('settings/_namespaces/_base/actions/lib/melee-ws.json')
+documents['melee-ws']=diskDocument('settings/namespaces/_base/actions/lib/melee-ws.json')
 for _,name in ipairs({'ws/mp-recovery','ws/staged/four-part-light','ws/two-part-light','ws/three-part-light'}) do
  documents[name]={actions={{commands={name}}}}
 end
 local magePath='./settings/namespaces/base/actions/lib/common/(mages).json'
 env.targetSelectors=realSelectors
 local policyPath='./settings/namespaces/child/actions/lib/common/common.json'
-documents[magePath]=diskDocument('settings/_namespaces/_base/actions/lib/common/(mages).json')
-for _,policy in ipairs({'_base','_boss/_normal','xp','sortie/_a','sortie/_b','sortie/_ghatjot','sortie/_leshonn','clear-offense'}) do
+documents[magePath]=diskDocument('settings/namespaces/_base/actions/lib/common/(mages).json')
+for _,policy in ipairs({'_base','boss/_normal','xp','sortie/_a','sortie/_b','sortie/_ghatjot','sortie/_leshonn','clear-offense'}) do
  local policyDoc=policy=='_base' and {} or policy=='clear-offense' and {contributions={['!ws-main']={}}}
-  or diskDocument('settings/_namespaces/'..policy..'/actions/lib/common/common.json')
+  or diskDocument('settings/namespaces/'..policy..'/actions/lib/common/common.json')
  documents[policyPath]={contributions={}}
  for _,entry in ipairs(require('./lib/contribution-entries').read(policyDoc.contributions)) do
   local key=entry.slot
@@ -657,7 +657,7 @@ for _,policy in ipairs({'_base','_boss/_normal','xp','sortie/_a','sortie/_b','so
   local isMelee=realSelectors.matchesPlayer(selectedPlayer,{'melee','ranged'})
   env.settingsPaths.commonFiles=function() return isMage and {magePath,policyPath} or {policyPath} end
   local entryName=(job=='SAM' or job=='BLU') and '(melee)' or job:lower()
-  local layout=diskDocument('settings/_namespaces/_base/actions/'..entryName..'.json')
+  local layout=diskDocument('settings/namespaces/_base/actions/'..entryName..'.json')
   for index,action in ipairs(layout.battle) do
    if action.slot=='ws-main' then assert(layout.battle[index-1].slot=='ws-mp-recovery') end
   end
@@ -682,7 +682,7 @@ for _,policy in ipairs({'_base','_boss/_normal','xp','sortie/_a','sortie/_b','so
   if isMage and not suppressMP then expected[#expected+1]='ws/mp-recovery' end
   if policy=='sortie/_ghatjot' and (job=='WAR' or job=='PLD') then expected[#expected+1]='ws/three-part-light' end
   if isMelee and policy~='clear-offense' then expected[#expected+1]='finisher_ws()';expected[#expected+1]='all_out_ws()' end
-  if isMelee and (policy=='_boss/_normal' or policy=='xp') then expected[#expected+1]='ws/staged/four-part-light' end
+  if isMelee and (policy=='boss/_normal' or policy=='xp') then expected[#expected+1]='ws/staged/four-part-light' end
   if policy=='sortie/_a' and (job=='WAR' or job=='PLD') then expected[#expected+1]='ws/two-part-light' end
   assert(table.concat(actual,',')==table.concat(expected,','),policy..'/'..job..': '..table.concat(actual,','))
  end

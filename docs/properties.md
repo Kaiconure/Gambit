@@ -66,10 +66,10 @@ These fields are also available to panel tracking expressions:
 | `gambit.event_namespace` | Owning namespace folder path of the selected event file, including physical underscore aliases; nil for global/shipped files or no active file |
 
 Entry-point fields can be nil before actions have loaded. For example, a source
-file `./settings/Carbonite/actions/pld.json` gives an `entrypoint_name` of
-`./settings/Carbonite/actions/pld`.
+file `./settings/players/Carbonite/actions/pld.json` gives an `entrypoint_name` of
+`./settings/players/Carbonite/actions/pld`.
 For a namespace source such as
-`./settings/_namespace-settings/xp/players/Carbonite/actions/pld.json`, `entrypoint_relative` is
+`./settings/namespace-settings/xp/players/Carbonite/actions/pld.json`, `entrypoint_relative` is
 `players/Carbonite/actions/pld.json`. Inherited sources are relative to their own
 namespace rather than the currently selected namespace.
 The event fields describe the selected event entry point, not its imported

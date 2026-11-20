@@ -63,7 +63,23 @@ function Status:configure(options,trackingOverride,waypointOverride)
         tracking=Config.normalize(temporary).tracking.sets.temporary
     end
     self.trackingOverride=trackingOverride~=nil and copy(tracking) or nil
-    tracking=Config.expandTracking(tracking,options.tracking.sets)
+    local explicitBranches={}
+    for _,supplement in pairs(self.trackingSupplements or {}) do
+        if type(supplement)=='table' and supplement.branch then
+            explicitBranches[supplement.id or supplement.name]=supplement.branch
+        end
+    end
+    local branchContext
+    local selections=setmetatable(explicitBranches,{__index=function(_,id)
+        if branchContext==false then return nil end
+        if not branchContext then
+            local ok,context=pcall(self.deps.context,'status panel branches')
+            branchContext=ok and context or false
+        end
+        return branchContext and branchContext.getSessionVar and
+            branchContext.getSessionVar('panel_branches.'..id) or nil
+    end})
+    tracking=Config.expandTracking(tracking,options.tracking.sets,nil,selections)
     local supplementNames={}
     for name,enabled in pairs(self.trackingSupplements or {}) do
         if enabled then supplementNames[#supplementNames+1]=name end
@@ -72,7 +88,13 @@ function Status:configure(options,trackingOverride,waypointOverride)
     for _,name in ipairs(supplementNames) do
         local supplement=assert(options.tracking.sets[name],
             'Unknown panel tracking supplement: '..tostring(name))
-        for _,entry in ipairs(Config.expandTracking(supplement,options.tracking.sets)) do
+        local supplementState=self.trackingSupplements[name]
+        if type(supplementState)=='table' and supplementState.branch then
+            for _,definition in ipairs(supplement) do
+                if definition.branches then explicitBranches[definition.id]=supplementState.branch end
+            end
+        end
+        for _,entry in ipairs(Config.expandTracking(supplement,options.tracking.sets,nil,selections)) do
             tracking[#tracking+1]=entry
         end
     end
@@ -154,11 +176,25 @@ function Status:configure(options,trackingOverride,waypointOverride)
         if definition.checklist~=nil then
             entry.checks={}
             for _,objective in ipairs(definition.checklist) do
-                local path='vars.panel.'..definition.id..'.'..objective.id
+                local persistent=definition.persistent==true
+                local path=(persistent and 'panel_checklists.' or 'vars.panel.')..
+                    definition.id..'.'..objective.id
                 local button=self.panel:button(18,0,0,lineHeight,options.font_size,function()
-                    if objective.checked_when~=nil then return end
+                    if definition._branch_selector then
+                        local context=self.deps.context('status panel branches')
+                        context.setSessionVar('panel_branches.'..definition.id,objective.id)
+                        for _,state in pairs(self.trackingSupplements or {}) do
+                            if type(state)=='table' and state.id==definition.id then state.branch=objective.id end
+                        end
+                        self:configure(self.options)
+                        self:update()
+                        return
+                    end
+                    if objective.checked_when~=nil or objective.icon~=nil then return end
                     local context=self.deps.context('status panel checklist')
-                    context.setVar(path,not context.getVar(path))
+                    local get=persistent and context.getSessionVar or context.getVar
+                    local set=persistent and context.setSessionVar or context.setVar
+                    set(path,not get(path))
                     self.nextUpdate=0
                     self:update()
                 end,'subheading')
@@ -166,12 +202,23 @@ function Status:configure(options,trackingOverride,waypointOverride)
                 button.bold=false
                 Theme.color(button.text,'checklist')
                 button.onHover=function(hovered)
-                    Theme.color(button.text,hovered and objective.checked_when==nil and 'yellow' or 'checklist')
+                    Theme.color(button.text,hovered and objective.checked_when==nil and objective.icon==nil and 'yellow' or 'checklist')
                 end
                 local size=math.max(10,math.floor(options.font_size*1.2+0.5))
                 local icon=self.panel:icon(18,0,size)
-                local check={button=button,path=path,objective=objective,icon=icon,size=size,
-                    automatic=objective.checked_when~=nil}
+                local check={button=button,path=path,persistent=persistent,objective=objective,icon=icon,size=size,
+                    automatic=objective.checked_when~=nil,branchSelector=definition._branch_selector}
+                if objective.show_when~=nil then
+                    check.showFns={}
+                    local conditions=type(objective.show_when)=='table' and objective.show_when or {objective.show_when}
+                    for _,code in ipairs(conditions) do
+                        local ok,fn=pcall(factory.get,code)
+                        if ok then check.showFns[#check.showFns+1]=fn else check.showError=true end
+                    end
+                end
+                if objective.icon~=nil then
+                    check.icon.image:path((self.deps.windower.addon_path or '')..'content/ui/'..objective.icon)
+                end
                 if objective.format~=nil then
                     check.formatFns={}
                     for index=2,#objective.format do
@@ -273,16 +320,37 @@ function Status:setWaypoint(waypoint)
     self:update()
     return true
 end
-function Status:setTrackingSupplement(name,enabled)
+function Status:setTrackingSupplement(name,enabled,settings)
     assert(type(name)=='string' and name:match('%S'),
         'Panel tracking supplement requires a name')
     assert(enabled==nil or type(enabled)=='boolean',
         'Panel tracking supplement enabled flag must be boolean')
+    assert(settings==nil or type(settings)=='table',
+        'Panel tracking supplement settings must be an object')
     assert(self.options.tracking.sets[name],
         'Unknown panel tracking supplement: '..tostring(name))
     self.trackingSupplements=self.trackingSupplements or {}
     if enabled==false then self.trackingSupplements[name]=nil
-    else self.trackingSupplements[name]=true end
+    else
+        local state=true
+        if settings then
+            state=copy(settings)
+            state.name=name
+            if state.branch~=nil then
+                assert(type(state.branch)=='string','Panel tracking supplement branch must be a string')
+                local found
+                for _,entry in ipairs(self.options.tracking.sets[name]) do
+                    if entry.branches and entry.branches[state.branch] then
+                        found=entry.id
+                        break
+                    end
+                end
+                assert(found,'Unknown branch '..state.branch..' for panel tracking supplement '..name)
+                state.id=found
+            end
+        end
+        self.trackingSupplements[name]=state
+    end
     self:configure(self.options)
     self:update()
     return true
@@ -430,7 +498,21 @@ function Status:update()
             if not context then ok,context=pcall(self.deps.context,'status panel checklist') end
             local resetColor=visibilityReset or (ok and context and PanelContext.attach(context,self.deps.canShareClaim))
             for _,check in ipairs(entry.checks) do
-                local checked=not not (ok and context and context.getVar(check.path))
+                check.shown=ok and context and not check.showError
+                for _,fn in ipairs(check.showFns or {}) do
+                    setfenv(fn,context)
+                    local success,result=pcall(fn)
+                    if not success or not result then check.shown=false; break end
+                end
+                if check.shown then
+                local get=check.persistent and context.getSessionVar or context.getVar
+                local checked
+                if check.branchSelector then
+                    checked=check.branchSelector.selected==check.objective.id
+                else
+                    checked=check.objective.icon==nil and
+                        not not (ok and context and get and get(check.path)) or false
+                end
                 if check.conditions then
                     checked=not not (ok and context and not check.conditionError)
                     if checked then
@@ -441,7 +523,7 @@ function Status:update()
                         end
                     end
                 end
-                if check.checked~=checked then
+                if check.objective.icon==nil and check.checked~=checked then
                     local prefix=check.automatic and 'automatic-' or ''
                     check.icon.image:path((self.deps.windower.addon_path or '')..
                         'content/ui/checklist/'..prefix..(checked and 'checked' or 'unchecked')..'.png')
@@ -476,8 +558,14 @@ function Status:update()
                         if success and type(result)~='table' then label=result==nil and '' or tostring(result) end
                     end
                 end
-                check.display=Buffer.plain(label,self.deps.windower.from_shift_jis):gsub('[\r\n]+',' ')
+                check.display=Buffer.plain(label,self.deps.windower.from_shift_jis)
+                    :gsub('\r\n','\n'):gsub('\r','\n'):gsub('\t','    ')
+                local _,newlines=check.display:gsub('\n','\n')
+                check.lineCount=math.max(1,newlines+1)
                 value[#value+1]=check.display
+                else
+                    check.display=''; check.lineCount=1
+                end
             end
         elseif entry.definition.format~=nil then
             value='[error]'
@@ -587,15 +675,25 @@ function Status:update()
     local y=math.max(32,5+math.ceil((self.options.font_size+2)*1.8))
     for _, entry in ipairs(self.entries) do
         entry.label.y=y; entry.valueLabel.y=y+(entry.inline and 0 or lineHeight)
-        for i,check in ipairs(entry.checks or {}) do
-            check.button.y=y+i*lineHeight
+        local checkLine=0
+        for _,check in ipairs(entry.checks or {}) do
+            local lines=check.shown and (check.lineCount or 1) or 0
+            check.button.y=y+(checkLine+1)*lineHeight
+            check.button.height=math.max(lineHeight,lines*lineHeight)
             check.button.x=entry.valueLabel.x
             check.button.width=self.panel.width-check.button.x-10
             check.button.hitX=18; check.button.hitWidth=self.panel.width-28
-            check.icon.y=check.button.y+math.floor((lineHeight-check.size)/2)
-            check.icon.visible=not entry.hidden and not entry.visibilityFailure
+            -- Custom indicators have a fuller 32px canvas than the outlined
+            -- checklist glyphs and sit optically high when scaled down.
+            local opticalOffset=check.objective.icon~=nil and 1 or 0
+            -- Multiline checklist indicators align with the first text row,
+            -- matching conventional checkbox/list layouts. The full label
+            -- height remains clickable.
+            check.icon.y=check.button.y+math.floor((lineHeight-check.size)/2)+opticalOffset
+            check.icon.visible=check.shown and not entry.hidden and not entry.visibilityFailure
             if self.panel.visible then check.icon.image:visible(check.icon.visible) end
             if not check.icon.visible then check.button.hitWidth=0 end
+            checkLine=checkLine+lines
         end
         if not entry.hidden then y=y+(entry.lineCount+(entry.inline and 0 or 1))*lineHeight end
     end
@@ -616,7 +714,7 @@ function Status:update()
         self:setText(entry.label,entry.hidden and '' or entry.heading)
         self:setText(entry.valueLabel,(entry.hidden or (entry.checks and not entry.visibilityFailure)) and '' or entry.display)
         for _,check in ipairs(entry.checks or {}) do
-            self:setText(check.button,(entry.hidden or entry.visibilityFailure) and '' or check.display)
+            self:setText(check.button,(not check.shown or entry.hidden or entry.visibilityFailure) and '' or check.display)
         end
         Theme.color(entry.valueLabel.text,(entry.error or (entry.visibilityFailure and entry.showError)) and 'red' or 'body')
     end

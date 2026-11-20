@@ -1,6 +1,6 @@
 local json=require('./lib/jsonlua')
 local factory=require('./lib/execution-factory')
-local f=assert(io.open('settings/_namespaces/ambuscade/dullahan/actions/lib/dullahan/combat.json'))
+local f=assert(io.open('settings/namespaces/ambuscade/dullahan/actions/lib/dullahan/combat.json'))
 local actions=json.parse(f:read('*a')).actions;f:close()
 local dia
 for _,action in ipairs(actions)do

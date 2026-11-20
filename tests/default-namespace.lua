@@ -16,6 +16,8 @@ paths.ensureNamespaceFolders=function() error('Normal loads must not initialize 
 local messages={}
 local abstractWarnings={}
 local env=setmetatable({
+    profiling={start=function() end,stop=function() end},
+    panelConfig={forSave=copy},
     Colors={warning=1},
     writeWarning=function(message) abstractWarnings[#abstractWarnings+1]=message end,
     settingsPaths=paths, json={parse=copy,stringify=copy},
@@ -40,9 +42,15 @@ local env=setmetatable({
     loadSettingsInternal=function() return {distance=5} end,
 }, {__index=_G})
 files=env.files
+json=env.json
 local chunk=assert(loadstring(helpers..loader..saver)); setfenv(chunk,env); chunk()
 env.loadSettings()
 assert(paths.getNamespace()=='fight' and paths.getLoadedNamespace()=='fight')
+env.reportLoadedSettings()
+assert(messages[#messages] == 'Gambit: Settings loaded from namespace: fight')
+disk['./settings/namespaces/index.json']={aliases={shortcut='fight'}}
+env.loadSettings(nil,false,'shortcut')
+assert(paths.getLoadedNamespace()=='fight')
 env.reportLoadedSettings()
 assert(messages[#messages] == 'Gambit: Settings loaded from namespace: fight')
 local nsconfig='./settings/namespaces/fight/.nsconfig'

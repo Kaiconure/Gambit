@@ -98,7 +98,7 @@ settings/
       lib/
   actions/
     lib/
-  _namespaces/
+  namespaces/
     my-event/
       .nsconfig
       actions/
@@ -109,7 +109,7 @@ settings/
             whm.json
             (mages).json
             (~mages).json
-  _namespace-settings/
+  namespace-settings/
     my-event/
       players/
         CharacterName/
@@ -169,12 +169,12 @@ cycles are rejected. Existing namespaces are inheritable by default. Set
 `"inheritable": false` to forbid inheritance, or `"abstract": true` for a shared
 parent that cannot be selected directly.
 
-`settings/_namespaces` is the user namespace root. Exact directory names win, with underscore-prefixed
+`settings/namespaces` is the user namespace root. Exact directory names win, with underscore-prefixed
 aliases supported per segment: logical `base` can resolve to `_base`. Namespace
 segments cannot use reserved `actions`/`players` names or Windows device names.
 
 Selecting a namespace saves `default_namespace` in the character's global
-`settings/<character>/main.json`. Addon startup restores that preference; job
+`settings/players/<character>/main.json`. Addon startup restores that preference; job
 changes retain it. `//gbt ns -clear` removes the preference and returns to global
 lookup. `//gbt r -ns my-event` performs a temporary namespace load instead.
 
@@ -219,7 +219,7 @@ load-time priorities.
 
 ### Saving and reloading
 
-Main configuration changes save to `settings/<character>/main.json`, even while
+Main configuration changes save to `settings/players/<character>/main.json`, even while
 using a namespace. Existing namespace `main.json` files can still override that
 file when loading; automatic saves do not create or update namespace overrides.
 Unchanged settings do not trigger a write.

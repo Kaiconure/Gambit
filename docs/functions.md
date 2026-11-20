@@ -300,6 +300,23 @@ Role resolution depends on known party job information; no match yields an empty
 array or false. Client-relative selectors such as `me` and `^` should not be used
 for a shared cross-client WS order.
 
+`findPrimaryTank()` returns the participant selected by the same deterministic
+policy used by `isPrimaryTank()`, or `nil` when no eligible tank is present. It
+also assigns the result to `primary_tank` for reuse later in the action. The
+party leader wins when eligible; otherwise the order is PLD, RUN, NIN, WAR, then
+other eligible jobs, with names breaking ties alphabetically. PLD and RUN are
+eligible without Provoke; other player jobs require access to Provoke, while
+Trust eligibility comes from Trust tank metadata.
+
+`setPrimaryTank(member)` overrides that automatic choice using a party-member
+object, mob wrapper, player name, or server ID. Passing `nil` or `false` clears
+the override. Only stable identity is retained: every `findPrimaryTank()` call
+resolves a fresh member from the current party and uses the override only while
+that member has `is_participant == true`. If the member is absent or outside the
+local participant group, selection falls back to the normal deterministic
+policy. The override does not require the selected member to otherwise qualify
+as an automatic tank candidate.
+
 ## Member positioning
 
 ### Movement reservations
@@ -736,9 +753,11 @@ Slices apply to the actual arc union, including custom ranges, gaps, overlaps,
 and wraparound. They do not special-case names such as `side`. Exact angles and
 unrestricted/nil angles bypass distribution. Following distances are unchanged.
 
-The nearest point in the assigned slice is tried first. If blocked, alternatives
-may use the entire configured arc set, including other arcs and slices. Movement
-attempts share the existing duration budget; distributed attempts check progress
+The nearest point in the assigned slice is tried first when starting outside
+the allowed arcs. Once you occupy an allowed arc, positioning prefers any part
+of your assigned slice on that arc. If your slice is on another arc, your current
+arc takes precedence. Movement tries the current arc's destinations before
+trying other arcs. Attempts share the existing duration budget and check progress
 in short steps. Continuing progress or untried alternatives return to the scheduler
 using `progress_retry_delay`; exhausted attempts use `retry_delay`. Cancellation
 does not restart movement via an alternative.

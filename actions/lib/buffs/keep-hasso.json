@@ -1,0 +1,12 @@
+{
+  "actions": [
+    {
+      "when": [
+        "canUseAbility('Hasso') and not hasEffectOf(ability)",
+        "slotInfo('main') and slot_info.two_handed"
+      ],
+      "commands": ["useAbility(me)"],
+      "frequency": 10
+    }
+  ]
+}

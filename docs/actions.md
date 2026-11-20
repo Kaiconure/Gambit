@@ -46,19 +46,19 @@ I recommend downloading a free code editor like [Visual Studio Code](https://cod
 Actions sets are defined using JSON files under the Gambit addon directory:
 
 ```bash
-./settings/<character-name>/actions
+./settings/players/<character-name>/actions
 ```
 
 By default, an action file named after your current job/sub job will be loaded. If you are a RDM50/BLM25 named Shrek, then actions would be loaded from:
 
 ```
-./settings/Shrek/actions/rdm-blm.json
+./settings/players/Shrek/actions/rdm-blm.json
 ```
 
 If a job/sub job file cannot be found, a file named for your current main job will be loaded instead. This is actually the way Gambit generates new action files for you when running`//gbt actions -save-default`.
 
 ```
-./settings/Shrek/actions/rdm.json
+./settings/players/Shrek/actions/rdm.json
 ```
 
 If no matching actions file can be found, default values will be loaded. The default actions file is defined in the following location:

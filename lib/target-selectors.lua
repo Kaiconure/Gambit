@@ -1,4 +1,5 @@
 local selectors = {}
+local primaryTankOverride
 function selectors.alphabetical(a, b)
     local an = (a.name or ''):lower()
     local bn = (b.name or ''):lower()
@@ -256,6 +257,104 @@ function selectors.partyHasJob(context, targets)
         end
     end
     return false
+end
+
+-- Provoke is learned by WAR at level 5, whether WAR is the main or support job.
+-- This is intentionally based on shared job information rather than local
+-- recast/readiness state so every participant can reach the same decision.
+function selectors.hasProvoke(member)
+    if type(member)~='table' then return false end
+    local main=type(member.main_job)=='string' and member.main_job:upper()
+    local sub=type(member.sub_job)=='string' and member.sub_job:upper()
+    return (main=='WAR' and (tonumber(member.main_job_level) or 0)>=5)
+        or (sub=='WAR' and (tonumber(member.sub_job_level) or 0)>=5)
+end
+
+function selectors.isTankCandidate(member)
+    if type(member)~='table' then return false end
+    -- Trust job combinations describe their behavior only approximately. Use
+    -- the explicit role maintained by Trust metadata instead.
+    if member.is_trust or member.meta then
+        return member.meta and member.meta.tank==true or false
+    end
+    local main=type(member.main_job)=='string' and member.main_job:upper()
+    return main=='PLD' or main=='RUN' or selectors.hasProvoke(member)
+end
+
+-- Retain only stable identity for an explicitly selected tank. Party member
+-- objects are rebuilt as the roster changes, so callers must never rely on the
+-- object that happened to be current when the override was assigned.
+function selectors.setPrimaryTank(member)
+    if member==nil or member==false then
+        primaryTankOverride=nil
+        return true
+    end
+    if type(member)=='table' and type(member.mob)=='table' then member=member.mob end
+    local identity
+    if type(member)=='table' then
+        identity={id=member.id,name=member.name}
+    elseif type(member)=='number' then
+        identity={id=member}
+    elseif type(member)=='string' and member~='' then
+        identity={name=member}
+    end
+    if not identity or identity.id==nil and identity.name==nil then return false end
+    primaryTankOverride=identity
+    return true
+end
+
+local function overriddenPrimaryTank(context)
+    local override=primaryTankOverride
+    if not override then return nil end
+    if override.id~=nil then
+        for i=0,5 do
+            local member=context['p'..i]
+            if member and member.id==override.id then
+                return member.is_participant==true and member or nil
+            end
+        end
+    end
+    if type(override.name)=='string' then
+        local name=override.name:lower()
+        for i=0,5 do
+            local member=context['p'..i]
+            if member and type(member.name)=='string' and member.name:lower()==name then
+                return member.is_participant==true and member or nil
+            end
+        end
+    end
+end
+
+-- Choose a tank deterministically from the local participant group. An
+-- eligible party leader always wins; otherwise prefer conventional tank jobs
+-- and use the character name to break ties and rank all remaining jobs.
+function selectors.primaryTank(context)
+    local override=overriddenPrimaryTank(context)
+    if override then return override end
+    local candidates={}
+    local leader=context.party_leader
+    for i=0,5 do
+        local member=context['p'..i]
+        if member and member.is_participant==true and selectors.isTankCandidate(member) then
+            candidates[#candidates+1]=member
+        end
+    end
+    local priorities={PLD=1,RUN=2,NIN=3,WAR=4}
+    local function isLeader(member)
+        return member.is_party_leader==true
+            or leader and member.id~=nil and member.id==leader.id
+    end
+    table.sort(candidates,function(a,b)
+        local al,bl=isLeader(a),isLeader(b)
+        if al~=bl then return al end
+        local ar=priorities[type(a.main_job)=='string' and a.main_job:upper()] or 5
+        local br=priorities[type(b.main_job)=='string' and b.main_job:upper()] or 5
+        if ar~=br then return ar<br end
+        local an,bn=(a.name or ''):lower(),(b.name or ''):lower()
+        if an~=bn then return an<bn end
+        return (tonumber(a.id) or math.huge)<(tonumber(b.id) or math.huge)
+    end)
+    return candidates[1]
 end
 
 -- Apply opt-in ordering once, after expansion, filtering and deterministic ordering.

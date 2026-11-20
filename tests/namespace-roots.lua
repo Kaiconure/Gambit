@@ -1,11 +1,11 @@
 local dirs={}
 windower={addon_path='',dir_exists=function(p) return dirs[p] or false end}
 local paths=dofile('lib/settings-paths.lua')
-assert(paths.namespaceRoot()=='./settings/_namespaces')
-assert(paths.namespaceSettingsRoot()=='./settings/_namespace-settings')
-assert(paths.bundledNamespaceRoot()=='./_namespaces')
+assert(paths.namespaceRoot()=='./settings/namespaces')
+assert(paths.namespaceSettingsRoot()=='./settings/namespace-settings')
+assert(paths.bundledNamespaceRoot()=='./namespaces')
 paths.setLoadedNamespace('example')
-assert(paths.writePath('Tester','main.json')=='./settings/_namespace-settings/example/players/Tester/main.json')
+assert(paths.writePath('Tester','main.json')=='./settings/namespace-settings/example/players/Tester/main.json')
 for _,parent in ipairs({'settings/',''}) do
     dirs[parent..'namespaces']=true
 end
@@ -18,10 +18,16 @@ dirs['settings/namespaces/plain-only']=true
 dirs['namespaces/plain-only']=true
 for _,parent in ipairs({'settings/',''}) do dirs[parent..'_namespaces']=true end
 dirs['settings/_namespace-settings']=true
+assert(paths.namespaceRoot()=='./settings/namespaces')
+assert(paths.bundledNamespaceRoot()=='./namespaces')
+assert(paths.namespaceSettingsRoot()=='./settings/namespace-settings')
+assert(paths.namespaceExists('plain-only')) -- Plain roots win when both forms exist.
+dirs['settings/namespaces']=nil
+dirs['namespaces']=nil
+dirs['settings/namespace-settings']=nil
 assert(paths.namespaceRoot()=='./settings/_namespaces')
 assert(paths.bundledNamespaceRoot()=='./_namespaces')
 assert(paths.namespaceSettingsRoot()=='./settings/_namespace-settings')
-assert(not paths.namespaceExists('plain-only')) -- Organizational roots never merge.
 dirs['_namespaces/example']=true
 assert(paths.namespacePath('example')=='./_namespaces/example')
 files={new=function(p) return {exists=function() return p=='./_namespaces/example/.nsconfig' end,
@@ -39,4 +45,33 @@ for _,prefix in ipairs({'namespace-settings','_namespace-settings'}) do
     assert(paths.fileNamespace(p)=='example')
     assert(paths.namespaceRelativeFile(p)=='players/Tester/events/war.json')
 end
-print('PASS: underscore organizational defaults, plain fallback, root conflicts, bundled selection and path metadata')
+local index = './settings/_namespaces/index.json'
+local indexContents = '{"aliases":{"xp":"battle","xp/di":"battle/di","di":"battle/di","chain":"di"}}'
+local newFile = files.new
+files.new=function(path)
+    if path==index then
+        return {exists=function() return true end,read=function() return indexContents end}
+    end
+    return newFile(path)
+end
+dirs['settings/_namespaces/battle']=true
+dirs['settings/_namespaces/battle/di']=true
+assert(paths.namespacePath('xp')=='./settings/_namespaces/battle')
+assert(paths.namespacePlayerRoot('xp/di')=='./settings/_namespace-settings/battle/di/players')
+assert(not paths.namespaceExists('xp/cleave') and not paths.namespaceExists('chain'))
+assert(not paths.namespaceExists('gambit:xp'))
+local configs={di={inherits_from='xp'},battle={}}
+local chain=paths.resolveInheritance('di',function(name) return configs[name] end,paths.namespaceExists)
+assert(#chain==2 and chain[2]=='battle')
+dirs['_namespaces/xp']=true
+assert(paths.namespacePath('xp')=='./_namespaces/xp')
+dirs['settings/_namespaces/xp']=true
+assert(paths.namespacePath('xp')=='./settings/_namespaces/xp')
+paths.withDirectoryCache(function()
+    assert(paths.namespaceExists('di'))
+    indexContents='{}'
+    assert(paths.namespaceExists('di'))
+end)
+assert(not paths.namespaceExists('di'))
+print('PASS: namespace index aliases, exact and bundled precedence, inheritance, personal paths and reload scope')
+print('PASS: plain organizational defaults, underscore fallback, root conflicts, bundled selection and path metadata')

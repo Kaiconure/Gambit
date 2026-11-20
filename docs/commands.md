@@ -23,6 +23,10 @@ Panel controls: `gbt panel`, `gbt panel show`, `gbt panel hide`,
 `gbt panel tracking -set <name>`. Panel settings persist per character in the
 global `main.json`; see [status panel configuration](status-panel.md).
 
+Use `gbt panel preview warning` or `gbt panel preview error` to temporarily
+preview the stock indicator icons. `gbt panel preview clear` restores the
+configured tracking display.
+
 `gbt waypoint` attaches a temporary directional waypoint to the status panel.
 It can capture the player, current target, a named mob, or explicit coordinates;
 see [waypoint sidecar](status-panel.md#attached-waypoint-sidecar).
@@ -103,6 +107,8 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 | `-reload` | `-r` | Reload the currently loaded action set, retaining its loaded namespace unless `-ns` overrides it. |
 | `-settings-only` | `-so` | Reload settings while bypassing action reload. |
 | `-ns <namespace>` | — | Select a namespace for this load. Cannot be combined with `-settings-only`. |
+| `-global` | — | Temporarily load in global mode, without a named namespace. |
+| `-gambit` | — | Alias for `-global`. |
 | `-verbose` | `-v` | Write processed action and event JSON debugging output to `.output` folders for this reload. Off by default. |
 
 Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
@@ -133,10 +139,14 @@ read-only and cannot be targets of `actions -save-local`.
 | `namespace` | Show the selected namespace, or global mode. |
 | `namespace -list` | List namespaces containing `.nsconfig`, alphabetically by full name (case-insensitive). Searches nested folders under the active namespace root, skipping reserved content folders. Underscore aliases are shortened when unambiguous. Does not change selection or reload settings. |
 | `namespace -v` | Replay the loaded namespace's description sequence, respecting `!description`, without reloading settings. Outputs nothing when no descriptions are available. |
-| `namespace -set <name> [-force] [-parent <namespace>]` | Select an existing namespace and perform a full settings reload for the current job. Missing folders or `.nsconfig` files warn with an initialization hint and leave selection unchanged unless `-force` is supplied. `-force` ensures the folder and `.nsconfig` exist; if it already exists, it warns and continues. `-parent` initializes a missing `.nsconfig` with `inherits_from` after validating the parent chain. Existing configuration must already name that parent; otherwise selection is rejected without changing it. |
+| `namespace -set <name> [-force] [-parent <namespace>]` | Select an existing namespace and perform a full settings reload for the current job. The reserved names `global` and `gambit` select global mode. Missing folders or `.nsconfig` files warn with an initialization hint and leave selection unchanged unless `-force` is supplied. `-force` ensures the folder and `.nsconfig` exist; if it already exists, it warns and continues. `-parent` initializes a missing `.nsconfig` with `inherits_from` after validating the parent chain. Existing configuration must already name that parent; otherwise selection is rejected without changing it. |
 | `namespace -clear` | Clear namespace selection and perform a full settings reload. |
 
-`namespace -set` and `namespace -clear` remember the selection in `settings/<character>/main.json` as `default_namespace`, after a successful reload. Startup reads this field only from that base character file; namespace copies are ignored. Job changes retain the selection, and each settings load reports the active namespace. Invalid startup selections report an error and fall back to base settings without deleting the saved preference. `reload -ns` remains a temporary override.
+`namespace -set` and `namespace -clear` remember the selection in `settings/players/<character>/main.json` as `default_namespace`, after a successful reload. Startup reads this field only from that base character file; namespace copies are ignored. Job changes retain the selection, and each settings load reports the active namespace. Invalid startup selections report an error and fall back to base settings without deleting the saved preference. `reload -ns` remains a temporary override.
+
+The names `global` and `gambit` are reserved and cannot be used as namespace
+folder segments. For reloads, `-ns global`, `-ns gambit`, `-global`, and
+`-gambit` are equivalent temporary global-mode selections.
 
 ## Target selection
 
@@ -336,14 +346,14 @@ type, distance, 16-point compass direction, entity ID, and hexadecimal index.
 | `-distancebuffer [number]` | `-db` | Nonnegative distance added only when retaining an already-selected, unclaimed target; defaults to 5. Omit the value to display the buffer and effective retention distance. |
 | `-distancez <number>` | `-z` | Maximum vertical targeting distance; clamped to 1–50. |
 | `-strategy <name>` | `-strat` | Set targeting strategy. |
-| `-followd <number>` | `-fd` | Default follow-command distance; clamped to 0.25–10. |
+| `-followd <number>` | `-fd` | Default follow-command distance; clamped to 1–10. `0` transiently follows the target's exact position, without model-radius or spacing offsets, until zoning or mounting. |
 | `-follow-offset <number>` | `-foff` | Nonnegative horizontal follow offset. |
 | `-chasetime <seconds>` | `-ct` | Maximum chase time; clamped to 5–60. |
 | `-skillchaindelay <seconds>` | `-scdelay`, `-scd` | Skillchain delay; requires a positive input and is capped by Gambit's maximum skillchain time. |
 | `-targetingduration <seconds>` | `-td` | Targeting duration; clamped to 1–20. |
 | `-cloudpanel on/off` | `-cp` | Retired; displays a notice without changing saved settings. Use `gbt panel show`. |
 | `-rawdistance on/off` | `-rd` | Toggle raw-distance mode. This option alone does not trigger a settings save. |
-| `-debugging on/off` | — | Toggle additional debugging details. |
+| `-debugging on/off` | — | Toggle action/execution diagnostics. Debug logging verbosity implicitly enables these diagnostics without changing this saved setting. |
 | `-stt on/off` | — | Toggle slower target transitions. |
 | `-spt on/off` | — | Toggle skipping packet targeting. |
 | `-pretarget on/off` | — | Toggle pre-targeting. |
@@ -352,7 +362,7 @@ type, distance, 16-point compass direction, entity ID, and hexadecimal index.
 
 Configuration changes normally save automatically. The raw-distance exception is noted above.
 
-`verbosity` displays the current log level; `verbosity -level <level>` changes and saves it. Levels: `normal` (0), `verbose` (1), `comment` (2), `debug` (3), `trace` (4).
+`verbosity` displays the current log level; `verbosity -level <level>` changes and saves it. Levels: `normal` (0), `verbose` (1), `comment` (2), `debug` (3), `trace` (4). The `debug` and `trace` levels also imply `config -debugging on`; lowering verbosity restores the independently configured debugging state.
 
 ## Inspection and diagnostics
 

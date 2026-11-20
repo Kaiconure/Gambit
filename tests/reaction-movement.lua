@@ -1,11 +1,11 @@
 local reactions=require('./lib/reactions')
 local driver=require('./lib/reaction-movement')
-local now,me,actors,current,started,allowed,onSleep,onStart,turns,cancelled,reactionDeps
+local now,me,actors,current,started,allowed,onSleep,onStart,turns,cancelled,reactionDeps,restored
 local function reset()
  now=0;me={x=1,y=0,model_size=100};actors={
  [2]={id=2,index=2,x=0,y=0,heading=0,hpp=100,valid_target=true,model_size=100},
  [3]={id=3,index=3,x=0,y=5,heading=0,hpp=100,valid_target=true}}
- current=nil;started={};allowed=true;onSleep=nil;onStart=nil;turns=0;cancelled={}
+ current=nil;started={};allowed=true;onSleep=nil;onStart=nil;turns=0;cancelled={};restored={}
  local function cancel(id)
   cancelled[#cancelled+1]=id or 'all'
   if current and (not id or current.jobId==id)then current=nil end
@@ -13,7 +13,7 @@ local function reset()
  reactionDeps={clock=function()return now end,player=function()return {vitals={hp=100}}end,
  enabled=function()return true end,zone=function()return 1 end,mob=function(id)return actors[id]end,me=function()return me end,
  cancelMovement=function()cancel(nil)end,cancelReactionMovement=cancel,
- unlock=function()end,faceAway=function()turns=turns+1 end,restore=function()end}
+ unlock=function()end,faceAway=function()turns=turns+1 end,restore=function(id)restored[#restored+1]=id end}
  reactions.attach(reactionDeps)
  return {available=function()return allowed end,me=function()return me end,mob=function(id)return actors[id]end,
  clock=function()return now end,cancel=cancel,job=function()return current end,
@@ -139,6 +139,33 @@ release();assert(not current and not reactions.active())
 deps=reset();reactionDeps.movement=deps
 start(20,{no_turn=true});assert(current)
 actors[2].hpp=0;reactions.tick(true);assert(not current and not reactions.active())
+assert(#restored==0)
+deps=reset();reactionDeps.movement=deps
+start(nil,{angle='aside',no_turn=true})
+assert(current and turns==0 and #restored==0)
+me.x,me.y=started[1].x,started[1].y
+reactions.tick(true)
+assert(not current and turns==0 and #restored==1 and restored[1]==2)
+assert(reactions.blocksMovement())
+reactions.tick(true);assert(#restored==1)
+deps=reset();reactionDeps.movement=deps
+local faced=0
+reactionDeps.faceAfterMovement=function(actor)
+ assert(actor==actors[2] and not current)
+ faced=faced+1
+end
+start(nil,{angle='aside',no_turn=true,allow_weapon_skills=true})
+assert(current and faced==0 and reactions.blocksAction('weapon_skill'))
+me.x,me.y=started[1].x,started[1].y
+assert(reactions.blocksAction('weapon_skill')) -- The escape job still owns movement.
+reactions.tick(true)
+assert(not current and turns==0 and faced>0 and not reactions.blocksAction('weapon_skill'))
+local arrivalChecks=faced
+reactions.tick(true);assert(faced>arrivalChecks) -- Recheck facing on subsequent frames.
+local safeChecks=faced
+me.x,me.y=1,0
+reactions.tick(true)
+assert(current and faced==safeChecks and reactions.blocksAction('weapon_skill'))
 -- Shockmaw keeps the original job across the former stop/replan boundaries.
 deps=reset();reactionDeps.movement=deps
 start(5,{angle='sider'})
