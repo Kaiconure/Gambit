@@ -15,12 +15,12 @@ followed by the normal global settings and shipped-library fallbacks.
 folder. To customize shared rules, copy it into the user root or create a
 differently named user namespace that inherits it.
 
-Global character settings normally live under
-`settings/players/<character>/`. For backward compatibility, Gambit falls back
-to the former `settings/<character>/` location when the organized character
-directory does not exist. The two locations are not merged: once
-`settings/players/<character>/` exists, it owns that character's global
-settings, actions, events, data, and output paths.
+Gambit reads and writes global character files under
+`settings/players/<character>/` by default. It uses the legacy
+`settings/<character>/` tree when that tree already contains files and the
+organized character directory is absent. An existing organized character
+directory takes precedence for all global settings, actions, events, data,
+and output.
 
 Prefix a namespace reference with `gambit:` to bypass a same-named user
 namespace and address the bundled namespace explicitly. This works for both

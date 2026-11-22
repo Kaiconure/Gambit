@@ -11,14 +11,23 @@ local env=setmetatable({handlers={},globals={event_system=service},
     reloadSettings=function() error('must not reload normal settings') end},{__index=_G})
 local chunk=assert(loadstring(body)); setfenv(chunk,env); chunk()
 local exported
+local directories={}
 env.windower={ffxi={get_player=function() return {name='Tester',main_job='BLM'} end,get_items=function() return {} end},
-    create_dir=function(path) assert(path=='./settings/Tester/data') end}
+    dir_exists=function(path) return directories[path] or false end,
+    get_dir=function(path) if path=='settings/Tester/' then return {'main.json'} end end}
+windower=env.windower
 env.gearExport={render=function() return 'formatted gear\n' end}
 env.files={new=function() return {exists=function() return false end} end}
 env.writeStringToFile=function(path,text) exported={path,text} end
 env.handlers.events({'sg'})
-assert(exported[1]:find('./settings/Tester/data/blm-',1,true) and exported[1]:match('%.vars%.json$'))
+assert(exported[1]:find('./settings/players/Tester/data/blm-',1,true) and exported[1]:match('%.vars%.json$'))
 assert(exported[2]=='formatted gear\n')
+directories['settings/Tester']=true
+env.handlers.events({'sg'})
+assert(exported[1]:find('./settings/Tester/data/blm-',1,true))
+directories['settings/players/Tester']=true
+env.handlers.events({'sg'})
+assert(exported[1]:find('./settings/players/Tester/data/blm-',1,true))
 env.handlers.events({'save-gear','extra'})
 assert(output[#output]=='Usage: gbt events save-gear (alias: sg)')
 env.handlers.events({'RELOAD'})

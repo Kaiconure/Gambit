@@ -428,7 +428,6 @@ handlers['events'] = function(args)
             assert(not manager or #manager.queue.batches==0,'Wait for pending equipment swaps before exporting')
             local contents=gearExport.render(inventory,windower.ffxi.get_items())
             local directory=require('./lib/settings-paths').globalPlayerRoot(player.name)..'/data'
-            windower.create_dir((windower.addon_path or '')..directory)
             local base=directory..'/'..player.main_job:lower()..'-'..os.date('%Y%m%d-%H%M%S')
             local path=base..'.vars.json'
             local suffix=1

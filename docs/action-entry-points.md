@@ -24,8 +24,8 @@ over the shared `blm.json`. A child namespace's `(all).json` beats any inherited
 or shipped job-specific file.
 
 Global `settings/players/<player>/actions` and `settings/actions` are separate fallback
-layers. Legacy `settings/<player>/actions` remains a fallback when the organized
-character directory does not exist. For an
+layers. Gambit uses the legacy character tree when it contains files and the
+organized character directory is absent. For an
 inheritance chain C → B → A, resolution searches C, B, A, global character,
 global shared, then shipped standard actions.
 

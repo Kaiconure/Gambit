@@ -28,7 +28,7 @@ local service=Service.new({windower={ffxi={get_player=function() return {id=1,na
     writeProcessed=function(path,value) writes[#writes+1]={path=path,value=value} end})
 service:reload(); assert(#writes==0)
 service:reload(true)
-assert(#writes==1 and writes[1].path=='./settings/Tester/.output/geo.events.processed.json')
+assert(#writes==1 and writes[1].path=='./settings/players/Tester/.output/geo.events.processed.json')
 assert(writes[1].value.vars.initialized==nil and service.runtime.config.vars.initialized==true)
 service:destroy()
 print('PASS: processed event ordering/source metadata, expanded vars, JSON safety, optional output and before-loading snapshot')
