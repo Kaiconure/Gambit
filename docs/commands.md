@@ -369,9 +369,9 @@ Configuration changes normally save automatically. The raw-distance exception is
 | Command | Alias | Behavior |
 | --- | --- | --- |
 | `iteminfo [-verbose]` | `ii`; option `-v` | Inventory occupancy and gil; verbose adds stored currency information and other bags/wardrobes. |
-| `jobinfo [-name <character>]` | `ji`; option `-n` | Show your job information, or another character's cached IPC job information. |
+| `jobinfo [-name <character-or-trust>]` | `ji`; option `-n` | Show your live job information, another character's cached IPC job information, or a Trust's jobs by spell or party name. Quote spell names that contain spaces, as in `jobinfo -n "Prishe II"`. |
 | `jobinfo -send` | — | Broadcast your job information to other local Gambit instances. |
-| `jobinfo -all` | `ji -all` | List all cached characters and yourself alphabetically, using live job information for yourself. |
+| `jobinfo -all` | `ji -all` | List yourself, cached characters, and Trusts currently in your party or alliance alphabetically. Trust entries show main and sub jobs without levels. |
 | `wsinfo [-name <character>]` | option `-n` | Show a character heading followed by an indented list of weapon-skill names; defaults to yourself, refreshed from live abilities. |
 | `wsinfo -all` | — | Show every cached character's weapon-skill names, with characters ordered alphabetically. |
 | `wsinfo -send` | — | Broadcast your current weapon-skill capability IDs. |

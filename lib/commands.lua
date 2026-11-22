@@ -311,8 +311,8 @@ handlers['moblist'] = function(args)
         end
         local function direction(dx,dy,distance)
             if distance==0 then return '--' end
-            -- FFXI world X increases southward and Y increases westward.
-            local angle=math.atan2(-dy,-dx)
+            -- Windower mob coordinates increase eastward on X and northward on Y.
+            local angle=math.atan2(dx,dy)
             if angle<0 then angle=angle+2*math.pi end
             local slice=math.floor(angle/(2*math.pi)*16+0.5)%16+1
             return compass[slice]
@@ -1257,18 +1257,40 @@ handlers['jobinfo'] = function(args)
     end
 
     local player = windower.ffxi.get_player()
+    local function showTrust(trust)
+        local jobs = trust.main_job
+        if trust.sub_job then
+            jobs = jobs .. '/' .. trust.sub_job
+        end
+        writeMessage('Job Info: %s is %s':format(text_player(trust.name), text_cornsilk(jobs)))
+    end
+
     if hasArg(args, '-all') then
-        local names, seen = {}, {}
+        local entries = {}
         for name in pairs(globals.ipc_job_info) do
-            names[#names + 1] = name
-            seen[name] = true
+            entries[#entries + 1] = {name = name}
         end
-        if player and player.name and not seen[player.name] then
-            names[#names + 1] = player.name
+        if player and player.name and not globals.ipc_job_info[player.name] then
+            entries[#entries + 1] = {name = player.name}
         end
-        table.sort(names, function(a, b) return a:lower() < b:lower() end)
-        for _, name in ipairs(names) do
-            handlers['jobinfo']({'-name', name})
+        for slot, member in pairs(windower.ffxi.get_party() or {}) do
+            if type(slot) == 'string' and (slot:match('^p[0-5]$') or slot:match('^a[12][0-5]$')) then
+                local mob = member.mob
+                if mob and mob.spawn_type == SPAWN_TYPE_TRUST then
+                    local trust = getTrustPartyMeta(mob.name or member.name, mob.models and mob.models[1])
+                    if trust then
+                        entries[#entries + 1] = {name = trust.name, trust = trust}
+                    end
+                end
+            end
+        end
+        table.sort(entries, function(a, b) return a.name:lower() < b.name:lower() end)
+        for _, entry in ipairs(entries) do
+            if entry.trust then
+                showTrust(entry.trust)
+            else
+                handlers['jobinfo']({'-name', entry.name})
+            end
         end
         return
     end
@@ -1294,6 +1316,19 @@ handlers['jobinfo'] = function(args)
         main_job_level = jobInfo.main_job_level or 0
         sub_job = jobInfo.sub_job
         sub_job_level = jobInfo.sub_job_level or 0
+    else
+        local lookup = name:lower()
+        for _, trust in pairs(meta.trusts) do
+            if trust.name:lower() == lookup then
+                showTrust(trust)
+                return
+            end
+        end
+        local trust = getTrustPartyMeta(name)
+        if trust then
+            showTrust(trust)
+            return
+        end
     end
 
     if name and main_job then

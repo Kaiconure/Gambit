@@ -44,7 +44,7 @@ local handler=env.handlers.moblist
 handler({'-f','gOb','-d','10','-t','mob'})
 assert(#errors==0,errors[1])
 assert(output[1]=='Mob list: <number:2> matches within <number:10.0> yalms.',output[1])
-assert(output[2]=='- <mob:Goblin Digger> (mob): <number:5.0y> <direction:E> '..
+assert(output[2]=='- <mob:Goblin Digger> (mob): <number:5.0y> <direction:S> '..
     '(<number:2134567><bullet><number:4AC>)',output[2])
 assert(output[3]=='- <mob:Goblin Smithy> (mob): <number:7.1y> <direction:SE> '..
     '(<number:2134568><bullet><number:4AD>)',output[3])
@@ -52,8 +52,12 @@ assert(output[3]=='- <mob:Goblin Smithy> (mob): <number:7.1y> <direction:SE> '..
 output={}
 handler({'-t','34'})
 assert(#errors==0,errors[1])
-assert(output[2]=='- <npc:Door> (npc): <number:10.0y> <direction:E> '..
+assert(output[2]=='- <npc:Door> (npc): <number:10.0y> <direction:S> '..
     '(<number:12><bullet><number:016>)',output[2])
+
+output={}
+handler({'-t','player'})
+assert(output[2]:find('<direction:W>',1,true),output[2])
 
 handler({'-d','10','-d','20'})
 assert(#errors==1 and errors[1]:find('Usage: gbt moblist',1,true),errors[1])

@@ -716,7 +716,19 @@ end
 
 -- Route progress is intentionally independent of movement jobs: unscoped routes
 -- can be interrupted by battle and resume the same segment afterward.
-function smartMove:clearWaypointProgress()
+function smartMove:resetWaypointRoutes()
+    for i = #self.queue, 1, -1 do
+        if self.queue[i].mode == Modes.route then
+            table.remove(self.queue, i)
+        end
+    end
+    if self.previousJob and self.previousJob.mode == Modes.route then
+        self.previousJob = nil
+    end
+    local current = self.current
+    if current and current.mode == Modes.route and not self.cancel then
+        self:cancelJob(current.jobId, true, current.owner)
+    end
     self.waypointProgress = {}
     self.waypointProgressByConfig = setmetatable({}, {__mode='k'})
 end
@@ -740,7 +752,7 @@ function smartMove:shutdown()
     self.queue = {}
     self.previousJob = nil
     self.current = nil
-    self:clearWaypointProgress()
+    self:resetWaypointRoutes()
     windower.ffxi.follow(-1)
     windower.ffxi.run(false)
 end
@@ -842,13 +854,21 @@ end
 -- with the same configuration refresh its scheduling state without restarting it.
 function smartMove:waypointRoute(config, owner, routeKey)
     if self.shutting_down or not self:canMove(owner) or type(config)~='table' then return end
+    local parts={config.mode or 'bounce'}
+    if type(config.points)=='table' then
+        for _,point in ipairs(config.points) do
+            parts[#parts+1]=tostring(point.x)..','..tostring(point.y)
+        end
+    end
+    local routeSignature=table.concat(parts,';')
     local function refresh(job)
-        if job and not self.cancel and job.mode==Modes.route and job.routeConfig==config and job.owner==owner then
+        if job and job.mode==Modes.route and job.routeConfig==config
+            and job.routeKey==routeKey and job.routeSignature==routeSignature and job.owner==owner then
             job.refreshed=os.clock()
             return job.jobId
         end
     end
-    local existing=refresh(self.current)
+    local existing=not self.cancel and refresh(self.current)
     if existing then return existing end
     for _,queued in ipairs(self.queue) do
         existing=refresh(queued)
@@ -856,20 +876,10 @@ function smartMove:waypointRoute(config, owner, routeKey)
     end
     local me=windower.ffxi.get_mob_by_target('me')
     if not me or type(me.x)~='number' or type(me.y)~='number' then return end
-    local function signature()
-        local parts={config.mode or 'bounce'}
-        if type(config.points)=='table' then
-            for _,point in ipairs(config.points) do
-                parts[#parts+1]=tostring(point.x)..','..tostring(point.y)
-            end
-        end
-        return table.concat(parts,';')
-    end
     local persistent=config.scoped~=true
     local progressStore=routeKey and self.waypointProgress or self.waypointProgressByConfig
     local progressKey=routeKey or config
     local info=windower.ffxi.get_info()
-    local routeSignature=signature()
     local progress=persistent and progressStore[progressKey] or nil
     if progress and (progress.zone~=(info and info.zone) or progress.signature~=routeSignature) then
         progressStore[progressKey]=nil
@@ -889,10 +899,11 @@ function smartMove:waypointRoute(config, owner, routeKey)
     if #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
         plan:advance(now)
     end
-    saveProgress()
-    local job=sm_createBaseJob(self,Modes.route,false,owner)
+    local job=sm_createBaseJob(self,Modes.route,true,owner)
     if not job then return end
     job.routeConfig=config
+    job.routeKey=routeKey
+    job.routeSignature=routeSignature
     job.routePlan=plan
     job.refreshed=os.clock()
     job.heartbeat=config.heartbeat~=nil and tonumber(config.heartbeat) or nil
@@ -929,6 +940,12 @@ function smartMove:waypointRoute(config, owner, routeKey)
     end
     job.description=job.description..' ('..#plan.points..' points / '..plan.mode..')'
     if not self:canMove(job.owner) then return end
+    -- Stop the old job and publish its replacement before yielding to the worker.
+    self:cancelJob(nil,true,owner)
+    if self.previousJob and self.previousJob.mode==Modes.route then
+        self.previousJob=nil
+    end
+    saveProgress()
     self.queue={job}
     self.verbose('Requested: %s':format(job.description))
     coroutine.sleep(0.25)

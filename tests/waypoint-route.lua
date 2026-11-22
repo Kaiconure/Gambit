@@ -37,3 +37,81 @@ for _,bad in ipairs({{}, {points={}}, {mode='bad',points={point(0,0)}},
     assert(not pcall(Route.new,bad,{x=0,y=0},0))
 end
 print('PASS: nearest and resumed starts, cycle/bounce transitions, endpoint turns, radii, pauses, durations and validation')
+
+local file=assert(io.open('lib/smart-move.lua'))
+local source=file:read('*a')
+file:close()
+source=source:gsub("('[^'\r\n]*'):format",'(%1):format')
+local me={x=1,y=0}
+local stops=0
+local env=setmetatable({
+    V=function(value) return value end,
+    require=function(name)
+        if name=='resources' then return {zones={[1]={}}} end
+        return require(name)
+    end,
+    windower={ffxi={
+        get_info=function() return {zone=1} end,
+        get_mob_by_target=function() return me end,
+        follow=function() end,
+        run=function(value) if value==false then stops=stops+1 end end,
+    }},
+    coroutine={schedule=function() end,sleep=function() end},
+},{__index=_G})
+local chunk=assert(loadstring(source))
+setfenv(chunk,env)
+local move=chunk()
+move:setLogger()
+local config={points={point(0,0),point(10,0),point(20,0)}}
+move:waypointRoute(config,nil,'test')
+local running=move.queue[1]
+move.current,move.previousJob,move.queue=running,running,{}
+running:advance(0,1,0.33)
+assert(move.waypointProgress.test.index==2)
+
+config.points={point(40,0),point(50,0),point(60,0)}
+local oldStops=stops
+local replacement=move:waypointRoute(config,nil,'test')
+assert(move.cancel and stops==oldStops+1 and move.previousJob==nil)
+assert(move.queue[1]:pos()[1]==40 and replacement~=running.jobId)
+assert(move:waypointRoute(config,nil,'test')==replacement, 'Refresh the queued replacement during cancellation')
+
+local queued=move.queue[1]
+move.current,move.previousJob,move.cancel=queued,queued,false
+queued:advance(0,2,0.33)
+assert(move.waypointProgress.test.index==2)
+
+file=assert(io.open('Gambit.lua'))
+local reload=assert(file:read('*a'):match('(function reloadSettings%(.-\nend)'))
+file:close()
+local function noop() end
+env.smartMove=move
+env.settings={actions={}}
+env.loadSettings=function(_, bypassActions)
+    assert(bypassActions, 'Exercise settings-only reload with the same action configuration')
+    return env.settings
+end
+env.profiling={begin=noop,start=noop,stop=noop,finish=noop}
+env.executionFactory={clear=noop}
+env.inventory={}
+env.logging_settings={}
+env.globals={}
+env.isDebugging=function() return false end
+env.actionStateManager={needsRecompile=true}
+chunk=assert(loadstring(reload))
+setfenv(chunk,env)
+chunk()
+oldStops=stops
+env.reloadSettings(nil,true)
+assert(move.cancel and stops==oldStops+1 and move.previousJob==nil and #move.queue==0)
+assert(next(move.waypointProgress)==nil and next(move.waypointProgressByConfig)==nil)
+move.current,move.cancel=nil,false
+me.x=41
+move:waypointRoute(config,nil,'test')
+assert(move.queue[1]:pos()[1]==40, 'Start from the nearest point after resetting, even for the same route')
+
+local positionJob={mode='position'}
+move.current,move.previousJob,move.queue=positionJob,positionJob,{positionJob}
+move:resetWaypointRoutes()
+assert(move.current==positionJob and move.previousJob==positionJob and move.queue[1]==positionJob and not move.cancel)
+print('PASS: route replacement, reset of running and queued routes, and preservation of other movement')

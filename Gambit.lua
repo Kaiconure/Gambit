@@ -1,6 +1,6 @@
 local profiling=require('./lib/load-profile')
 profiling.begin('startup modules')
-__version = '1.0.7.4'
+__version = '1.0.7.5'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -321,6 +321,7 @@ function reloadSettings(actionsName, bypassActions, namespaceOverride, outputPro
     bypassActions = bypassActions and settings.actions ~= nil
 
     settings = loadSettings(actionsName, bypassActions, namespaceOverride, outputProcessed)
+    smartMove:resetWaypointRoutes()
     profiling.stop('settings/imports')
     logging_settings.verbosity = settings.verbosity
 
@@ -417,7 +418,7 @@ windower.register_event('zone change', function(zone_id)
     require('./lib/session-variables').reset('panel_branches')
     require('./lib/follow-distance').resetTransient()
     smartMove:stop()
-    smartMove:clearWaypointProgress()
+    smartMove:resetWaypointRoutes()
 
     -- Store the new zone
     globals.currentZone = zone_id > 0 and resources.zones[zone_id] or nil

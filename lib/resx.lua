@@ -871,6 +871,20 @@ function getTrustSpellMeta(partyName, mode, player, party)
     return matches[1]
 end
 
+function getTrustPartyMeta(partyName, model)
+    local matches = getTrustSpellMeta(partyName, TrustSearchModes.all)
+    local fallback
+    for _, trust in ipairs(matches or {}) do
+        if model and trust.model == model then
+            return trust
+        end
+        if not fallback or trust.id < fallback.id then
+            fallback = trust
+        end
+    end
+    return fallback
+end
+
 --------------------------------------------------------------------------------------
 -- Determine if the specified mob is a player character
 function isMobPlayer(mob)

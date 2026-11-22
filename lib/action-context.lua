@@ -1815,10 +1815,8 @@ local function initContextTargetSymbol(context, symbol, debug)
 
     -- Trusts
     if symbol.is_trust then
-        local metadata = getTrustSpellMeta(symbol.name,
-            TrustSearchModes.best,
-            context.player,
-            context.party)
+        local models = symbol.mob.models
+        local metadata = getTrustPartyMeta(symbol.name, models and models[1])
         
         if metadata then
             symbol.meta = metadata

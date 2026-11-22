@@ -6,7 +6,7 @@ end
 
 function info.name(value)
     if type(value) ~= 'string' or not value:match('^[A-Za-z]+$') or #value < 3 or #value > 15 then
-        return nil, 'Character names must contain 3–15 letters.'
+        return nil, 'Character names must contain 3-15 letters.'
     end
     return value:sub(1,1):upper() .. value:sub(2):lower()
 end
