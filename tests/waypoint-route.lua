@@ -43,6 +43,7 @@ local source=file:read('*a')
 file:close()
 source=source:gsub("('[^'\r\n]*'):format",'(%1):format')
 local me={x=1,y=0}
+local player={status=0}
 local stops=0
 local env=setmetatable({
     V=function(value) return value end,
@@ -52,6 +53,7 @@ local env=setmetatable({
     end,
     windower={ffxi={
         get_info=function() return {zone=1} end,
+        get_player=function() return player end,
         get_mob_by_target=function() return me end,
         follow=function() end,
         run=function(value) if value==false then stops=stops+1 end end,
@@ -82,7 +84,8 @@ queued:advance(0,2,0.33)
 assert(move.waypointProgress.test.index==2)
 
 file=assert(io.open('Gambit.lua'))
-local reload=assert(file:read('*a'):match('(function reloadSettings%(.-\nend)'))
+local addonSource=file:read('*a')
+local reload=assert(addonSource:match('(function reloadSettings%(.-\nend)'))
 file:close()
 local function noop() end
 env.smartMove=move
@@ -115,3 +118,67 @@ move.current,move.previousJob,move.queue=positionJob,positionJob,{positionJob}
 move:resetWaypointRoutes()
 assert(move.current==positionJob and move.previousJob==positionJob and move.queue[1]==positionJob and not move.cancel)
 print('PASS: route replacement, reset of running and queued routes, and preservation of other movement')
+
+file=assert(io.open('lib/action-context.lua'))
+local waypointHandler=assert(file:read('*a'):match('(context%.waypointRoute = function.-\n    end)'))
+file:close()
+local context={movementAvailable=function() return true end,vars={},scopes={}}
+env.context=context
+chunk=assert(loadstring(waypointHandler))
+setfenv(chunk,env)
+chunk()
+
+for _, scoped in ipairs({true,false}) do
+    move.current,move.previousJob,move.queue=nil,nil,{}
+    move:resetWaypointRoutes()
+    local route={scoped=scoped,points={point(0,0),point(10,0),point(20,0)}}
+    context.vars.waypoints_ex={active='resume',data={resume=route}}
+    context.scopes.battle=1
+    me.x=19
+    local started,id=context.waypointRoute()
+    assert(started)
+    local job=move.queue[1]
+    move.current,move.previousJob,move.queue=job,job,{}
+    job:advance(0,1,0.33)
+    assert(job.routePlan.step==-1 and job:pos()[1]==10)
+
+    me.x=18
+    move:cancelJob(id,true)
+    move.current,move.cancel=nil,false
+    assert(move:reschedule(id), 'Resume automatically after an item-style interruption')
+    job=move.queue[1]
+    assert(job:pos()[1]==10 and job.routePlan.step==-1)
+
+    move.current,move.previousJob,move.queue=job,job,{}
+    context.scopes.battle=2
+    local refreshed,nextId=context.waypointRoute()
+    assert(refreshed and (nextId~=job.jobId)==scoped)
+    job=scoped and move.queue[1] or move.current
+    assert(job:pos()[1]==(scoped and 20 or 10))
+    assert(job.routePlan.step==(scoped and 1 or -1))
+end
+print('PASS: temporary pauses preserve route progress, and a battle scope change resets scoped routes only')
+
+move.current,move.previousJob,move.queue,move.cancel=nil,nil,{},false
+move:resetWaypointRoutes()
+local unscoped={scoped=false,corner_radius=3,points={point(0,0),point(10,0),point(20,0)}}
+context.vars.waypoints_ex={active='resume',data={resume=unscoped}}
+context.scopes.battle=3
+me.x=10
+assert(context.waypointRoute())
+local outbound=move.queue[1]
+assert(outbound:pos()[1]==20)
+move.current,move.previousJob,move.queue=outbound,outbound,{}
+move:stop()
+move.current,move.cancel=nil,false
+
+-- Battle ended inside the endpoint's corner radius, but short of arrival.
+me.x=18
+context.scopes.battle=4
+assert(context.waypointRoute())
+local resumed=move.queue[1]
+assert(resumed:pos()[1]==20 and resumed.routePlan.step==1)
+assert(not resumed:advance(2,1,0.33), 'Keep moving toward the saved endpoint after battle')
+assert(resumed:advance(0.25,2,0.33).reversed and resumed:pos()[1]==10)
+assert(resumed.routePlan:threshold(0.33)==3, 'Restore normal cornering after reaching the saved point')
+print('PASS: unscoped battle resume keeps the saved endpoint even inside its corner radius')

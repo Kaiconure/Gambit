@@ -461,8 +461,9 @@ local function sm_movement_exp(self, job)
         if not paused then
             -- If we're within the desired distance, or if we passed right by the target but are still
             -- reasonably close, then we'll call ourselves done.
+            local tolerance=job.routePlan and job.routePlan:arrivalTolerance(self.tolerance) or self.tolerance
             if 
-                d2 < self.tolerance or
+                d2 < tolerance or
                 (d2 < 1.0 and not sharesHalfspace(hdg, hdg2))
             then
                 paused = true
@@ -714,8 +715,7 @@ function smartMove:stop()
     windower.ffxi.run(false)
 end
 
--- Route progress is intentionally independent of movement jobs: unscoped routes
--- can be interrupted by battle and resume the same segment afterward.
+-- Route progress survives movement interruptions within the same scope.
 function smartMove:resetWaypointRoutes()
     for i = #self.queue, 1, -1 do
         if self.queue[i].mode == Modes.route then
@@ -852,8 +852,9 @@ end
 -----------------------------------------------------------------------------------------
 -- Traverse a configured point sequence as one continuous movement job. Repeated calls
 -- with the same configuration refresh its scheduling state without restarting it.
-function smartMove:waypointRoute(config, owner, routeKey)
+function smartMove:waypointRoute(config, owner, routeKey, battleScope)
     if self.shutting_down or not self:canMove(owner) or type(config)~='table' then return end
+    local routeScope=config.scoped==true and battleScope or nil
     local parts={config.mode or 'bounce'}
     if type(config.points)=='table' then
         for _,point in ipairs(config.points) do
@@ -863,7 +864,8 @@ function smartMove:waypointRoute(config, owner, routeKey)
     local routeSignature=table.concat(parts,';')
     local function refresh(job)
         if job and job.mode==Modes.route and job.routeConfig==config
-            and job.routeKey==routeKey and job.routeSignature==routeSignature and job.owner==owner then
+            and job.routeKey==routeKey and job.routeSignature==routeSignature
+            and job.routeScope==routeScope and job.owner==owner then
             job.refreshed=os.clock()
             return job.jobId
         end
@@ -876,27 +878,27 @@ function smartMove:waypointRoute(config, owner, routeKey)
     end
     local me=windower.ffxi.get_mob_by_target('me')
     if not me or type(me.x)~='number' or type(me.y)~='number' then return end
-    local persistent=config.scoped~=true
     local progressStore=routeKey and self.waypointProgress or self.waypointProgressByConfig
     local progressKey=routeKey or config
     local info=windower.ffxi.get_info()
-    local progress=persistent and progressStore[progressKey] or nil
-    if progress and (progress.zone~=(info and info.zone) or progress.signature~=routeSignature) then
+    local progress=progressStore[progressKey]
+    if progress and (progress.zone~=(info and info.zone) or progress.signature~=routeSignature
+        or progress.scope~=routeScope) then
         progressStore[progressKey]=nil
         progress=nil
     end
     local now=os.clock()
     local plan=require('./lib/waypoint-route').new(config,me,now,progress)
     local function saveProgress()
-        if not persistent then return end
         local snapshot=plan:snapshot()
         snapshot.zone=info and info.zone
         snapshot.signature=routeSignature
+        snapshot.scope=routeScope
         progressStore[progressKey]=snapshot
     end
     local initial=plan:point()
     local initialDistance=math.sqrt((me.x-initial.x)^2+(me.y-initial.y)^2)
-    if #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
+    if not plan.resuming and #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
         plan:advance(now)
     end
     local job=sm_createBaseJob(self,Modes.route,true,owner)
@@ -904,6 +906,7 @@ function smartMove:waypointRoute(config, owner, routeKey)
     job.routeConfig=config
     job.routeKey=routeKey
     job.routeSignature=routeSignature
+    job.routeScope=routeScope
     job.routePlan=plan
     job.refreshed=os.clock()
     job.heartbeat=config.heartbeat~=nil and tonumber(config.heartbeat) or nil
@@ -936,7 +939,7 @@ function smartMove:waypointRoute(config, owner, routeKey)
             self.verbose('Not rescheduling waypoint route while engaged')
             return
         end
-        return smartMove:waypointRoute(config,owner,routeKey)
+        return smartMove:waypointRoute(config,owner,routeKey,battleScope)
     end
     job.description=job.description..' ('..#plan.points..' points / '..plan.mode..')'
     if not self:canMove(job.owner) then return end

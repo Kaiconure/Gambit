@@ -38,6 +38,7 @@ function M.new(config,position,now,progress)
         and (progress.step==1 or progress.step==-1)
     route.index=restored and progress.index or 1
     route.step=restored and progress.step or 1
+    route.resuming=restored
     if route.mode=='cycle' then route.step=1 end
     if not restored and position and finite(position.x) and finite(position.y) then
         local nearestDistance
@@ -53,9 +54,13 @@ function M.new(config,position,now,progress)
 end
 function M:point() return self.points[self.index] end
 function M:snapshot() return {index=self.index,step=self.step} end
+function M:arrivalTolerance(defaultTolerance)
+    return self:point().tolerance or self.tolerance or defaultTolerance or 0.33
+end
 function M:threshold(defaultTolerance)
+    local tolerance=self:arrivalTolerance(defaultTolerance)
+    if self.resuming then return tolerance end
     local point=self:point()
-    local tolerance=point.tolerance or self.tolerance or defaultTolerance or 0.33
     return math.max(tolerance,point.corner_radius or self.cornerRadius)
 end
 function M:timedOut(now)
@@ -64,6 +69,7 @@ function M:timedOut(now)
 end
 function M:advance(now)
     if #self.points<2 then return end
+    self.resuming=false
     local leaving=self:point()
     local reversed=false
     if self.mode=='cycle' then

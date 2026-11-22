@@ -5103,7 +5103,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 routeKey='waypoints_ex:'..options.active
             end
         end
-        local jobId=smartMove:waypointRoute(config,nil,routeKey)
+        local jobId=smartMove:waypointRoute(config,nil,routeKey,context.scopes.battle)
         return jobId~=nil,jobId
     end
 
