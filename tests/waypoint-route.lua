@@ -182,3 +182,75 @@ assert(not resumed:advance(2,1,0.33), 'Keep moving toward the saved endpoint aft
 assert(resumed:advance(0.25,2,0.33).reversed and resumed:pos()[1]==10)
 assert(resumed.routePlan:threshold(0.33)==3, 'Restore normal cornering after reaching the saved point')
 print('PASS: unscoped battle resume keeps the saved endpoint even inside its corner radius')
+
+local timed={duration=5,points={point(0,0,{duration=0}),point(10,0),point(20,0,{duration=2})}}
+local plan=Route.new(timed,{x=0,y=0},0)
+assert(plan:point().duration==0 and not plan:timedOut(100))
+plan:advance(0)
+assert(plan:point().duration==5 and not plan:timedOut(4) and plan:timedOut(5))
+plan:advance(5)
+assert(plan:point().duration==2 and plan:timedOut(7))
+
+move.current,move.previousJob,move.queue,move.cancel=nil,nil,{},false
+move:resetWaypointRoutes()
+local now=0
+env.os={clock=function() return now end}
+env.coroutine.sleep=coroutine.yield
+context.vars.waypoints_ex={active='timed',data={timed=timed}}
+me.x=0
+local function request() assert(context.waypointRoute()) end
+local action=coroutine.create(request)
+assert(coroutine.resume(action))
+local leg=move.queue[1]
+assert(leg.blocking and leg:pos()[1]==10 and coroutine.status(action)=='suspended')
+move.current,move.queue=leg,{}
+now=1
+assert(coroutine.resume(action) and coroutine.status(action)=='suspended')
+local arrival=leg:advance(0,now,0.33)
+assert(arrival.finish and arrival.stop and leg:pos()[1]==20)
+assert(coroutine.resume(action) and coroutine.status(action)=='dead')
+assert(#move.queue==0, 'Leave the next leg to a later action request')
+
+move.current=nil
+me.x=10
+action=coroutine.create(request)
+assert(coroutine.resume(action))
+leg=move.queue[1]
+assert(leg.blocking and leg:pos()[1]==20)
+move.current,move.queue=leg,{}
+now=3
+assert(coroutine.resume(action) and coroutine.status(action)=='dead' and move.cancel)
+print('PASS: route duration defaults, point overrides, per-leg action wait, arrival and timeout')
+
+file=assert(io.open('lib/commands.lua'))
+local commands=assert(file:read('*a'):match("(handlers%['actions'%] = function.-\nend)"))
+file:close()
+env.handlers={}
+env.arrayIndexOfStrI=function(args, value)
+    for i, arg in ipairs(args) do if arg==value then return i end end
+end
+env.text_red=tostring
+env.writeMessage=noop
+env.loadActions=function() return {},'replacement.json' end
+env.recompileActions=noop
+env.saveSettings=noop
+chunk=assert(loadstring(commands))
+setfenv(chunk,env)
+chunk()
+
+for _, cancel in ipairs({
+    function() move:stop() end,
+    function() env.reloadSettings(nil,true) end,
+    function() env.handlers.actions({'-off'}) end,
+    function() env.handlers.actions({'-load','replacement'}) end,
+}) do
+    move.current,move.queue,move.cancel=nil,{},false
+    action=coroutine.create(request)
+    assert(coroutine.resume(action) and coroutine.status(action)=='suspended')
+    leg=move.queue[1]
+    move.current,move.queue=leg,{}
+    cancel()
+    assert(move.cancel)
+    assert(coroutine.resume(action) and coroutine.status(action)=='dead')
+end
+print('PASS: automation stop, settings reload, actions off and action-set load release a timed leg')

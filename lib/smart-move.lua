@@ -344,7 +344,7 @@ local function sm_movement_exp(self, job)
                 job.runHeading=nil
                 if transition.stop then
                     windower.ffxi.run(false)
-                    windower.ffxi.turn(hdg2)
+                    if not transition.finish then windower.ffxi.turn(hdg2) end
                     paused=false
                     local remaining=transition.pause
                     while remaining>0 and not self.shutting_down and not self.cancel and job:is_valid() do
@@ -352,7 +352,7 @@ local function sm_movement_exp(self, job)
                         coroutine.sleep(slice)
                         remaining=remaining-slice
                     end
-                    if self.shutting_down or self.cancel or not job:is_valid() then return end
+                    if transition.finish or self.shutting_down or self.cancel or not job:is_valid() then return end
                     job.runHeading=hdg2
                     windower.ffxi.run(hdg2)
                 end
@@ -733,6 +733,16 @@ function smartMove:resetWaypointRoutes()
     self.waypointProgressByConfig = setmetatable({}, {__mode='k'})
 end
 
+function smartMove:cancelTimedWaypoint()
+    for i = #self.queue, 1, -1 do
+        if self.queue[i].blocking then table.remove(self.queue, i) end
+    end
+    local current = self.current
+    if current and current.blocking and not self.cancel then
+        self:cancelJob(current.jobId, true, current.owner)
+    end
+end
+
 -------------------------------------------------------------------------------
 -- If there's a job running, this will cause its jitter tracker to reset.
 -- The result will be termination of any in-progress jitter, or a reset
@@ -852,29 +862,44 @@ end
 -----------------------------------------------------------------------------------------
 -- Traverse a configured point sequence as one continuous movement job. Repeated calls
 -- with the same configuration refresh its scheduling state without restarting it.
-function smartMove:waypointRoute(config, owner, routeKey, battleScope)
+function smartMove:waypointRoute(config, owner, routeKey, battleScope, waitForLeg)
     if self.shutting_down or not self:canMove(owner) or type(config)~='table' then return end
     local routeScope=config.scoped==true and battleScope or nil
-    local parts={config.mode or 'bounce'}
+    local parts={config.mode or 'bounce',tostring(config.duration)}
     if type(config.points)=='table' then
         for _,point in ipairs(config.points) do
-            parts[#parts+1]=tostring(point.x)..','..tostring(point.y)
+            parts[#parts+1]=tostring(point.x)..','..tostring(point.y)..','..tostring(point.duration)
         end
     end
     local routeSignature=table.concat(parts,';')
+    local function awaitLeg(job)
+        if waitForLeg and job.blocking then
+            while not job.legFinished and not self.shutting_down and self:canMove(owner)
+                and ((self.current==job and not self.cancel) or self.queue[1]==job) do
+                local now=os.clock()
+                if job.routePlan:timedOut(now) then
+                    self:cancelJob(job.jobId,true,owner)
+                    break
+                end
+                job.refreshed=now
+                coroutine.sleep(0.1)
+            end
+        end
+        return job.jobId
+    end
     local function refresh(job)
         if job and job.mode==Modes.route and job.routeConfig==config
             and job.routeKey==routeKey and job.routeSignature==routeSignature
             and job.routeScope==routeScope and job.owner==owner then
             job.refreshed=os.clock()
-            return job.jobId
+            return job
         end
     end
     local existing=not self.cancel and refresh(self.current)
-    if existing then return existing end
+    if existing then return awaitLeg(existing) end
     for _,queued in ipairs(self.queue) do
         existing=refresh(queued)
-        if existing then return existing end
+        if existing then return awaitLeg(existing) end
     end
     local me=windower.ffxi.get_mob_by_target('me')
     if not me or type(me.x)~='number' or type(me.y)~='number' then return end
@@ -908,11 +933,13 @@ function smartMove:waypointRoute(config, owner, routeKey, battleScope)
     job.routeSignature=routeSignature
     job.routeScope=routeScope
     job.routePlan=plan
+    job.blocking=plan:point().duration>0
     job.refreshed=os.clock()
     job.heartbeat=config.heartbeat~=nil and tonumber(config.heartbeat) or nil
     assert(job.heartbeat==nil or (job.heartbeat>=0.5 and job.heartbeat<math.huge),
         'Waypoint route heartbeat must be at least 0.5 seconds')
     job.autoComplete=false
+    job.oncomplete=nil
     job.follow_distance=0
     job.canJitter=config.jitter~=false
     job.pos=function(self)
@@ -922,7 +949,7 @@ function smartMove:waypointRoute(config, owner, routeKey, battleScope)
     job.is_valid=function(self)
         local info=windower.ffxi.get_info()
         local now=os.clock()
-        return info and info.zone==self.zone and not self.routePlan:timedOut(now)
+        return info and info.zone==self.zone and (self.legFinished or not self.routePlan:timedOut(now))
     end
     job.cycle=function(self) return self:is_valid() end
     job.advance=function(self,distance,now,defaultTolerance,passed)
@@ -930,10 +957,17 @@ function smartMove:waypointRoute(config, owner, routeKey, battleScope)
         if fresh and (distance<=self.routePlan:threshold(defaultTolerance) or passed) then
             local transition=self.routePlan:advance(now)
             saveProgress()
+            if self.blocking or self.routePlan:point().duration>0 then
+                self.legFinished=true
+                transition=transition or {pause=0}
+                transition.finish=true
+                transition.stop=true
+            end
             return transition
         end
     end
     job.reschedule=function()
+        if job.blocking or job.legFinished then return end
         local player=windower.ffxi.get_player()
         if player and player.status==1 and config.allow_engaged~=true then
             self.verbose('Not rescheduling waypoint route while engaged')
@@ -951,8 +985,8 @@ function smartMove:waypointRoute(config, owner, routeKey, battleScope)
     saveProgress()
     self.queue={job}
     self.verbose('Requested: %s':format(job.description))
-    coroutine.sleep(0.25)
-    return job.jobId
+    if not waitForLeg or not job.blocking then coroutine.sleep(0.25) end
+    return awaitLeg(job)
 end
 
 -----------------------------------------------------------------------------------------

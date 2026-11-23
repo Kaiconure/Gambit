@@ -19,6 +19,7 @@ function M.new(config,position,now,progress)
     assert(#config.points>0,'Waypoint route requires at least one point')
     local mode=config.mode or 'bounce'
     assert(mode=='bounce' or mode=='cycle','Waypoint route mode must be bounce or cycle')
+    local duration=nonnegative(config.duration,'Waypoint route duration',0)
     local route=setmetatable({config=config,mode=mode,points={},step=1,
         cornerRadius=nonnegative(config.corner_radius,'Waypoint route corner_radius',0),
         tolerance=config.tolerance~=nil and nonnegative(config.tolerance,'Waypoint route tolerance') or nil,
@@ -30,7 +31,7 @@ function M.new(config,position,now,progress)
             corner_radius=point.corner_radius~=nil and nonnegative(point.corner_radius,'Waypoint corner_radius') or nil,
             tolerance=point.tolerance~=nil and nonnegative(point.tolerance,'Waypoint tolerance') or nil,
             pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
-            duration=point.duration~=nil and nonnegative(point.duration,'Waypoint duration') or nil}
+            duration=nonnegative(point.duration,'Waypoint duration',duration)}
     end
     local restored=type(progress)=='table'
         and type(progress.index)=='number' and progress.index%1==0
@@ -65,7 +66,7 @@ function M:threshold(defaultTolerance)
 end
 function M:timedOut(now)
     local duration=self:point().duration
-    return duration and now-self.started>=duration or false
+    return duration>0 and now-self.started>=duration
 end
 function M:advance(now)
     if #self.points<2 then return end

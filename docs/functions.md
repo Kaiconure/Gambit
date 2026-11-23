@@ -99,8 +99,13 @@ next point.
 point. It defaults to zero, which uses `tolerance` or smart-move's normal
 tolerance and preserves precise waypoint travel. Larger radii cut the corner
 and produce smoother paths. Each point can override `corner_radius` and
-`tolerance`; `pause` forces a stop before continuing, and `duration` limits time
-on that segment. Routes continue until replaced or cancelled. An optional
+`tolerance`; `pause` forces a stop before continuing. Set `duration` in seconds
+on the route to give every leg a time limit. A point's `duration` overrides the
+default for travel toward that point, and zero opts out. A positive duration
+holds Gambit's action and engagement loop until arrival, timeout, or
+cancellation. On arrival the movement job stops at the waypoint, and the
+action loop can run before it requests the next leg. Legs without a positive
+duration run in the background. An optional
 route-level `heartbeat` controls how long the route may advance without its
 action being refreshed; when configured, an expired route finishes its current
 segment and waits at that waypoint until refreshing returns. Set `jitter: false`

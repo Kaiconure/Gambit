@@ -2230,7 +2230,7 @@ end
 
 handlers['actions'] = function(args)
     local on = arrayIndexOfStrI(args, '-on') or arrayIndexOfStrI(args, '-enable')
-    local off = arrayIndexOfStrI(args, '-off') arrayIndexOfStrI(args, '-disable')
+    local off = arrayIndexOfStrI(args, '-off') or arrayIndexOfStrI(args, '-disable')
     local toggle = arrayIndexOfStrI(args, '-toggle')
 
     local load = tonumber(arrayIndexOfStrI(args, '-load') or 0)
@@ -2246,6 +2246,7 @@ handlers['actions'] = function(args)
                 settings.actionInfo.fileName = fileName
                 settings.actions = actions
 
+                smartMove:resetWaypointRoutes()
                 recompileActions()
                 saveSettings()
             end
@@ -2286,6 +2287,7 @@ handlers['actions'] = function(args)
         elseif toggle then
             globals.actionsEnabled = not globals.actionsEnabled
         end
+        if not globals.actionsEnabled then smartMove:cancelTimedWaypoint() end
         
         writeMessage(string.format(
             '  Action execution is [%s]',
