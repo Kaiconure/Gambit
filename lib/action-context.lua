@@ -5103,7 +5103,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                 routeKey='waypoints_ex:'..options.active
             end
         end
-        local jobId=smartMove:waypointRoute(config,nil,routeKey,context.scopes.battle,true)
+        local function runHook(point, phase)
+            local guard=require('./lib/action-errors')
+            local hook={name='Waypoint '..phase, importedFrom=routeKey, commands={}}
+            if guard.compileCommandList(hook,point[phase],phase,hook.commands) then
+                guard.commands(hook,context,phase)
+            end
+        end
+        local jobId=smartMove:waypointRoute(config,nil,routeKey,context.scopes.battle,true,runHook)
         return jobId~=nil,jobId
     end
 

@@ -31,6 +31,8 @@ function M.new(config,position,now,progress)
             corner_radius=point.corner_radius~=nil and nonnegative(point.corner_radius,'Waypoint corner_radius') or nil,
             tolerance=point.tolerance~=nil and nonnegative(point.tolerance,'Waypoint tolerance') or nil,
             pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
+            passthrough=point.passthrough==true,
+            onenter=point.onenter,onleave=point.onleave,
             duration=nonnegative(point.duration,'Waypoint duration',duration)}
     end
     local restored=type(progress)=='table'

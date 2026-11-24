@@ -254,3 +254,77 @@ for _, cancel in ipairs({
     assert(coroutine.resume(action) and coroutine.status(action)=='dead')
 end
 print('PASS: automation stop, settings reload, actions off and action-set load release a timed leg')
+
+local eastHill={duration=10,points={
+    point(121,596),point(118,543,{passthrough=true}),point(148,537),
+}}
+for _, reverse in ipairs({false,true}) do
+    move.current,move.queue,move.cancel=nil,{},false
+    move:resetWaypointRoutes()
+    context.vars.waypoints_ex={active='east-hill',data={['east-hill']=eastHill}}
+    local start=eastHill.points[reverse and 3 or 1]
+    local destination=eastHill.points[reverse and 1 or 3]
+    me.x,me.y=start.x,start.y
+    now=0
+    action=coroutine.create(request)
+    assert(coroutine.resume(action) and coroutine.status(action)=='suspended')
+    leg=move.queue[1]
+    move.current,move.queue=leg,{}
+    assert(leg:pos()[1]==118)
+    now=9
+    local turn=leg:advance(0,now,0.33)
+    assert(not turn.stop and not turn.finish and leg:pos()[1]==destination.x)
+    now=11
+    assert(coroutine.resume(action) and coroutine.status(action)=='suspended',
+        'The next timed leg has a fresh budget, with no action break')
+    local arrival=leg:advance(0,now,0.33)
+    assert(arrival.finish and arrival.stop)
+    assert(coroutine.resume(action) and coroutine.status(action)=='dead')
+end
+
+move.current,move.queue,move.cancel=nil,{},false
+move:resetWaypointRoutes()
+local mixed={points={point(0,0),point(10,0,{duration=5,passthrough=true}),
+    point(20,0,{duration=0,passthrough=true})}}
+context.vars.waypoints_ex={active='mixed',data={mixed=mixed}}
+me.x,me.y=0,0
+action=coroutine.create(request)
+assert(coroutine.resume(action) and coroutine.status(action)=='suspended')
+leg=move.queue[1]
+move.current,move.queue=leg,{}
+assert(not leg:advance(0,now,0.33).finish and leg:pos()[1]==20)
+assert(coroutine.resume(action) and coroutine.status(action)=='dead')
+assert(not leg.blocking and leg:advance(0,now,0.33).finish,
+    'An untimed passthrough flag has no effect at the boundary to a timed leg')
+print('PASS: timed passthrough in both directions, fresh leg timeouts, and untimed boundaries')
+
+local calls={}
+context.record=function(value) calls[#calls+1]=value end
+local hooks={duration=10,points={
+    point(0,0,{onenter="record('unexpected')",onleave="record('start')"}),
+    point(10,0,{passthrough=true,onenter={"record('bend')","record('enter')"},onleave="record('through')"}),
+    point(20,0,{onenter="record('arrive')",onleave="record('resume')"}),
+}}
+move.current,move.queue,move.cancel=nil,{},false
+move:resetWaypointRoutes()
+context.vars.waypoints_ex={active='hooks',data={hooks=hooks}}
+me.x,me.y=0,0
+action=coroutine.create(request)
+assert(coroutine.resume(action))
+leg=move.queue[1]
+move.current,move.queue=leg,{}
+assert(leg:depart() and leg:depart())
+assert(not leg:advance(0,now,0.33).finish)
+assert(leg:depart() and leg:advance(0,now,0.33).finish)
+assert(coroutine.resume(action) and coroutine.status(action)=='dead')
+assert(table.concat(calls,',')=='start,bend,enter,through,arrive')
+move:stop()
+move.current,move.cancel=nil,false
+me.x=20
+action=coroutine.create(request)
+assert(coroutine.resume(action))
+leg=move.queue[1]
+move.current,move.queue=leg,{}
+assert(leg:depart() and leg:depart())
+assert(table.concat(calls,',')=='start,bend,enter,through,arrive,resume')
+print('PASS: waypoint command hooks, timed stop, passthrough, and departure after interruption')

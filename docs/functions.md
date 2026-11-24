@@ -105,7 +105,10 @@ default for travel toward that point, and zero opts out. A positive duration
 holds Gambit's action and engagement loop until arrival, timeout, or
 cancellation. On arrival the movement job stops at the waypoint, and the
 action loop can run before it requests the next leg. Legs without a positive
-duration run in the background. An optional
+duration run in the background. Set `"passthrough": true` on a timed point to
+continue into the next leg without an action break. Each timed leg gets its own
+timeout. If the next leg is untimed, movement continues in the background and
+the action loop resumes. An optional
 route-level `heartbeat` controls how long the route may advance without its
 action being refreshed; when configured, an expired route finishes its current
 segment and waits at that waypoint until refreshing returns. Set `jitter: false`
@@ -114,6 +117,24 @@ engaged by default, preventing a pre-battle route from reclaiming movement from
 engagement behavior. Set `allow_engaged: true` on a route to permit that automatic
 reschedule; ordinary calls to `waypointRoute` remain governed by their action's
 own conditions.
+
+Individual points accept `onenter` and `onleave` in the same string or array
+format as action `commands`. `onenter` runs when navigation reaches the point,
+including at a passthrough point. `onleave` runs when navigation starts the
+next leg from that point. At a timed stop, those hooks can run on opposite
+sides of a battle. Starting already at a waypoint runs its departure hook
+without an arrival hook. A cancelled or timed-out inbound leg does not count
+as arrival. Hooks run in the movement worker, so use them for commands such
+as changing strategy and avoid starting a move that waits on that same worker.
+
+```json
+{
+  "x": 148,
+  "y": 537,
+  "onenter": ["sendCommand('send @others gbt config -strat nearest')"],
+  "onleave": ["sendCommand('send @others gbt config -strat leader')"]
+}
+```
 
 Both route types retain their current waypoint and travel direction through
 pauses such as casting a cure or using an item. After a pause, the route uses
