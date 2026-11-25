@@ -111,7 +111,7 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 | `-gambit` | — | Alias for `-global`. |
 | `-verbose` | `-v` | Write processed action and event JSON debugging output to `.output` folders for this reload. Off by default. |
 
-Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
+Without a namespace flag, reload uses the currently loaded namespace, including global mode. Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
 
 Prefix an action, event, or namespace name with `gambit:` to bypass user
 overrides and select the shipped source explicitly:

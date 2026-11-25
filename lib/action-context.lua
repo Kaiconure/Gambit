@@ -5456,7 +5456,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
         if 
             type(distance) == 'number' and
             distance > 0 and
-            (type(identifier) == 'number' or type(identifier) == 'string' or type(identifier) == 'table')
+            (identifier == nil or type(identifier) == 'number' or type(identifier) == 'string' or type(identifier) == 'table')
         then
             local mobs = windower.ffxi.get_mob_array()
             local distanceSquared = distance * distance
@@ -5471,7 +5471,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                         partyInfo:canShareClaimOnMob(mob)
                     then
                         if
-                            matchesMobIdentifier(mob, identifier)
+                            (identifier == nil or matchesMobIdentifier(mob, identifier))
                         then
                             if
                                 (not withAggro or mob.status == STATUS_ENGAGED) and

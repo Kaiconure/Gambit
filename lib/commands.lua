@@ -902,7 +902,7 @@ handlers['reload'] = function (args)
     local nsIndex = arrayIndexOfStrI(args, '-ns')
     local globalFlag = arrayIndexOfStrI(args, '-global')
     local gambitFlag = arrayIndexOfStrI(args, '-gambit')
-    local namespaceOverride
+    local namespaceOverride = settingsPaths.getLoadedNamespace() or false
     if (globalFlag and gambitFlag) or (nsIndex and (globalFlag or gambitFlag)) then
         writeError('Use only one namespace selector: -ns <name>, -global, or -gambit.')
         return
@@ -927,8 +927,6 @@ handlers['reload'] = function (args)
             return
         end
         if globalAlias then namespaceOverride=false end
-    elseif reload then
-        namespaceOverride = settingsPaths.getLoadedNamespace() or false
     end
 
     if reload and settings.actionInfo and type(settings.actionInfo.name) == 'string' then

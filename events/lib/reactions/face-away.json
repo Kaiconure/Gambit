@@ -98,7 +98,8 @@
             "Grim Glower",
             "Mortal Blast",
             "Mortal Ray",
-            "Oppressive Glare"
+            "Oppressive Glare",
+            "Petro Eyes"
           ],
           "options": { "wait": 2 }
         },
@@ -119,6 +120,19 @@
           "actor": "Shockmaw",
           "kind": "enemy_ability",
           "names": "Thar She Blows",
+          "options": {
+            "wait": 3,
+            "angle": "sider",
+            "no_turn": true,
+            "allow_weapon_skills": true,
+            "allow_offensive_magic": true
+          }
+        },
+        {
+          "key": "tenodera-death-prophet",
+          "actor": "Tenodera",
+          "kind": "enemy_ability",
+          "names": "Death Prophet",
           "options": {
             "wait": 3,
             "angle": "sider",

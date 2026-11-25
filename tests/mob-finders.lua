@@ -30,6 +30,9 @@ assert(context.findMob(1,20)==nil) -- Index is no longer an ID selector.
 assert(context.findMob({'ALPHA',200},20).id==200)
 assert(context.findMob({'Alpha',200},20,true).id==100)
 assert(context.findMob({},20)==nil)
+assert(context.findMob().id==200)
+assert(context.findMob(nil,20,true).id==100)
+assert(context.findMob(nil,4)==nil)
 assert(context.findMob(300,20)==nil)
 assert(context.findMob('alpha',20).distance==10)
 assert(#context.findMobs(20,{'ALPHA',200})==2)
@@ -46,6 +49,7 @@ context.limit = 15
 assert(context.findMobWhere({'Alpha','Beta'}, "not hasEffectOf(mob, 'Silence') and distance < limit",20).id==100)
 assert(context.mob.id==100)
 assert(context.findMobWhere({'Alpha','Beta'}, 'mob.id == 200',20).id==200)
+assert(context.findMobWhere(nil, 'mob.id ~= 200',20).id==100)
 assert(context.findMobWhere({'Alpha','Beta'}, 'mob.id == 200',20,true)==nil)
 assert(context.findMobWhere('Alpha', 'false',50)==nil)
 assert(context.findMobWhere({}, 'true',50)==nil)
@@ -73,6 +77,7 @@ context.bt = {}
 assert(context.findMob('bt',20)==nil)
 print('PASS: battle-target selector, mixed lists, dynamic resolution, filters and missing target')
 claims[200] = 999
+assert(context.findMob(nil,20).id==100)
 assert(context.findMob({'Alpha','Beta'},20).id==100)
 assert(context.findMobWhere({'Alpha','Beta'},'true',20).id==100)
 assert(context.findMobWhere('Beta','missing.field',20)==nil) -- Excluded before predicate.
