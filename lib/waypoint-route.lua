@@ -25,16 +25,20 @@ function M.new(config,position,now,progress)
         tolerance=config.tolerance~=nil and nonnegative(config.tolerance,'Waypoint route tolerance') or nil,
         turnPause=nonnegative(config.turn_pause,'Waypoint route turn_pause',0.35)},{__index=M})
     for index,point in ipairs(config.points) do
-        assert(type(point)=='table' and finite(point.x) and finite(point.y),
-            'Waypoint route point '..index..' requires finite x and y coordinates')
-        route.points[index]={x=point.x,y=point.y,
-            corner_radius=point.corner_radius~=nil and nonnegative(point.corner_radius,'Waypoint corner_radius') or nil,
-            tolerance=point.tolerance~=nil and nonnegative(point.tolerance,'Waypoint tolerance') or nil,
-            pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
-            passthrough=point.passthrough==true,
-            onenter=point.onenter,onleave=point.onleave,
-            duration=nonnegative(point.duration,'Waypoint duration',duration)}
+        assert(type(point)=='table','Waypoint route point '..index..' must be an object')
+        if point.disabled~=true then
+            assert(finite(point.x) and finite(point.y),
+                'Waypoint route point '..index..' requires finite x and y coordinates')
+            route.points[#route.points+1]={x=point.x,y=point.y,
+                corner_radius=point.corner_radius~=nil and nonnegative(point.corner_radius,'Waypoint corner_radius') or nil,
+                tolerance=point.tolerance~=nil and nonnegative(point.tolerance,'Waypoint tolerance') or nil,
+                pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
+                passthrough=point.passthrough==true,
+                onenter=point.onenter,onleave=point.onleave,
+                duration=nonnegative(point.duration,'Waypoint duration',duration)}
+        end
     end
+    if #route.points==0 then return nil end
     local restored=type(progress)=='table'
         and type(progress.index)=='number' and progress.index%1==0
         and progress.index>=1 and progress.index<=#route.points

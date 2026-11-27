@@ -164,6 +164,9 @@ engagement behavior. Set `allow_engaged: true` on a route to permit that automat
 reschedule; ordinary calls to `waypointRoute` remain governed by their action's
 own conditions.
 
+Set `"disabled": true` on a point to skip it and its hooks while keeping it
+in the configuration. If all points are disabled, the route stops.
+
 Individual points accept `onenter` and `onleave` in the same string or array
 format as action `commands`. `onenter` runs when navigation reaches the point,
 including at a passthrough point. `onleave` runs when navigation starts the

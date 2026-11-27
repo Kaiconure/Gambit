@@ -873,7 +873,7 @@ function smartMove:waypointRoute(config, owner, routeKey, battleScope, waitForLe
     if type(config.points)=='table' then
         for _,point in ipairs(config.points) do
             parts[#parts+1]=tostring(point.x)..','..tostring(point.y)..','..tostring(point.duration)
-                ..','..tostring(point.passthrough==true)
+                ..','..tostring(point.passthrough==true)..','..tostring(point.disabled==true)
         end
     end
     local routeSignature=table.concat(parts,';')
@@ -920,6 +920,20 @@ function smartMove:waypointRoute(config, owner, routeKey, battleScope, waitForLe
     end
     local now=os.clock()
     local plan=require('./lib/waypoint-route').new(config,me,now,progress)
+    if not plan then
+        local function sameRoute(job)
+            return job and job.mode==Modes.route and job.owner==owner
+                and (job.routeConfig==config or (routeKey and job.routeKey==routeKey))
+        end
+        for index=#self.queue,1,-1 do
+            if sameRoute(self.queue[index]) then table.remove(self.queue,index) end
+        end
+        if sameRoute(self.previousJob) then self.previousJob=nil end
+        if sameRoute(self.current) and not self.cancel then
+            self:cancelJob(self.current.jobId,true,owner)
+        end
+        return
+    end
     local pendingLeave=progress and progress.pendingLeave
     local function saveProgress()
         local snapshot=plan:snapshot()

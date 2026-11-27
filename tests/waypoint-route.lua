@@ -31,6 +31,11 @@ assert(snapshot.index==3 and snapshot.step==1)
 
 local exact=Route.new({points={point(0,0,{tolerance=0.1}),point(1,0)},corner_radius=0},{x=0,y=0},0)
 assert(exact:threshold(0.33)==0.1)
+local skipped=Route.new({mode='cycle',points={point(0,0),point(10,0,{disabled=true}),
+    point(20,0,{disabled=false})}},{x=9,y=0},0)
+assert(#skipped.points==2 and skipped:point().x==0)
+assert(skipped:advance(1).point.x==20 and skipped:advance(2).point.x==0)
+assert(Route.new({points={point(0,0,{disabled=true})}},nil,0)==nil)
 for _,bad in ipairs({{}, {points={}}, {mode='bad',points={point(0,0)}},
     {points={{x='0',y=0}}}, {points={point(0,0)},corner_radius=-1},
     {points={point(0,0,{pause=-1})}}}) do
@@ -328,3 +333,22 @@ move.current,move.queue=leg,{}
 assert(leg:depart() and leg:depart())
 assert(table.concat(calls,',')=='start,bend,enter,through,arrive,resume')
 print('PASS: waypoint command hooks, timed stop, passthrough, and departure after interruption')
+
+move.current,move.previousJob,move.queue,move.cancel=nil,nil,{},false
+move:resetWaypointRoutes()
+local toggle={points={point(0,0),point(10,0),point(20,0)}}
+me.x,me.y=9,0
+env.coroutine.sleep=noop
+assert(move:waypointRoute(toggle,nil,'toggle'))
+local old=move.queue[1]
+move.current,move.previousJob,move.queue=old,old,{}
+toggle.points[2].disabled=true
+assert(move:waypointRoute(toggle,nil,'toggle')~=old.jobId)
+assert(move.cancel and move.queue[1]:pos()[1]==0)
+local remaining=move.queue[1]
+move.current,move.previousJob,move.cancel=remaining,remaining,false
+toggle.points[1].disabled=true
+toggle.points[3].disabled=true
+assert(not move:waypointRoute(toggle,nil,'toggle'))
+assert(move.cancel and #move.queue==0 and move.previousJob==nil)
+print('PASS: disabling points replaces stale movement and all-disabled routes stop')
