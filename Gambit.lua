@@ -1,6 +1,6 @@
 local profiling=require('./lib/load-profile')
 profiling.begin('startup modules')
-__version = '1.0.7.6'
+__version = '1.0.7.7'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
