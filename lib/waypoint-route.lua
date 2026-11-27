@@ -19,25 +19,33 @@ function M.new(config,position,now,progress)
     assert(#config.points>0,'Waypoint route requires at least one point')
     local mode=config.mode or 'bounce'
     assert(mode=='bounce' or mode=='cycle','Waypoint route mode must be bounce or cycle')
+    local duration=nonnegative(config.duration,'Waypoint route duration',0)
     local route=setmetatable({config=config,mode=mode,points={},step=1,
         cornerRadius=nonnegative(config.corner_radius,'Waypoint route corner_radius',0),
         tolerance=config.tolerance~=nil and nonnegative(config.tolerance,'Waypoint route tolerance') or nil,
         turnPause=nonnegative(config.turn_pause,'Waypoint route turn_pause',0.35)},{__index=M})
     for index,point in ipairs(config.points) do
-        assert(type(point)=='table' and finite(point.x) and finite(point.y),
-            'Waypoint route point '..index..' requires finite x and y coordinates')
-        route.points[index]={x=point.x,y=point.y,
-            corner_radius=point.corner_radius~=nil and nonnegative(point.corner_radius,'Waypoint corner_radius') or nil,
-            tolerance=point.tolerance~=nil and nonnegative(point.tolerance,'Waypoint tolerance') or nil,
-            pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
-            duration=point.duration~=nil and nonnegative(point.duration,'Waypoint duration') or nil}
+        assert(type(point)=='table','Waypoint route point '..index..' must be an object')
+        if point.disabled~=true then
+            assert(finite(point.x) and finite(point.y),
+                'Waypoint route point '..index..' requires finite x and y coordinates')
+            route.points[#route.points+1]={x=point.x,y=point.y,
+                corner_radius=point.corner_radius~=nil and nonnegative(point.corner_radius,'Waypoint corner_radius') or nil,
+                tolerance=point.tolerance~=nil and nonnegative(point.tolerance,'Waypoint tolerance') or nil,
+                pause=point.pause~=nil and nonnegative(point.pause,'Waypoint pause') or nil,
+                passthrough=point.passthrough==true,
+                onenter=point.onenter,onleave=point.onleave,
+                duration=nonnegative(point.duration,'Waypoint duration',duration)}
+        end
     end
+    if #route.points==0 then return nil end
     local restored=type(progress)=='table'
         and type(progress.index)=='number' and progress.index%1==0
         and progress.index>=1 and progress.index<=#route.points
         and (progress.step==1 or progress.step==-1)
     route.index=restored and progress.index or 1
     route.step=restored and progress.step or 1
+    route.resuming=restored
     if route.mode=='cycle' then route.step=1 end
     if not restored and position and finite(position.x) and finite(position.y) then
         local nearestDistance
@@ -53,17 +61,22 @@ function M.new(config,position,now,progress)
 end
 function M:point() return self.points[self.index] end
 function M:snapshot() return {index=self.index,step=self.step} end
+function M:arrivalTolerance(defaultTolerance)
+    return self:point().tolerance or self.tolerance or defaultTolerance or 0.33
+end
 function M:threshold(defaultTolerance)
+    local tolerance=self:arrivalTolerance(defaultTolerance)
+    if self.resuming then return tolerance end
     local point=self:point()
-    local tolerance=point.tolerance or self.tolerance or defaultTolerance or 0.33
     return math.max(tolerance,point.corner_radius or self.cornerRadius)
 end
 function M:timedOut(now)
     local duration=self:point().duration
-    return duration and now-self.started>=duration or false
+    return duration>0 and now-self.started>=duration
 end
 function M:advance(now)
     if #self.points<2 then return end
+    self.resuming=false
     local leaving=self:point()
     local reversed=false
     if self.mode=='cycle' then

@@ -214,7 +214,7 @@ replacementTest({
 replacementTest({
     {'./actions/lib/common/geo.json',{burst=command('shipped')}},
     {'./settings/actions/lib/common/geo.json',{['!burst']=command('shared')}},
-    {'./settings/Tester/actions/lib/common/common.json',{burst=command('personal')}},
+    {'./settings/players/Tester/actions/lib/common/common.json',{burst=command('personal')}},
 },'personal,shared')
 replacementTest({
     {'./settings/actions/lib/first.json',{['!burst']=command('first')}},
@@ -314,7 +314,7 @@ assert(layered.vars.inverse_default=='inverse')
 assert(layered.vars.explicit=='inverse')
 documents['./actions/lib/common/(~mages).json'].vars.layer='global-inverse'
 documents['./actions/lib/common/PLD.json'].vars.layer='global-job'
-documents['./settings/Tester/actions/lib/common/(~mages).json']={vars={layer='character-inverse'}}
+documents['./settings/players/Tester/actions/lib/common/(~mages).json']={vars={layer='character-inverse'}}
 local scoped={}
 load('Tester',scoped,{name='Tester',main_job='PLD',main_job_level=99},'entry')
 assert(scoped.vars.layer=='character-inverse')

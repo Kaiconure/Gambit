@@ -6,9 +6,10 @@ end
 local source=read('Gambit.lua')
 local messages={}
 local player={name='Steris', main_job='WHM', main_job_level=99, sub_job='RDM', sub_job_level=49}
+local party
 local env=setmetatable({
     windower={send_ipc_message=function(message) messages[#messages+1]=message end,
-        ffxi={get_player=function() return player end}},
+        ffxi={get_player=function() return player end, get_party=function() return party end}},
     hasArg=function(args, flag)
         for _, arg in ipairs(args) do if arg==flag then return true end end
         return false
@@ -18,7 +19,7 @@ local env=setmetatable({
     getArgValue=function(args, flag)
         for i, arg in ipairs(args) do if arg==flag then return args[i+1] end end
     end,
-    handlers={}, writeMessage=function() end,
+    handlers={}, meta={trusts={}}, writeMessage=function() end,
 }, {__index=_G})
 local function run(code)
     -- Windower's Lua accepts method calls directly on string literals.
@@ -73,6 +74,45 @@ env.globals.ipc_job_info.Steris={main_job='BLM',main_job_level=1}
 output={}
 env.handlers.jobinfo({'-all'})
 assert(#output==3 and output[2]=='Job Info: Steris is WHM99/RDM49', 'Self must use live information and appear only once')
+env.meta={trusts=require('./meta/trusts'), trusts_by_party_name={}}
+for _, trust in pairs(env.meta.trusts) do
+    local name=trust.party_name:lower()
+    local matches=env.meta.trusts_by_party_name[name] or {}
+    matches[#matches+1]=trust
+    env.meta.trusts_by_party_name[name]=matches
+end
+run(assert(read('lib/resx.lua'):match('(TrustSearchModes = .-\nfunction getTrustPartyMeta.-\nend)')))
+env.canUseSpell=function() error('Trust job lookup must not depend on spell usability') end
+assert(env.getTrustPartyMeta('Prishe',3082).name=='Prishe II')
+assert(env.getTrustPartyMeta('Prishe').name=='Prishe')
+output={}
+env.handlers.jobinfo({'-n','ArKeV'})
+env.handlers.jobinfo({'-name','pRiShE ii'})
+assert(output[1]=='Job Info: AAEV is PLD/WHM')
+assert(output[2]=='Job Info: Prishe II is WHM/MNK')
+env.SPAWN_TYPE_TRUST=14
+party={
+    p1={mob={name='Prishe',spawn_type=14,models={3082}}},
+    a10={mob={name='ArkEV',spawn_type=14}},
+    a25={mob={name='Naji',spawn_type=14}},
+    p2={mob={name='Ayame',spawn_type=13}},
+    p3={name='Kupipi'},
+    party1_count=4,
+}
+output={}
+env.handlers.jobinfo({'-all'})
+assert(#output==6)
+local listed={}
+local previousName=''
+for _, line in ipairs(output) do
+    local name=assert(line:match('^Job Info: (.-) is ')):lower()
+    assert(previousName<=name, 'Job info must be sorted')
+    previousName=name
+    listed[line]=true
+end
+assert(listed['Job Info: Prishe II is WHM/MNK'])
+assert(listed['Job Info: AAEV is PLD/WHM'] and listed['Job Info: Naji is WAR/WAR'])
+assert(not listed['Job Info: Prishe is MNK/WHM'])
 run(assert(read('lib/commands.lua'):match("(handlers%['wsinfo'%] = function.-)\nhandlers%['jobinfo'%]")))
 output={}
 env.handlers.wsinfo({})

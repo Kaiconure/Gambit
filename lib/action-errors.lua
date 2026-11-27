@@ -85,9 +85,7 @@ function guard.selectBranch(action, context)
     if evaluated and action._elseCommands and #action._elseCommands > 0 then return 'else' end
 end
 
-function guard.compileElse(action)
-    action._elseCommands = {}
-    local values = action['else']
+function guard.compileCommandList(action, values, branch, output)
     if values == nil then return true end
     if type(values) ~= 'table' then values = {values} end
     local indexes = {}
@@ -106,22 +104,27 @@ function guard.compileElse(action)
             else
                 local fn, message = loadstring('return ' .. pending)
                 if not fn then
-                    guard.fail(action, 'compile else[' .. index .. ']', pending, message)
+                    guard.fail(action, 'compile '..branch..'[' .. index .. ']', pending, message)
                     return false
                 end
-                action._elseCommands[#action._elseCommands + 1] = {command=pending, _commandFn=fn}
+                output[#output + 1] = {command=pending, _commandFn=fn}
                 pending = ''
             end
         elseif expression ~= nil and type(expression) ~= 'string' then
-            guard.fail(action, 'compile else[' .. index .. ']', expression, 'Expected command string')
+            guard.fail(action, 'compile '..branch..'[' .. index .. ']', expression, 'Expected command string')
             return false
         end
     end
     if pending ~= '' then
-        guard.fail(action, 'compile else', pending, 'Unfinished command continuation')
+        guard.fail(action, 'compile '..branch, pending, 'Unfinished command continuation')
         return false
     end
     return true
+end
+
+function guard.compileElse(action)
+    action._elseCommands = {}
+    return guard.compileCommandList(action, action['else'], 'else', action._elseCommands)
 end
 
 function guard.commands(action, context, branch)

@@ -11,7 +11,11 @@ local disk={[base]={default_namespace='fight', distance=18, nested={keep=true}}}
 disk['./settings/namespaces/fight/.nsconfig']={}
 local player={name='Player',main_job='PLD'}
 local paths=dofile('lib/settings-paths.lua')
-windower={addon_path='',dir_exists=function(path) return path=='settings/namespaces' or path=='settings/namespaces/fight' end}
+windower={addon_path='',dir_exists=function(path)
+    return path=='settings/namespaces' or path=='settings/namespaces/fight' or path=='settings/Player'
+end,get_dir=function(path)
+    if path=='settings/Player/' then return {'main.json'} end
+end}
 paths.ensureNamespaceFolders=function() error('Normal loads must not initialize namespaces') end
 local messages={}
 local abstractWarnings={}

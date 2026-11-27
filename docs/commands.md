@@ -111,7 +111,7 @@ Namespaces can be inherited by default. Set `"inheritable": false` in a namespac
 | `-gambit` | — | Alias for `-global`. |
 | `-verbose` | `-v` | Write processed action and event JSON debugging output to `.output` folders for this reload. Off by default. |
 
-Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
+Without a namespace flag, reload uses the currently loaded namespace, including global mode. Without `-a` or `-r`, a normal full reload selects actions for your current job. `-r` takes precedence over `-a` when a current action name exists. Reload's `-v` is independent of the logging verbosity setting.
 
 Prefix an action, event, or namespace name with `gambit:` to bypass user
 overrides and select the shipped source explicitly:
@@ -161,8 +161,8 @@ folder segments. For reloads, `-ns global`, `-ns gambit`, `-global`, and
 | --- | --- |
 | `manual` | You choose targets by engaging manually. |
 | `nearest` | Prefer the nearest aggroing mob. |
-| `maxhp` | Prefer the aggroing mob with the most HP. |
-| `minhp` | Prefer the aggroing mob with the least HP. |
+| `maxhp` | Pick the eligible aggroing mob with the highest remaining HP percentage. Nearest wins ties. |
+| `minhp` | Pick the eligible aggroing mob with the lowest remaining HP percentage. Nearest wins ties. |
 | `aggressor` | Proactively acquire enemies rather than waiting for aggro. |
 | `leader` | Follow the party leader's target, with an aggro fallback. |
 | `puller` | Proactive targeting with additional restrictions on unclaimed mobs engaged with others. |
@@ -200,7 +200,7 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 | `follow -target [-distance <yalms>]` | Follow the current selected target. Aliases: `-t`, `-d`. Default distance comes from settings. |
 | `follow -cancel` | Cancel smart movement. Alias: `-c`. |
 | `follow -toggle [-d <yalms>]` | Cancel the current movement job, or start following the selected target. |
-| `move -x <number> -y <number>` | Move to coordinates. If only one coordinate is supplied, retain your current value for the other. |
+| `move -x <number> -y <number> [-r <radius>]` | Move to coordinates. With `-r`, choose a random destination within that many yalms of the center. If only one coordinate is supplied, use your current value for the other center coordinate. |
 | `run -start` / `run -stop` | Start or stop running. |
 | `walkmode [-on or -off]` | Set walk mode; no option toggles it. |
 | `align [-target <name>] [-distance <yalms>] [-angle <degrees>] [-wait <seconds>]` | Align relative to the named or currently selected target. Defaults: distance 1, wait 10 seconds. Aliases: `-t`, `-d`, `-a`, `-w`. |
@@ -369,9 +369,9 @@ Configuration changes normally save automatically. The raw-distance exception is
 | Command | Alias | Behavior |
 | --- | --- | --- |
 | `iteminfo [-verbose]` | `ii`; option `-v` | Inventory occupancy and gil; verbose adds stored currency information and other bags/wardrobes. |
-| `jobinfo [-name <character>]` | `ji`; option `-n` | Show your job information, or another character's cached IPC job information. |
+| `jobinfo [-name <character-or-trust>]` | `ji`; option `-n` | Show your live job information, another character's cached IPC job information, or a Trust's jobs by spell or party name. Quote spell names that contain spaces, as in `jobinfo -n "Prishe II"`. |
 | `jobinfo -send` | — | Broadcast your job information to other local Gambit instances. |
-| `jobinfo -all` | `ji -all` | List all cached characters and yourself alphabetically, using live job information for yourself. |
+| `jobinfo -all` | `ji -all` | List yourself, cached characters, and Trusts currently in your party or alliance alphabetically. Trust entries show main and sub jobs without levels. |
 | `wsinfo [-name <character>]` | option `-n` | Show a character heading followed by an indented list of weapon-skill names; defaults to yourself, refreshed from live abilities. |
 | `wsinfo -all` | — | Show every cached character's weapon-skill names, with characters ordered alphabetically. |
 | `wsinfo -send` | — | Broadcast your current weapon-skill capability IDs. |

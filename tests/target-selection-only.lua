@@ -12,6 +12,36 @@ run({},{});assert(calls.selected==mob and not calls.attack and not calls.legacy 
 assert(env.actionStateManager.user_target_id==nil and env.actionStateManager.user_target_engage==nil)
 calls={};env.actionStateManager.user_target_id=10;run({},{})
 assert(calls.attack and calls.legacy==mob and calls.sleep)
+local function candidate(id, distance, hpp, status)
+    return {id=id,distance=distance,hpp=hpp,status=status or 1,z=0,claim_id=0,
+        valid_target=true,spawn_type=16,is_npc=true,model_scale=1,model_size=1}
+end
+local nearest=candidate(1,4,50)
+local highest=candidate(2,64,90)
+local lowest=candidate(3,81,10)
+local mobs={nearest,candidate(4,100,90),highest,lowest,candidate(5,144,10),
+    candidate(6,1,100,0),candidate(7,784,1)}
+env.windower.ffxi.get_mob_array=function() return mobs end
+env.windower.ffxi.get_mob_by_target=function() return {z=0} end
+env.shouldAquireNewTarget=function() return true end
+env.hasBuff=function() return false end
+env.findIgnoreListMatch=function() end
+env.STATUS_ENGAGED=1
+env.TargetStrategy={nearest='nearest',maxhp='maxhp',minhp='minhp',
+    aggressor='aggressor',puller='puller'}
+env.settings={maxDistance=27,maxDistanceZ=5}
+local selection=assert(source:match('(function processTargeting%(player, party%).-\nend)'))
+selection=selection:gsub("('[^'\r\n]*'):format",'(%1):format')
+local process=assert(loadstring(selection))
+setfenv(process,setmetatable(env,{__index=_G}))
+process()
+for strategy, expected in pairs({maxhp=highest,minhp=lowest,nearest=nearest,aggressor=nearest}) do
+    env.settings.strategy=strategy
+    calls={}
+    env.processTargeting({},{})
+    assert(calls.legacy==expected, strategy..' selected the wrong mob')
+end
+print('PASS: HP strategies rank eligible aggroing mobs by percentage and then distance')
 local f=assert(io.open('lib/action-context.lua'));source=f:read('*a');f:close()
 local setter=assert(source:match('context.setBattleTarget = function%(mob, engage%)(.-)\n    end'))
 local make=assert(loadstring('return function(mob,engage)'..setter..' end'));setfenv(make,setmetatable(env,{__index=_G}));local set=make()

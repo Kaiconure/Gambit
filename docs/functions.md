@@ -4,6 +4,52 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Sending commands to other clients
+
+`send(command [, targets])`, `sendParty(command [, targets])`, and
+`sendZone(command [, targets])` run a Windower command on logged-in local clients
+running Gambit. `send` covers all such clients, `sendParty` covers your
+current party, and `sendZone` covers clients in your current zone.
+
+Targets can be a character name, a selector, or an array of names and
+selectors. Jobs, groups such as `mages`, and `leader` are evaluated on the
+receiving client. Party slots `p0` through `p5` refer to the sender's roster.
+The `primary_tank` selector uses the sender's `findPrimaryTank()` result.
+Use `~me` to exclude the sending character. A selector list
+containing only exclusions starts with everyone in the domain. Use a single
+command argument, or pass `nil` as the second argument, to include everyone in
+the domain. An empty selector array sends nothing.
+
+```lua
+sendParty('gbt config -strat nearest', '~me')
+sendZone('gbt config -d 20', {'mages', '~me'})
+sendParty('gbt show')
+```
+
+An optional third argument filters recipients using an expression string or
+an array of conditions. All conditions in an array must pass. The sender
+evaluates the filter using its action context, with `recipient` set to the
+candidate. Filtered sends use the live Gambit IPC roster, refreshed by
+heartbeats. A newly joined client becomes eligible when its presence arrives.
+For an out-of-zone or otherwise unavailable mob, `has_mob_data`,
+`valid_target`, and `is_participant` are false and `distance` is nil. The
+recipient's advertised job and level can still be used.
+
+```lua
+sendParty('gbt config -strat nearest', '~me', {
+    'recipient.distance and recipient.distance <= 15',
+    'recipient.main_job_level and recipient.main_job_level >= 75',
+})
+```
+
+## Finding mobs
+
+`findMob(identifier, distance, withAggro)` and
+`findMobWhere(identifier, expression, distance, withAggro)` return the nearest
+eligible mob. Pass `nil` for the identifier to search across all names. Omit
+`withAggro` or pass `nil` to accept either state, pass `false` for non-engaged
+mobs, or pass `true` for engaged mobs.
+
 ## Relative positioning and following
 
 `alignRelative(target, partner, angle, distance)` positions you around `target`
@@ -99,8 +145,16 @@ next point.
 point. It defaults to zero, which uses `tolerance` or smart-move's normal
 tolerance and preserves precise waypoint travel. Larger radii cut the corner
 and produce smoother paths. Each point can override `corner_radius` and
-`tolerance`; `pause` forces a stop before continuing, and `duration` limits time
-on that segment. Routes continue until replaced or cancelled. An optional
+`tolerance`; `pause` forces a stop before continuing. Set `duration` in seconds
+on the route to give every leg a time limit. A point's `duration` overrides the
+default for travel toward that point, and zero opts out. A positive duration
+holds Gambit's action and engagement loop until arrival, timeout, or
+cancellation. On arrival the movement job stops at the waypoint, and the
+action loop can run before it requests the next leg. Legs without a positive
+duration run in the background. Set `"passthrough": true` on a timed point to
+continue into the next leg without an action break. Each timed leg gets its own
+timeout. If the next leg is untimed, movement continues in the background and
+the action loop resumes. An optional
 route-level `heartbeat` controls how long the route may advance without its
 action being refreshed; when configured, an expired route finishes its current
 segment and waits at that waypoint until refreshing returns. Set `jitter: false`
@@ -110,12 +164,36 @@ engagement behavior. Set `allow_engaged: true` on a route to permit that automat
 reschedule; ordinary calls to `waypointRoute` remain governed by their action's
 own conditions.
 
-Unscoped routes (`scoped` false or omitted) retain their current waypoint and
-travel direction when movement is cancelled, so battle interruptions resume
-toward the same waypoint. This also preserves the return direction of `bounce`
-routes and the exact position within `cycle` routes whose coordinates loop back.
-Scoped routes restart from the nearest point as before. Saved route progress is
-discarded when the route definition or zone changes, or when Gambit shuts down.
+Set `"disabled": true` on a point to skip it and its hooks while keeping it
+in the configuration. If all points are disabled, the route stops.
+
+Individual points accept `onenter` and `onleave` in the same string or array
+format as action `commands`. `onenter` runs when navigation reaches the point,
+including at a passthrough point. `onleave` runs when navigation starts the
+next leg from that point. At a timed stop, those hooks can run on opposite
+sides of a battle. Starting already at a waypoint runs its departure hook
+without an arrival hook. A cancelled or timed-out inbound leg does not count
+as arrival. Hooks run in the movement worker, so use them for commands such
+as changing strategy and avoid starting a move that waits on that same worker.
+
+```json
+{
+  "x": 148,
+  "y": 537,
+  "onenter": ["sendCommand('send @others gbt config -strat nearest')"],
+  "onleave": ["sendCommand('send @others gbt config -strat leader')"]
+}
+```
+
+Both route types retain their current waypoint and travel direction through
+pauses such as casting a cure or using an item. After a pause, the route uses
+arrival tolerance for the saved waypoint and then resumes normal cornering.
+A scoped route reassesses the
+nearest waypoint when the action's battle scope changes. An unscoped route keeps
+its destination and direction across those changes. In
+`waypoints-ex`, `scoped` also selects a battle-scoped action for requesting the
+route. Saved progress is discarded on settings reload, zone change, shutdown,
+or when the route's points or traversal mode change.
 The reference character skips following and alignment when the resolved partner
 is themselves, including when `follow_leader.target` explicitly names them.
 
@@ -519,6 +597,8 @@ the looker's heading is within the specified angle of the direction to the
 target. The default threshold is 10 degrees, inclusive, matching the default
 used by `facingEnemy`. Headings are Windower radians; the threshold is degrees.
 The check uses horizontal X/Y coordinates and handles heading wraparound.
+In actions and waypoint hooks, it reads the player's current position and
+refreshes other entities by ID when available.
 
 ```lua
 facing(bt, me)       -- Is the enemy facing the player, within 10 degrees?

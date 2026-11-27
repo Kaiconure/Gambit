@@ -54,10 +54,10 @@ Paths.setLoadedNamespace('child',{'child','parent'})
 local paths=Paths.eventFiles('Tester','RDM')
 assert(paths[1]=='./settings/namespace-settings/child/players/Tester/events/rdm.json' and paths[4]=='./settings/namespaces/child/events/(all).json')
 assert(paths[5]=='./settings/namespace-settings/parent/players/Tester/events/rdm.json')
-assert(paths[9]=='./settings/Tester/events/rdm.json')
+assert(paths[9]=='./settings/players/Tester/events/rdm.json')
 local available={
     ['./settings/namespaces/child/events/(all).json']={},
-    ['./settings/Tester/events/rdm.json']={vars={wrong_scope=true}},
+    ['./settings/players/Tester/events/rdm.json']={vars={wrong_scope=true}},
 }
 local function selected() return Config.load(paths,function(path) return available[path] end) end
 assert(selected().path=='./settings/namespaces/child/events/(all).json')
@@ -78,7 +78,7 @@ assert(positions[root..'(mages).json'] and positions[root..'(leader).json'])
 assert(positions[root..'(all).json']>positions[root..'(~melee).json'])
 assert(positions[root..'(~melee).json']>positions[root..'(mages).json'])
 assert(positions[root..'(mages).json']>positions[root..'rdm.json'])
-assert(positions['./settings/Tester/events/(mages).json'])
+assert(positions['./settings/players/Tester/events/(mages).json'])
 
 local now,queue,trace,errors=0,{},{},{}
 local savedCancel
@@ -387,10 +387,10 @@ local beforeReload=injected
 adapterDeps.read=function(path)
     if path=='./settings/events/(all).json' then return {spells={post={{commands={'mark(event.outcome)'}}}}} end
     if path=='./settings/events/(mages).json' then return {vars={group_loaded=true}} end
-    if path=='./settings/Tester/events/(leader).json' then return {vars={leader_loaded=true}} end
+    if path=='./settings/players/Tester/events/(leader).json' then return {vars={leader_loaded=true}} end
 end
 local loaded=service:reload()
-assert(#loaded.files==1 and loaded.path=='./settings/Tester/events/(leader).json')
+assert(#loaded.files==1 and loaded.path=='./settings/players/Tester/events/(leader).json')
 assert(loaded.vars.group_loaded==nil and loaded.vars.leader_loaded)
 assert(announcements[#announcements]=='Active event file: <file>'..loaded.path..'</file>')
 flush(); assert(injected==beforeReload)

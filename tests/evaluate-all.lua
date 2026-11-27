@@ -2,11 +2,17 @@ local file = assert(io.open('lib/action-context.lua'))
 local source = file:read('*a')
 file:close()
 local body = assert(source:match('(context.execute = function%(code, %.%.%.%).-)    %-%- "Static" context properties'))
+body = body .. assert(source:match('(    local function sendTo%(domain, command, targets, conditions%).-)    context.sendCommands ='))
 local context = {calls = 0}
 context.touch = function() context.calls = context.calls + 1; return true end
 context.fail = function() error('expected condition failure') end
 local chunk = assert(loadstring(body))
-setfenv(chunk, setmetatable({context=context, executionFactory=dofile('lib/execution-factory.lua')}, {__index=_G}))
+setfenv(chunk, setmetatable({context=context, executionFactory=dofile('lib/execution-factory.lua'),
+    contextSend={send=function(_,domain,command,targets,_,predicate)
+        assert(domain=='party' and command=='gbt show' and targets=='~me')
+        return predicate({distance=10,main_job_level=99}),predicate({main_job_level=99})
+    end},
+}, {__index=_G}))
 chunk()
 assert(context.evaluateAll(true) == true)
 assert(context.evaluateAll(false) == false)
@@ -35,5 +41,8 @@ assert(context.evaluateAllConditions({true, 'true'}) == true)
 assert(not pcall(context.evaluateAllConditions, 'fail()'))
 assert(not pcall(context.evaluateAllConditions, {name='true'}))
 assert(not pcall(context.evaluateAllConditions, {[1]='true',[3]='true'}))
+local near, remote=context.sendParty('gbt show','~me',{'recipient.distance and recipient.distance<=15',
+    'recipient.main_job_level>=75 and touch()'})
+assert(near and not remote and context.calls==2 and context.recipient==nil)
 print('PASS: evaluateAll scalar/array semantics, short-circuiting, arguments, errors and unchanged execute')
 print('PASS: evaluateAllConditions optional inputs, explicit false, forwarding, short-circuiting and errors')

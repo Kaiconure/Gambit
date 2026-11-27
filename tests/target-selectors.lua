@@ -53,8 +53,10 @@ local tanks={
 tanks.p5.main_job_level=4
 tanks.party_leader=tanks.p3
 assert(selectors.primaryTank(tanks)==tanks.p3)
+assert(selectors.orderedNames(tanks,'primary_tank')[1]==tanks.p3.name)
 assert(selectors.setPrimaryTank(tanks.p1))
 assert(selectors.primaryTank(tanks)==tanks.p1)
+assert(selectors.orderedNames(tanks,'primary_tank')[1]==tanks.p1.name)
 local refreshed=tank(2,'Alpha','PLD','WAR')
 tanks.p1=refreshed
 assert(selectors.primaryTank(tanks)==refreshed) -- Resolve the current object by stable ID.

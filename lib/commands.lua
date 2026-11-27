@@ -311,8 +311,8 @@ handlers['moblist'] = function(args)
         end
         local function direction(dx,dy,distance)
             if distance==0 then return '--' end
-            -- FFXI world X increases southward and Y increases westward.
-            local angle=math.atan2(-dy,-dx)
+            -- Windower mob coordinates increase eastward on X and northward on Y.
+            local angle=math.atan2(dx,dy)
             if angle<0 then angle=angle+2*math.pi end
             local slice=math.floor(angle/(2*math.pi)*16+0.5)%16+1
             return compass[slice]
@@ -428,7 +428,6 @@ handlers['events'] = function(args)
             assert(not manager or #manager.queue.batches==0,'Wait for pending equipment swaps before exporting')
             local contents=gearExport.render(inventory,windower.ffxi.get_items())
             local directory=require('./lib/settings-paths').globalPlayerRoot(player.name)..'/data'
-            windower.create_dir((windower.addon_path or '')..directory)
             local base=directory..'/'..player.main_job:lower()..'-'..os.date('%Y%m%d-%H%M%S')
             local path=base..'.vars.json'
             local suffix=1
@@ -862,6 +861,15 @@ end
 handlers['move'] = function (args)
     local x = arrayIndexOfStrI(args, '-x')
     local y = arrayIndexOfStrI(args, '-y')
+    local radiusFlag = arrayIndexOfStrI(args, '-r')
+    local radius = 0
+    if radiusFlag then
+        radius = tonumber(args[radiusFlag + 1])
+        if not radius or radius ~= radius or radius < 0 or radius == math.huge then
+            writeError('Move radius must be a finite nonnegative number.')
+            return
+        end
+    end
 
     if type(x) == 'number' then x = tonumber(args[x + 1]) end
     if type(y) == 'number' then y = tonumber(args[y + 1]) end
@@ -873,6 +881,13 @@ handlers['move'] = function (args)
     if type(x) ~= 'number' or type(y) ~= 'number' then
         writeMessage('A valid coordinate could not be found. Movement skipped.')
         return
+    end
+
+    if radius > 0 then
+        local angle = math.random() * 2 * math.pi
+        local offset = radius * math.sqrt(math.random())
+        x = x + offset * math.cos(angle)
+        y = y + offset * math.sin(angle)
     end
 
     local job = smartMove:moveTo(x, y)
@@ -903,7 +918,7 @@ handlers['reload'] = function (args)
     local nsIndex = arrayIndexOfStrI(args, '-ns')
     local globalFlag = arrayIndexOfStrI(args, '-global')
     local gambitFlag = arrayIndexOfStrI(args, '-gambit')
-    local namespaceOverride
+    local namespaceOverride = settingsPaths.getLoadedNamespace() or false
     if (globalFlag and gambitFlag) or (nsIndex and (globalFlag or gambitFlag)) then
         writeError('Use only one namespace selector: -ns <name>, -global, or -gambit.')
         return
@@ -928,8 +943,6 @@ handlers['reload'] = function (args)
             return
         end
         if globalAlias then namespaceOverride=false end
-    elseif reload then
-        namespaceOverride = settingsPaths.getLoadedNamespace() or false
     end
 
     if reload and settings.actionInfo and type(settings.actionInfo.name) == 'string' then
@@ -1257,18 +1270,40 @@ handlers['jobinfo'] = function(args)
     end
 
     local player = windower.ffxi.get_player()
+    local function showTrust(trust)
+        local jobs = trust.main_job
+        if trust.sub_job then
+            jobs = jobs .. '/' .. trust.sub_job
+        end
+        writeMessage('Job Info: %s is %s':format(text_player(trust.name), text_cornsilk(jobs)))
+    end
+
     if hasArg(args, '-all') then
-        local names, seen = {}, {}
+        local entries = {}
         for name in pairs(globals.ipc_job_info) do
-            names[#names + 1] = name
-            seen[name] = true
+            entries[#entries + 1] = {name = name}
         end
-        if player and player.name and not seen[player.name] then
-            names[#names + 1] = player.name
+        if player and player.name and not globals.ipc_job_info[player.name] then
+            entries[#entries + 1] = {name = player.name}
         end
-        table.sort(names, function(a, b) return a:lower() < b:lower() end)
-        for _, name in ipairs(names) do
-            handlers['jobinfo']({'-name', name})
+        for slot, member in pairs(windower.ffxi.get_party() or {}) do
+            if type(slot) == 'string' and (slot:match('^p[0-5]$') or slot:match('^a[12][0-5]$')) then
+                local mob = member.mob
+                if mob and mob.spawn_type == SPAWN_TYPE_TRUST then
+                    local trust = getTrustPartyMeta(mob.name or member.name, mob.models and mob.models[1])
+                    if trust then
+                        entries[#entries + 1] = {name = trust.name, trust = trust}
+                    end
+                end
+            end
+        end
+        table.sort(entries, function(a, b) return a.name:lower() < b.name:lower() end)
+        for _, entry in ipairs(entries) do
+            if entry.trust then
+                showTrust(entry.trust)
+            else
+                handlers['jobinfo']({'-name', entry.name})
+            end
         end
         return
     end
@@ -1294,6 +1329,19 @@ handlers['jobinfo'] = function(args)
         main_job_level = jobInfo.main_job_level or 0
         sub_job = jobInfo.sub_job
         sub_job_level = jobInfo.sub_job_level or 0
+    else
+        local lookup = name:lower()
+        for _, trust in pairs(meta.trusts) do
+            if trust.name:lower() == lookup then
+                showTrust(trust)
+                return
+            end
+        end
+        local trust = getTrustPartyMeta(name)
+        if trust then
+            showTrust(trust)
+            return
+        end
     end
 
     if name and main_job then
@@ -2196,7 +2244,7 @@ end
 
 handlers['actions'] = function(args)
     local on = arrayIndexOfStrI(args, '-on') or arrayIndexOfStrI(args, '-enable')
-    local off = arrayIndexOfStrI(args, '-off') arrayIndexOfStrI(args, '-disable')
+    local off = arrayIndexOfStrI(args, '-off') or arrayIndexOfStrI(args, '-disable')
     local toggle = arrayIndexOfStrI(args, '-toggle')
 
     local load = tonumber(arrayIndexOfStrI(args, '-load') or 0)
@@ -2212,6 +2260,7 @@ handlers['actions'] = function(args)
                 settings.actionInfo.fileName = fileName
                 settings.actions = actions
 
+                smartMove:resetWaypointRoutes()
                 recompileActions()
                 saveSettings()
             end
@@ -2252,6 +2301,7 @@ handlers['actions'] = function(args)
         elseif toggle then
             globals.actionsEnabled = not globals.actionsEnabled
         end
+        if not globals.actionsEnabled then smartMove:cancelTimedWaypoint() end
         
         writeMessage(string.format(
             '  Action execution is [%s]',

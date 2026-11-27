@@ -137,13 +137,28 @@ function paths.namespacePlayerRoot(name)
     return paths.namespaceSettingsRoot() .. '/' .. relative .. '/players'
 end
 
--- Prefer the organized global character tree when that character directory
--- exists. Otherwise retain the legacy settings/<character> layout so existing
--- installations continue to load without migration.
+local function directoryContainsFiles(path)
+    local absolute = (windower.addon_path or '') .. path:gsub('^%./', '') .. '/'
+    for _, entry in ipairs(windower.get_dir(absolute) or {}) do
+        if entry ~= '.' and entry ~= '..' then
+            local child = path .. '/' .. entry
+            if not directoryExists(child) or directoryContainsFiles(child) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Use one global character tree for both reads and writes.
 function paths.globalPlayerParent(playerName)
-    local organized=SETTINGS_ROOT..'/players/'..playerName
-    if directoryExists(organized) then return SETTINGS_ROOT..'/players' end
-    return SETTINGS_ROOT
+    local organized = SETTINGS_ROOT .. '/players'
+    local legacy = SETTINGS_ROOT .. '/' .. playerName
+    if not directoryExists(organized .. '/' .. playerName) and directoryExists(legacy)
+        and directoryContainsFiles(legacy) then
+        return SETTINGS_ROOT
+    end
+    return organized
 end
 
 function paths.globalPlayerRoot(playerName)

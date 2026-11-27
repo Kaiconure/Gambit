@@ -322,6 +322,7 @@ local function sm_movement_exp(self, job)
             windower.ffxi.run(false)
             return 0.15
         end
+        if job.depart and not job:depart() then return end
         
         -- Get the new vectors
         local vme2 = coordVector(me)
@@ -344,7 +345,7 @@ local function sm_movement_exp(self, job)
                 job.runHeading=nil
                 if transition.stop then
                     windower.ffxi.run(false)
-                    windower.ffxi.turn(hdg2)
+                    if not transition.finish then windower.ffxi.turn(hdg2) end
                     paused=false
                     local remaining=transition.pause
                     while remaining>0 and not self.shutting_down and not self.cancel and job:is_valid() do
@@ -352,9 +353,12 @@ local function sm_movement_exp(self, job)
                         coroutine.sleep(slice)
                         remaining=remaining-slice
                     end
-                    if self.shutting_down or self.cancel or not job:is_valid() then return end
+                    if transition.finish or self.shutting_down or self.cancel or not job:is_valid() then return end
+                    if job.depart and not job:depart() then return end
                     job.runHeading=hdg2
                     windower.ffxi.run(hdg2)
+                elseif job.depart and not job:depart() then
+                    return
                 end
             end
         end
@@ -461,8 +465,9 @@ local function sm_movement_exp(self, job)
         if not paused then
             -- If we're within the desired distance, or if we passed right by the target but are still
             -- reasonably close, then we'll call ourselves done.
+            local tolerance=job.routePlan and job.routePlan:arrivalTolerance(self.tolerance) or self.tolerance
             if 
-                d2 < self.tolerance or
+                d2 < tolerance or
                 (d2 < 1.0 and not sharesHalfspace(hdg, hdg2))
             then
                 paused = true
@@ -714,11 +719,32 @@ function smartMove:stop()
     windower.ffxi.run(false)
 end
 
--- Route progress is intentionally independent of movement jobs: unscoped routes
--- can be interrupted by battle and resume the same segment afterward.
-function smartMove:clearWaypointProgress()
+-- Route progress survives movement interruptions within the same scope.
+function smartMove:resetWaypointRoutes()
+    for i = #self.queue, 1, -1 do
+        if self.queue[i].mode == Modes.route then
+            table.remove(self.queue, i)
+        end
+    end
+    if self.previousJob and self.previousJob.mode == Modes.route then
+        self.previousJob = nil
+    end
+    local current = self.current
+    if current and current.mode == Modes.route and not self.cancel then
+        self:cancelJob(current.jobId, true, current.owner)
+    end
     self.waypointProgress = {}
     self.waypointProgressByConfig = setmetatable({}, {__mode='k'})
+end
+
+function smartMove:cancelTimedWaypoint()
+    for i = #self.queue, 1, -1 do
+        if self.queue[i].blocking then table.remove(self.queue, i) end
+    end
+    local current = self.current
+    if current and current.blocking and not self.cancel then
+        self:cancelJob(current.jobId, true, current.owner)
+    end
 end
 
 -------------------------------------------------------------------------------
@@ -740,7 +766,7 @@ function smartMove:shutdown()
     self.queue = {}
     self.previousJob = nil
     self.current = nil
-    self:clearWaypointProgress()
+    self:resetWaypointRoutes()
     windower.ffxi.follow(-1)
     windower.ffxi.run(false)
 end
@@ -840,65 +866,106 @@ end
 -----------------------------------------------------------------------------------------
 -- Traverse a configured point sequence as one continuous movement job. Repeated calls
 -- with the same configuration refresh its scheduling state without restarting it.
-function smartMove:waypointRoute(config, owner, routeKey)
+function smartMove:waypointRoute(config, owner, routeKey, battleScope, waitForLeg, runHook)
     if self.shutting_down or not self:canMove(owner) or type(config)~='table' then return end
-    local function refresh(job)
-        if job and not self.cancel and job.mode==Modes.route and job.routeConfig==config and job.owner==owner then
-            job.refreshed=os.clock()
-            return job.jobId
+    local routeScope=config.scoped==true and battleScope or nil
+    local parts={config.mode or 'bounce',tostring(config.duration)}
+    if type(config.points)=='table' then
+        for _,point in ipairs(config.points) do
+            parts[#parts+1]=tostring(point.x)..','..tostring(point.y)..','..tostring(point.duration)
+                ..','..tostring(point.passthrough==true)..','..tostring(point.disabled==true)
         end
     end
-    local existing=refresh(self.current)
-    if existing then return existing end
+    local routeSignature=table.concat(parts,';')
+    local function awaitLeg(job)
+        if waitForLeg and job.blocking then
+            while job.blocking and not job.legFinished and not self.shutting_down and self:canMove(owner)
+                and ((self.current==job and not self.cancel) or self.queue[1]==job) do
+                local now=os.clock()
+                if not job.runningHook and job.routePlan:timedOut(now) then
+                    self:cancelJob(job.jobId,true,owner)
+                    break
+                end
+                job.refreshed=now
+                coroutine.sleep(0.1)
+            end
+        end
+        return job.jobId
+    end
+    local function refresh(job)
+        if job and job.mode==Modes.route and job.routeConfig==config
+            and job.routeKey==routeKey and job.routeSignature==routeSignature
+            and job.routeScope==routeScope and job.owner==owner then
+            job.refreshed=os.clock()
+            job.runHook=runHook or job.runHook
+            return job
+        end
+    end
+    local existing=not self.cancel and refresh(self.current)
+    if existing then return awaitLeg(existing) end
     for _,queued in ipairs(self.queue) do
         existing=refresh(queued)
-        if existing then return existing end
+        if existing then return awaitLeg(existing) end
     end
     local me=windower.ffxi.get_mob_by_target('me')
     if not me or type(me.x)~='number' or type(me.y)~='number' then return end
-    local function signature()
-        local parts={config.mode or 'bounce'}
-        if type(config.points)=='table' then
-            for _,point in ipairs(config.points) do
-                parts[#parts+1]=tostring(point.x)..','..tostring(point.y)
-            end
-        end
-        return table.concat(parts,';')
-    end
-    local persistent=config.scoped~=true
     local progressStore=routeKey and self.waypointProgress or self.waypointProgressByConfig
     local progressKey=routeKey or config
     local info=windower.ffxi.get_info()
-    local routeSignature=signature()
-    local progress=persistent and progressStore[progressKey] or nil
-    if progress and (progress.zone~=(info and info.zone) or progress.signature~=routeSignature) then
+    local progress=progressStore[progressKey]
+    if progress and (progress.zone~=(info and info.zone) or progress.signature~=routeSignature
+        or progress.scope~=routeScope) then
         progressStore[progressKey]=nil
         progress=nil
     end
     local now=os.clock()
     local plan=require('./lib/waypoint-route').new(config,me,now,progress)
+    if not plan then
+        local function sameRoute(job)
+            return job and job.mode==Modes.route and job.owner==owner
+                and (job.routeConfig==config or (routeKey and job.routeKey==routeKey))
+        end
+        for index=#self.queue,1,-1 do
+            if sameRoute(self.queue[index]) then table.remove(self.queue,index) end
+        end
+        if sameRoute(self.previousJob) then self.previousJob=nil end
+        if sameRoute(self.current) and not self.cancel then
+            self:cancelJob(self.current.jobId,true,owner)
+        end
+        return
+    end
+    local pendingLeave=progress and progress.pendingLeave
     local function saveProgress()
-        if not persistent then return end
         local snapshot=plan:snapshot()
         snapshot.zone=info and info.zone
         snapshot.signature=routeSignature
+        snapshot.scope=routeScope
+        snapshot.pendingLeave=pendingLeave
         progressStore[progressKey]=snapshot
     end
     local initial=plan:point()
     local initialDistance=math.sqrt((me.x-initial.x)^2+(me.y-initial.y)^2)
-    if #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
+    if not plan.resuming and #plan.points>1 and initialDistance<=plan:threshold(self.tolerance) then
+        pendingLeave=plan.index
         plan:advance(now)
+    elseif #plan.points==1 and initialDistance>plan:threshold(self.tolerance) then
+        pendingLeave=nil
     end
-    saveProgress()
-    local job=sm_createBaseJob(self,Modes.route,false,owner)
+    local job=sm_createBaseJob(self,Modes.route,true,owner)
     if not job then return end
     job.routeConfig=config
+    job.routeKey=routeKey
+    job.routeSignature=routeSignature
+    job.routeScope=routeScope
     job.routePlan=plan
+    job.runHook=runHook
+    job.blocking=plan:point().duration>0
     job.refreshed=os.clock()
     job.heartbeat=config.heartbeat~=nil and tonumber(config.heartbeat) or nil
     assert(job.heartbeat==nil or (job.heartbeat>=0.5 and job.heartbeat<math.huge),
         'Waypoint route heartbeat must be at least 0.5 seconds')
     job.autoComplete=false
+    job.oncomplete=nil
     job.follow_distance=0
     job.canJitter=config.jitter~=false
     job.pos=function(self)
@@ -908,31 +975,75 @@ function smartMove:waypointRoute(config, owner, routeKey)
     job.is_valid=function(self)
         local info=windower.ffxi.get_info()
         local now=os.clock()
-        return info and info.zone==self.zone and not self.routePlan:timedOut(now)
+        return info and info.zone==self.zone and
+            (self.runningHook or self.legFinished or not self.routePlan:timedOut(now))
     end
     job.cycle=function(self) return self:is_valid() end
+    local function executeHook(job, point, phase)
+        if not job.runHook or not point[phase] then return end
+        job.runningHook=true
+        job.runHook(point,phase)
+        job.runningHook=false
+        plan.started=os.clock()
+    end
+    job.depart=function(job)
+        if self.shutting_down or self.cancel or not self:canMove(owner) or not job:is_valid() then
+            return false
+        end
+        if pendingLeave and #plan.points>1 then
+            local point=plan.points[pendingLeave]
+            pendingLeave=nil
+            saveProgress()
+            executeHook(job,point,'onleave')
+        end
+        return not self.shutting_down and not self.cancel and self:canMove(owner) and job:is_valid()
+    end
     job.advance=function(self,distance,now,defaultTolerance,passed)
         local fresh=self.heartbeat==nil or now-self.refreshed<=self.heartbeat
         if fresh and (distance<=self.routePlan:threshold(defaultTolerance) or passed) then
+            local point=self.routePlan:point()
+            local passthrough=self.blocking and point.passthrough
+            local previousArrival=pendingLeave
+            pendingLeave=plan.index
             local transition=self.routePlan:advance(now)
             saveProgress()
+            if point.onenter and self.runHook and (transition or not previousArrival) then
+                windower.ffxi.run(false)
+                executeHook(self,point,'onenter')
+            end
+            local nextTimed=self.routePlan:point().duration>0
+            if passthrough and transition then
+                self.blocking=nextTimed
+            elseif self.blocking or nextTimed then
+                self.legFinished=true
+                transition=transition or {pause=0}
+                transition.finish=true
+                transition.stop=true
+            end
             return transition
         end
     end
     job.reschedule=function()
+        if job.blocking or job.legFinished then return end
         local player=windower.ffxi.get_player()
         if player and player.status==1 and config.allow_engaged~=true then
             self.verbose('Not rescheduling waypoint route while engaged')
             return
         end
-        return smartMove:waypointRoute(config,owner,routeKey)
+        return smartMove:waypointRoute(config,owner,routeKey,battleScope,false,job.runHook)
     end
     job.description=job.description..' ('..#plan.points..' points / '..plan.mode..')'
     if not self:canMove(job.owner) then return end
+    -- Stop the old job and publish its replacement before yielding to the worker.
+    self:cancelJob(nil,true,owner)
+    if self.previousJob and self.previousJob.mode==Modes.route then
+        self.previousJob=nil
+    end
+    saveProgress()
     self.queue={job}
     self.verbose('Requested: %s':format(job.description))
-    coroutine.sleep(0.25)
-    return job.jobId
+    if not waitForLeg or not job.blocking then coroutine.sleep(0.25) end
+    return awaitLeg(job)
 end
 
 -----------------------------------------------------------------------------------------

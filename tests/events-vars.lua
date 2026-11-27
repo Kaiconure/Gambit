@@ -12,7 +12,7 @@ local docs={
     [root..'events/common.vars.json']={vars={gear={head='shared',feet='shared'},ordinary='shared',base=true}},
     [root..'events/(mages).vars.json']={vars={gear={body='mage'}}},
     [root..'events/geo.vars.json']={vars={gear={head='geo'},['^ordinary']='shared default',list={'geo'}}},
-    [root..'Tester/events/geo.vars.json']={vars={gear={head='character'}}},
+    [root..'players/Tester/events/geo.vars.json']={vars={gear={head='character'}}},
     [root..'namespaces/parent/events/geo.vars.json']={vars={gear={body='parent'},inherited=true}},
     [child..'events/common.vars.json']={vars={gear={head='namespace'},['!priority']='namespace priority'}},
     [root..'namespace-settings/child/players/Tester/events/geo.vars.json']={vars={gear={head='specific'},priority='ordinary',
@@ -69,6 +69,6 @@ end
 assert(sharedCount==1)
 bundled['./settings/events/(all).json']={}
 assert(loadBundled().path=='./settings/events/(all).json') -- Even user all-jobs beats shipped exact job.
-bundled['./settings/Tester/events/geo.json']={}
-assert(loadBundled().path=='./settings/Tester/events/geo.json')
+bundled['./settings/players/Tester/events/geo.json']={}
+assert(loadBundled().path=='./settings/players/Tester/events/geo.json')
 print('PASS: event vars namespace/character/job/group layering, implicit defaults, explicit priorities, isolation and validation')

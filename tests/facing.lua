@@ -27,8 +27,21 @@ assert(not facing(me,{x=math.huge,y=0}) and not facing(me,point(0),0/0))
 -- Verify the action-context entry point forwards both entities and tolerance.
 f=assert(io.open('lib/action-context.lua'));source=f:read('*a');f:close()
 local block=assert(source:match('(context%.facing = function.-)\n    end'))..'\n    end'
-local env={context={},directionality={facing=facing}}
+local env=setmetatable({context={},directionality={facing=facing}},{__index=_G})
 local chunk=assert(loadstring(block));setfenv(chunk,env);chunk()
 assert(env.context.facing(me,point(0),0))
 assert(not env.context.facing(me,point(20)))
+-- A route hook can run long after the action context captured the player.
+env.context.me={id=1,mob={id=1,x=0,y=0}}
+local enemy={id=2,x=5,y=0,heading=math.pi}
+env.windower={ffxi={
+    get_mob_by_target=function(target)
+        assert(target=='me'); return {id=1,x=10,y=0}
+    end,
+    get_mob_by_id=function(id)
+        assert(id==2); return {id=2,x=5,y=0,heading=0}
+    end,
+}}
+assert(env.context.facing(enemy,env.context.me,25))
+assert(not env.context.facing(enemy,{x=0,y=0},25))
 print('PASS: generic facing, cardinal directions, angular boundaries/wraparound, context symbols, plain points and invalid inputs')
