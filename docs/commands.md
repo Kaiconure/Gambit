@@ -161,8 +161,8 @@ folder segments. For reloads, `-ns global`, `-ns gambit`, `-global`, and
 | --- | --- |
 | `manual` | You choose targets by engaging manually. |
 | `nearest` | Prefer the nearest aggroing mob. |
-| `maxhp` | Prefer the aggroing mob with the most HP. |
-| `minhp` | Prefer the aggroing mob with the least HP. |
+| `maxhp` | Pick the eligible aggroing mob with the highest remaining HP percentage. Nearest wins ties. |
+| `minhp` | Pick the eligible aggroing mob with the lowest remaining HP percentage. Nearest wins ties. |
 | `aggressor` | Proactively acquire enemies rather than waiting for aggro. |
 | `leader` | Follow the party leader's target, with an aggro fallback. |
 | `puller` | Proactive targeting with additional restrictions on unclaimed mobs engaged with others. |
@@ -200,7 +200,7 @@ Options for `ignore`: `-target` aliases `-t`; `-note "text"` stores a note; `-al
 | `follow -target [-distance <yalms>]` | Follow the current selected target. Aliases: `-t`, `-d`. Default distance comes from settings. |
 | `follow -cancel` | Cancel smart movement. Alias: `-c`. |
 | `follow -toggle [-d <yalms>]` | Cancel the current movement job, or start following the selected target. |
-| `move -x <number> -y <number>` | Move to coordinates. If only one coordinate is supplied, retain your current value for the other. |
+| `move -x <number> -y <number> [-r <radius>]` | Move to coordinates. With `-r`, choose a random destination within that many yalms of the center. If only one coordinate is supplied, use your current value for the other center coordinate. |
 | `run -start` / `run -stop` | Start or stop running. |
 | `walkmode [-on or -off]` | Set walk mode; no option toggles it. |
 | `align [-target <name>] [-distance <yalms>] [-angle <degrees>] [-wait <seconds>]` | Align relative to the named or currently selected target. Defaults: distance 1, wait 10 seconds. Aliases: `-t`, `-d`, `-a`, `-w`. |

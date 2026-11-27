@@ -11,6 +11,7 @@
     {
       "precondition": "movementAvailable()",
       "when": [
+        "not vars.follow_leader.disabled",
         "not vars.follow_leader.suppress_on_battle_target or not bt",
         "me.can_follow",
         "vars.follow_leader.target or (not me.is_party_leader and party_leader)",

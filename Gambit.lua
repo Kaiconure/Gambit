@@ -1,6 +1,6 @@
 local profiling=require('./lib/load-profile')
 profiling.begin('startup modules')
-__version = '1.0.7.5c'
+__version = '1.0.7.6'
 __name = 'Gambit'
 __shortName = 'gbt'
 __author = '@Kaiconure'
@@ -53,6 +53,7 @@ images = require('images')
 
 skillchain_helper = require('lib/skillchain-helper')
 local selfSpellState = require('./lib/self-spell-state')
+local contextSend = require('./lib/context-send')
 local selfActionState = require('./lib/self-action-state')
 local actionObservation = require('./lib/action-observation')
 local partyAlignment = require('./lib/party-alignment')
@@ -365,8 +366,10 @@ end
 local lastLeaderSettingsCheck = 0
 windower.register_event('prerender', function()
     local now = os.clock()
+    selfSpellState.expire(actionStateManager,globals,now)
     if now - lastLeaderSettingsCheck < 1 then return end
     lastLeaderSettingsCheck = now
+    if globals.logged_in then contextSend.tick(windower,now) end
     if checkLeaderSettings then checkLeaderSettings() end
 end)
 
@@ -735,6 +738,7 @@ windower.register_event('login', function ()
 end)
 
 windower.register_event('logout', function()
+    contextSend.reset(windower)
     partyAlignment.reset()
     globals.last_ability = nil
     globals.last_spell = nil
@@ -753,6 +757,7 @@ end)
 windower.register_event('unload', function()
     print('Gambit: Shutdown notification received.')
 
+    contextSend.reset(windower)
     globals.logged_in = false
     globals.shutting_down = true
     smartMove:shutdown()
@@ -899,7 +904,7 @@ windower.register_event('ipc message', function (msg)
 
     --printDebug('IPC message received: [%s]':format(msg))
 
-    if partyAlignment.receive(msg) then return end
+    if contextSend.receive(windower,msg) or partyAlignment.receive(msg) then return end
     msg = msg or ''--string.lower(msg or '')
 
     local split = msg:split(' ', string.encoding.shift_jis)

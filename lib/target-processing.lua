@@ -813,6 +813,7 @@ function processTargeting(player, party)
     local bestMatchingMob = nil
     local nearestAggroingMob = nil
 
+    local isHpStrategy = strategy == TargetStrategy.maxhp or strategy == TargetStrategy.minhp
     local can_initiate = strategy == TargetStrategy.aggressor or strategy == TargetStrategy.puller
 
     local hasElvorseal = hasBuff(player, BUFF_ELVORSEAL)
@@ -884,7 +885,7 @@ function processTargeting(player, party)
             then
 
                 -- We'll store the nearest aggroing mob, and give it priority over others
-                if candidateMob.status == STATUS_ENGAGED then
+                if not isHpStrategy and candidateMob.status == STATUS_ENGAGED then
                     if 
                         nearestAggroingMob == nil
                     then
@@ -914,7 +915,6 @@ function processTargeting(player, party)
                     bestMatchingMob = candidateMob
                 else
                     local isHpEqual = (bestMatchingMob.hpp == candidateMob.hpp)
-                    local isHpStrategy = (strategy == TargetStrategy.maxhp) or (settings.strategy == TargetStrategy.minhp)
                     local isNearer = candidateMob.distance < bestMatchingMob.distance
 
                     local assumeStrategy = strategy

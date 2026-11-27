@@ -5,6 +5,7 @@ local engagementHelpers = require('./lib/engagement-helpers')
 local variableValues = require('./lib/variable-values')
 local resourceNameAliases = require('./lib/resource-name-aliases')
 local targetSelectors = require('./lib/target-selectors')
+local contextSend = require('./lib/context-send')
 local multiStageParticipants = require('./lib/multi-stage-participants')
 local targetedAction = require('./lib/targeted-action')
 local actionCategories = require('./meta/outgoing-action-categories')
@@ -4336,7 +4337,18 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     --------------------------------------------------------------------------------------
     -- 
     context.facing = function(looker, target, degreesThreshold)
-        return directionality.facing(looker,target,degreesThreshold)
+        local function currentGeometry(entity)
+            if type(entity) ~= 'table' then return entity end
+            if context.me and (entity == context.me or entity == context.me.mob) then
+                return windower.ffxi.get_mob_by_target('me')
+            end
+            local id = entity.id or (type(entity.mob) == 'table' and entity.mob.id)
+            if type(id) == 'number' then
+                return windower.ffxi.get_mob_by_id(id) or entity
+            end
+            return entity
+        end
+        return directionality.facing(currentGeometry(looker),currentGeometry(target),degreesThreshold)
     end
 
     context.facingEnemy = function (degreesThreshold)
@@ -5474,7 +5486,7 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
                             (identifier == nil or matchesMobIdentifier(mob, identifier))
                         then
                             if
-                                (not withAggro or mob.status == STATUS_ENGAGED) and
+                                (withAggro == nil or (mob.status == STATUS_ENGAGED) == (not not withAggro)) and
                                 (nearest == nil or nearest.distance > mob.distance)
                             then
                                 local accepted = true
@@ -7284,14 +7296,14 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     end
 
     -- Unlike execute, condition arrays short-circuit and combine results with AND.
-    context.evaluateAll = function(conditions, ...)
+    local function evaluateAllIn(environment, conditions, ...)
         local function evaluate(condition, ...)
             local kind = type(condition)
             if kind == 'nil' then return false end
             if kind == 'boolean' then return condition end
             if kind == 'number' then return true end -- Lua numbers, including zero, are truthy.
             if kind ~= 'string' then error('evaluateAll expects expressions or scalar conditions', 2) end
-            return not not context.execute(condition, ...)
+            return not not executionFactory.execute(condition, environment, ...)
         end
         if type(conditions) ~= 'table' then return evaluate(conditions, ...) end
         local count = 0
@@ -7307,6 +7319,9 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
             if not evaluate(condition, ...) then return false end
         end
         return true
+    end
+    context.evaluateAll = function(conditions, ...)
+        return evaluateAllIn(context, conditions, ...)
     end
 
     --------------------------------------------------------------------------------------
@@ -7348,6 +7363,19 @@ local function makeActionContext(actionType, time, target, mobEngagedTime, battl
     context.abs = context_abs
     context.randomize = context_randomize
     context.sendCommand = context_send_command
+    local function sendTo(domain, command, targets, conditions)
+        local predicate
+        if conditions ~= nil then
+            assert(type(conditions)=='string' or type(conditions)=='table','Expected a send filter expression or array')
+            predicate=function(recipient)
+                return evaluateAllIn(setmetatable({recipient=recipient},{__index=context}),conditions)
+            end
+        end
+        return contextSend.send(windower,domain,command,targets,context.findPrimaryTank,predicate)
+    end
+    context.send = function(command, targets, conditions) return sendTo('all',command,targets,conditions) end
+    context.sendParty = function(command, targets, conditions) return sendTo('party',command,targets,conditions) end
+    context.sendZone = function(command, targets, conditions) return sendTo('zone',command,targets,conditions) end
     context.sendCommands = context_send_commands
     -- Dispatch literal Windower strings separately; never evaluate or format them.
     context.sendWindowerCommands = function(commands)

@@ -4,6 +4,52 @@ The following functions are available for use in your actions. They are broken d
 
 
 
+## Sending commands to other clients
+
+`send(command [, targets])`, `sendParty(command [, targets])`, and
+`sendZone(command [, targets])` run a Windower command on logged-in local clients
+running Gambit. `send` covers all such clients, `sendParty` covers your
+current party, and `sendZone` covers clients in your current zone.
+
+Targets can be a character name, a selector, or an array of names and
+selectors. Jobs, groups such as `mages`, and `leader` are evaluated on the
+receiving client. Party slots `p0` through `p5` refer to the sender's roster.
+The `primary_tank` selector uses the sender's `findPrimaryTank()` result.
+Use `~me` to exclude the sending character. A selector list
+containing only exclusions starts with everyone in the domain. Use a single
+command argument, or pass `nil` as the second argument, to include everyone in
+the domain. An empty selector array sends nothing.
+
+```lua
+sendParty('gbt config -strat nearest', '~me')
+sendZone('gbt config -d 20', {'mages', '~me'})
+sendParty('gbt show')
+```
+
+An optional third argument filters recipients using an expression string or
+an array of conditions. All conditions in an array must pass. The sender
+evaluates the filter using its action context, with `recipient` set to the
+candidate. Filtered sends use the live Gambit IPC roster, refreshed by
+heartbeats. A newly joined client becomes eligible when its presence arrives.
+For an out-of-zone or otherwise unavailable mob, `has_mob_data`,
+`valid_target`, and `is_participant` are false and `distance` is nil. The
+recipient's advertised job and level can still be used.
+
+```lua
+sendParty('gbt config -strat nearest', '~me', {
+    'recipient.distance and recipient.distance <= 15',
+    'recipient.main_job_level and recipient.main_job_level >= 75',
+})
+```
+
+## Finding mobs
+
+`findMob(identifier, distance, withAggro)` and
+`findMobWhere(identifier, expression, distance, withAggro)` return the nearest
+eligible mob. Pass `nil` for the identifier to search across all names. Omit
+`withAggro` or pass `nil` to accept either state, pass `false` for non-engaged
+mobs, or pass `true` for engaged mobs.
+
 ## Relative positioning and following
 
 `alignRelative(target, partner, angle, distance)` positions you around `target`
@@ -548,6 +594,8 @@ the looker's heading is within the specified angle of the direction to the
 target. The default threshold is 10 degrees, inclusive, matching the default
 used by `facingEnemy`. Headings are Windower radians; the threshold is degrees.
 The check uses horizontal X/Y coordinates and handles heading wraparound.
+In actions and waypoint hooks, it reads the player's current position and
+refreshes other entities by ID when available.
 
 ```lua
 facing(bt, me)       -- Is the enemy facing the player, within 10 degrees?

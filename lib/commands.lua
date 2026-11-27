@@ -861,6 +861,15 @@ end
 handlers['move'] = function (args)
     local x = arrayIndexOfStrI(args, '-x')
     local y = arrayIndexOfStrI(args, '-y')
+    local radiusFlag = arrayIndexOfStrI(args, '-r')
+    local radius = 0
+    if radiusFlag then
+        radius = tonumber(args[radiusFlag + 1])
+        if not radius or radius ~= radius or radius < 0 or radius == math.huge then
+            writeError('Move radius must be a finite nonnegative number.')
+            return
+        end
+    end
 
     if type(x) == 'number' then x = tonumber(args[x + 1]) end
     if type(y) == 'number' then y = tonumber(args[y + 1]) end
@@ -872,6 +881,13 @@ handlers['move'] = function (args)
     if type(x) ~= 'number' or type(y) ~= 'number' then
         writeMessage('A valid coordinate could not be found. Movement skipped.')
         return
+    end
+
+    if radius > 0 then
+        local angle = math.random() * 2 * math.pi
+        local offset = radius * math.sqrt(math.random())
+        x = x + offset * math.cos(angle)
+        y = y + offset * math.sin(angle)
     end
 
     local job = smartMove:moveTo(x, y)

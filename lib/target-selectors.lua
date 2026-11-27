@@ -131,7 +131,12 @@ local function resolvePositive(context, targets)
     for _, target in ipairs(targets or {}) do
         local key, excludeSelf = parseSelector(target)
         local group = key and groups[key]
-        if key and (jobs[key] or group or key == 'LEADER') then
+        if key == 'PRIMARY_TANK' then
+            local member = selectors.primaryTank(context)
+            if member and (not excludeSelf or not isSelf(context, member)) then
+                add(member.name or (member.mob and member.mob.name))
+            end
+        elseif key and (jobs[key] or group or key == 'LEADER') then
             local matching = {}
             for i = 0, 5 do
                 local member = context['p' .. i]
@@ -197,14 +202,15 @@ function selectors.orderedNames(context, targets)
 end
 
 -- Load-time selector matching for the character whose actions are being loaded.
-function selectors.matchesPlayer(player, targets, isLeader)
-    local member = {name=player.name, main_job=player.main_job, is_me=true, is_party_leader=isLeader}
-    local context = {me=member, p0=member}
+function selectors.matchesPlayer(player, targets, isLeader, senderIsSelf)
+    local member = {name=player.name, main_job=player.main_job,
+        is_me=senderIsSelf~=false, is_party_leader=isLeader}
+    local context = {me=member.is_me and member or nil, p0=member}
     local positive, negative = selectors.resolve(context, targets)
     local function includes(names)
         for _, name in ipairs(names) do
             local key = name:lower()
-            if key == '*' or key == 'me' or key == (member.name or ''):lower() then return true end
+            if key == '*' or (key == 'me' and member.is_me) or key == (member.name or ''):lower() then return true end
         end
         return false
     end
